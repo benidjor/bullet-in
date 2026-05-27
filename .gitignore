@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+x_cookies.json
+dbt/bullet_in.duckdb
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml
