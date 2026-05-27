@@ -1,0 +1,10 @@
+sources:
+  - source_id: arsenal_official
+    tier: 0
+    enabled: true
+  - source_id: football_london
+    tier: 4
+    enabled: true
+  - source_id: disabled_one
+    tier: 2
+    enabled: false

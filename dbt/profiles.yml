@@ -1,0 +1,11 @@
+bullet_in:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "bullet_in.duckdb"
+      extensions: [mysql_scanner]
+      attach:
+        - path: "host=localhost user=root password=bulletin port=3306 database=bulletin"
+          type: mysql
+          alias: maria

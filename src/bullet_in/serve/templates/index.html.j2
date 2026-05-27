@@ -1,0 +1,10 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>Bullet-in</title></head>
+<body><h1>Bullet-in — Arsenal 뉴스</h1>
+{% for a in articles %}
+<article data-tier="{{ a.tier }}">
+  <h2>{{ a.title_ko or a.title_original }}</h2>
+  <p class="src">{{ a.source_id }} · tier {{ a.tier }}</p>
+  <p class="sum">{{ a.summary_ko or "" }}</p>
+  <a href="{{ a.url }}">원문</a>
+</article>
+{% endfor %}</body></html>
