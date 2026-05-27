@@ -4,7 +4,10 @@
 
 *Bullet-in = bulletin(단신) + bullet(병기고 Arsenal)의 언어유희.*
 
-<!-- TODO: 데모 스크린샷 (site/index.html 캡처) 추가 -->
+![Bullet-in 서빙 페이지 — 샘플 데이터(v1 뷰)](docs/assets/serving-page-sample.png)
+
+> 샘플 데이터로 렌더한 v1 뷰(스타일 미적용). 신뢰도(tier) 순 정렬 + 한국어 번역·요약.
+<!-- 스크린샷(예정): 라이브 e2e 후 실데이터 + 스타일 적용 화면으로 교체 -->
 
 ---
 
