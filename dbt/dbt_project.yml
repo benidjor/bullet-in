@@ -1,0 +1,4 @@
+name: bullet_in
+version: "1.0"
+profile: bullet_in
+model-paths: ["models"]
