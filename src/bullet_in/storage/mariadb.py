@@ -14,7 +14,16 @@ class MartStore:
           VALUES (:content_hash,:url,:source_id,:author,:tier,:confidence_score,
              :title_original,:title_ko,:summary_ko,:body_excerpt,:published_at,:fetched_at,:revision)
           ON DUPLICATE KEY UPDATE
-             revision=VALUES(revision), title_original=VALUES(title_original)""")
+             title_ko=IF(articles.content_hash=VALUES(content_hash), articles.title_ko, NULL),
+             summary_ko=IF(articles.content_hash=VALUES(content_hash), articles.summary_ko, NULL),
+             title_original=VALUES(title_original),
+             body_excerpt=VALUES(body_excerpt),
+             published_at=VALUES(published_at),
+             tier=VALUES(tier),
+             confidence_score=VALUES(confidence_score),
+             fetched_at=VALUES(fetched_at),
+             revision=VALUES(revision),
+             content_hash=VALUES(content_hash)""")
         rows = [a.model_dump() for a in articles]
         for r in rows:
             r.setdefault("fetched_at", None)
