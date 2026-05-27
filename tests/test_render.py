@@ -1,5 +1,13 @@
 from bullet_in.serve.render import render_page
 
+def test_render_escapes_scraped_html():
+    arts = [{"title_original": "A & B <script>x</script>", "title_ko": None,
+             "summary_ko": "", "url": "u1", "source_id": "s", "tier": 2,
+             "confidence_score": 0.5}]
+    html = render_page(arts)
+    assert "<script>x</script>" not in html
+    assert "&lt;script&gt;" in html
+
 def test_render_orders_by_confidence_desc_and_shows_korean_title():
     arts = [
         {"title_original": "Low", "title_ko": None, "summary_ko": "", "url": "u1",
