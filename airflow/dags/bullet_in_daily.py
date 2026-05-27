@@ -1,7 +1,7 @@
 from __future__ import annotations
 import pendulum
 from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 
 def _run():
     import asyncio
