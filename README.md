@@ -7,7 +7,8 @@
 ![Bullet-in 서빙 페이지 — 샘플 데이터(v1 뷰)](docs/assets/serving-page-sample.png)
 
 > 샘플 데이터로 렌더한 v1 뷰(스타일 미적용). 신뢰도(tier) 순 정렬 + 한국어 번역·요약.
-<!-- 스크린샷(예정): 라이브 e2e 후 실데이터 + 스타일 적용 화면으로 교체 -->
+<!-- 라이브 e2e 후 실데이터 화면 캡처 → docs/assets/serving-page-live.png 저장 후 아래 주석 해제 -->
+<!-- ![Bullet-in 서빙 페이지 — 실데이터](docs/assets/serving-page-live.png) -->
 
 ---
 
@@ -20,6 +21,8 @@
 ## 2. 아키텍처
 
 메달리온(Bronze→Silver/Gold) + AI 인리치먼트 파이프라인.
+
+![아키텍처 — 수집 파이프라인](docs/assets/architecture.png)
 
 ```
 [Ingest]    소스별 어댑터 (RSS · Guardian API · httpx+파서 · Playwright · twikit)
