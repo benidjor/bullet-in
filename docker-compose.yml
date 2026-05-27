@@ -1,0 +1,15 @@
+services:
+  mongo:
+    image: mongo:7
+    ports: ["27017:27017"]
+    volumes: ["mongo_data:/data/db"]
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: bulletin
+      MARIADB_DATABASE: bulletin
+    ports: ["3306:3306"]
+    volumes: ["maria_data:/var/lib/mysql"]
+volumes:
+  mongo_data:
+  maria_data:
