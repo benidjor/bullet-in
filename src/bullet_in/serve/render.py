@@ -7,7 +7,7 @@ _TPL_DIR = Path(__file__).parent / "templates"
 def render_page(articles: list[dict]) -> str:
     ordered = sorted(articles, key=lambda a: a.get("confidence_score") or 0.0, reverse=True)
     env = Environment(loader=FileSystemLoader(_TPL_DIR),
-                      autoescape=select_autoescape(["html"]))
+                      autoescape=select_autoescape(default_for_string=True, default=True))
     return env.get_template("index.html.j2").render(articles=ordered)
 
 def write_page(articles: list[dict], out_path: str | Path) -> None:
