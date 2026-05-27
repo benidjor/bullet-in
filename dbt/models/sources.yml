@@ -1,0 +1,15 @@
+version: 2
+models:
+  - name: stg_articles
+    columns:
+      - name: content_hash
+        tests: [unique, not_null]
+      - name: url
+        tests: [unique, not_null]
+      - name: title_original
+        tests: [not_null]
+      - name: tier
+        tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1, 1.5, 2, 3, 4]
