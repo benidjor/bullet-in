@@ -25,8 +25,6 @@ class MartStore:
              revision=VALUES(revision),
              content_hash=VALUES(content_hash)""")
         rows = [a.model_dump() for a in articles]
-        for r in rows:
-            r.setdefault("fetched_at", None)
         with self.engine.begin() as c:
             c.execute(sql, rows)
         return len(rows)

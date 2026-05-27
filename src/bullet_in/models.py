@@ -25,4 +25,5 @@ class Article(BaseModel):
     summary_ko: str | None = None
     body_excerpt: str | None = None
     published_at: datetime
+    fetched_at: datetime | None = None
     revision: int = 1

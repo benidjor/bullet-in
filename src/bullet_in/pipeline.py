@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timezone
 from dateutil import parser as dtparser
 from bullet_in.models import RawItem, Article
 from bullet_in.canonical import canonical_url, content_hash
@@ -9,9 +9,9 @@ from bullet_in.score import confidence
 def _published(payload: dict) -> datetime:
     raw = payload.get("published") or payload.get("created_at")
     try:
-        return dtparser.parse(raw)
+        return dtparser.parse(raw).astimezone(timezone.utc)
     except (TypeError, ValueError):
-        return datetime.now().astimezone()
+        return datetime.now(timezone.utc)
 
 def to_articles(raw: list[RawItem], sources: dict[str, dict],
                 seen: dict[str, tuple[str, int]]) -> list[Article]:
@@ -30,5 +30,6 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
             content_hash=h, url=url, source_id=item.source_id,
             tier=src.get("tier"), confidence_score=confidence(item.source_id, sources),
             title_original=title, body_excerpt=item.raw_payload.get("summary"),
-            published_at=_published(item.raw_payload), revision=rev))
+            published_at=_published(item.raw_payload), fetched_at=item.fetched_at,
+            revision=rev))
     return out
