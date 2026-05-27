@@ -23,7 +23,10 @@ uv venv /tmp/af30 --python 3.11
 ```
 기대: 두 버전 모두 `test_dag_imports_without_errors` PASS (DagBag 임포트 에러 0, `bullet_in_daily` DAG 존재).
 
-<!-- 스크린샷: DagBag 임포트 2.9.3/3.0.0 통과 터미널. (라이브 시) Airflow webserver 띄워 UI의 bullet_in_daily DAG 그래프 -->
+<!-- 터미널 캡처 → docs/assets/airflow-dag-import.png 저장 후 아래 주석 해제 -->
+<!-- ![DagBag 임포트 통과(2.9/3.0)](../assets/airflow-dag-import.png) -->
+<!-- (라이브) Airflow UI 캡처 → docs/assets/airflow-ui-dag-graph.png 저장 후 아래 주석 해제 -->
+<!-- ![Airflow UI — bullet_in_daily DAG 그래프](../assets/airflow-ui-dag-graph.png) -->
 
 ## 정리
 ```bash

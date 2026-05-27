@@ -10,6 +10,10 @@ dbt(DuckDB)가 MariaDB를 attach해 분석 마트를 만들고, 데이터 테스
   - `not_null`(content_hash, url, title_original) → **필수 필드 완전성**
   - `accepted_values`(tier ∈ {0,1,1.5,2,3,4}) → **스키마 무결성**
 
+`dbt docs generate`로 본 `daily_source_quality` 마트(컬럼·타입·의존성):
+
+![dbt docs — daily_source_quality 모델](../assets/dbt-lineage.png)
+
 ## 사전조건 (중요 — 빠지면 빌드 실패)
 1. MariaDB 컨테이너 기동: `docker compose up -d mariadb`.
 2. **`bulletin` DB에 스키마가 적용돼 있어야 한다.** attach가 `maria.articles`를 읽는데, 테이블이 없으면 `Catalog Error: Table ... does not exist`로 실패한다.
@@ -34,7 +38,8 @@ cd dbt && uv run dbt build --profiles-dir .
 ```
 기대: 모델 2개 빌드 + 테스트 전부 PASS (예: `PASS=8 ERROR=0`).
 
-<!-- 스크린샷: dbt build 의 PASS=N 요약 터미널 출력 (데이터 품질 게이트 작동 증거) -->
+<!-- 터미널 캡처 → docs/assets/dbt-build-pass.png 저장 후 아래 주석 해제 -->
+<!-- ![dbt 품질 게이트 PASS](../assets/dbt-build-pass.png) -->
 
 ## 결과 해석 / 실패 시
 - 전부 PASS = 품질 게이트 통과.
