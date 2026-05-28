@@ -38,8 +38,7 @@ cd dbt && uv run dbt build --profiles-dir .
 ```
 기대: 모델 2개 빌드 + 테스트 전부 PASS (예: `PASS=8 ERROR=0`).
 
-<!-- 터미널 캡처 → docs/assets/dbt-build-pass.png 저장 후 아래 주석 해제 -->
-<!-- ![dbt 품질 게이트 PASS](../assets/dbt-build-pass.png) -->
+![dbt 품질 게이트 PASS](../assets/dbt-build-pass.png)
 
 ## 결과 해석 / 실패 시
 - 전부 PASS = 품질 게이트 통과.

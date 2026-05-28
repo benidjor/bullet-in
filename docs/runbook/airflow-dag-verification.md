@@ -43,8 +43,7 @@ git checkout HEAD -- airflow/dags/bullet_in_daily.py
 ```
 두 결과 모두 `1 passed`면 마이그레이션 검증 완료. 안전 확인: `git status -- airflow/dags/`가 비어 있어야 함.
 
-<!-- 터미널 캡처 → docs/assets/airflow-dag-import.png 저장 후 아래 주석 해제 -->
-<!-- ![DagBag 임포트 통과(2.9/3.0)](../assets/airflow-dag-import.png) -->
+![DagBag 임포트 통과(2.9/3.0)](../assets/airflow-dag-import.png)
 <!-- (라이브) Airflow UI 캡처 → docs/assets/airflow-ui-dag-graph.png 저장 후 아래 주석 해제 -->
 <!-- ![Airflow UI — bullet_in_daily DAG 그래프](../assets/airflow-ui-dag-graph.png) -->
 
