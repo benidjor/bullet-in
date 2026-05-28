@@ -11,13 +11,13 @@ DAG 파싱(DagBag 임포트)을 프로젝트 환경과 **분리된 일회용 ven
 ```bash
 # Airflow 2.9.3
 uv venv /tmp/af29 --python 3.11
-/tmp/af29/bin/python -m pip install --quiet "apache-airflow==2.9.3" pytest pendulum \
+uv pip install --python /tmp/af29/bin/python --quiet "apache-airflow==2.9.3" pytest pendulum \
   --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.9.3/constraints-3.11.txt"
 /tmp/af29/bin/python -m pytest tests/test_dag_import.py -v
 
 # Airflow 3.0.0
 uv venv /tmp/af30 --python 3.11
-/tmp/af30/bin/python -m pip install --quiet "apache-airflow==3.0.0" "apache-airflow-providers-standard" pytest pendulum \
+uv pip install --python /tmp/af30/bin/python --quiet "apache-airflow==3.0.0" "apache-airflow-providers-standard" pytest pendulum \
   --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.0.0/constraints-3.11.txt"
 /tmp/af30/bin/python -m pytest tests/test_dag_import.py -v
 ```
