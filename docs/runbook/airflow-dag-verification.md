@@ -21,7 +21,27 @@ uv pip install --python /tmp/af30/bin/python --quiet "apache-airflow==3.0.0" "ap
   --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.0.0/constraints-3.11.txt"
 /tmp/af30/bin/python -m pytest tests/test_dag_import.py -v
 ```
-기대: 두 버전 모두 `test_dag_imports_without_errors` PASS (DagBag 임포트 에러 0, `bullet_in_daily` DAG 존재).
+기대: 각 venv에서 `test_dag_imports_without_errors` PASS — 단, **현재 DAG는 3.0 import 기준**이라 2.9 venv에서 그대로 돌리면 `ModuleNotFoundError`로 실패한다(=마이그레이션이 적용됐다는 증거). "양쪽 통과"를 사후에 재현하려면 아래 "마이그레이션 검증" 절차를 따른다.
+
+## 마이그레이션 검증 (사후 재현)
+
+마이그레이션 직전 DAG(2.9 import)를 워크트리에 임시로 가져와 2.9.3에서 통과시킨 뒤, 현재(post-migration, 3.0 import) DAG로 복원해 3.0.0에서 통과시킨다. HEAD/인덱스는 건드리지 않는다.
+
+```bash
+# 마이그레이션 직전 DAG로 임시 교체 (직전 커밋 SHA 자동 추출)
+PREV=$(git log --format=%H -2 -- airflow/dags/bullet_in_daily.py | tail -1)
+git checkout "$PREV" -- airflow/dags/bullet_in_daily.py
+
+# 2.9.3 테스트
+/tmp/af29/bin/python -m pytest tests/test_dag_import.py -v
+
+# 현재(post-migration) DAG로 복원
+git checkout HEAD -- airflow/dags/bullet_in_daily.py
+
+# 3.0.0 테스트
+/tmp/af30/bin/python -m pytest tests/test_dag_import.py -v
+```
+두 결과 모두 `1 passed`면 마이그레이션 검증 완료. 안전 확인: `git status -- airflow/dags/`가 비어 있어야 함.
 
 <!-- 터미널 캡처 → docs/assets/airflow-dag-import.png 저장 후 아래 주석 해제 -->
 <!-- ![DagBag 임포트 통과(2.9/3.0)](../assets/airflow-dag-import.png) -->
