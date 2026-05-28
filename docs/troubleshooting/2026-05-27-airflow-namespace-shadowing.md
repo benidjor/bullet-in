@@ -30,8 +30,7 @@ from airflow.models import DagBag        # ← 실제로는 여기서 터짐
    False                                                  # 실제 모듈은 없음
    ```
    `import airflow`가 (프로젝트 폴더로) "성공"하므로 `importorskip("airflow")`가 통과해버리고, `airflow.models`는 없어 다음 줄에서 터진다.
-   <!-- 터미널 캡처 → docs/assets/t1-airflow-namespace.png 저장 후 아래 주석 해제 -->
-   <!-- ![T1 진단 터미널](../assets/t1-airflow-namespace.png) -->
+   ![T1 진단 터미널](../assets/t1-airflow-namespace.png)
 
 4. **결론**: 디렉터리명이 패키지명을 섀도잉 → `importorskip("airflow")`는 의미가 없고, 실제로 필요한 건 `airflow.models`다.
 
