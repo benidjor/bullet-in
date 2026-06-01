@@ -3,7 +3,7 @@ import argparse, asyncio, json, os, time, uuid, yaml
 from pathlib import Path
 from pymongo import MongoClient
 from sqlalchemy import create_engine, text
-import anthropic
+from google import genai
 from bullet_in.adapters.factory import build_adapters
 from bullet_in.ingest import gather_all
 from bullet_in.canonical import content_hash, canonical_url
@@ -36,8 +36,8 @@ async def main(concurrency: int):
     arts = to_articles(raw, sources, seen=mart.seen_map())
     mart.upsert(arts)
 
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    translations = enrich_rows(mart.rows_missing_translation(), client, "claude-haiku-4-5")
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    translations = enrich_rows(mart.rows_missing_translation(), client, "gemini-2.5-flash-lite")
     for h, (tk, sk) in translations.items():
         mart.set_translation(h, tk, sk)
 
