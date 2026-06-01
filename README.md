@@ -53,7 +53,7 @@
 - **병렬 수집** — asyncio 팬아웃 + 소스별 실패 격리(한 소스 실패가 전체를 멈추지 않음).
 - **공신력 스코어링** — Tier 0(Arsenal.com 공식)~4(타블로이드)를 YAML로 외부화, confidence로 정렬.
 - **중복제거·증분·변경 감지** — content_hash + URL 정규화, DB UNIQUE 제약으로 앱·DB 이중 방어.
-- **LLM 번역·요약** — Claude Haiku로 한국어 번역·한 줄 요약. 신규 항목만 처리해 멱등·저비용.
+- **LLM 번역·요약** — Gemini 2.5 Flash-Lite로 한국어 번역·한 줄 요약. 신규 항목만 처리해 멱등·저비용.
 - **데이터 품질 게이트** — dbt test(unique·not_null·accepted_values·freshness)로 "이상 점검"을 선언적으로.
 
 ## 4. 정량 지표 (SLO)
@@ -77,6 +77,7 @@
 | 품질/분석 | **dbt + DuckDB** | dbt test가 "이상 점검"과 정면 일치, DuckDB가 MariaDB attach해 zero-infra 분석 |
 | 스크래핑 | **Playwright/httpx/twikit** | 소스 난이도(정적~인증·안티봇)에 맞는 도구 선택 |
 | 오케스트레이션 | **Airflow 3.0** | 일간 DAG. 2.9→3.0 마이그레이션 직접 수행 ([docs/MIGRATION.md](docs/MIGRATION.md)) |
+| LLM 번역·요약 | **Gemini 2.5 Flash-Lite** | 일 수백 건 저용량·단순 번역에 최적. [무료 티어](https://ai.google.dev/gemini-api/docs/pricing)로 비용 0, 유료도 1M 토큰당 입력 $0.10·출력 $0.40. `response_mime_type`으로 JSON 출력 유도 |
 
 **왜 CDC를 안 썼나** — CDC(Debezium/binlog)는 상류 트랜잭션 DB의 변경을 캡처하는 기술인데, 본 파이프라인의 소스는 웹/API/X라 읽을 binlog가 없다. 일 수백 건 배치에 Kafka+Debezium은 과설계이므로, **앱 레벨 변경 감지(content_hash 비교 + revision)**로 뉴스 수정·삭제에 대응했다.
 
@@ -91,7 +92,7 @@
 
 ```bash
 # 0. 환경
-cp .env.example .env          # 값 채우기 (Mongo/MariaDB/Anthropic/Guardian/X)
+cp .env.example .env          # 값 채우기 (Mongo/MariaDB/Gemini/Guardian/X)
 uv sync --extra dev
 uv run playwright install chromium
 
