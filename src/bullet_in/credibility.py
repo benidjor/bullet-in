@@ -36,9 +36,8 @@ def resolve_tier(item, sources: dict, registry: "Registry | None") -> float | No
         if registry is None:
             return None
         text = item.raw_payload.get("text", "")
-        tiers = [registry.journalists[k]
-                 for h in _HANDLE_RE.findall(text)
-                 if (k := ("@" + h).lower()) in registry.journalists]
+        handles = {("@" + h).lower() for h in _HANDLE_RE.findall(text)}
+        tiers = [registry.journalists[k] for k in handles if k in registry.journalists]
         return min(tiers) if tiers else None
 
     if mode == "fmkorea":
@@ -55,6 +54,6 @@ def resolve_tier(item, sources: dict, registry: "Registry | None") -> float | No
             return min(ot)
         return 4.0
 
-    # 고정 소스
+    # 고정 소스: tier 미지정(설정 누락 등)이면 None → 항목 drop
     tier = src.get("tier")
     return float(tier) if tier is not None else None
