@@ -17,6 +17,7 @@ from bullet_in.serve.render import write_page
 from bullet_in.quality import success_rate
 
 KO_SUMMARY_MAX_LEN = 200
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 async def main(concurrency: int):
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
@@ -43,12 +44,12 @@ async def main(concurrency: int):
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     ko_rows, en_rows = partition_translation_rows(
         mart.rows_missing_translation(), sources)
-    ko_summaries = summarize_ko_rows(ko_rows, client, "gemini-2.5-flash-lite")
+    ko_summaries = summarize_ko_rows(ko_rows, client, GEMINI_MODEL)
     for r in ko_rows:
-        summary = ko_summaries.get(r["content_hash"]) \
-            or (r.get("body_excerpt") or "")[:KO_SUMMARY_MAX_LEN]
+        summary = (ko_summaries.get(r["content_hash"])
+                   or (r.get("body_excerpt") or "")[:KO_SUMMARY_MAX_LEN])
         mart.set_translation(r["content_hash"], r["title_original"], summary)
-    translations = enrich_rows(en_rows, client, "gemini-2.5-flash-lite")
+    translations = enrich_rows(en_rows, client, GEMINI_MODEL)
     for h, (tk, sk) in translations.items():
         mart.set_translation(h, tk, sk)
 
