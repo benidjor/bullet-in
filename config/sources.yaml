@@ -26,7 +26,7 @@ sources:
     config:
       list_url: "https://www.goal.com/en/team/arsenal/news/4dsgumo7d4ztgmgmcwzj0scnv"
       item_selector: "a[data-testid='article-link']"
-    enabled: true
+    enabled: false  # 라이브 점검: 셀렉터/동의월 문제로 일시 비활성 (후속 수정)
   - source_id: football_london
     display_name: football.london
     tier: 4
@@ -42,7 +42,7 @@ sources:
     adapter: x_twikit
     credibility: x_mentions
     config: { handle: "afcstuff", max_tweets: 20 }
-    enabled: true
+    enabled: false  # 후속: X 버너 자격증명 필요
   - source_id: fmkorea
     display_name: fmkorea 축구 소식통
     medium: community
@@ -56,4 +56,4 @@ sources:
       body_selector: ".xe_content"
       base_url: "https://www.fmkorea.com"
       max_posts: 10
-    enabled: true
+    enabled: false  # 후속: 퍼가기 금지 정책 + HTTP 429 대응 후 활성
