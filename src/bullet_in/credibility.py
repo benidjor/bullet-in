@@ -26,3 +26,35 @@ def load_registry(path) -> Registry:
     _build(data.get("journalists", []), jour)
     _build(data.get("outlets", []), out)
     return Registry(jour, out)
+
+def resolve_tier(item, sources: dict, registry: "Registry | None") -> float | None:
+    """항목 1건의 tier 를 산출. None 이면 호출측에서 그 항목을 버린다."""
+    src = sources.get(item.source_id, {})
+    mode = src.get("credibility")
+
+    if mode == "x_mentions":
+        if registry is None:
+            return None
+        text = item.raw_payload.get("text", "")
+        tiers = [registry.journalists[k]
+                 for h in _HANDLE_RE.findall(text)
+                 if (k := ("@" + h).lower()) in registry.journalists]
+        return min(tiers) if tiers else None
+
+    if mode == "fmkorea":
+        if registry is None:
+            return 4.0
+        title = (item.raw_payload.get("title") or "").lower()
+        body = (item.raw_payload.get("body") or "").lower()
+        text = title + " " + body
+        jt = [t for a, t in registry.journalists.items() if a in text]
+        if jt:
+            return min(jt)
+        ot = [t for a, t in registry.outlets.items() if a in title]
+        if ot:
+            return min(ot)
+        return 4.0
+
+    # 고정 소스
+    tier = src.get("tier")
+    return float(tier) if tier is not None else None
