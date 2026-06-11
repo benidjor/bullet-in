@@ -12,7 +12,7 @@ from bullet_in.score import load_sources
 from bullet_in.credibility import load_registry
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
-from bullet_in.enrich import enrich_rows, partition_translation_rows
+from bullet_in.enrich import enrich_rows, partition_translation_rows, summarize_ko_rows
 from bullet_in.serve.render import write_page
 from bullet_in.quality import success_rate
 
@@ -43,9 +43,11 @@ async def main(concurrency: int):
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     ko_rows, en_rows = partition_translation_rows(
         mart.rows_missing_translation(), sources)
+    ko_summaries = summarize_ko_rows(ko_rows, client, "gemini-2.5-flash-lite")
     for r in ko_rows:
-        mart.set_translation(r["content_hash"], r["title_original"],
-                             (r.get("body_excerpt") or "")[:KO_SUMMARY_MAX_LEN])
+        summary = ko_summaries.get(r["content_hash"]) \
+            or (r.get("body_excerpt") or "")[:KO_SUMMARY_MAX_LEN]
+        mart.set_translation(r["content_hash"], r["title_original"], summary)
     translations = enrich_rows(en_rows, client, "gemini-2.5-flash-lite")
     for h, (tk, sk) in translations.items():
         mart.set_translation(h, tk, sk)
