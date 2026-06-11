@@ -5,6 +5,7 @@ from bullet_in.adapters.guardian_api import GuardianAdapter
 from bullet_in.adapters.html import HtmlAdapter
 from bullet_in.adapters.playwright_news import PlaywrightAdapter
 from bullet_in.adapters.x_twikit import XAdapter
+from bullet_in.adapters.fmkorea import FmkoreaAdapter
 
 def build_adapters(cfg: dict) -> list:
     out = []
@@ -24,6 +25,12 @@ def build_adapters(cfg: dict) -> list:
             out.append(PlaywrightAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url")))
         elif kind == "x_twikit":
             out.append(XAdapter(sid, c["handle"], c.get("max_tweets", 20)))
+        elif kind == "fmkorea":
+            out.append(FmkoreaAdapter(
+                sid, c["list_url"], c["item_selector"], c["keywords"],
+                base_url=c.get("base_url"),
+                body_selector=c.get("body_selector", ".xe_content"),
+                max_posts=c.get("max_posts", 10)))
         else:
             raise ValueError(f"unknown adapter: {kind}")
     return out

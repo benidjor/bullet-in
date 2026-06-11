@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>에이전트 하네스 엔지니어링 — 방법론 조합 분석</title>
+<style>
+  :root{
+    --bg:#0f1320; --panel:#171c2e; --panel2:#1e2438; --line:#2b3350;
+    --ink:#e8ecf6; --muted:#9aa6c4; --faint:#6b779a;
+    --teal:#3ec8c0; --amber:#f5b545; --violet:#9b8cff; --rose:#ff7a93; --green:#5fd07a;
+    --shadow:0 8px 30px rgba(0,0,0,.35);
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:radial-gradient(1200px 600px at 70% -10%, #1b2440 0, transparent 60%),var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo","Segoe UI",Roboto,"Malgun Gothic",sans-serif;
+    line-height:1.7; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1040px; margin:0 auto; padding:48px 22px 90px}
+  header.hero{
+    border:1px solid var(--line); border-radius:20px; padding:38px 34px;
+    background:linear-gradient(135deg,#1a2138,#141a2c); box-shadow:var(--shadow); position:relative; overflow:hidden;
+  }
+  header.hero::after{content:""; position:absolute; right:-60px; top:-60px; width:240px; height:240px;
+    background:radial-gradient(circle,rgba(62,200,192,.18),transparent 70%);}
+  .kicker{color:var(--teal); font-weight:700; letter-spacing:.14em; font-size:12px; text-transform:uppercase}
+  h1{margin:.35em 0 .2em; font-size:30px; line-height:1.25; letter-spacing:-.01em}
+  .sub{color:var(--muted); font-size:15.5px; max-width:760px}
+  .meta{margin-top:18px; display:flex; gap:10px; flex-wrap:wrap}
+  .pill{font-size:12px; color:var(--muted); border:1px solid var(--line); background:#0e1426;
+    padding:5px 11px; border-radius:999px}
+
+  section{margin-top:42px}
+  .sec-head{display:flex; align-items:baseline; gap:12px; margin-bottom:8px}
+  .sec-num{font-size:13px; font-weight:800; color:var(--bg); background:var(--teal);
+    width:26px;height:26px;border-radius:8px;display:grid;place-items:center; flex:none}
+  h2{font-size:21px; margin:0; letter-spacing:-.01em}
+  .lead{color:var(--muted); font-size:15px; margin:6px 0 18px}
+
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:22px; box-shadow:var(--shadow)}
+
+  /* verdict callout */
+  .verdict{border-left:4px solid var(--amber); background:linear-gradient(90deg,rgba(245,181,69,.10),transparent);
+    padding:14px 18px; border-radius:10px; margin:14px 0; font-size:15px}
+  .verdict b{color:var(--amber)}
+
+  /* layered stack */
+  .stack{display:flex; flex-direction:column; gap:10px}
+  .layer{display:grid; grid-template-columns:170px 1fr; gap:16px; align-items:center;
+    border:1px solid var(--line); border-radius:12px; padding:14px 16px; background:var(--panel2)}
+  .layer .lname{font-weight:700}
+  .layer .ltag{font-size:12px; color:var(--faint); display:block; margin-top:2px}
+  .layer .ldesc{color:var(--muted); font-size:14px}
+  .layer.l1{border-color:rgba(62,200,192,.4)} .layer.l1 .lname{color:var(--teal)}
+  .layer.l2{border-color:rgba(95,208,122,.4)} .layer.l2 .lname{color:var(--green)}
+  .layer.l3{border-color:rgba(155,140,255,.4)} .layer.l3 .lname{color:var(--violet)}
+  .layer.l4{border-color:rgba(245,181,69,.4)} .layer.l4 .lname{color:var(--amber)}
+
+  /* tables */
+  table{width:100%; border-collapse:collapse; font-size:14px; margin-top:6px}
+  th,td{text-align:left; padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:top}
+  th{color:var(--faint); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:.04em}
+  tbody tr:hover{background:#141a2c}
+  .tool{font-weight:700; white-space:nowrap}
+  .badge{font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:999px; white-space:nowrap; display:inline-block}
+  .b-low{background:rgba(95,208,122,.16); color:var(--green)}
+  .b-high{background:rgba(255,122,147,.16); color:var(--rose)}
+  .b-comp{background:rgba(155,140,255,.16); color:var(--violet)}
+  .b-base{background:rgba(154,166,196,.14); color:var(--muted)}
+
+  /* pipeline */
+  .pipe{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:6px}
+  .stage{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px; position:relative}
+  .stage h4{margin:0 0 4px; font-size:15px}
+  .stage .snum{font-size:11px; color:var(--faint); font-weight:700}
+  .chips{display:flex; flex-direction:column; gap:7px; margin-top:10px}
+  .chip{font-size:12.5px; padding:6px 9px; border-radius:8px; border:1px solid var(--line); background:#10162a}
+  .chip.main{border-color:rgba(62,200,192,.5); color:#bff3ef}
+  .chip.aux{color:var(--muted)}
+  .chip small{color:var(--faint); display:block; font-size:11px}
+  .arrow{position:absolute; right:-9px; top:50%; transform:translateY(-50%); color:var(--faint); z-index:2; font-size:16px}
+  .pipe .stage:last-child .arrow{display:none}
+
+  /* 4 결 cards */
+  .grid4{display:grid; grid-template-columns:repeat(2,1fr); gap:12px}
+  .card{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:16px}
+  .card .ct{font-weight:700; font-size:14.5px; margin-bottom:3px}
+  .card .cd{color:var(--muted); font-size:13.5px}
+  .dot{width:9px;height:9px;border-radius:50%; display:inline-block; margin-right:7px; vertical-align:middle}
+
+  /* recommendation hero */
+  .reco{background:linear-gradient(135deg,rgba(62,200,192,.14),rgba(95,208,122,.06));
+    border:1.5px solid rgba(62,200,192,.45); border-radius:16px; padding:22px 24px; text-align:center}
+  .reco .eq{font-size:20px; font-weight:800; letter-spacing:-.01em; margin:4px 0 6px}
+  .reco .eq .t{color:var(--teal)} .reco .eq .g{color:var(--green)} .reco .eq .op{color:var(--faint); margin:0 8px}
+  .reco .note{color:var(--muted); font-size:14px}
+
+  .why{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:14px}
+  .why .card .ct{display:flex; align-items:center; gap:7px}
+  .rank{font-size:11px; font-weight:800; background:var(--teal); color:var(--bg); border-radius:6px; padding:2px 7px}
+
+  /* reserve */
+  .reserve{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
+  .reserve .card{border-style:dashed}
+  .reserve .when{margin-top:8px; font-size:12.5px; color:var(--amber)}
+
+  /* karpathy principles */
+  .principles{display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:6px}
+  .pr{display:flex; gap:12px; background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px}
+  .pr .n{flex:none; width:30px;height:30px;border-radius:9px;background:var(--violet);color:var(--bg);
+    font-weight:800; display:grid; place-items:center; font-size:14px}
+  .pr .pt{font-weight:700; font-size:14px} .pr .pd{color:var(--muted); font-size:13px}
+
+  .foot{margin-top:50px; color:var(--faint); font-size:12.5px; text-align:center; border-top:1px solid var(--line); padding-top:20px}
+  code{background:#0d1324; border:1px solid var(--line); border-radius:6px; padding:1px 6px; font-size:12.5px; color:#cfe}
+
+  @media (max-width:760px){
+    .pipe{grid-template-columns:1fr 1fr} .why,.reserve{grid-template-columns:1fr}
+    .grid4,.principles{grid-template-columns:1fr} .layer{grid-template-columns:1fr}
+    .arrow{display:none!important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Agent Harness Engineering</div>
+    <h1>방법론 조합 분석 — superpowers + 4종 검토</h1>
+    <p class="sub">superpowers를 척추로, karpathy·ouroboros·dynamic workflows·ultraplan을 어떻게 조합할지 점검했습니다.
+      결론: <b>네 개를 다 얹으면 오히려 느려집니다.</b> 겹치는 것을 덜어내고 고효율 한 가지만 더하는 "린 스택"이 답입니다.</p>
+    <div class="meta">
+      <span class="pill">2026-06-11</span>
+      <span class="pill">우선순위 · 효율성 &gt; 구현용이 &gt; 정확성 &gt; 속도</span>
+      <span class="pill">대상 · bullet-in 소스 재구성</span>
+    </div>
+  </header>
+
+  <!-- 1 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">1</span><h2>이 범주는 "하네스 엔지니어링"이 맞습니다</h2></div>
+    <p class="lead">코드를 직접 쓰는 게 아니라, LLM이 작동하는 <b>발판(프로세스·컨텍스트·검증 루프)</b>을 설계하는 일입니다.
+      Karpathy의 표현으로는 "명령형 → 선언형(목표 + 검증 루프) 전환". 다만 한 덩어리가 아니라 결이 다른 4종이 섞여 있습니다.</p>
+    <div class="panel">
+      <div class="grid4">
+        <div class="card"><div class="ct"><span class="dot" style="background:var(--teal)"></span>프로세스 하네스</div>
+          <div class="cd">작업 생애주기 파이프라인 — <b>superpowers, ouroboros</b></div></div>
+        <div class="card"><div class="ct"><span class="dot" style="background:var(--violet)"></span>행동 가드레일</div>
+          <div class="cd">코딩 중 지켜야 할 원칙 — <b>karpathy-guidelines</b></div></div>
+        <div class="card"><div class="ct"><span class="dot" style="background:var(--amber)"></span>오케스트레이션 하네스</div>
+          <div class="cd">대규모 병렬 에이전트 — <b>dynamic workflows</b></div></div>
+        <div class="card"><div class="ct"><span class="dot" style="background:var(--green)"></span>계획·리뷰 표면</div>
+          <div class="cd">계획 검토 UX — <b>ultraplan</b></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">2</span><h2>본질 + superpowers와의 중첩</h2></div>
+    <p class="lead">핵심은 <b>중복 제거</b>입니다. 중첩이 클수록 추가 가치는 작고 의식(ceremony)만 늘어납니다.</p>
+    <div class="panel">
+      <table>
+        <thead><tr><th>도구</th><th>한 줄 정체</th><th>중첩도</th><th>고유 가치</th></tr></thead>
+        <tbody>
+          <tr><td class="tool" style="color:var(--teal)">superpowers <small style="color:var(--faint)">(현재)</small></td>
+              <td>brainstorm → plan → 서브에이전트 구현 + 2단계 리뷰 → finish</td>
+              <td><span class="badge b-base">기준</span></td>
+              <td>풀 생애주기 + TDD + 리뷰 게이트</td></tr>
+          <tr><td class="tool" style="color:var(--violet)">karpathy</td>
+              <td>4대 행동지침(가정점검·단순화·수술적변경·목표주도)</td>
+              <td><span class="badge b-low">낮음 ✅</span></td>
+              <td>오버헤드 0, 코딩 중 품질 가드레일</td></tr>
+          <tr><td class="tool" style="color:var(--rose)">ouroboros</td>
+              <td>spec-first 런타임(Interview→Seed→Execute→Evaluate→Evolve)</td>
+              <td><span class="badge b-high">매우 높음 ⚠️</span></td>
+              <td>모호도&lt;0.2 게이트, <b>멀티모델 합의 검증</b></td></tr>
+          <tr><td class="tool" style="color:var(--amber)">dynamic workflows</td>
+              <td>수십~수백 에이전트 병렬 오케스트레이션</td>
+              <td><span class="badge b-comp">보완적</span></td>
+              <td>대규모 <b>폭</b>(감사·마이그레이션), 적대적 검증</td></tr>
+          <tr><td class="tool" style="color:var(--green)">ultraplan</td>
+              <td>계획을 클라우드로 보내 인라인 리뷰 후 실행</td>
+              <td><span class="badge b-comp">보완적</span></td>
+              <td>큰 계획의 풍부한 리뷰 UX (GitHub+웹 필요)</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict">
+        <b>판정 ·</b>
+        <b style="color:var(--rose)">ouroboros</b>는 superpowers와 거의 1:1 중복 → 전체 도입 대신 아이디어 2개만 차용.
+        <b style="color:var(--amber)">dynamic workflows</b>는 "폭"용 → 깊이-1 작은 기능엔 과함.
+        <b style="color:var(--green)">ultraplan</b>은 방법론이 아니라 리뷰 장소 차이 → 큰 계획에만.
+        <b style="color:var(--violet)">karpathy</b>만 중첩이 작고 오버헤드 0 → <b>즉시 채택</b>.
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">3</span><h2>4단계 × 도구 매핑</h2></div>
+    <p class="lead">주력(채택)은 한 줄로 흐르고, 보조 도구는 상황이 트리거될 때만 끼웁니다.</p>
+    <div class="panel">
+      <div class="pipe">
+        <div class="stage"><div class="snum">STAGE ①</div><h4>방법론</h4>
+          <div class="chips">
+            <div class="chip main">superpowers <small>spine</small></div>
+            <div class="chip main">karpathy <small>상시 가드레일</small></div>
+          </div><span class="arrow">➜</span></div>
+        <div class="stage"><div class="snum">STAGE ②</div><h4>설계 / 계획</h4>
+          <div class="chips">
+            <div class="chip main">brainstorm + writing-plans</div>
+            <div class="chip aux">ouroboros 모호도 게이트 <small>보조</small></div>
+            <div class="chip aux">ultraplan <small>큰 계획만</small></div>
+          </div><span class="arrow">➜</span></div>
+        <div class="stage"><div class="snum">STAGE ③</div><h4>구현</h4>
+          <div class="chips">
+            <div class="chip main">subagent-driven + TDD</div>
+            <div class="chip main">karpathy 단순화·수술적</div>
+            <div class="chip aux">dynamic workflows <small>대규모만</small></div>
+          </div><span class="arrow">➜</span></div>
+        <div class="stage"><div class="snum">STAGE ④</div><h4>검증</h4>
+          <div class="chips">
+            <div class="chip main">2단계 리뷰(스펙→품질)</div>
+            <div class="chip main">karpathy 목표주도</div>
+            <div class="chip aux">ouroboros 멀티모델 합의 <small>고위험만</small></div>
+          </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">4</span><h2>권고 — "린 스택"</h2></div>
+    <div class="panel">
+      <div class="reco">
+        <div class="kicker" style="color:var(--green)">지금 작업의 최적 조합</div>
+        <div class="eq"><span class="t">superpowers</span><span class="op">+</span><span class="g">karpathy</span></div>
+        <div class="note">척추(superpowers) + 얇은 가드레일(karpathy). 나머지 3종은 <b>예비</b>로 두고 트리거될 때만 꺼냅니다.</div>
+      </div>
+      <div class="why">
+        <div class="card"><div class="ct"><span class="rank">우선 ①④</span> 효율성·속도</div>
+          <div class="cd">겹치는 ouroboros 전체·ultraplan·workflows를 빼서 의식을 최소화. 네 개 다 얹는 게 가장 느립니다.</div></div>
+        <div class="card"><div class="ct"><span class="rank">우선 ②</span> 구현 용이성</div>
+          <div class="cd">karpathy는 서브에이전트 프롬프트에 4원칙 한 단락 주입만으로 끝. 설치·학습 0.</div></div>
+        <div class="card"><div class="ct"><span class="rank">우선 ③</span> 정확성</div>
+          <div class="cd">"가정 점검 + 수술적 변경"이 LLM 대표 실수(엉뚱한 수정·과설계)를 직접 차단. 2단계 리뷰가 보강.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">5</span><h2>예비 발동 조건 — 지금은 불필요, 향후</h2></div>
+    <div class="panel">
+      <div class="reserve">
+        <div class="card"><div class="ct" style="color:var(--amber)">dynamic workflows</div>
+          <div class="cd">수십~수백 파일을 동시에 훑는 폭 작업.</div>
+          <div class="when">▶ live-e2e 셀렉터 대규모 검증 · 코드베이스 전체 감사/마이그레이션</div></div>
+        <div class="card"><div class="ct" style="color:var(--rose)">ouroboros 멀티모델 합의</div>
+          <div class="cd">서로 다른 모델이 교차 검증하는 최종 게이트.</div>
+          <div class="when">▶ 되돌리기 어려운 고위험 변경의 최종 검증</div></div>
+        <div class="card"><div class="ct" style="color:var(--green)">ultraplan</div>
+          <div class="cd">클라우드 인라인 리뷰가 필요한 대형 계획.</div>
+          <div class="when">▶ 다음에 크고 긴 계획을 짤 때 (현재 계획은 작음)</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">6</span><h2>지금 작업에 당장 반영 — karpathy 4원칙 주입</h2></div>
+    <p class="lead">멈춘 지점(T1 구현)을 다음만 바꿔 재개합니다. 각 implementer / reviewer 서브에이전트 프롬프트 상단에 주입:</p>
+    <div class="panel">
+      <div class="principles">
+        <div class="pr"><div class="n">1</div><div><div class="pt">가정 표면화</div>
+          <div class="pd">코딩 전 가정·트레이드오프를 드러내고, 불명확하면 질문 (Think Before Coding)</div></div></div>
+        <div class="pr"><div class="n">2</div><div><div class="pt">단순함 우선</div>
+          <div class="pd">요청된 것만, 투기적 추상화 금지 (Simplicity First · YAGNI)</div></div></div>
+        <div class="pr"><div class="n">3</div><div><div class="pt">수술적 변경</div>
+          <div class="pd">무관한 코드·주석은 건드리지 않기 (Surgical Changes)</div></div></div>
+        <div class="pr"><div class="n">4</div><div><div class="pt">목표 주도</div>
+          <div class="pd">검증 가능한 성공기준(테스트 통과)으로 스스로 루프 (Goal-Driven)</div></div></div>
+      </div>
+      <div class="verdict" style="border-color:var(--teal); background:linear-gradient(90deg,rgba(62,200,192,.10),transparent)">
+        superpowers 흐름(brainstorm→plan→subagent구현+2단계리뷰)은 <b style="color:var(--teal)">그대로 유지</b>,
+        karpathy를 얇게 덧입히는 방식. <code>T1</code>부터 이 오버레이로 재개하면 됩니다.
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">
+    bullet-in · 에이전트 하네스 엔지니어링 분석 · 2026-06-11 · superpowers + karpathy 린 스택 권고
+  </div>
+
+</div>
+</body>
+</html>

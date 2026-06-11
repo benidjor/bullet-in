@@ -9,15 +9,20 @@ from bullet_in.ingest import gather_all
 from bullet_in.canonical import content_hash, canonical_url
 from bullet_in.pipeline import to_articles
 from bullet_in.score import load_sources
+from bullet_in.credibility import load_registry
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
-from bullet_in.enrich import enrich_rows
+from bullet_in.enrich import enrich_rows, partition_translation_rows, summarize_ko_rows
 from bullet_in.serve.render import write_page
 from bullet_in.quality import success_rate
+
+KO_SUMMARY_MAX_LEN = 200
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 async def main(concurrency: int):
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
     sources = load_sources("config/sources.yaml")
+    registry = load_registry("config/credibility.yaml")
     adapters = build_adapters(cfg)
 
     t0 = time.perf_counter()
@@ -33,11 +38,18 @@ async def main(concurrency: int):
 
     engine = create_engine(os.environ["MARIADB_URL"])
     mart = MartStore(engine)
-    arts = to_articles(raw, sources, seen=mart.seen_map())
+    arts = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
     mart.upsert(arts)
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    translations = enrich_rows(mart.rows_missing_translation(), client, "gemini-2.5-flash-lite")
+    ko_rows, en_rows = partition_translation_rows(
+        mart.rows_missing_translation(), sources)
+    ko_summaries = summarize_ko_rows(ko_rows, client, GEMINI_MODEL)
+    for r in ko_rows:
+        summary = (ko_summaries.get(r["content_hash"])
+                   or (r.get("body_excerpt") or "")[:KO_SUMMARY_MAX_LEN])
+        mart.set_translation(r["content_hash"], r["title_original"], summary)
+    translations = enrich_rows(en_rows, client, GEMINI_MODEL)
     for h, (tk, sk) in translations.items():
         mart.set_translation(h, tk, sk)
 

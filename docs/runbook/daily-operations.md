@@ -3,7 +3,7 @@
 매일 수집을 정상 가동·점검하는 절차.
 
 ## 1. 사전 준비 (최초 1회)
-- `.env.example`를 `.env`로 복사 후 값 채우기: `MONGO_URI`, `MARIADB_URL`, `GEMINI_API_KEY`, `GUARDIAN_API_KEY`, X 버너 계정(`X_USERNAME`/`X_EMAIL`/`X_PASSWORD`).
+- `.env.example`를 `.env`로 복사 후 값 채우기: `MONGO_URI`, `MARIADB_URL`, `GEMINI_API_KEY`, X 버너 계정(`X_USERNAME`/`X_EMAIL`/`X_PASSWORD`).
 - 의존성: `uv sync --extra dev && uv run playwright install chromium`.
 
 ## 2. 데이터 스토어 기동
