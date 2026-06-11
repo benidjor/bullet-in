@@ -17,7 +17,7 @@
 본문 ("왜" 중심, 72자 wrap)
 
 Refs: <plan/spec/task/PR/runbook 링크>
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.github.com>
 ```
 
 - 언어: `type`·`scope`는 영어, 제목·본문은 한국어.
@@ -43,12 +43,15 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 모든 커밋 본문 끝에 아래 트레일러를 붙임.
 
 ```
-Co-Authored-By: Claude Opus <버전> (1M context) <noreply@anthropic.com>
+Co-Authored-By: Claude Opus <버전> (1M context) <94089198+benidjor@users.noreply.github.com>
 ```
 
 - `<버전>`은 실제 작업한 모델을 반영함.
   4.8로 작업하면 `4.8`, 과거 4.7로 작업한 커밋은 `4.7`.
 - 이 트레일러는 커밋 단위로 AI 활용을 투명하게 남기기 위한 것이며, PR에는 적용하지 않음 (§2.7 참조)
+- **이메일은 저장소 소유자의 GitHub noreply (`94089198+benidjor@users.noreply.github.com`)를 씀.**
+  `noreply@anthropic.com` 같은 공용 도메인 주소를 쓰면 그 주소를 자기 계정에 등록한 제3자
+  (예: 과거 `meta-chain-developer`)에게 co-author로 귀속돼 contributor 목록에 노출되므로 금지.
 
 ## 2. Pull Request
 
