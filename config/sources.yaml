@@ -3,8 +3,11 @@ sources:
     display_name: Arsenal.com
     tier: 0
     medium: official
-    adapter: rss
-    config: { feed_url: "https://www.arsenal.com/rss-feeds/news" }
+    adapter: html
+    config:
+      list_url: "https://www.arsenal.com/news"
+      item_selector: "a.responsive-card__wrapper"
+      base_url: "https://www.arsenal.com"
     enabled: true
   - source_id: bbc_sport
     display_name: BBC Sport
