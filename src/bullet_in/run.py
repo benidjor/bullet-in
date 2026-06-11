@@ -16,6 +16,8 @@ from bullet_in.enrich import enrich_rows, partition_translation_rows
 from bullet_in.serve.render import write_page
 from bullet_in.quality import success_rate
 
+KO_SUMMARY_MAX_LEN = 200
+
 async def main(concurrency: int):
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
     sources = load_sources("config/sources.yaml")
@@ -43,7 +45,7 @@ async def main(concurrency: int):
         mart.rows_missing_translation(), sources)
     for r in ko_rows:
         mart.set_translation(r["content_hash"], r["title_original"],
-                             (r.get("body_excerpt") or "")[:200])
+                             (r.get("body_excerpt") or "")[:KO_SUMMARY_MAX_LEN])
     translations = enrich_rows(en_rows, client, "gemini-2.5-flash-lite")
     for h, (tk, sk) in translations.items():
         mart.set_translation(h, tk, sk)
