@@ -9,3 +9,13 @@ def test_factory_builds_enabled_adapters(monkeypatch):
     ]}
     adapters = build_adapters(cfg)
     assert [a.source_id for a in adapters] == ["guardian"]
+
+def test_factory_builds_fmkorea_adapter():
+    cfg = {"sources": [
+        {"source_id": "fmkorea", "adapter": "fmkorea", "enabled": True,
+         "config": {"list_url": "https://fm.test/football_news",
+                    "item_selector": "a.title", "keywords": ["아스날", "Arsenal"]}},
+    ]}
+    adapters = build_adapters(cfg)
+    assert adapters[0].source_id == "fmkorea"
+    assert adapters[0].keywords == ["아스날", "Arsenal"]
