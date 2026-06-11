@@ -197,3 +197,27 @@ ingest → RawItems
 | `src/bullet_in/storage/mariadb.py` | rows_missing_translation 에 source_id 포함 |
 | `.env.example` / 문서 | GUARDIAN_API_KEY 제거 |
 | `tests/` | test_credibility, test_fmkorea_adapter 신규 |
+
+## 9. 향후 작업 (live-e2e 트랙으로 이연)
+
+### 9.1 fmkorea '퍼가기 금지' 글 처리 정책 (미구현 — 실제 DOM 필요)
+
+fmkorea '축구 소식통'의 일부 글은 **작성자가 직접 번역한 2차 저작물**이며 '퍼가기 금지'
+표식이 붙는다(예: `https://www.fmkorea.com/9940576222`). 이 본문을 그대로 복제·요약해
+서빙하면 저작권·평판 문제가 생긴다. 결정: **무시하고 크롤(❌) 대신, 원 출처 기반으로 처리한다.**
+
+처리 분기 — **퍼가기 금지 여부**로 나눈다:
+
+1. **퍼가기 금지 감지** → fmkorea 번역 본문은 **저장·요약하지 않는다**.
+   - ① 본문에서 **원문 링크(The Athletic·BBC 등) 추출 가능 + 접근 가능(비페이월)**
+     → 원문을 가져와 **en 경로(번역+요약)**, 공신력은 해당 매체/기자 tier.
+   - ② 원문이 **페이월/링크 없음** → **제목(헤드라인) + 출처·tier + 링크만**(본문 미복제), 또는 스킵.
+2. **퍼가기 금지가 아닌 글** → 현행대로 fmkorea 본문을 `summarize_ko_rows`로 한국어 요약.
+
+구현 시 필요(실제 페이지 없이는 추측이 되어 이연):
+- `_is_repost_blocked(html)` — 퍼가기 금지 표식 감지(실제 DOM 표식 확인 필요).
+- 본문에서 **원문 캐노니컬 링크 추출** 로직(출처 표기 위치·형식 확인 필요).
+- 페이월 감지 + 폴백(헤드라인/링크만) 경로.
+- 안티봇: 방금 라이브 점검에서 fmkorea가 **HTTP 429**를 반환 → 요청 레이트·UA·간격 조정 또는 Playwright 폴백 검토.
+
+> 이 정책은 afcstuff(X)와 동일한 "**애그리게이터는 원 출처를 가리키는 발견 surface**" 철학의 연장이다.
