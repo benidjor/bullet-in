@@ -1,7 +1,8 @@
+import pytest
 from pathlib import Path
 from bullet_in.credibility import load_registry
 
-REG = Path("config/credibility.yaml")
+REG = Path(__file__).parent.parent / "config" / "credibility.yaml"
 
 def test_load_registry_maps_aliases_lowercased():
     r = load_registry(REG)
@@ -17,8 +18,5 @@ def test_load_registry_rejects_duplicate_alias(tmp_path):
         '  - {name: A, tier: 1, aliases: ["dup"]}\n'
         '  - {name: B, tier: 2, aliases: ["dup"]}\n'
         "outlets: []\n", encoding="utf-8")
-    try:
+    with pytest.raises(ValueError, match="duplicate alias"):
         load_registry(p)
-        assert False, "expected ValueError"
-    except ValueError:
-        pass
