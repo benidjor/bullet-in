@@ -109,13 +109,15 @@ def resolve_tier(item, sources, registry) -> float | None:
 - 수집 방식: **정적 httpx 우선**, 차단 시 Playwright 폴백(구현 단계에서 실제 테스트로 확정).
 - 본문 fetch 실패 시 그 글만 스킵(배치 중단 안 함).
 
-### 3.5 enrich 한국어 스킵
+### 3.5 enrich 한국어 분기 (번역 스킵·요약 수행)
 
 `rows_missing_translation()` 쿼리에 `source_id`를 포함시키고, `run.py`에서 소스의
-`lang`으로 분기한다.
+`lang`으로 분기한다. Gemini API의 용도는 두 가지다 — ① 번역, ② 요약.
 
-- **ko 소스** (fmkorea): LLM 호출 없이 `set_translation(h, title_original, body_excerpt)`.
-- **en 소스**: 기존대로 `enrich_rows(..., client, "gemini-2.5-flash-lite")`.
+- **ko 소스** (fmkorea): **번역은 스킵**(`title_ko=원제목`), 그러나 **요약은 수행**한다.
+  `summarize_ko_rows(...)`로 한국어 본문을 한국어 한 줄 요약(`summary_ko`)으로 생성.
+  요약 호출 실패 시 본문 발췌(`body_excerpt[:200]`)로 graceful fallback.
+- **en 소스**: 기존대로 `enrich_rows(...)`가 번역 + 요약을 함께 수행.
 
 ### 3.6 `pipeline.py` 변경
 
@@ -151,7 +153,7 @@ tier=tier, confidence_score=round(max(0.0, 1.0 - tier/4.0), 3)
 ingest → RawItems
   → to_articles: 항목마다 resolve_tier()  [고정 | x_mentions | fmkorea]
        └ None → 제외(afcstuff 인용 없음)
-  → enrich: ko 소스 스킵(원제목/본문발췌), en 소스만 Gemini 번역
+  → enrich: ko 소스=번역 스킵+한국어 요약, en 소스=Gemini 번역+요약
   → store(MariaDB) → serve(site/index.html)
 ```
 
@@ -162,7 +164,7 @@ ingest → RawItems
 | a | fmkorea 제목 키워드 | `["아스날", "Arsenal"]` (대소문자 무시) |
 | b | fmkorea 수집 방식 | 정적 httpx 우선, 차단 시 Playwright 폴백 |
 | c | fmkorea 본문 수집 | 수집함(기자 파싱·요약용) |
-| d | ko 소스 번역 | LLM 스킵, `title_ko=원제목`, `summary_ko=본문 발췌` |
+| d | ko 소스 번역/요약 | 번역 스킵(`title_ko=원제목`) + Gemini로 한국어 요약(`summary_ko`), 실패 시 본문발췌 폴백 |
 | e | Guardian 제거 범위 | 설정·env·문서 제거, 어댑터 코드·테스트 보존 |
 
 ## 6. 에러 처리
