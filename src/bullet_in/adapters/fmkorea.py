@@ -5,6 +5,8 @@ import httpx
 from bs4 import BeautifulSoup
 from bullet_in.models import RawItem
 
+_BODY_MAX_CHARS = 2000
+
 def _matches(title: str, keywords: list[str]) -> bool:
     t = title.lower()
     return any(k.lower() in t for k in keywords)
@@ -12,7 +14,7 @@ def _matches(title: str, keywords: list[str]) -> bool:
 def _body_text(html: str, selector: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     el = soup.select_one(selector)
-    return el.get_text(" ", strip=True)[:2000] if el else ""
+    return el.get_text(" ", strip=True)[:_BODY_MAX_CHARS] if el else ""
 
 class FmkoreaAdapter:
     source_type = "html"
@@ -29,6 +31,7 @@ class FmkoreaAdapter:
 
     async def fetch(self) -> list[RawItem]:
         now, out, seen = datetime.now(timezone.utc), [], set()
+        # fmkorea는 봇 차단 회피를 위해 Mozilla prefix 포함
         headers = {"User-Agent": "Mozilla/5.0 bullet-in/0.1"}
         async with httpx.AsyncClient(timeout=20, follow_redirects=True,
                                      headers=headers) as c:
