@@ -5,6 +5,9 @@ PROMPT = ("Translate the football news title to natural Korean and write a one-l
           "Korean summary. Return ONLY JSON: "
           '{{"title_ko": "...", "summary_ko": "..."}}\n\nTitle: {title}\nBody: {body}')
 
+SUMMARY_PROMPT = ("다음 한국어 축구 뉴스를 한 문장으로 요약하세요. "
+                  'JSON만 반환: {{"summary_ko": "..."}}\n\n제목: {title}\n본문: {body}')
+
 def _extract(text: str) -> tuple[str, str] | None:
     m = re.search(r"\{.*\}", text, re.DOTALL)
     if not m:
@@ -45,9 +48,6 @@ def partition_translation_rows(rows: list[dict], sources: dict[str, dict]
         lang = sources.get(r.get("source_id"), {}).get("lang", "en")
         (ko if lang == "ko" else en).append(r)
     return ko, en
-
-SUMMARY_PROMPT = ("다음 한국어 축구 뉴스를 한 문장으로 요약하세요. "
-                  'JSON만 반환: {{"summary_ko": "..."}}\n\n제목: {title}\n본문: {body}')
 
 def _extract_summary(text: str) -> str | None:
     m = re.search(r"\{.*\}", text, re.DOTALL)
