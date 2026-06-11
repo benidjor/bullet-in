@@ -36,3 +36,12 @@ def enrich_rows(rows: list[dict], client, model: str) -> dict[str, tuple[str, st
         if parsed is not None:
             result[r["content_hash"]] = parsed
     return result
+
+def partition_translation_rows(rows: list[dict], sources: dict[str, dict]
+                               ) -> tuple[list[dict], list[dict]]:
+    """소스 lang 기준으로 (ko_rows, en_rows) 로 분리. lang 미지정은 en 취급."""
+    ko, en = [], []
+    for r in rows:
+        lang = sources.get(r.get("source_id"), {}).get("lang", "en")
+        (ko if lang == "ko" else en).append(r)
+    return ko, en
