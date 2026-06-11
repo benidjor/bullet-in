@@ -4,7 +4,7 @@ from dateutil import parser as dtparser
 from bullet_in.models import RawItem, Article
 from bullet_in.canonical import canonical_url, content_hash
 from bullet_in.dedup import classify
-from bullet_in.credibility import resolve_tier
+from bullet_in.credibility import resolve_tier, Registry
 from bullet_in.score import confidence_from_tier
 
 def _published(payload: dict) -> datetime:
@@ -15,7 +15,8 @@ def _published(payload: dict) -> datetime:
         return datetime.now(timezone.utc)
 
 def to_articles(raw: list[RawItem], sources: dict[str, dict],
-                seen: dict[str, tuple[str, int]], registry=None) -> list[Article]:
+                seen: dict[str, tuple[str, int]],
+                registry: "Registry | None" = None) -> list[Article]:
     out: list[Article] = []
     local_seen = dict(seen)
     for item in raw:
