@@ -4,7 +4,8 @@ from dateutil import parser as dtparser
 from bullet_in.models import RawItem, Article
 from bullet_in.canonical import canonical_url, content_hash
 from bullet_in.dedup import classify
-from bullet_in.score import confidence
+from bullet_in.credibility import resolve_tier
+from bullet_in.score import confidence_from_tier
 
 def _published(payload: dict) -> datetime:
     raw = payload.get("published") or payload.get("created_at")
@@ -14,10 +15,13 @@ def _published(payload: dict) -> datetime:
         return datetime.now(timezone.utc)
 
 def to_articles(raw: list[RawItem], sources: dict[str, dict],
-                seen: dict[str, tuple[str, int]]) -> list[Article]:
+                seen: dict[str, tuple[str, int]], registry=None) -> list[Article]:
     out: list[Article] = []
     local_seen = dict(seen)
     for item in raw:
+        tier = resolve_tier(item, sources, registry)
+        if tier is None:
+            continue
         title = item.raw_payload.get("title") or item.raw_payload.get("text") or ""
         url = canonical_url(item.url)
         h = content_hash(title, url)
@@ -25,11 +29,11 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
         if decision == "duplicate":
             continue
         local_seen[url] = (h, rev)
-        src = sources.get(item.source_id, {})
         out.append(Article(
             content_hash=h, url=url, source_id=item.source_id,
-            tier=src.get("tier"), confidence_score=confidence(item.source_id, sources),
-            title_original=title, body_excerpt=item.raw_payload.get("summary"),
+            tier=tier, confidence_score=confidence_from_tier(tier),
+            title_original=title,
+            body_excerpt=item.raw_payload.get("summary") or item.raw_payload.get("body"),
             published_at=_published(item.raw_payload), fetched_at=item.fetched_at,
             revision=rev))
     return out
