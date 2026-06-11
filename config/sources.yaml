@@ -6,13 +6,6 @@ sources:
     adapter: rss
     config: { feed_url: "https://www.arsenal.com/rss-feeds/news" }
     enabled: true
-  - source_id: guardian
-    display_name: The Guardian
-    tier: 1.5
-    medium: newspaper
-    adapter: guardian_api
-    config: { query: "Arsenal", section: "football" }
-    enabled: true
   - source_id: bbc_sport
     display_name: BBC Sport
     tier: 2
@@ -40,10 +33,24 @@ sources:
       list_url: "https://www.football.london/arsenal-fc/"
       item_selector: "a.headline"
     enabled: true
-  - source_id: x_handofarsnal
-    display_name: handofarsnal (ITK)
-    tier: 1.5
+  - source_id: x_afcstuff
+    display_name: afcstuff (aggregator)
     medium: x
     adapter: x_twikit
-    config: { handle: "handofarsnal", max_tweets: 20 }
+    credibility: x_mentions
+    config: { handle: "afcstuff", max_tweets: 20 }
+    enabled: true
+  - source_id: fmkorea
+    display_name: fmkorea 축구 소식통
+    medium: community
+    adapter: fmkorea
+    credibility: fmkorea
+    lang: ko
+    config:
+      list_url: "https://www.fmkorea.com/football_news"
+      item_selector: "h3.title a"
+      keywords: ["아스날", "Arsenal"]
+      body_selector: ".xe_content"
+      base_url: "https://www.fmkorea.com"
+      max_posts: 10
     enabled: true
