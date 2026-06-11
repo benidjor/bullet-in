@@ -42,3 +42,15 @@ def test_enrich_skips_bad_row_without_aborting_batch():
             {"content_hash":"ok","title_original":"B","body_excerpt":""}]
     out = enrich_rows(rows, C(), "gemini-2.5-flash-lite")
     assert "bad" not in out and out["ok"] == ("제", "요")
+
+from bullet_in.enrich import partition_translation_rows
+
+def test_partition_splits_ko_and_en_by_source_lang():
+    rows = [
+        {"content_hash": "k", "source_id": "fmkorea", "title_original": "한글", "body_excerpt": "본문"},
+        {"content_hash": "e", "source_id": "bbc_sport", "title_original": "Eng", "body_excerpt": "b"},
+    ]
+    sources = {"fmkorea": {"lang": "ko"}, "bbc_sport": {"tier": 1}}
+    ko, en = partition_translation_rows(rows, sources)
+    assert [r["content_hash"] for r in ko] == ["k"]
+    assert [r["content_hash"] for r in en] == ["e"]
