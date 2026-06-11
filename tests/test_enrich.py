@@ -54,3 +54,33 @@ def test_partition_splits_ko_and_en_by_source_lang():
     ko, en = partition_translation_rows(rows, sources)
     assert [r["content_hash"] for r in ko] == ["k"]
     assert [r["content_hash"] for r in en] == ["e"]
+
+from bullet_in.enrich import summarize_ko_rows
+
+def test_summarize_ko_rows_returns_korean_summary():
+    class M:
+        def generate_content(self, **kw):
+            class R: pass
+            r = R(); r.text = '{"summary_ko":"사카 재계약 임박"}'
+            return r
+    class C:
+        def __init__(self): self.models = M()
+    rows = [{"content_hash": "h", "title_original": "사카 재계약", "body_excerpt": "본문"}]
+    out = summarize_ko_rows(rows, C(), "gemini-2.5-flash-lite")
+    assert out == {"h": "사카 재계약 임박"}
+
+def test_summarize_ko_rows_skips_bad_row_without_aborting_batch():
+    class M:
+        def __init__(self): self.n = 0
+        def generate_content(self, **kw):
+            self.n += 1
+            class R: pass
+            r = R()
+            r.text = "garbage no json" if self.n == 1 else '{"summary_ko":"요약"}'
+            return r
+    class C:
+        def __init__(self): self.models = M()
+    rows = [{"content_hash": "bad", "title_original": "A", "body_excerpt": ""},
+            {"content_hash": "ok", "title_original": "B", "body_excerpt": ""}]
+    out = summarize_ko_rows(rows, C(), "gemini-2.5-flash-lite")
+    assert "bad" not in out and out["ok"] == "요약"
