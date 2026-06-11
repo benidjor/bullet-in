@@ -1,6 +1,8 @@
 # 소스 재구성 + 공신력 레지스트리 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **방법론 오버레이 (karpathy 가드레일):** 구현·리뷰 서브에이전트는 4원칙을 지킨다 — ① 가정·트레이드오프 표면화(불명확하면 질문) ② 단순함 우선(요청된 것만, 투기적 추상화 금지) ③ 수술적 변경(무관한 코드·주석 불간섭) ④ 목표주도(테스트 통과로 자체 루프).
 
 **Goal:** Guardian을 제거하고, X 수집을 afcstuff(애그리게이터)로 교체해 인용된 `@계정` 기반 동적 공신력을 부여하며, fmkorea '축구 소식통' 보드를 아스날 키워드로 크롤링해 대괄호 매체 기반 공신력으로 통합한다.
 
@@ -302,9 +304,9 @@ def test_confidence_from_tier_linear():
 Run: `uv run pytest tests/test_score.py::test_confidence_from_tier_linear -v`
 Expected: FAIL — `ImportError: cannot import name 'confidence_from_tier'`
 
-- [ ] **Step 3: 구현 추가**
+- [ ] **Step 3: 구현 추가 + 기존 confidence() DRY 리팩터**
 
-Append to `src/bullet_in/score.py`:
+Append `confidence_from_tier` to `src/bullet_in/score.py`:
 
 ```python
 def confidence_from_tier(tier: float | None) -> float:
@@ -312,6 +314,15 @@ def confidence_from_tier(tier: float | None) -> float:
     if tier is None:
         return 0.0
     return round(max(0.0, 1.0 - float(tier) / 4.0), 3)
+```
+
+그리고 기존 `confidence()` 의 본문을 새 헬퍼에 위임하도록 교체(산술 중복 제거). 기존 시그니처·동작은 그대로 유지된다:
+
+```python
+def confidence(source_id: str, sources: dict[str, dict]) -> float:
+    """tier 0..4 를 confidence 1.0..0.0 로 선형 매핑. 미지의 소스는 0.0."""
+    src = sources.get(source_id)
+    return confidence_from_tier(None if src is None else src["tier"])
 ```
 
 - [ ] **Step 4: 테스트 통과 확인**
