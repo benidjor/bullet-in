@@ -58,58 +58,46 @@ def test_partition_splits_ko_and_en_by_source_lang():
 from bullet_in.enrich import summarize_ko_rows
 
 import logging
-import bullet_in.enrich as enrich_mod
 
 class _RateLimit(Exception):
     code = 429
 
-def test_enrich_retries_rate_limit_then_succeeds(monkeypatch):
-    monkeypatch.setattr(enrich_mod.time, "sleep", lambda s: None)
+def test_enrich_stops_and_logs_on_rate_limit(caplog):
+    # 429를 만나면 그 회차는 즉시 중단하고 남은 행은 호출하지 않는다(다음 사이클 누적).
     class M:
         def __init__(self): self.n = 0
         def generate_content(self, **kw):
             self.n += 1
-            if self.n == 1:
-                raise _RateLimit("429 RESOURCE_EXHAUSTED")
-            class R: pass
-            r = R(); r.text = '{"title_ko":"제","summary_ko":"요"}'
-            return r
-    class C:
-        def __init__(self): self.models = M()
-    c = C()
-    out = enrich_rows([{"content_hash":"h","title_original":"T","body_excerpt":""}], c, "m")
-    assert out["h"] == ("제", "요")
-    assert c.models.n == 2  # 429 후 재시도해 성공
-
-def test_enrich_skips_and_logs_persistent_rate_limit(monkeypatch, caplog):
-    monkeypatch.setattr(enrich_mod.time, "sleep", lambda s: None)
-    class M:
-        def generate_content(self, **kw):
             raise _RateLimit("429 RESOURCE_EXHAUSTED")
     class C:
         def __init__(self): self.models = M()
+    c = C()
+    rows = [{"content_hash":"a","title_original":"A","body_excerpt":""},
+            {"content_hash":"b","title_original":"B","body_excerpt":""}]
     with caplog.at_level(logging.WARNING):
-        out = enrich_rows([{"content_hash":"h","title_original":"T","body_excerpt":""}], C(), "m")
+        out = enrich_rows(rows, c, "m")
     assert out == {}
+    assert c.models.n == 1  # 둘째 행은 호출조차 안 함
     assert any("429" in r.message or "rate limit" in r.message.lower()
                for r in caplog.records)
 
-def test_summarize_ko_rows_retries_rate_limit_then_succeeds(monkeypatch):
-    monkeypatch.setattr(enrich_mod.time, "sleep", lambda s: None)
+def test_summarize_ko_rows_stops_and_logs_on_rate_limit(caplog):
     class M:
         def __init__(self): self.n = 0
         def generate_content(self, **kw):
             self.n += 1
-            if self.n == 1:
-                raise _RateLimit("429")
-            class R: pass
-            r = R(); r.text = '{"summary_ko":"요약"}'
-            return r
+            raise _RateLimit("429")
     class C:
         def __init__(self): self.models = M()
     c = C()
-    out = summarize_ko_rows([{"content_hash":"h","title_original":"T","body_excerpt":""}], c, "m")
-    assert out == {"h": "요약"} and c.models.n == 2
+    rows = [{"content_hash":"a","title_original":"A","body_excerpt":""},
+            {"content_hash":"b","title_original":"B","body_excerpt":""}]
+    with caplog.at_level(logging.WARNING):
+        out = summarize_ko_rows(rows, c, "m")
+    assert out == {}
+    assert c.models.n == 1
+    assert any("429" in r.message or "rate limit" in r.message.lower()
+               for r in caplog.records)
 
 def test_summarize_ko_rows_returns_korean_summary():
     class M:
