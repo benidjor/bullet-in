@@ -57,6 +57,60 @@ def test_partition_splits_ko_and_en_by_source_lang():
 
 from bullet_in.enrich import summarize_ko_rows
 
+import logging
+import bullet_in.enrich as enrich_mod
+
+class _RateLimit(Exception):
+    code = 429
+
+def test_enrich_retries_rate_limit_then_succeeds(monkeypatch):
+    monkeypatch.setattr(enrich_mod.time, "sleep", lambda s: None)
+    class M:
+        def __init__(self): self.n = 0
+        def generate_content(self, **kw):
+            self.n += 1
+            if self.n == 1:
+                raise _RateLimit("429 RESOURCE_EXHAUSTED")
+            class R: pass
+            r = R(); r.text = '{"title_ko":"제","summary_ko":"요"}'
+            return r
+    class C:
+        def __init__(self): self.models = M()
+    c = C()
+    out = enrich_rows([{"content_hash":"h","title_original":"T","body_excerpt":""}], c, "m")
+    assert out["h"] == ("제", "요")
+    assert c.models.n == 2  # 429 후 재시도해 성공
+
+def test_enrich_skips_and_logs_persistent_rate_limit(monkeypatch, caplog):
+    monkeypatch.setattr(enrich_mod.time, "sleep", lambda s: None)
+    class M:
+        def generate_content(self, **kw):
+            raise _RateLimit("429 RESOURCE_EXHAUSTED")
+    class C:
+        def __init__(self): self.models = M()
+    with caplog.at_level(logging.WARNING):
+        out = enrich_rows([{"content_hash":"h","title_original":"T","body_excerpt":""}], C(), "m")
+    assert out == {}
+    assert any("429" in r.message or "rate limit" in r.message.lower()
+               for r in caplog.records)
+
+def test_summarize_ko_rows_retries_rate_limit_then_succeeds(monkeypatch):
+    monkeypatch.setattr(enrich_mod.time, "sleep", lambda s: None)
+    class M:
+        def __init__(self): self.n = 0
+        def generate_content(self, **kw):
+            self.n += 1
+            if self.n == 1:
+                raise _RateLimit("429")
+            class R: pass
+            r = R(); r.text = '{"summary_ko":"요약"}'
+            return r
+    class C:
+        def __init__(self): self.models = M()
+    c = C()
+    out = summarize_ko_rows([{"content_hash":"h","title_original":"T","body_excerpt":""}], c, "m")
+    assert out == {"h": "요약"} and c.models.n == 2
+
 def test_summarize_ko_rows_returns_korean_summary():
     class M:
         def generate_content(self, **kw):
