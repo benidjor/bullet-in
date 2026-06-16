@@ -1,11 +1,21 @@
 from __future__ import annotations
+from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from bullet_in.models import Article
 
+_SCHEMA = Path(__file__).with_name("schema.sql")
+
 class MartStore:
     def __init__(self, engine: Engine):
         self.engine = engine
+    def ensure_schema(self) -> None:
+        """schema.sql 을 멱등 적용(CREATE TABLE IF NOT EXISTS)해 첫 실행 전
+        테이블을 보장한다. run.py 가 호출하므로 수동 스키마 적용이 불필요."""
+        stmts = [s.strip() for s in _SCHEMA.read_text().split(";") if s.strip()]
+        with self.engine.begin() as c:
+            for s in stmts:
+                c.execute(text(s))
     def upsert(self, articles: list[Article]) -> int:
         sql = text("""
           INSERT INTO articles
