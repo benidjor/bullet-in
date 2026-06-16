@@ -17,6 +17,8 @@ class MartStore:
             for s in stmts:
                 c.execute(text(s))
     def upsert(self, articles: list[Article]) -> int:
+        if not articles:  # 신규 없는 회차 → 빈 executemany는 SQLAlchemy가 거부
+            return 0
         sql = text("""
           INSERT INTO articles
             (content_hash,url,source_id,author,tier,confidence_score,
