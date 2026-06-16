@@ -92,6 +92,6 @@ SoT: `docs/conventions/2026-06-11-commit-pr-convention.md`. 핵심:
 - **소스 셀렉터 드리프트**: `config/sources.yaml`의 selector/feed_url은 외부 사이트에 의존해 깨진다.
   신규/변경 소스는 머지 전 어댑터 단독 `fetch()`로 라이브 검증할 것(단위 테스트는 모킹이라 못 잡음).
   사례: `docs/troubleshooting/2026-06-12-live-source-selector-drift.md`.
-- **Gemini 무료 티어 429**: ~15 RPM이라 회당 ~15건만 번역됨. enrich는 429를 식별해 바운드 백오프 후 재시도하고, 소진 시 `WARNING` 로깅(파싱 실패와 구분). 전건 번역하려면 결제 활성화(옵션 A) 필요.
+- **Gemini 무료 티어 429**: ~15 RPM은 분당 *속도* 한도(총량 아님). enrich는 429 식별 시 그 회차를 즉시 중단·`WARNING` 로깅(파싱 실패와 구분), 남은 건은 다음 사이클 누적. 전건 번역은 **하루 4회 스케줄로 멱등 누적**(옵션 C, 결제 불필요). per-row 백오프는 두지 않음(스케줄이 재시도).
 - **스키마 부트스트랩**: `run.py`가 `MartStore.ensure_schema()`로 `schema.sql`을 멱등 적용(`CREATE TABLE IF NOT EXISTS`)한다. 수동 적용 불필요.
 - **git 신원**: `benidjor <94089198+benidjor@users.noreply.github.com>`로 커밋(다른 이메일 금지).
