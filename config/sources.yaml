@@ -5,9 +5,11 @@ sources:
     medium: official
     adapter: html
     config:
-      list_url: "https://www.arsenal.com/news"
+      # 남자팀 필터 URL + 'sign'(영입·재계약) 제목만 → 공식 영입 확정 전용 고정밀 소스
+      list_url: "https://www.arsenal.com/news?field_article_arsenal_team_value=men&revision_information="
       item_selector: "a.responsive-card__wrapper"
       base_url: "https://www.arsenal.com"
+      title_contains: "sign"
     enabled: true
   - source_id: bbc_sport
     display_name: BBC Sport

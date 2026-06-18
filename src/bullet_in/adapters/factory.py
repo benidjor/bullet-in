@@ -20,7 +20,8 @@ def build_adapters(cfg: dict) -> list:
             out.append(GuardianAdapter(sid, os.environ["GUARDIAN_API_KEY"],
                                        c.get("query", "Arsenal"), c.get("section", "football")))
         elif kind == "html":
-            out.append(HtmlAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url")))
+            out.append(HtmlAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url"),
+                                   title_contains=c.get("title_contains")))
         elif kind == "playwright":
             out.append(PlaywrightAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url")))
         elif kind == "x_twikit":
