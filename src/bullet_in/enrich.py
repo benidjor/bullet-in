@@ -9,11 +9,16 @@ def _is_rate_limit(exc: Exception) -> bool:
     s = str(exc)
     return "429" in s or "RESOURCE_EXHAUSTED" in s
 
-PROMPT = ("Translate the football news title to natural Korean and write a one-line "
-          "Korean summary. Return ONLY JSON: "
-          '{{"title_ko": "...", "summary_ko": "..."}}\n\nTitle: {title}\nBody: {body}')
+PROMPT = ("아스날 FC 축구 뉴스를 한국어로 번역·요약한다. 규칙:\n"
+          "- title_ko: 한국 스포츠 기사 제목체로 간결하게(명사형 위주, 불필요한 조사 생략). "
+          "예: '케이틀린 포드, 재계약 체결'.\n"
+          "- summary_ko: 한 문장, 신문 평어체(종결어미 '~다'), 사실 중심, 추측·과장 금지.\n"
+          "- 고유명사는 통용 한글 표기. Arsenal=아스날, 선수·구단명은 널리 쓰는 한글 표기.\n"
+          'ONLY JSON 반환: {{"title_ko": "...", "summary_ko": "..."}}\n\nTitle: {title}\nBody: {body}')
 
-SUMMARY_PROMPT = ("다음 한국어 축구 뉴스를 한 문장으로 요약하세요. "
+SUMMARY_PROMPT = ("다음 한국어 축구 뉴스를 한 문장으로 요약한다. "
+                  "신문 평어체(종결어미 '~다'), 사실 중심, 추측·과장 금지. "
+                  "고유명사는 통용 한글 표기(Arsenal=아스날). "
                   'JSON만 반환: {{"summary_ko": "..."}}\n\n제목: {title}\n본문: {body}')
 
 def _extract(text: str) -> tuple[str, str] | None:
