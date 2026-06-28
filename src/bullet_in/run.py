@@ -17,7 +17,7 @@ from bullet_in.serve.render import write_page
 from bullet_in.quality import success_rate
 
 KO_SUMMARY_MAX_LEN = 200
-GEMINI_MODEL = "gemini-3.1-flash-lite"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 async def main(concurrency: int):
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
