@@ -16,9 +16,11 @@ def _published(payload: dict) -> datetime:
 
 def to_articles(raw: list[RawItem], sources: dict[str, dict],
                 seen: dict[str, tuple[str, int]],
-                registry: "Registry | None" = None) -> list[Article]:
+                registry: "Registry | None" = None) -> tuple[list[Article], dict]:
     out: list[Article] = []
     local_seen = dict(seen)
+    dup_count = 0
+    source_counts: dict[str, int] = {}
     for item in raw:
         tier = resolve_tier(item, sources, registry)
         if tier is None:
@@ -28,6 +30,7 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
         h = content_hash(title, url)
         decision, rev = classify(url, h, local_seen)
         if decision == "duplicate":
+            dup_count += 1
             continue
         local_seen[url] = (h, rev)
         out.append(Article(
@@ -37,4 +40,5 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
             body_excerpt=item.raw_payload.get("summary") or item.raw_payload.get("body"),
             published_at=_published(item.raw_payload), fetched_at=item.fetched_at,
             revision=rev))
-    return out
+        source_counts[item.source_id] = source_counts.get(item.source_id, 0) + 1
+    return out, {"dup_count": dup_count, "source_counts": source_counts}

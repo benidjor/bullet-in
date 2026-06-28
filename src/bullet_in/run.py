@@ -39,7 +39,7 @@ async def main(concurrency: int):
     engine = create_engine(os.environ["MARIADB_URL"])
     mart = MartStore(engine)
     mart.ensure_schema()
-    arts = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
+    arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
     mart.upsert(arts)
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
@@ -67,12 +67,13 @@ async def main(concurrency: int):
         c.execute(text(
             "INSERT INTO pipeline_runs (run_id,dag_run_id,started_at,finished_at,"
             "duration_sec,source_counts,new_count,dup_count,error_count,success_rate) "
-            "VALUES (:rid,:drid,FROM_UNIXTIME(:t0),NOW(),:dur,:counts,:new,0,:err,:sr)"),
+            "VALUES (:rid,:drid,FROM_UNIXTIME(:t0),NOW(),:dur,:counts,:new,:dup,:err,:sr)"),
             {"rid": str(uuid.uuid4()),
              "drid": os.environ.get("AIRFLOW_CTX_DAG_RUN_ID", "manual"),
              "t0": int(started_epoch), "dur": summary["elapsed_sec"],
-             "counts": json.dumps({a.source_id: 0 for a in adapters}),
-             "new": len(arts), "err": len(errors), "sr": summary["success_rate"]})
+             "counts": json.dumps(stats["source_counts"]),
+             "new": len(arts), "dup": stats["dup_count"],
+             "err": len(errors), "sr": summary["success_rate"]})
     print(summary)
 
 if __name__ == "__main__":

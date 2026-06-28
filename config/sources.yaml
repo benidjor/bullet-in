@@ -19,6 +19,16 @@ sources:
     config:
       list_url: "https://www.bbc.com/sport/football/teams/arsenal"
       item_selector: "a[href*='/sport/football/articles/']"
+      title_contains: ["transfer", "sign", "signed", "signing", "deal", "loan", "bid", "fee", "medical", "agree", "agreed", "join", "joins", "target", "linked", "links", "contract", "swap", "move", "talks"]
+    enabled: true
+  - source_id: bbc_gossip
+    display_name: BBC Football Gossip
+    tier: 4
+    medium: newspaper
+    adapter: html
+    config:
+      list_url: "https://www.bbc.com/sport/football/gossip"
+      item_selector: "a[href*='/sport/football/articles/']"
     enabled: true
   - source_id: goal
     display_name: Goal.com
@@ -37,6 +47,7 @@ sources:
     config:
       list_url: "https://www.football.london/arsenal-fc/"
       item_selector: "a.headline"
+      title_contains: ["transfer", "sign", "signed", "signing", "deal", "loan", "bid", "fee", "medical", "agree", "agreed", "join", "joins", "target", "linked", "links", "contract", "swap", "move", "talks"]
     enabled: true
   - source_id: x_afcstuff
     display_name: afcstuff (aggregator)

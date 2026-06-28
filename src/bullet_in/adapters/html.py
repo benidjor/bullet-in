@@ -8,12 +8,17 @@ from bullet_in.models import RawItem
 class HtmlAdapter:
     source_type = "html"
     def __init__(self, source_id: str, list_url: str, item_selector: str,
-                 base_url: str | None = None, title_contains: str | None = None):
+                 base_url: str | None = None, title_contains: str | list[str] | None = None):
         self.source_id = source_id
         self.list_url = list_url
         self.item_selector = item_selector
         self.base_url = base_url or list_url
-        self.title_contains = title_contains.lower() if title_contains else None
+        if title_contains is None:
+            self.title_keywords: list[str] | None = None
+        elif isinstance(title_contains, str):
+            self.title_keywords = [title_contains.lower()]
+        else:
+            self.title_keywords = [k.lower() for k in title_contains]
     async def fetch(self) -> list[RawItem]:
         async with httpx.AsyncClient(timeout=20, follow_redirects=True,
                                      headers={"User-Agent": "bullet-in/0.1"}) as c:
@@ -30,7 +35,8 @@ class HtmlAdapter:
                 continue
             seen.add(url)
             title = a.get_text(strip=True)
-            if self.title_contains and self.title_contains not in title.lower():
+            if self.title_keywords and not any(
+                    k in title.lower() for k in self.title_keywords):
                 continue
             out.append(RawItem(source_id=self.source_id, source_type="html", url=url,
                                fetched_at=now, raw_payload={"title": title}))

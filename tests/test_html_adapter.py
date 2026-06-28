@@ -27,3 +27,25 @@ def test_html_adapter_filters_by_title_contains():
                     title_contains="sign")  # 대소문자 무시, '재계약(signs ... extension)'도 포함
     titles = [it.raw_payload["title"] for it in asyncio.run(a.fetch())]
     assert titles == ["Gabriel signs new deal", "Saka SIGNS contract extension"]
+
+@respx.mock
+def test_html_adapter_filters_by_keyword_list():
+    html = ('<a class="card" href="/a">Arsenal agree deal for Gyokeres</a>'
+            '<a class="card" href="/b">Match preview vs Spurs</a>'
+            '<a class="card" href="/c">Saka injury update</a>'
+            '<a class="card" href="/d">Rice loan talks collapse</a>')
+    respx.get("https://a.test/news").mock(return_value=httpx.Response(200, text=html))
+    a = HtmlAdapter(source_id="bbc_sport", list_url="https://a.test/news",
+                    item_selector="a.card", base_url="https://a.test",
+                    title_contains=["transfer", "deal", "loan", "talks"])
+    titles = [it.raw_payload["title"] for it in asyncio.run(a.fetch())]
+    assert titles == ["Arsenal agree deal for Gyokeres", "Rice loan talks collapse"]
+
+@respx.mock
+def test_html_adapter_no_filter_returns_all():
+    html = ('<a class="card" href="/a">Anything one</a>'
+            '<a class="card" href="/b">Anything two</a>')
+    respx.get("https://a.test/all").mock(return_value=httpx.Response(200, text=html))
+    a = HtmlAdapter(source_id="bbc_gossip", list_url="https://a.test/all",
+                    item_selector="a.card", base_url="https://a.test")
+    assert len(asyncio.run(a.fetch())) == 2
