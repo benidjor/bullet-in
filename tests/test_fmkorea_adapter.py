@@ -140,6 +140,7 @@ def test_fetch_blocked_without_og_falls_back_to_headline_only():
     assert it.url == "https://orig.test/y"   # 원문 URL은 있으므로 링크는 원 출처
     assert it.raw_payload["body"] == ""       # 본문 미복제, 헤드라인만
     assert it.raw_payload["title"].startswith("[ITK]")
+    assert it.raw_payload["lang"] == "ko"
 
 @respx.mock
 def test_fetch_returns_empty_on_list_429(caplog):
