@@ -1,0 +1,21 @@
+<type>(<scope>):
+
+
+Refs:
+Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.github.com>
+
+# ── 작성 가이드 (이 '#' 줄들은 커밋 메시지에 포함되지 않음) ────────────────
+# SoT: docs/conventions/2026-06-11-commit-pr-convention.md
+#
+# 제목: <type>(<scope>): 한국어 제목 — 50자 이하, 마침표 없음 (type·scope는 영어)
+#   type:  feat  fix  chore  docs  refactor  test  perf  ci  build  revert
+#   scope: infra adapters ingest pipeline storage enrich credibility score
+#          serve dbt slo airflow env
+#          (docs 커밋에 한해 spec plan convention method runbook troubleshooting 허용)
+#
+# 본문: '무엇'이 아니라 '왜' 중심, 72자 wrap, 5~15줄
+#   - 도입 문장(맥락·왜)을 먼저, 세부·변경 항목은 명사형 불릿으로
+#
+# Refs: plan/spec/task/PR/runbook 링크
+# 트레일러: 모델 버전 반영(4.8 등). 이메일은 소유자 noreply 고정
+#   — 공용 noreply@anthropic.com 사용 금지(제3자 귀속됨)
