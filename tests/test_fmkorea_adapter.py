@@ -36,3 +36,25 @@ def test_fmkorea_skips_post_when_body_fetch_fails():
                        item_selector="a.title", keywords=["아스날"],
                        base_url="https://fm.test", body_selector=".xe_content")
     assert asyncio.run(a.fetch()) == []
+
+from bullet_in.adapters.fmkorea import _is_repost_blocked, _extract_original_url
+
+BLOCKED = (
+    '<div class="xe_content"><p>유벤투스가 루쿠미를 원한다.</p><p></p>'
+    '<p>https://m.gianlucadimarzio.com/calciomercato/juve-lucumi-493366</p></div>'
+    '<!--AfterDocument(1,2)--></article>'
+    '<strong>[퍼가기가 금지된 글입니다 - 캡처 방지 위해 글 열람 사용자 '
+    '아이디/아이피가 자동으로 표기됩니다]</strong>'
+)
+NORMAL = '<div class="xe_content"><p>일반 글 본문.</p></div>'
+
+def test_is_repost_blocked_detects_marker():
+    assert _is_repost_blocked(BLOCKED) is True
+    assert _is_repost_blocked(NORMAL) is False
+
+def test_extract_original_url_from_plaintext_body():
+    assert _extract_original_url(BLOCKED, ".xe_content") == \
+        "https://m.gianlucadimarzio.com/calciomercato/juve-lucumi-493366"
+
+def test_extract_original_url_none_when_no_external_link():
+    assert _extract_original_url(NORMAL, ".xe_content") is None

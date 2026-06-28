@@ -1,6 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from urllib.parse import urljoin
+import re
 import httpx
 from bs4 import BeautifulSoup
 from bullet_in.models import RawItem
@@ -15,6 +16,27 @@ def _body_text(html: str, selector: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     el = soup.select_one(selector)
     return el.get_text(" ", strip=True)[:_BODY_MAX_CHARS] if el else ""
+
+_REPOST_MARK = "퍼가기가 금지된 글입니다"
+_URL_RE = re.compile(r"https?://[^\s\"'<>)]+")
+
+def _is_repost_blocked(html: str) -> bool:
+    return _REPOST_MARK in html
+
+def _extract_original_url(html: str, body_selector: str) -> str | None:
+    soup = BeautifulSoup(html, "html.parser")
+    el = soup.select_one(body_selector)
+    if el is None:
+        return None
+    # href 우선, 없으면 본문 텍스트의 평문 URL
+    for a in el.select("a[href]"):
+        href = a.get("href", "")
+        if href.startswith("http") and "fmkorea.com" not in href:
+            return href
+    for m in _URL_RE.finditer(el.get_text(" ", strip=True)):
+        if "fmkorea.com" not in m.group(0):
+            return m.group(0)
+    return None
 
 class FmkoreaAdapter:
     source_type = "html"
