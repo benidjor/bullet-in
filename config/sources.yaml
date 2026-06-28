@@ -53,9 +53,9 @@ sources:
     lang: ko
     config:
       list_url: "https://www.fmkorea.com/football_news"
-      item_selector: "h3.title a"
+      item_selector: "a.title"
       keywords: ["아스날", "Arsenal"]
       body_selector: ".xe_content"
       base_url: "https://www.fmkorea.com"
       max_posts: 10
-    enabled: false  # 후속: 퍼가기 금지 정책 + HTTP 429 대응 후 활성
+    enabled: true  # 퍼가기 금지 정책·429 대응 구현 완료(2026-06-28)
