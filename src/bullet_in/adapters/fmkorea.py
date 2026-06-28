@@ -91,10 +91,19 @@ class FmkoreaAdapter:
                     rb.raise_for_status()
                 except httpx.HTTPError:
                     continue  # 해당 글만 스킵, 배치 지속
+                html = rb.text
+                if _is_repost_blocked(html):
+                    orig = _extract_original_url(html, self.body_selector)
+                    desc = await _fetch_og_description(c, orig) if orig else None
+                    if orig and desc:                 # 분기①: 원문 대체
+                        item_url, body = orig, desc
+                    else:                             # 분기②: 헤드라인만
+                        item_url, body = orig or url, ""
+                else:                                 # 현행: fmkorea 본문 요약
+                    item_url = url
+                    body = _body_text(html, self.body_selector)
                 out.append(RawItem(
-                    source_id=self.source_id, source_type="html", url=url,
+                    source_id=self.source_id, source_type="html", url=item_url,
                     fetched_at=now,
-                    raw_payload={"title": title,
-                                 "body": _body_text(rb.text, self.body_selector),
-                                 "lang": "ko"}))
+                    raw_payload={"title": title, "body": body, "lang": "ko"}))
         return out

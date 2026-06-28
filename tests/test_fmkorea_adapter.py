@@ -94,3 +94,49 @@ def test_fetch_og_description_none_on_http_error():
         async with httpx.AsyncClient() as c:
             return await _fetch_og_description(c, "https://orig.test/c")
     assert asyncio.run(run()) is None
+
+@respx.mock
+def test_fetch_blocked_replaces_with_original_og():
+    list_html = '<a class="title" href="/1">[디 마르지오] 아스날 수비수 노린다</a>'
+    blocked_body = (
+        '<div class="xe_content"><p>아스날이 수비수를 원한다.</p>'
+        '<p>https://orig.test/x</p></div><!--AfterDocument(1,2)--></article>'
+        '<strong>[퍼가기가 금지된 글입니다 - 캡처 방지 위해 글 열람 사용자 '
+        '아이디/아이피가 자동으로 표기됩니다]</strong>'
+    )
+    og = ('<meta property="og:description" content="Arsenal want a defender.">')
+    respx.get("https://fm.test/football_news").mock(return_value=httpx.Response(200, text=list_html))
+    respx.get("https://fm.test/1").mock(return_value=httpx.Response(200, text=blocked_body))
+    respx.get("https://orig.test/x").mock(return_value=httpx.Response(200, text=og))
+    a = FmkoreaAdapter(source_id="fmkorea", list_url="https://fm.test/football_news",
+                       item_selector="a.title", keywords=["아스날"],
+                       base_url="https://fm.test", body_selector=".xe_content")
+    items = asyncio.run(a.fetch())
+    assert len(items) == 1
+    it = items[0]
+    assert it.url == "https://orig.test/x"                 # 원 출처로 치환
+    assert it.raw_payload["title"].startswith("[디 마르지오]")  # fmkorea 헤드라인 유지
+    assert it.raw_payload["body"] == "Arsenal want a defender."  # og:description
+    assert "아스날이 수비수를 원한다" not in it.raw_payload["body"]  # fmkorea 번역 본문 미저장
+    assert it.raw_payload["lang"] == "ko"
+
+@respx.mock
+def test_fetch_blocked_without_og_falls_back_to_headline_only():
+    list_html = '<a class="title" href="/1">[ITK] 아스날 영입 임박</a>'
+    blocked_body = (
+        '<div class="xe_content"><p>본문 번역.</p><p>https://orig.test/y</p></div>'
+        '<strong>[퍼가기가 금지된 글입니다 - 캡처 방지 위해 글 열람 사용자 '
+        '아이디/아이피가 자동으로 표기됩니다]</strong>'
+    )
+    respx.get("https://fm.test/football_news").mock(return_value=httpx.Response(200, text=list_html))
+    respx.get("https://fm.test/1").mock(return_value=httpx.Response(200, text=blocked_body))
+    respx.get("https://orig.test/y").mock(return_value=httpx.Response(404))  # og fetch 실패
+    a = FmkoreaAdapter(source_id="fmkorea", list_url="https://fm.test/football_news",
+                       item_selector="a.title", keywords=["아스날"],
+                       base_url="https://fm.test", body_selector=".xe_content")
+    items = asyncio.run(a.fetch())
+    assert len(items) == 1
+    it = items[0]
+    assert it.url == "https://orig.test/y"   # 원문 URL은 있으므로 링크는 원 출처
+    assert it.raw_payload["body"] == ""       # 본문 미복제, 헤드라인만
+    assert it.raw_payload["title"].startswith("[ITK]")
