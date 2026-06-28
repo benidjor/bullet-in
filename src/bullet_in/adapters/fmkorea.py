@@ -2,9 +2,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from urllib.parse import urljoin
 import re
+import logging
 import httpx
 from bs4 import BeautifulSoup
 from bullet_in.models import RawItem
+
+log = logging.getLogger(__name__)
 
 _BODY_MAX_CHARS = 2000
 
@@ -69,8 +72,14 @@ class FmkoreaAdapter:
         headers = {"User-Agent": "Mozilla/5.0 bullet-in/0.1"}
         async with httpx.AsyncClient(timeout=20, follow_redirects=True,
                                      headers=headers) as c:
-            r = await c.get(self.list_url)
-            r.raise_for_status()
+            try:
+                r = await c.get(self.list_url)
+                r.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    log.warning("fmkorea 리스트 429(rate limit) — 이번 회차 스킵")
+                    return []
+                raise
             soup = BeautifulSoup(r.text, "html.parser")
             matched = []
             for a in soup.select(self.item_selector):
