@@ -58,3 +58,39 @@ def test_extract_original_url_from_plaintext_body():
 
 def test_extract_original_url_none_when_no_external_link():
     assert _extract_original_url(NORMAL, ".xe_content") is None
+
+from bullet_in.adapters.fmkorea import _fetch_og_description
+
+OG_HTML = (
+    '<html><head>'
+    '<meta property="og:title" content="La Juventus vuole Lucum&iacute;">'
+    '<meta property="og:description" content="I bianconeri vogliono il '
+    'difensore colombiano del Bologna.">'
+    '</head><body></body></html>'
+)
+META_ONLY = ('<html><head><meta name="description" content="Solo meta desc.">'
+             '</head></html>')
+
+@respx.mock
+def test_fetch_og_description_prefers_og():
+    respx.get("https://orig.test/a").mock(return_value=httpx.Response(200, text=OG_HTML))
+    async def run():
+        async with httpx.AsyncClient() as c:
+            return await _fetch_og_description(c, "https://orig.test/a")
+    assert asyncio.run(run()) == "I bianconeri vogliono il difensore colombiano del Bologna."
+
+@respx.mock
+def test_fetch_og_description_falls_back_to_meta():
+    respx.get("https://orig.test/b").mock(return_value=httpx.Response(200, text=META_ONLY))
+    async def run():
+        async with httpx.AsyncClient() as c:
+            return await _fetch_og_description(c, "https://orig.test/b")
+    assert asyncio.run(run()) == "Solo meta desc."
+
+@respx.mock
+def test_fetch_og_description_none_on_http_error():
+    respx.get("https://orig.test/c").mock(return_value=httpx.Response(404))
+    async def run():
+        async with httpx.AsyncClient() as c:
+            return await _fetch_og_description(c, "https://orig.test/c")
+    assert asyncio.run(run()) is None

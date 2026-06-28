@@ -38,6 +38,18 @@ def _extract_original_url(html: str, body_selector: str) -> str | None:
             return m.group(0)
     return None
 
+async def _fetch_og_description(client: httpx.AsyncClient, url: str) -> str | None:
+    try:
+        r = await client.get(url, follow_redirects=True)
+        r.raise_for_status()
+    except httpx.HTTPError:
+        return None
+    soup = BeautifulSoup(r.text, "html.parser")
+    tag = (soup.find("meta", property="og:description")
+           or soup.find("meta", attrs={"name": "description"}))
+    content = tag.get("content") if tag else None
+    return content.strip() if content else None
+
 class FmkoreaAdapter:
     source_type = "html"
     def __init__(self, source_id: str, list_url: str, item_selector: str,
