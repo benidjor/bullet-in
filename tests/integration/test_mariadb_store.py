@@ -11,6 +11,10 @@ def test_upsert_dedup_keeps_single_row(engine):
     store.upsert([_art()]); store.upsert([_art()])
     assert store.count() == 1
 
+def test_upsert_empty_list_is_noop(engine):
+    # 신규 없는 회차(6시간마다 흔함)는 빈 배치 → 에러 없이 0 반환해야 한다
+    assert MartStore(engine).upsert([]) == 0
+
 def test_watermark_returns_seen_map(engine):
     store = MartStore(engine)
     store.upsert([_art()])

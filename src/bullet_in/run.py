@@ -38,6 +38,7 @@ async def main(concurrency: int):
 
     engine = create_engine(os.environ["MARIADB_URL"])
     mart = MartStore(engine)
+    mart.ensure_schema()
     arts = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
     mart.upsert(arts)
 

@@ -57,6 +57,48 @@ def test_partition_splits_ko_and_en_by_source_lang():
 
 from bullet_in.enrich import summarize_ko_rows
 
+import logging
+
+class _RateLimit(Exception):
+    code = 429
+
+def test_enrich_stops_and_logs_on_rate_limit(caplog):
+    # 429를 만나면 그 회차는 즉시 중단하고 남은 행은 호출하지 않는다(다음 사이클 누적).
+    class M:
+        def __init__(self): self.n = 0
+        def generate_content(self, **kw):
+            self.n += 1
+            raise _RateLimit("429 RESOURCE_EXHAUSTED")
+    class C:
+        def __init__(self): self.models = M()
+    c = C()
+    rows = [{"content_hash":"a","title_original":"A","body_excerpt":""},
+            {"content_hash":"b","title_original":"B","body_excerpt":""}]
+    with caplog.at_level(logging.WARNING):
+        out = enrich_rows(rows, c, "m")
+    assert out == {}
+    assert c.models.n == 1  # 둘째 행은 호출조차 안 함
+    assert any("429" in r.message or "rate limit" in r.message.lower()
+               for r in caplog.records)
+
+def test_summarize_ko_rows_stops_and_logs_on_rate_limit(caplog):
+    class M:
+        def __init__(self): self.n = 0
+        def generate_content(self, **kw):
+            self.n += 1
+            raise _RateLimit("429")
+    class C:
+        def __init__(self): self.models = M()
+    c = C()
+    rows = [{"content_hash":"a","title_original":"A","body_excerpt":""},
+            {"content_hash":"b","title_original":"B","body_excerpt":""}]
+    with caplog.at_level(logging.WARNING):
+        out = summarize_ko_rows(rows, c, "m")
+    assert out == {}
+    assert c.models.n == 1
+    assert any("429" in r.message or "rate limit" in r.message.lower()
+               for r in caplog.records)
+
 def test_summarize_ko_rows_returns_korean_summary():
     class M:
         def generate_content(self, **kw):

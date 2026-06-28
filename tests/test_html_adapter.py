@@ -15,3 +15,15 @@ def test_html_adapter_extracts_matching_links():
     assert items[0].url == "https://bbc.test/sport/football/articles/abc123"
     assert items[0].raw_payload["title"] == "Saka shines"
     assert items[0].source_type == "html"
+
+@respx.mock
+def test_html_adapter_filters_by_title_contains():
+    html = ('<a class="card" href="/a">Gabriel signs new deal</a>'
+            '<a class="card" href="/b">Match preview vs Spurs</a>'
+            '<a class="card" href="/c">Saka SIGNS contract extension</a>')
+    respx.get("https://a.test/news").mock(return_value=httpx.Response(200, text=html))
+    a = HtmlAdapter(source_id="arsenal_official", list_url="https://a.test/news",
+                    item_selector="a.card", base_url="https://a.test",
+                    title_contains="sign")  # 대소문자 무시, '재계약(signs ... extension)'도 포함
+    titles = [it.raw_payload["title"] for it in asyncio.run(a.fetch())]
+    assert titles == ["Gabriel signs new deal", "Saka SIGNS contract extension"]

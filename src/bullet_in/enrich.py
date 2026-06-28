@@ -1,11 +1,24 @@
 from __future__ import annotations
-import json, re
+import json, logging, re
 
-PROMPT = ("Translate the football news title to natural Korean and write a one-line "
-          "Korean summary. Return ONLY JSON: "
-          '{{"title_ko": "...", "summary_ko": "..."}}\n\nTitle: {title}\nBody: {body}')
+log = logging.getLogger(__name__)
 
-SUMMARY_PROMPT = ("다음 한국어 축구 뉴스를 한 문장으로 요약하세요. "
+def _is_rate_limit(exc: Exception) -> bool:
+    if getattr(exc, "code", None) == 429:
+        return True
+    s = str(exc)
+    return "429" in s or "RESOURCE_EXHAUSTED" in s
+
+PROMPT = ("아스날 FC 축구 뉴스를 한국어로 번역·요약한다. 규칙:\n"
+          "- title_ko: 한국 스포츠 기사 제목체로 간결하게(명사형 위주, 불필요한 조사 생략). "
+          "예: '케이틀린 포드, 재계약 체결'.\n"
+          "- summary_ko: 한 문장, 신문 평어체(종결어미 '~다'), 사실 중심, 추측·과장 금지.\n"
+          "- 고유명사는 통용 한글 표기. Arsenal=아스날, 선수·구단명은 널리 쓰는 한글 표기.\n"
+          'ONLY JSON 반환: {{"title_ko": "...", "summary_ko": "..."}}\n\nTitle: {title}\nBody: {body}')
+
+SUMMARY_PROMPT = ("다음 한국어 축구 뉴스를 한 문장으로 요약한다. "
+                  "신문 평어체(종결어미 '~다'), 사실 중심, 추측·과장 금지. "
+                  "고유명사는 통용 한글 표기(Arsenal=아스날). "
                   'JSON만 반환: {{"summary_ko": "..."}}\n\n제목: {title}\n본문: {body}')
 
 def _extract(text: str) -> tuple[str, str] | None:
@@ -26,18 +39,25 @@ def enrich_rows(rows: list[dict], client, model: str) -> dict[str, tuple[str, st
     경우를 대비해 _extract 정규식을 안전망으로 둔다."""
     result: dict[str, tuple[str, str]] = {}
     for r in rows:
+        h = r["content_hash"]
         try:
             msg = client.models.generate_content(
                 model=model,
-                contents=PROMPT.format(
-                    title=r["title_original"], body=r.get("body_excerpt") or ""),
+                contents=PROMPT.format(title=r["title_original"],
+                                       body=r.get("body_excerpt") or ""),
                 config={"max_output_tokens": 300,
                         "response_mime_type": "application/json"})
-            parsed = _extract(msg.text)
-        except Exception:
-            parsed = None
-        if parsed is not None:
-            result[r["content_hash"]] = parsed
+        except Exception as e:
+            if _is_rate_limit(e):
+                log.warning("Gemini rate limit(429), 번역 중단 — 남은 행은 다음 사이클 누적")
+                break
+            log.warning("Gemini 호출 실패, 번역 스킵 content_hash=%s: %s", h, e)
+            continue
+        parsed = _extract(msg.text)
+        if parsed is None:
+            log.warning("Gemini 응답 파싱 실패, 번역 스킵 content_hash=%s", h)
+            continue
+        result[h] = parsed
     return result
 
 def partition_translation_rows(rows: list[dict], sources: dict[str, dict]
@@ -63,16 +83,23 @@ def summarize_ko_rows(rows: list[dict], client, model: str) -> dict[str, str]:
     한 행이 실패해도 배치 전체를 중단하지 않는다 (run 측에서 본문 발췌로 폴백)."""
     result: dict[str, str] = {}
     for r in rows:
+        h = r["content_hash"]
         try:
             msg = client.models.generate_content(
                 model=model,
-                contents=SUMMARY_PROMPT.format(
-                    title=r["title_original"], body=r.get("body_excerpt") or ""),
+                contents=SUMMARY_PROMPT.format(title=r["title_original"],
+                                               body=r.get("body_excerpt") or ""),
                 config={"max_output_tokens": 200,
                         "response_mime_type": "application/json"})
-            s = _extract_summary(msg.text)
-        except Exception:
-            s = None
-        if s is not None:
-            result[r["content_hash"]] = s
+        except Exception as e:
+            if _is_rate_limit(e):
+                log.warning("Gemini rate limit(429), 요약 중단 — 남은 행은 다음 사이클 누적")
+                break
+            log.warning("Gemini 호출 실패, 요약 스킵 content_hash=%s: %s", h, e)
+            continue
+        s = _extract_summary(msg.text)
+        if s is None:
+            log.warning("Gemini 응답 파싱 실패, 요약 스킵 content_hash=%s", h)
+            continue
+        result[h] = s
     return result
