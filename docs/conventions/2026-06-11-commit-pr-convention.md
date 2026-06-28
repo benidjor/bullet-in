@@ -43,15 +43,20 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.gi
 모든 커밋 본문 끝에 아래 트레일러를 붙임.
 
 ```
-Co-Authored-By: Claude Opus <버전> (1M context) <94089198+benidjor@users.noreply.github.com>
+Co-Authored-By: Claude Opus <버전> (1M context) <noreply@anthropic.com>
 ```
 
 - `<버전>`은 실제 작업한 모델을 반영함.
   4.8로 작업하면 `4.8`, 과거 4.7로 작업한 커밋은 `4.7`.
 - 이 트레일러는 커밋 단위로 AI 활용을 투명하게 남기기 위한 것이며, PR에는 적용하지 않음 (§2.7 참조)
-- **이메일은 저장소 소유자의 GitHub noreply (`94089198+benidjor@users.noreply.github.com`)를 씀.**
-  `noreply@anthropic.com` 같은 공용 도메인 주소를 쓰면 그 주소를 자기 계정에 등록한 제3자
-  (예: 과거 `meta-chain-developer`)에게 co-author로 귀속돼 contributor 목록에 노출되므로 금지.
+- **co-author 이메일은 Claude 공식 noreply (`noreply@anthropic.com`)를 씀.**
+  현재 이 주소는 GitHub "Claude" 계정으로 매핑돼 co-author 아바타가 정상 표시되며,
+  Anthropic Claude Code 기본값과도 일치함.
+- **author / git 신원은 저장소 소유자 noreply (`94089198+benidjor@users.noreply.github.com`)를 유지.**
+  (co-author만 anthropic noreply, author는 소유자 — 둘은 별개 축.)
+- ⚠️ 과거엔 `noreply@anthropic.com`이 선점자(`meta-chain-developer`)에게 매핑돼 contributor에
+  노출된 적이 있음. 매핑은 바뀔 수 있으니 가끔 contributors를 점검할 것. 진단·잔여 캐시 대응:
+  `docs/troubleshooting/2026-06-28-github-contributor-misattribution.md`.
 
 ## 2. Pull Request
 

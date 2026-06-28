@@ -73,9 +73,11 @@ uv run python -m bullet_in.run --concurrency 8              # 종단 실행
 ## 커밋 & PR 컨벤션 (필독)
 SoT: `docs/conventions/2026-06-11-commit-pr-convention.md`. 핵심:
 - 커밋: `<type>(<scope>): 한국어 제목` + 본문(왜) + `Refs:` + 트레일러. type/scope는 영어.
-- **트레일러 이메일은 반드시 소유자 GitHub noreply**:
-  `Co-Authored-By: Claude Opus <버전> (1M context) <94089198+benidjor@users.noreply.github.com>`
-  공용 `noreply@anthropic.com`을 쓰면 그 주소를 선점한 제3자에게 co-author로 귀속됨(금지).
+- **co-author 트레일러는 Claude 공식 noreply**:
+  `Co-Authored-By: Claude Opus <버전> (1M context) <noreply@anthropic.com>`
+  이 주소는 현재 GitHub "Claude" 계정으로 매핑돼 co-author 아바타가 정상 표시됨.
+  (author/git 신원은 소유자 noreply 유지 — 아래 'git 신원' 참조. 과거 선점자 이슈·잔여 캐시는
+  `docs/troubleshooting/2026-06-28-github-contributor-misattribution.md`.)
 - PR 본문: 7섹션 한국어 구조, `--body-file`로 전달, **Claude 서명 금지**(§2.7).
 - GitHub Flow + squash merge, PR = Task.
 

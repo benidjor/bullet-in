@@ -2,7 +2,7 @@
 
 
 Refs:
-Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.github.com>
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 # ── 작성 가이드 (이 '#' 줄들은 커밋 메시지에 포함되지 않음) ────────────────
 # SoT: docs/conventions/2026-06-11-commit-pr-convention.md
@@ -17,5 +17,5 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.gi
 #   - 도입 문장(맥락·왜)을 먼저, 세부·변경 항목은 명사형 불릿으로
 #
 # Refs: plan/spec/task/PR/runbook 링크
-# 트레일러: 모델 버전 반영(4.8 등). 이메일은 소유자 noreply 고정
-#   — 공용 noreply@anthropic.com 사용 금지(제3자 귀속됨)
+# 트레일러: 모델 버전 반영(4.8 등). co-author 이메일은 noreply@anthropic.com
+#   — 현재 GitHub "Claude" 계정으로 매핑돼 아바타 정상 표시 (author는 소유자 noreply)
