@@ -21,6 +21,8 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
     local_seen = dict(seen)
     dup_count = 0
     source_counts: dict[str, int] = {}
+    # fmkorea(발견 소스)는 같은 원문 URL 에서 EN/X 보다 후순위 → first-seen 이 EN/X 가 되게 정렬
+    raw = sorted(raw, key=lambda it: 1 if it.source_id == "fmkorea" else 0)
     for item in raw:
         tier = resolve_tier(item, sources, registry)
         if tier is None:
@@ -38,6 +40,11 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
             tier=tier, confidence_score=confidence_from_tier(tier),
             title_original=title,
             body_excerpt=item.raw_payload.get("summary") or item.raw_payload.get("body"),
+            body_source=item.raw_payload.get("body"),
+            image_url=item.raw_payload.get("image_url"),
+            outlet=item.raw_payload.get("outlet"),
+            journalist=item.raw_payload.get("journalist"),
+            team="arsenal",
             published_at=_published(item.raw_payload), fetched_at=item.fetched_at,
             revision=rev))
         source_counts[item.source_id] = source_counts.get(item.source_id, 0) + 1

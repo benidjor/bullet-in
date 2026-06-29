@@ -56,3 +56,33 @@ def test_to_articles_returns_dup_and_source_counts():
     assert len(arts) == 2
     assert stats["dup_count"] == 1
     assert stats["source_counts"] == {"bbc_sport": 1, "football_london": 1}
+
+def test_to_articles_maps_tier2a_fields():
+    raw = [RawItem(source_id="bbc_sport", source_type="html",
+                   url="https://www.bbc.com/sport/football/articles/g",
+                   fetched_at=datetime.now(timezone.utc),
+                   raw_payload={"title": "Arsenal sign Gyokeres", "body": "English body",
+                                "image_url": "https://img.test/g.jpg", "outlet": "BBC",
+                                "journalist": "Sami Mokbel"})]
+    sources = {"bbc_sport": {"source_id": "bbc_sport", "tier": 2}}
+    arts, _ = to_articles(raw, sources, seen={})
+    assert arts[0].body_source == "English body"
+    assert arts[0].image_url == "https://img.test/g.jpg"
+    assert arts[0].outlet == "BBC" and arts[0].journalist == "Sami Mokbel"
+    assert arts[0].team == "arsenal"
+
+def test_to_articles_prefers_en_source_over_fmkorea_for_same_url():
+    now = datetime.now(timezone.utc)
+    url = "https://www.bbc.com/sport/football/articles/g"
+    raw = [
+        RawItem(source_id="fmkorea", source_type="html", url=url, fetched_at=now,
+                raw_payload={"title": "Arsenal sign Gyokeres", "outlet": "BBC"}),
+        RawItem(source_id="bbc_sport", source_type="html", url=url, fetched_at=now,
+                raw_payload={"title": "Arsenal sign Gyokeres", "outlet": "BBC"}),
+    ]
+    sources = {"fmkorea": {"source_id": "fmkorea", "tier": 4},
+               "bbc_sport": {"source_id": "bbc_sport", "tier": 2}}
+    arts, stats = to_articles(raw, sources, seen={})
+    assert len(arts) == 1
+    assert arts[0].source_id == "bbc_sport"   # EN 우선, fmkorea 스킵
+    assert stats["dup_count"] == 1
