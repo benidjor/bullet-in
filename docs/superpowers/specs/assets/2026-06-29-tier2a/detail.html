@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>아스날, 빅토르 요케레스 영입 완료 · Bullet-in</title>
+<style>
+  :root{
+    --red:#EF0107; --red-d:#c70006; --navy:#0a3a78; --max:1180px; --side:250px;
+    --bg:#f5f6f8; --card:#fff; --ink:#13171d; --muted:#6c7480; --line:#e6e9ee; --chip:#eef1f5; --bar:#fff; --thumb1:#27324a; --thumb2:#0d1422; --thumbfg:#7e8aa3;
+  }
+  html[data-theme="dark"]{
+    --bg:#0e1014; --card:#171a21; --ink:#eef1f6; --muted:#9aa3b2; --line:#262b35; --chip:#222732; --bar:#13161c; --thumb1:#222a3a; --thumb2:#0a0e15; --thumbfg:#5f6b80;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,"Apple SD Gothic Neo",Roboto,sans-serif;
+    line-height:1.65;font-size:16px;transition:background .2s,color .2s}
+  a{color:inherit;text-decoration:none}
+
+  .topbar{position:sticky;top:0;z-index:30;background:var(--bar);border-bottom:1px solid var(--line)}
+  .topbar .inner{max-width:var(--max);margin:0 auto;display:flex;align-items:center;gap:12px;padding:12px 18px}
+  .logo{display:flex;align-items:center;gap:9px;font-weight:900;font-size:21px;letter-spacing:-.02em;white-space:nowrap}
+  .crest{width:26px;height:26px;border-radius:50%;background:var(--red);color:#fff;display:grid;place-items:center;font-size:14px;font-weight:900}
+  .nav{display:flex;gap:2px}
+  .nav a{padding:8px 11px;border-radius:9px;font-weight:600;font-size:14px;color:var(--muted);white-space:nowrap}
+  .nav a:hover{background:var(--chip);color:var(--ink)}
+  .search{flex:0 1 440px;min-width:0;display:flex;align-items:center;gap:8px;background:var(--chip);border:1px solid var(--line);border-radius:99px;padding:9px 14px}
+  .search input{border:0;background:transparent;outline:none;width:100%;font-size:15px;color:var(--ink)}
+  .search svg{flex:0 0 auto;opacity:.5}
+  .spacer{flex:1 1 auto}
+  .iconbtn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;width:40px;height:40px;font-size:17px;cursor:pointer;flex:0 0 auto}
+  .hamb{display:none}
+
+  .shell{max-width:var(--max);margin:0 auto;display:grid;grid-template-columns:var(--side) 1fr;gap:22px;padding:20px 18px 60px;align-items:start}
+  .side{position:sticky;top:74px;max-height:calc(100vh - 90px);overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 14px 8px}
+  .side h4{margin:16px 0 8px;font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+  .side h4:first-child{margin-top:4px}
+  .opt{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:9px;font-size:14px;cursor:pointer}
+  .opt:hover{background:var(--chip)}
+  .opt input{width:16px;height:16px;accent-color:var(--red);cursor:pointer}
+  .opt .ct{margin-left:auto;font-size:12px;color:var(--muted)}
+  .opt.disabled{opacity:.45;cursor:not-allowed}
+  .opt.disabled .soon{margin-left:auto;font-size:10px;border:1px solid var(--line);border-radius:99px;padding:1px 7px;color:var(--muted)}
+  .stage{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .s-off{background:#16a34a}.s-med{background:#0ea5e9}.s-talk{background:#f59e0b}.s-rum{background:#9ca3af}
+  .fstatus{font-size:12px;color:var(--muted);padding:8px 9px 2px}
+  .actions{position:sticky;bottom:0;background:var(--card);padding:10px 2px 6px;margin-top:8px;border-top:1px solid var(--line);display:flex;gap:8px}
+  .btn{flex:1;border-radius:10px;padding:10px;font-weight:800;font-size:13px;cursor:pointer}
+  .btn.apply{background:var(--red);color:#fff;border:1px solid var(--red)}
+  .btn.apply.dirty{box-shadow:0 0 0 3px rgba(239,1,7,.18)}
+  .btn.reset{background:transparent;color:var(--muted);border:1px solid var(--line)}
+
+  .back{display:inline-block;margin:0 0 14px;color:var(--red);font-weight:700;font-size:14px}
+  .article{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .hero{aspect-ratio:21/9;background:linear-gradient(135deg,var(--red),#7a0a3f);color:#fff;display:grid;place-items:center;font-weight:800;letter-spacing:.12em}
+  .pad{padding:22px}
+  .chips{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:13px}
+  .chip{font-size:11px;font-weight:800;padding:3px 9px;border-radius:99px}
+  .chip.team{background:var(--chip);color:var(--muted)}
+  .chip.src{background:#fdeaea;color:var(--red-d)} html[data-theme="dark"] .chip.src{background:rgba(239,1,7,.18);color:#ff6b6f}
+  .chip.tier{background:var(--chip);color:var(--navy)} html[data-theme="dark"] .chip.tier{color:#9fc0ff}
+  .when{font-size:12px;color:var(--muted);margin-left:auto}
+  h2.title{margin:0 0 18px;font-size:28px;line-height:1.3;font-weight:900;letter-spacing:-.02em}
+  .summary{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:0 0 24px}
+  .summary h3{margin:0 0 12px;font-size:12px;letter-spacing:.05em;color:var(--red);font-weight:900;text-transform:uppercase}
+  .summary ul{margin:0;padding-left:18px}.summary li{margin:0 0 9px;line-height:1.55}
+  .body p{margin:0 0 17px}
+  .body figure{margin:24px 0}
+  .body .imgph{aspect-ratio:16/9;background:linear-gradient(135deg,var(--thumb1),var(--thumb2));border-radius:10px;display:grid;place-items:center;color:var(--thumbfg);font-size:12px;font-weight:800;letter-spacing:.12em}
+  .body figcaption{margin-top:7px;font-size:13px;color:var(--muted);text-align:center}
+  .origin{margin-top:8px;padding-top:16px;border-top:1px solid var(--line);font-size:14px;color:var(--muted)}
+  .origin a{color:var(--red);font-weight:700}
+
+  /* bottom 5-article list (no thumbnails, current centered) */
+  .more{margin:26px 0 10px}
+  .more h3{font-size:13px;letter-spacing:.04em;color:var(--muted);text-transform:uppercase;margin:0 0 6px}
+  .more ul{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .more li a{display:flex;gap:12px;align-items:baseline;padding:14px 16px;border-top:1px solid var(--line)}
+  .more li:first-child a{border-top:0}
+  .more li a:hover{background:var(--chip)}
+  .more li.cur a{background:color-mix(in srgb,var(--red) 9%,transparent)}
+  .more .mt{font-weight:700;line-height:1.4;flex:1}
+  .more .ms{font-size:12px;color:var(--muted);white-space:nowrap}
+  .more .nowtag{font-size:10px;font-weight:800;color:#fff;background:var(--red);border-radius:99px;padding:2px 7px;margin-right:6px}
+
+  @media (min-width:1080px){ h2.title{font-size:34px} }
+  @media (max-width:880px){
+    .hamb{display:block}
+    .nav{display:none}
+    .shell{grid-template-columns:1fr;padding:14px}
+    .side{position:fixed;top:0;left:0;bottom:0;width:280px;max-height:none;border-radius:0;z-index:40;transform:translateX(-100%);transition:.2s;box-shadow:0 0 40px rgba(0,0,0,.3)}
+    .side.open{transform:none}
+    .scrim{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:35;display:none}
+    .scrim.open{display:block}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="inner">
+  <button class="iconbtn hamb" onclick="document.querySelector('.side').classList.toggle('open');document.querySelector('.scrim').classList.toggle('open')">☰</button>
+  <span class="logo"><span class="crest">B</span>Bullet-in</span>
+  <nav class="nav">
+    <a href="mockup_v2_index.html">홈</a>
+    <a href="#">소개</a>
+    <a href="#">일정</a>
+  </nav>
+  <label class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+    <input placeholder="선수·구단·이적 키워드 검색 (예: 요케레스, 재계약)">
+  </label>
+  <span class="spacer"></span>
+  <button class="iconbtn" id="themeBtn" title="라이트/다크 전환">🌙</button>
+</div></div>
+
+<div class="scrim" onclick="document.querySelector('.side').classList.remove('open');this.classList.remove('open')"></div>
+
+<div class="shell">
+  <aside class="side">
+    <h4>팀</h4>
+    <label class="opt"><input type="checkbox" checked> Arsenal <span class="ct">128</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled> Manchester United <span class="soon">예정</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled> Chelsea <span class="soon">예정</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled> Liverpool <span class="soon">예정</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled> Tottenham <span class="soon">예정</span></label>
+    <h4>영입 단계</h4>
+    <label class="opt"><input type="checkbox"><span class="stage s-off"></span>오피셜 <span class="ct">12</span></label>
+    <label class="opt"><input type="checkbox"><span class="stage s-med"></span>메디컬 <span class="ct">5</span></label>
+    <label class="opt"><input type="checkbox"><span class="stage s-talk"></span>협상 중 <span class="ct">23</span></label>
+    <label class="opt"><input type="checkbox"><span class="stage s-rum"></span>루머 <span class="ct">88</span></label>
+    <h4>신뢰도 (Tier)</h4>
+    <label class="opt"><input type="checkbox"> tier 0 <span class="ct">9</span></label>
+    <label class="opt"><input type="checkbox"> tier 1 <span class="ct">14</span></label>
+    <label class="opt"><input type="checkbox"> tier 2 <span class="ct">27</span></label>
+    <label class="opt"><input type="checkbox"> tier 3 <span class="ct">31</span></label>
+    <label class="opt"><input type="checkbox"> tier 4 <span class="ct">47</span></label>
+    <h4>정렬</h4>
+    <label class="opt"><input type="radio" name="sort" checked> 최신순</label>
+    <label class="opt"><input type="radio" name="sort"> 신뢰도순</label>
+
+    <div class="fstatus" id="fstatus">미적용 · 전체 표시</div>
+    <div class="actions">
+      <button class="btn reset" id="resetBtn">초기화</button>
+      <button class="btn apply" id="applyBtn">필터 적용</button>
+    </div>
+  </aside>
+
+  <main>
+    <a class="back" href="mockup_v2_index.html">← 목록으로</a>
+    <article class="article">
+      <div class="hero">HERO IMAGE · 21:9</div>
+      <div class="pad">
+        <div class="chips"><span class="chip team">Arsenal</span><span class="chip src">아스날 공식</span><span class="chip tier">tier 0</span><span class="when">2026-06-29</span></div>
+        <h2 class="title">아스날, 빅토르 요케레스 영입 완료</h2>
+        <section class="summary">
+          <h3>3줄 요약</h3>
+          <ul>
+            <li>아스날이 스포르팅과 합의해 요케레스 영입을 공식 발표했다.</li>
+            <li>이적료는 약 6천만 유로이며 5년 계약에 서명했다.</li>
+            <li>메디컬을 통과했고 등번호 14번을 배정받았다.</li>
+          </ul>
+        </section>
+        <div class="body">
+          <p>아스날이 스웨덴 국가대표 공격수 빅토르 요케레스의 영입을 공식 발표했다. 구단은 스포르팅 리스본과 이적료 및 세부 조건에 합의했으며, 선수는 런던에서 메디컬을 마친 뒤 계약서에 서명했다.</p>
+          <figure><div class="imgph">BODY IMAGE (옵션·stretch)</div><figcaption>요케레스가 에미레이츠에서 유니폼을 들어 보이고 있다.</figcaption></figure>
+          <p>이적료는 보너스를 포함해 약 6천만 유로 수준으로 알려졌다. 요케레스는 5년 계약을 맺었으며, 등번호 14번을 배정받았다.</p>
+          <p>지난 시즌 리그에서 다수의 득점을 기록한 요케레스는 미켈 아르테타 감독이 오랫동안 원해 온 정통 9번 공격수다. 구단 관계자는 “팀의 화력을 한 단계 끌어올릴 선수”라고 평가했다.</p>
+        </div>
+        <p class="origin">출처: 아스날 공식 · <a href="#">원문 기사 보기 ↗</a></p>
+      </div>
+    </article>
+
+    <section class="more">
+      <h3>기사 목록 · 현재 글 중심 (위 2 · 현재 · 아래 2)</h3>
+      <ul>
+        <li><a href="mockup_v2_detail.html"><span class="mt">디 애슬레틱, “아스날 겨울 수비수 보강 추진”</span><span class="ms">디 애슬레틱 · tier 1</span></a></li>
+        <li><a href="mockup_v2_detail.html"><span class="mt">칼라피오리, 아스날 입단 메디컬 진행</span><span class="ms">Goal · tier 2</span></a></li>
+        <li class="cur"><a href="#"><span class="mt"><span class="nowtag">지금</span>아스날, 빅토르 요케레스 영입 완료</span><span class="ms">아스날 공식 · tier 0</span></a></li>
+        <li><a href="mockup_v2_detail.html"><span class="mt">아스날, 주앙 네베스 영입 위해 벤피카와 협상</span><span class="ms">BBC · tier 2</span></a></li>
+        <li><a href="mockup_v2_detail.html"><span class="mt">사카, 아스날과 장기 재계약 임박</span><span class="ms">football.london · tier 4</span></a></li>
+      </ul>
+    </section>
+  </main>
+</div>
+
+<script>
+  const root=document.documentElement, btn=document.getElementById('themeBtn');
+  const saved=localStorage.getItem('theme'); if(saved) root.setAttribute('data-theme',saved);
+  const sync=()=>btn.textContent=root.getAttribute('data-theme')==='dark'?'☀️':'🌙'; sync();
+  btn.onclick=()=>{const n=root.getAttribute('data-theme')==='dark'?'light':'dark';root.setAttribute('data-theme',n);localStorage.setItem('theme',n);sync()};
+
+  // 필터 적용/초기화 (목업: 적용 시 조건 수 표시, 초기화 시 기본값 복원)
+  const side=document.querySelector('.side'), fstatus=document.getElementById('fstatus');
+  const applyBtn=document.getElementById('applyBtn'), resetBtn=document.getElementById('resetBtn');
+  const boxes=()=>[...side.querySelectorAll('input[type=checkbox]:not([disabled])')];
+  side.addEventListener('change',()=>applyBtn.classList.add('dirty'));
+  applyBtn.onclick=()=>{
+    const n=boxes().filter(c=>c.checked).length;
+    const sort=side.querySelector('input[name=sort]:checked').parentNode.textContent.trim();
+    fstatus.textContent=`적용됨 · 조건 ${n}개 · ${sort}`;
+    applyBtn.classList.remove('dirty');
+  };
+  resetBtn.onclick=()=>{
+    boxes().forEach((c,i)=>c.checked=(i===0));
+    side.querySelector('input[name=sort]').checked=true;
+    fstatus.textContent='미적용 · 전체 표시';
+    applyBtn.classList.remove('dirty');
+  };
+</script>
+</body>
+</html>

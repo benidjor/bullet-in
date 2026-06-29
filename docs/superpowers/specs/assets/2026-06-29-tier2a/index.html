@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bullet-in · 인덱스</title>
+<style>
+  :root{
+    --red:#EF0107; --red-d:#c70006; --navy:#0a3a78; --max:1180px; --side:250px;
+    /* light */
+    --bg:#f5f6f8; --card:#fff; --ink:#13171d; --muted:#6c7480; --line:#e6e9ee; --chip:#eef1f5; --bar:#fff; --thumb1:#27324a; --thumb2:#0d1422; --thumbfg:#7e8aa3;
+  }
+  html[data-theme="dark"]{
+    --bg:#0e1014; --card:#171a21; --ink:#eef1f6; --muted:#9aa3b2; --line:#262b35; --chip:#222732; --bar:#13161c; --thumb1:#222a3a; --thumb2:#0a0e15; --thumbfg:#5f6b80;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,"Apple SD Gothic Neo",Roboto,sans-serif;
+    line-height:1.6;font-size:16px;transition:background .2s,color .2s}
+  a{color:inherit;text-decoration:none}
+
+  .topbar{position:sticky;top:0;z-index:30;background:var(--bar);border-bottom:1px solid var(--line)}
+  .topbar .inner{max-width:var(--max);margin:0 auto;display:flex;align-items:center;gap:12px;padding:12px 18px}
+  .logo{display:flex;align-items:center;gap:9px;font-weight:900;font-size:21px;letter-spacing:-.02em;white-space:nowrap}
+  .crest{width:26px;height:26px;border-radius:50%;background:var(--red);color:#fff;display:grid;place-items:center;font-size:14px;font-weight:900}
+  .nav{display:flex;gap:2px}
+  .nav a{padding:8px 11px;border-radius:9px;font-weight:600;font-size:14px;color:var(--muted);white-space:nowrap}
+  .nav a:hover{background:var(--chip);color:var(--ink)}
+  .nav a.active{color:var(--ink)}
+  .search{flex:0 1 440px;min-width:0;display:flex;align-items:center;gap:8px;background:var(--chip);border:1px solid var(--line);border-radius:99px;padding:9px 14px}
+  .search input{border:0;background:transparent;outline:none;width:100%;font-size:15px;color:var(--ink)}
+  .search svg{flex:0 0 auto;opacity:.5}
+  .spacer{flex:1 1 auto}
+  .iconbtn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;width:40px;height:40px;font-size:17px;cursor:pointer;flex:0 0 auto}
+  .hamb{display:none}
+
+  .shell{max-width:var(--max);margin:0 auto;display:grid;grid-template-columns:var(--side) 1fr;gap:22px;padding:20px 18px 60px;align-items:start}
+
+  /* sticky, independently scrollable sidebar */
+  .side{position:sticky;top:74px;max-height:calc(100vh - 90px);overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 14px 8px}
+  .side h4{margin:16px 0 8px;font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:6px}
+  .side h4:first-child{margin-top:4px}
+  .opt{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:9px;font-size:14px;cursor:pointer}
+  .opt:hover{background:var(--chip)}
+  .opt input{width:16px;height:16px;accent-color:var(--red);cursor:pointer}
+  .opt .ct{margin-left:auto;font-size:12px;color:var(--muted)}
+  .opt.disabled{opacity:.45;cursor:not-allowed}
+  .opt.disabled .soon{margin-left:auto;font-size:10px;border:1px solid var(--line);border-radius:99px;padding:1px 7px;color:var(--muted)}
+  .stage{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .s-off{background:#16a34a}.s-med{background:#0ea5e9}.s-talk{background:#f59e0b}.s-rum{background:#9ca3af}
+  .sortrow input{accent-color:var(--red)}
+  .fstatus{font-size:12px;color:var(--muted);padding:8px 9px 2px}
+  .actions{position:sticky;bottom:0;background:var(--card);padding:10px 2px 6px;margin-top:8px;border-top:1px solid var(--line);display:flex;gap:8px}
+  .btn{flex:1;border-radius:10px;padding:10px;font-weight:800;font-size:13px;cursor:pointer}
+  .btn.apply{background:var(--red);color:#fff;border:1px solid var(--red)}
+  .btn.apply.dirty{box-shadow:0 0 0 3px rgba(239,1,7,.18)}
+  .btn.reset{background:transparent;color:var(--muted);border:1px solid var(--line)}
+
+  .grid{display:grid;grid-template-columns:1fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+  .card:hover{box-shadow:0 8px 22px rgba(0,0,0,.12);transform:translateY(-2px);transition:.15s}
+  .thumb{aspect-ratio:16/9;background:linear-gradient(135deg,var(--thumb1),var(--thumb2));color:var(--thumbfg);display:grid;place-items:center;font-size:12px;font-weight:800;letter-spacing:.12em;position:relative}
+  .thumb .badge{position:absolute;left:10px;top:10px;background:var(--red);color:#fff;font-size:11px;font-weight:800;padding:3px 9px;border-radius:99px}
+  .pad{padding:13px 15px 15px;display:flex;flex-direction:column;gap:7px;flex:1}
+  .chips{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+  .chip{font-size:11px;font-weight:800;padding:3px 8px;border-radius:99px}
+  .chip.src{background:#fdeaea;color:var(--red-d)} html[data-theme="dark"] .chip.src{background:rgba(239,1,7,.18);color:#ff6b6f}
+  .chip.tier{background:var(--chip);color:var(--navy)} html[data-theme="dark"] .chip.tier{color:#9fc0ff}
+  .chip.team{background:var(--chip);color:var(--muted)}
+  .when{font-size:12px;color:var(--muted);margin-left:auto}
+  .card h2{margin:0;font-size:18px;line-height:1.35;font-weight:800;letter-spacing:-.01em}
+  .card p{margin:0;color:var(--muted);font-size:14px}
+
+  @media (min-width:760px){ .grid{grid-template-columns:1fr 1fr} }
+  @media (max-width:880px){
+    .hamb{display:block}
+    .nav{display:none}
+    .shell{grid-template-columns:1fr;padding:14px}
+    .side{position:fixed;top:0;left:0;bottom:0;width:280px;max-height:none;border-radius:0;z-index:40;transform:translateX(-100%);transition:.2s;box-shadow:0 0 40px rgba(0,0,0,.3)}
+    .side.open{transform:none}
+    .scrim{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:35;display:none}
+    .scrim.open{display:block}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="inner">
+  <button class="iconbtn hamb" onclick="document.querySelector('.side').classList.toggle('open');document.querySelector('.scrim').classList.toggle('open')">☰</button>
+  <span class="logo"><span class="crest">B</span>Bullet-in</span>
+  <nav class="nav">
+    <a class="active" href="mockup_v2_index.html">홈</a>
+    <a href="#">소개</a>
+    <a href="#">일정</a>
+  </nav>
+  <label class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+    <input placeholder="선수·구단·이적 키워드 검색 (예: 요케레스, 재계약)">
+  </label>
+  <span class="spacer"></span>
+  <button class="iconbtn" id="themeBtn" title="라이트/다크 전환">🌙</button>
+</div></div>
+
+<div class="scrim" onclick="document.querySelector('.side').classList.remove('open');this.classList.remove('open')"></div>
+
+<div class="shell">
+  <aside class="side">
+    <h4>팀</h4>
+    <label class="opt"><input type="checkbox" checked> Arsenal <span class="ct">128</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled> Manchester United <span class="soon">예정</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled> Chelsea <span class="soon">예정</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled> Liverpool <span class="soon">예정</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled> Tottenham <span class="soon">예정</span></label>
+
+    <h4>영입 단계</h4>
+    <label class="opt"><input type="checkbox"><span class="stage s-off"></span>오피셜 <span class="ct">12</span></label>
+    <label class="opt"><input type="checkbox"><span class="stage s-med"></span>메디컬 <span class="ct">5</span></label>
+    <label class="opt"><input type="checkbox"><span class="stage s-talk"></span>협상 중 <span class="ct">23</span></label>
+    <label class="opt"><input type="checkbox"><span class="stage s-rum"></span>루머 <span class="ct">88</span></label>
+
+    <h4>신뢰도 (Tier)</h4>
+    <label class="opt"><input type="checkbox"> tier 0 <span class="ct">9</span></label>
+    <label class="opt"><input type="checkbox"> tier 1 <span class="ct">14</span></label>
+    <label class="opt"><input type="checkbox"> tier 2 <span class="ct">27</span></label>
+    <label class="opt"><input type="checkbox"> tier 3 <span class="ct">31</span></label>
+    <label class="opt"><input type="checkbox"> tier 4 <span class="ct">47</span></label>
+
+    <h4>정렬</h4>
+    <label class="opt sortrow"><input type="radio" name="sort" checked> 최신순</label>
+    <label class="opt sortrow"><input type="radio" name="sort"> 신뢰도순</label>
+
+    <div class="fstatus" id="fstatus">미적용 · 전체 표시</div>
+    <div class="actions">
+      <button class="btn reset" id="resetBtn">초기화</button>
+      <button class="btn apply" id="applyBtn">필터 적용</button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="grid">
+      <a class="card" href="mockup_v2_detail.html">
+        <div class="thumb"><span class="badge">오피셜</span>PHOTO · 16:9</div>
+        <div class="pad"><div class="chips"><span class="chip team">Arsenal</span><span class="chip src">아스날 공식</span><span class="chip tier">tier 0</span><span class="when">2시간 전</span></div>
+          <h2>아스날, 빅토르 요케레스 영입 완료</h2>
+          <p>요케레스를 약 6천만 유로에 영입해 5년 계약을 맺었다.</p></div>
+      </a>
+      <a class="card" href="mockup_v2_detail.html">
+        <div class="thumb"><span class="badge">협상</span>PHOTO · 16:9</div>
+        <div class="pad"><div class="chips"><span class="chip team">Arsenal</span><span class="chip src">BBC Sport</span><span class="chip tier">tier 2</span><span class="when">4시간 전</span></div>
+          <h2>아스날, 주앙 네베스 영입 위해 벤피카와 협상</h2>
+          <p>중원 보강을 위해 벤피카의 주앙 네베스 영입 협상에 착수했다.</p></div>
+      </a>
+      <a class="card" href="mockup_v2_detail.html">
+        <div class="thumb"><span class="badge">독점</span>PHOTO · 16:9</div>
+        <div class="pad"><div class="chips"><span class="chip team">Arsenal</span><span class="chip src">디 애슬레틱</span><span class="chip tier">tier 1</span><span class="when">6시간 전</span></div>
+          <h2>디 애슬레틱, “아스날 겨울 수비수 보강 추진”</h2>
+          <p>겨울 이적시장에서 센터백 영입을 검토하고 있다고 전했다.</p></div>
+      </a>
+      <a class="card" href="mockup_v2_detail.html">
+        <div class="thumb"><span class="badge">메디컬</span>PHOTO · 16:9</div>
+        <div class="pad"><div class="chips"><span class="chip team">Arsenal</span><span class="chip src">Goal</span><span class="chip tier">tier 2</span><span class="when">11시간 전</span></div>
+          <h2>칼라피오리, 아스날 입단 메디컬 진행</h2>
+          <p>리카르도 칼라피오리가 런던에서 메디컬 테스트를 받고 있다.</p></div>
+      </a>
+      <a class="card" href="mockup_v2_detail.html">
+        <div class="thumb"><span class="badge">재계약</span>PHOTO · 16:9</div>
+        <div class="pad"><div class="chips"><span class="chip team">Arsenal</span><span class="chip src">football.london</span><span class="chip tier">tier 4</span><span class="when">9시간 전</span></div>
+          <h2>사카, 아스날과 장기 재계약 임박</h2>
+          <p>부카요 사카가 재계약 협상에서 합의에 근접했다.</p></div>
+      </a>
+      <a class="card" href="mockup_v2_detail.html">
+        <div class="thumb"><span class="badge">루머</span>PHOTO · 16:9</div>
+        <div class="pad"><div class="chips"><span class="chip team">Arsenal</span><span class="chip src">BBC Gossip</span><span class="chip tier">tier 4</span><span class="when">하루 전</span></div>
+          <h2>아스날, 측면 자원 추가 영입 관심</h2>
+          <p>여름 이적시장 마감 전 윙어 보강 가능성이 거론된다.</p></div>
+      </a>
+    </div>
+  </main>
+</div>
+
+<script>
+  const root=document.documentElement, btn=document.getElementById('themeBtn');
+  const saved=localStorage.getItem('theme'); if(saved) root.setAttribute('data-theme',saved);
+  const sync=()=>btn.textContent=root.getAttribute('data-theme')==='dark'?'☀️':'🌙'; sync();
+  btn.onclick=()=>{const n=root.getAttribute('data-theme')==='dark'?'light':'dark';root.setAttribute('data-theme',n);localStorage.setItem('theme',n);sync()};
+
+  // 필터 적용/초기화 (목업: 적용 시 조건 수 표시, 초기화 시 기본값 복원)
+  const side=document.querySelector('.side'), fstatus=document.getElementById('fstatus');
+  const applyBtn=document.getElementById('applyBtn'), resetBtn=document.getElementById('resetBtn');
+  const boxes=()=>[...side.querySelectorAll('input[type=checkbox]:not([disabled])')];
+  const markDirty=()=>applyBtn.classList.add('dirty');
+  side.addEventListener('change',markDirty);
+  applyBtn.onclick=()=>{
+    const n=boxes().filter(c=>c.checked).length;
+    const sort=side.querySelector('input[name=sort]:checked').parentNode.textContent.trim();
+    fstatus.textContent=`적용됨 · 조건 ${n}개 · ${sort}`;
+    applyBtn.classList.remove('dirty');
+  };
+  resetBtn.onclick=()=>{
+    boxes().forEach((c,i)=>c.checked=(i===0)); // Arsenal만 기본 체크
+    side.querySelector('input[name=sort]').checked=true;
+    fstatus.textContent='미적용 · 전체 표시';
+    applyBtn.classList.remove('dirty');
+  };
+</script>
+</body>
+</html>
