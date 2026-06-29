@@ -22,14 +22,25 @@ class MartStore:
         sql = text("""
           INSERT INTO articles
             (content_hash,url,source_id,author,tier,confidence_score,
-             title_original,title_ko,summary_ko,body_excerpt,published_at,fetched_at,revision)
+             title_original,title_ko,summary_ko,body_excerpt,
+             summary3_ko,body_ko,body_source,image_url,outlet,journalist,team,
+             published_at,fetched_at,revision)
           VALUES (:content_hash,:url,:source_id,:author,:tier,:confidence_score,
-             :title_original,:title_ko,:summary_ko,:body_excerpt,:published_at,:fetched_at,:revision)
+             :title_original,:title_ko,:summary_ko,:body_excerpt,
+             :summary3_ko,:body_ko,:body_source,:image_url,:outlet,:journalist,:team,
+             :published_at,:fetched_at,:revision)
           ON DUPLICATE KEY UPDATE
              title_ko=IF(articles.content_hash=VALUES(content_hash), articles.title_ko, NULL),
              summary_ko=IF(articles.content_hash=VALUES(content_hash), articles.summary_ko, NULL),
+             summary3_ko=IF(articles.content_hash=VALUES(content_hash), articles.summary3_ko, NULL),
+             body_ko=IF(articles.content_hash=VALUES(content_hash), articles.body_ko, NULL),
              title_original=VALUES(title_original),
              body_excerpt=VALUES(body_excerpt),
+             body_source=VALUES(body_source),
+             image_url=VALUES(image_url),
+             outlet=VALUES(outlet),
+             journalist=VALUES(journalist),
+             team=VALUES(team),
              published_at=VALUES(published_at),
              tier=VALUES(tier),
              confidence_score=VALUES(confidence_score),
@@ -50,11 +61,13 @@ class MartStore:
     def rows_missing_translation(self) -> list[dict]:
         with self.engine.connect() as c:
             rows = c.execute(text(
-                "SELECT content_hash,source_id,title_original,body_excerpt FROM articles "
-                "WHERE title_ko IS NULL")).mappings().all()
+                "SELECT content_hash,source_id,title_original,body_excerpt,"
+                "body_source,outlet FROM articles WHERE title_ko IS NULL")).mappings().all()
         return [dict(r) for r in rows]
-    def set_translation(self, content_hash: str, title_ko: str, summary_ko: str):
+    def set_translation(self, content_hash: str, title_ko: str, summary_ko: str,
+                        summary3_ko: str | None = None, body_ko: str | None = None):
         with self.engine.begin() as c:
-            c.execute(text("UPDATE articles SET title_ko=:t, summary_ko=:s "
-                           "WHERE content_hash=:h"),
-                      {"t": title_ko, "s": summary_ko, "h": content_hash})
+            c.execute(text("UPDATE articles SET title_ko=:t, summary_ko=:s, "
+                           "summary3_ko=:s3, body_ko=:b WHERE content_hash=:h"),
+                      {"t": title_ko, "s": summary_ko, "s3": summary3_ko,
+                       "b": body_ko, "h": content_hash})
