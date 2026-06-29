@@ -1,6 +1,12 @@
 # 런북 — 서빙 UI 검증 (렌더 구조 + 브라우저 인터랙션)
 
-정적 서빙 UI(`site/`)를 머지 전 검증한다. **단위 테스트는 Jinja 렌더 결과 일부만 모킹으로 보고, 클라이언트 JS(검색 · 필터 · 정렬 · 테마 토글)와 시각 레이아웃은 못 잡는다.** 셀렉터 드리프트를 어댑터 단독 `fetch()`로 라이브 검증하듯 (`docs/troubleshooting/2026-06-12-live-source-selector-drift.md`), 서빙도 실제 렌더 출력 + 실 브라우저 구동으로 확인한다.
+정적 서빙 UI (`site/`)를 머지 전 검증한다.
+
+**단위 테스트는 Jinja 렌더 결과 일부만 모킹으로 보고, 클라이언트 JS (검색 · 필터 · 정렬 · 테마 토글)와 시각 레이아웃은 못 잡는다.**
+이유는 pytest 환경에 브라우저 · JS 엔진 · CSS 렌더러가 없어 `render_*`가 만든 HTML 문자열의 조각만 단언하기 때문.
+`app.js`는 실행되지 않고 `style.css`는 적용되지 않으므로, 필터 로직 · 정렬 비교자 · 테마 영속이 틀려도 레이아웃 · 다크모드 대비가 깨져도 HTML 문자열은 동일해 테스트는 통과한다.
+
+따라서 셀렉터 드리프트를 어댑터 단독 `fetch()`로 라이브 검증하듯 (`docs/troubleshooting/2026-06-12-live-source-selector-drift.md`), 서빙도 실제 렌더 출력 + 실 브라우저 구동으로 확인한다.
 
 ## 언제 쓰나
 
@@ -9,7 +15,8 @@
 
 ## 1단계 — 픽스처로 `site/` 생성
 
-엣지를 모두 덮는 10건 픽스처(이미지 유/무 · `outlet` NULL=직접 EN 소스 · `journalist` 유/무 · `tier` 0–4 · 다문단 본문)로 사이트를 만든다. DB 불필요.
+엣지를 모두 덮는 10건 픽스처 (이미지 유/무 · `outlet` NULL=직접 EN 소스 · `journalist` 유/무 · `tier` 0–4 · 다문단 본문)로 사이트를 만든다.
+DB 불필요.
 
 ```bash
 cd <repo>
@@ -45,7 +52,8 @@ PY
 
 실제 HTML을 전수 확인한다. 기대값은 위 픽스처 기준.
 
-스크랩 마크업 이스케이프 자체는 단위 테스트(`tests/test_serve_render.py::test_index_prefers_korean_title_and_escapes`)가 잠근다. 아래 grep은 구조 · 폴백 · 카운트 확인용.
+스크랩 마크업 이스케이프 자체는 단위 테스트 (`tests/test_serve_render.py::test_index_prefers_korean_title_and_escapes`)가 잠근다.
+아래 grep은 구조 · 폴백 · 카운트 확인용.
 
 ```bash
 cd site
@@ -64,13 +72,15 @@ grep -c 'nowtag">지금' article/hash5.html          # 1  (현재 글 배지 정
 grep -o 'Arsenal <span class="ct">[0-9]*' article/hash5.html  # Arsenal …10  (상세 사이드바도 실제 facet)
 ```
 
-슬라이딩 윈도우 가장자리(과거 끝 `hash9`)는 이웃이 선수 5·6·7·8·9, 현재=9로 끝에서 5개 유지되는지 확인.
+슬라이딩 윈도우 가장자리 (과거 끝 `hash9`)는 이웃이 선수 5 · 6 · 7 · 8 · 9, 현재=9로 끝에서 5개 유지되는지 확인.
 
 ## 3단계 — 실 브라우저 인터랙션 (Playwright)
 
-프로젝트에 이미 설치된 Playwright(chromium)로 검색 · 필터 · 정렬 · 테마를 **실제 구동**한다(클릭/입력 → DOM 반영 단언). 스크린샷도 함께 캡처. 아래 스니펫을 임시 파일에 저장해 `uv run python <file>`로 실행한다(커밋하지 않는다).
+프로젝트에 이미 설치된 Playwright (chromium)로 검색 · 필터 · 정렬 · 테마를 **실제 구동**한다 (클릭/입력 → DOM 반영 단언).
+스크린샷도 함께 캡처.
+아래 스니펫을 임시 파일에 저장해 `uv run python <file>`로 실행한다 (커밋하지 않는다).
 
-검증 항목(전부 PASS여야 함):
+검증 항목 (전부 PASS여야 함):
 
 | 항목 | 기대 |
 |---|---|
@@ -78,12 +88,12 @@ grep -o 'Arsenal <span class="ct">[0-9]*' article/hash5.html  # Arsenal …10  (
 | 테마 토글 | `html[data-theme]` light → dark, 버튼 🌙 → ☀️, `localStorage.theme=dark` |
 | 테마 영속 | 새로고침 후 dark 유지 |
 | 검색 `선수 3` | 1건만, 비우면 10건 복원 |
-| 필터 tier 0 + 적용 | 2건(선수 0 · 5), 상태줄 `적용됨 · 조건 1개 · 2건` |
+| 필터 tier 0 + 적용 | 2건 (선수 0 · 5), 상태줄 `적용됨 · 조건 1개 · 2건` |
 | 초기화 | 전체 복원 + 체크 해제 |
 | 정렬 신뢰도순 | `data-confidence` 내림차순 |
-| 정렬 최신순 | 가장 최근(선수 0) 선두 |
+| 정렬 최신순 | 가장 최근 (선수 0) 선두 |
 
-핵심 스니펫(전체 스크립트는 길어 요지만):
+핵심 스니펫 (전체 스크립트는 길어 요지만):
 
 ```python
 from pathlib import Path
@@ -112,7 +122,7 @@ with sync_playwright() as p:
 
 > **스크린샷 함정**: 테마 토글 직후 캡처하면 `body{transition:… color .2s}` 트랜지션 중간이 잡혀 글자가 흐릿하게 보인다.
 > 시각 확인용 스크린샷은 토글 후 `pg.wait_for_timeout(400)` 뒤에 찍는다.
-> 대비 진단은 스크린샷 대신 computed color로 확정: `getComputedStyle(card_h2).color` 가 다크의 `--ink`(`rgb(238,241,246)`)인지 확인.
+> 대비 진단은 스크린샷 대신 computed color로 확정: `getComputedStyle(card_h2).color` 가 다크의 `--ink` (`rgb(238,241,246)`)인지 확인.
 
 ## 기대 결과
 
@@ -124,4 +134,4 @@ with sync_playwright() as p:
 
 - 계획 · spec: `docs/superpowers/plans/2026-06-29-tier2a-serving-ui.md`, `docs/superpowers/specs/2026-06-29-tier2a-detail-page-design.md` (§7)
 - 인라인 CSS 인젝션 함정: `docs/troubleshooting/2026-06-29-jinja-autoescape-css-context-injection.md`
-- 라이브 검증 철학(모킹이 못 잡는 드리프트): `docs/troubleshooting/2026-06-12-live-source-selector-drift.md`
+- 라이브 검증 철학 (모킹이 못 잡는 드리프트): `docs/troubleshooting/2026-06-12-live-source-selector-drift.md`
