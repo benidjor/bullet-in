@@ -1,4 +1,5 @@
 from __future__ import annotations
+import shutil
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -110,23 +111,33 @@ def build_neighbors(ordered: list[dict], idx: int, sources: dict,
 
 
 def render_article(article: dict, neighbors: list[dict], current_hash: str,
-                   sources: dict, now: datetime) -> str:
-    empty_facets = {"team": {}, "outlets": [], "tiers": {t: 0 for t in range(5)}, "total": 0}
+                   sources: dict, now: datetime, facets: dict | None = None) -> str:
+    # facets=None이면 빈 구조로 폴백 (하위 호환 유지)
+    if facets is None:
+        facets = {"team": {}, "outlets": [], "tiers": {t: 0 for t in range(5)}, "total": 0}
     return _env().get_template("detail.html.j2").render(
-        a=article, neighbors=neighbors, active=None, root="../", facets=empty_facets)
+        a=article, neighbors=neighbors, active=None, root="../", facets=facets)
 
 
-def render_page(articles: list[dict]) -> str:
-    # Task 5에서 제거 예정. 템플릿이 _layout을 상속하므로 최소 컨텍스트 보완.
-    now = datetime.utcnow()
-    ordered = [_decorate(a, {}, now)
-               for a in sorted(articles,
-                               key=lambda a: a.get("confidence_score") or 0.0,
-                               reverse=True)]
-    empty_facets = {"team": {}, "outlets": [], "tiers": {t: 0 for t in range(5)}, "total": 0}
-    return _env().get_template("index.html.j2").render(
-        articles=ordered, facets=empty_facets, active="home", root="")
+def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
+               now: datetime | None = None) -> None:
+    """인덱스·상세 N개·정적 자산을 out_dir에 일괄 생성한다."""
+    now = now or datetime.utcnow()
+    out = Path(out_dir)
+    (out / "article").mkdir(parents=True, exist_ok=True)
 
-def write_page(articles: list[dict], out_path: str | Path) -> None:
-    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(out_path).write_text(render_page(articles), encoding="utf-8")
+    (out / "index.html").write_text(render_index(articles, sources, now),
+                                    encoding="utf-8")
+
+    ordered = _sorted_latest(articles)
+    # 패싯은 전체 기사 기준으로 한 번만 계산해 모든 상세 페이지에 전달
+    facets = facet_counts(articles, sources)
+    for idx, row in enumerate(ordered):
+        a = _decorate(row, sources, now)
+        neighbors = build_neighbors(ordered, idx, sources, now)
+        html = render_article(a, neighbors, row["content_hash"], sources, now, facets=facets)
+        (out / "article" / f"{row['content_hash']}.html").write_text(
+            html, encoding="utf-8")
+
+    for asset in ("style.css", "app.js"):
+        shutil.copyfile(_STATIC_DIR / asset, out / asset)

@@ -97,3 +97,24 @@ def test_detail_small_corpus_shows_all():
     arts = [_row(content_hash=f"h{i}", title_ko=f"기사{i}") for i in range(3)]
     nb = build_neighbors(arts, 1, SOURCES, NOW)
     assert len(nb) == 3
+
+
+from bullet_in.serve.render import write_site
+
+
+def test_write_site_creates_index_articles_and_assets(tmp_path):
+    arts = [_row(content_hash=f"h{i}", title_ko=f"기사{i}",
+                 published_at=datetime(2026, 6, 29, 12 - i, 0)) for i in range(3)]
+    write_site(arts, SOURCES, tmp_path, now=NOW)
+    assert (tmp_path / "index.html").exists()
+    assert (tmp_path / "style.css").exists()
+    assert (tmp_path / "app.js").exists()
+    for i in range(3):
+        assert (tmp_path / "article" / f"h{i}.html").exists()
+    # 상세에서 정적 자산은 ../ 로 참조
+    detail = (tmp_path / "article" / "h0.html").read_text(encoding="utf-8")
+    assert 'href="../style.css"' in detail and 'src="../app.js"' in detail
+    index = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert 'href="style.css"' in index
+    # 상세 사이드바에 실제 패싯(BBC Sport 언론사) 카운트가 반영됨 — 빈 패싯이 아닌 증거
+    assert 'data-value="BBC Sport"' in detail
