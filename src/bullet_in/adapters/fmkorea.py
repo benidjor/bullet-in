@@ -20,8 +20,9 @@ def _body_text(html: str, selector: str) -> str:
     el = soup.select_one(selector)
     return el.get_text(" ", strip=True)[:_BODY_MAX_CHARS] if el else ""
 
-_REPOST_MARK = "퍼가기가 금지된 글입니다"
 _URL_RE = re.compile(r"https?://[^\s\"'<>)]+")
+
+PAYWALLED_OUTLETS = {"The Athletic"}
 
 OUTLET_MAP = {
     "디 애슬레틱": "The Athletic", "디애슬레틱": "The Athletic",
@@ -43,9 +44,6 @@ def parse_bracket(title: str) -> tuple[str | None, str | None, bool]:
     outlet = OUTLET_MAP.get(outlet, outlet)
     return (outlet or None), journalist, is_excl
 
-def _is_repost_blocked(html: str) -> bool:
-    return _REPOST_MARK in html
-
 def _extract_original_url(html: str, body_selector: str) -> str | None:
     soup = BeautifulSoup(html, "html.parser")
     el = soup.select_one(body_selector)
@@ -63,17 +61,14 @@ def _extract_original_url(html: str, body_selector: str) -> str | None:
             return href
     return None
 
-async def _fetch_og_description(client: httpx.AsyncClient, url: str) -> str | None:
+async def _fetch_og_image(client: httpx.AsyncClient, url: str) -> str | None:
+    from bullet_in.adapters.meta import extract_og_image
     try:
         r = await client.get(url, follow_redirects=True)
         r.raise_for_status()
     except httpx.HTTPError:
         return None
-    soup = BeautifulSoup(r.text, "html.parser")
-    tag = (soup.find("meta", property="og:description")
-           or soup.find("meta", attrs={"name": "description"}))
-    content = tag.get("content") if tag else None
-    return content.strip() if content else None
+    return extract_og_image(r.text)
 
 class FmkoreaAdapter:
     source_type = "html"
@@ -116,25 +111,38 @@ class FmkoreaAdapter:
                 matched.append((title, url))
                 if len(matched) >= self.max_posts:
                     break
+            from bullet_in.adapters.meta import extract_og_image, extract_article_body
             for title, url in matched:
                 try:
                     rb = await c.get(url)
                     rb.raise_for_status()
                 except httpx.HTTPError:
-                    continue  # 해당 글만 스킵, 배치 지속
+                    continue  # 글 fetch 실패 — 스킵, 배치 지속
                 html = rb.text
-                if _is_repost_blocked(html):
-                    orig = _extract_original_url(html, self.body_selector)
-                    desc = await _fetch_og_description(c, orig) if orig else None
-                    if orig and desc:                 # 분기①: 원문 대체
-                        item_url, body = orig, desc
-                    else:                             # 분기②: 헤드라인만
-                        item_url, body = orig or url, ""
-                else:                                 # 현행: fmkorea 본문 요약
-                    item_url = url
+                outlet, journalist, _excl = parse_bracket(title)
+                orig = _extract_original_url(html, self.body_selector)
+                if orig is None or outlet is None:
+                    log.warning("fmkorea 원문/말머리 해소 실패 — 스킵 url=%s", url)
+                    continue
+                if outlet in PAYWALLED_OUTLETS:
+                    # 유료 (디 애슬레틱): fmkorea 한국어 번역본 유지, 원문 og:image 만 시도
                     body = _body_text(html, self.body_selector)
+                    image = await _fetch_og_image(c, orig)
+                    lang = "ko"
+                else:
+                    # 무료: 원문 fetch 후 영어 본문·이미지 추출
+                    try:
+                        ro = await c.get(orig)
+                        ro.raise_for_status()
+                        body = extract_article_body(ro.text)
+                        image = extract_og_image(ro.text)
+                    except httpx.HTTPError:
+                        body, image = "", None
+                    lang = "en"
                 out.append(RawItem(
-                    source_id=self.source_id, source_type="html", url=item_url,
+                    source_id=self.source_id, source_type="html", url=orig,
                     fetched_at=now,
-                    raw_payload={"title": title, "body": body, "lang": "ko"}))
+                    raw_payload={"title": title, "body": body, "lang": lang,
+                                 "outlet": outlet, "journalist": journalist,
+                                 "image_url": image}))
         return out
