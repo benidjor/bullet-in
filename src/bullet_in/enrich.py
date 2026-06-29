@@ -11,13 +11,6 @@ def _is_rate_limit(exc: Exception) -> bool:
     s = str(exc)
     return "429" in s or "RESOURCE_EXHAUSTED" in s
 
-PROMPT = ("아스날 FC 축구 뉴스를 한국어로 번역·요약한다. 규칙:\n"
-          "- title_ko: 한국 스포츠 기사 제목체로 간결하게(명사형 위주, 불필요한 조사 생략). "
-          "예: '케이틀린 포드, 재계약 체결'.\n"
-          "- summary_ko: 한 문장, 신문 평어체(종결어미 '~다'), 사실 중심, 추측·과장 금지.\n"
-          "- 고유명사는 통용 한글 표기. Arsenal=아스날, 선수·구단명은 널리 쓰는 한글 표기.\n"
-          'ONLY JSON 반환: {{"title_ko": "...", "summary_ko": "..."}}\n\nTitle: {title}\nBody: {body}')
-
 SUMMARY_PROMPT = ("다음 한국어 축구 뉴스를 한 문장으로 요약한다. "
                   "신문 평어체(종결어미 '~다'), 사실 중심, 추측·과장 금지. "
                   "고유명사는 통용 한글 표기(Arsenal=아스날). "
@@ -42,16 +35,6 @@ PARAPHRASE_PROMPT = (
     "- body_ko: 본문 전체를 문장 표현만 바꿔 다시 쓴다. 내용 추가·삭제 금지.\n"
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],"body_ko":"..."}}'
     "\n\nTitle: {title}\nBody: {body}")
-
-def _extract(text: str) -> tuple[str, str] | None:
-    m = re.search(r"\{.*\}", text, re.DOTALL)
-    if not m:
-        return None
-    try:
-        d = json.loads(m.group(0))
-        return d["title_ko"], d["summary_ko"]
-    except (json.JSONDecodeError, KeyError, TypeError):
-        return None
 
 def _extract_full(text: str) -> dict | None:
     m = re.search(r"\{.*\}", text, re.DOTALL)

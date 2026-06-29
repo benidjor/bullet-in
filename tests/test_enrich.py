@@ -11,7 +11,10 @@ class FakeClient:
 def test_enrich_translates_missing_rows():
     rows = [{"content_hash": "h1", "title_original": "Title", "body_excerpt": "Body"}]
     out = enrich_rows(rows, client=FakeClient(), model="gemini-2.5-flash-lite")
-    assert out["h1"]["title_ko"] == "제목" and out["h1"]["summary_ko"] == "요약"
+    assert out["h1"]["title_ko"] == "제목"
+    assert out["h1"]["summary_ko"] == "요약"
+    assert out["h1"]["summary3_ko"] == "①\n②\n③"
+    assert out["h1"]["body_ko"] == "본문"
 
 def test_enrich_skips_when_no_rows():
     assert enrich_rows([], client=FakeClient(), model="gemini-2.5-flash-lite") == {}
@@ -25,7 +28,10 @@ def test_enrich_handles_code_fenced_json():
     class C:
         def __init__(self): self.models = M()
     out = enrich_rows([{"content_hash":"h","title_original":"T","body_excerpt":""}], C(), "gemini-2.5-flash-lite")
-    assert out["h"]["title_ko"] == "제" and out["h"]["summary_ko"] == "요"
+    assert out["h"]["title_ko"] == "제"
+    assert out["h"]["summary_ko"] == "요"
+    assert out["h"]["summary3_ko"] == "a\nb\nc"
+    assert out["h"]["body_ko"] == "b"
 
 def test_enrich_skips_bad_row_without_aborting_batch():
     class M:
@@ -41,7 +47,11 @@ def test_enrich_skips_bad_row_without_aborting_batch():
     rows = [{"content_hash":"bad","title_original":"A","body_excerpt":""},
             {"content_hash":"ok","title_original":"B","body_excerpt":""}]
     out = enrich_rows(rows, C(), "gemini-2.5-flash-lite")
-    assert "bad" not in out and out["ok"]["title_ko"] == "제" and out["ok"]["summary_ko"] == "요"
+    assert "bad" not in out
+    assert out["ok"]["title_ko"] == "제"
+    assert out["ok"]["summary_ko"] == "요"
+    assert out["ok"]["summary3_ko"] == "a\nb\nc"
+    assert out["ok"]["body_ko"] == "b"
 
 from bullet_in.enrich import partition_translation_rows
 
@@ -160,7 +170,7 @@ def test_enrich_paraphrase_mode_uses_paraphrase_prompt():
     client = FullClient(payload)
     rows = [{"content_hash": "h", "title_original": "[디 애슬레틱] 제목", "body_source": "한국어 본문"}]
     out = enrich_rows(rows, client, "m", mode="paraphrase")
-    assert out["h"]["body_ko"] == "B"  # 정상 처리됨 (프롬프트 분기는 PROMPT 상수 사용)
+    assert out["h"]["body_ko"] == "B"  # 정상 처리됨
 
 def test_partition_by_paywall_splits_by_outlet():
     rows = [{"content_hash": "a", "outlet": "The Athletic"},
