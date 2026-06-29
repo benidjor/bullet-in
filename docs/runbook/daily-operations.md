@@ -30,3 +30,25 @@ cd dbt && uv run dbt build --profiles-dir .
 
 ## 6. 서빙 확인
 `site/index.html` 가 갱신되고 confidence 내림차순으로 기사가 나열되는지 확인.
+
+## 7. enrich (번역) 점검 — 긴 본문 번역 잘림 · Gemini 503 / 429
+
+- **증상**: 특정 (주로 긴) 기사가 매 사이클 `body_ko` / `summary3_ko` NULL 유지 (에러 로그 없이 조용히).
+
+긴 본문 번역이 출력 한도에 걸려 잘리면서 영영 안 채워지는 경로.
+
+```
+원문 (extract_article_body, 최대 8000자)
+  ── 번역 출력 > max_output_tokens
+  ── JSON 잘림
+  ── 파싱 실패로 행 스킵
+  ── 트리거 title_ko IS NULL 그대로
+  ── 다음 회차도 같은 길이라 다시 잘림 (무한)
+```
+
+- **대응**: `src/bullet_in/enrich.py` 의 `max_output_tokens` 상향 (현 8192) 또는 `extract_article_body` 본문 cap (현 8000자) 하향.
+- **Gemini 503 (모델 과부하) vs 429 구분**
+  - 429 (RESOURCE_EXHAUSTED) — `_is_rate_limit` 이 잡아 그 회차 즉시 중단 · 남은 행은 다음 회차 누적.
+  - 503 — 개별 행만 스킵하고 배치는 지속 · 다음 회차 재시도. 503 급증 시 일부 행이 이번 회차에 안 채워지는 것은 정상.
+- **멱등**: 둘 다 `title_ko IS NULL` 로 다음 사이클 자동 재시도 · 중복 적재 없음.
+- 상세 — `docs/troubleshooting/2026-06-29-fmkorea-discovery-extraction.md` · `2026-05-27-llm-json-parsing-robustness.md`.

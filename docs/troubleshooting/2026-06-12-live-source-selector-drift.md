@@ -43,3 +43,4 @@
 - **머지 전 라이브 probe 의무화** — 신규/변경 소스는 어댑터 단독 `fetch()`로 실사이트 셀렉터를 검증한 뒤 활성화. 단위 테스트는 모킹이라 드리프트를 못 잡는다.
 - probe 스니펫(재사용): 각 어댑터를 `config`에서 만들어 `await adapter.fetch()` 후 건수·샘플 제목·URL 출력.
 - 소스 selector는 깨질 수 있는 외부 의존이므로, 수집 0건/타임아웃을 운영 알람 신호로 본다(런북 daily-operations §4).
+- **본문 셀렉터도 같은 함정**(Tier 2-a) — `body_selector`(EN 소스 상세 본문)가 추가되며 드리프트 표면이 목록 + 본문 두 곳으로 늘었다. 본문이 빈 값이면 제목만 저장되고 `body_ko`가 안 채워지므로, 신규/변경 `body_selector`도 머지 전 단독 `fetch()`로 본문 추출을 검증한다. fmkorea 발견 소스의 추출 함정은 `2026-06-29-fmkorea-discovery-extraction.md` 참조.
