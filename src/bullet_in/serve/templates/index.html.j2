@@ -1,10 +1,31 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>Bullet-in</title></head>
-<body><h1>Bullet-in — Arsenal 뉴스</h1>
+{% extends "_layout.html.j2" %}
+{% block title %}Bullet-in · 인덱스{% endblock %}
+{% block content %}
+<div class="grid">
 {% for a in articles %}
-<article data-tier="{{ a.tier }}">
-  <h2>{{ a.title_ko or a.title_original }}</h2>
-  <p class="src">{{ a.source_id }} · tier {{ a.tier }}</p>
-  <p class="sum">{{ a.summary_ko or "" }}</p>
-  <a href="{{ a.url }}">원문</a>
-</article>
-{% endfor %}</body></html>
+  <a class="card" href="article/{{ a.content_hash }}.html"
+     data-team="{{ a.team or 'arsenal' }}"
+     data-outlet="{{ a._outlet }}"
+     data-tier="{{ a.tier | int if a.tier is not none else '' }}"
+     data-published="{{ a._published_iso }}"
+     data-confidence="{{ a.confidence_score or 0 }}"
+     data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">
+    {% if a.image_url %}
+    <div class="thumb" style="background-image:url('{{ a.image_url }}');background-size:cover;background-position:center"></div>
+    {% else %}
+    <div class="thumb">PHOTO · 16:9</div>
+    {% endif %}
+    <div class="pad">
+      <div class="chips">
+        <span class="chip team">{{ '아스날' if (a.team or 'arsenal') == 'arsenal' else a.team }}</span>
+        <span class="chip src">{{ a._outlet }}</span>
+        <span class="chip tier">{{ a._tier_label }}</span>
+        <span class="when">{{ a._when }}</span>
+      </div>
+      <h2>{{ a._title }}</h2>
+      <p>{{ a.summary_ko or "" }}</p>
+    </div>
+  </a>
+{% endfor %}
+</div>
+{% endblock %}

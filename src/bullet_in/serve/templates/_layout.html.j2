@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Bullet-in{% endblock %}</title>
+<link rel="stylesheet" href="{{ root }}style.css">
+</head>
+<body>
+<div class="topbar"><div class="inner">
+  <button class="iconbtn hamb" onclick="document.querySelector('.side').classList.toggle('open');document.querySelector('.scrim').classList.toggle('open')">☰</button>
+  <a class="logo" href="{{ root }}index.html"><span class="crest">B</span>Bullet-in</a>
+  <nav class="nav">
+    <a class="{{ 'active' if active == 'home' else '' }}" href="{{ root }}index.html">홈</a>
+    <a href="#">소개</a>
+    <a href="#">일정</a>
+  </nav>
+  <label class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+    <input id="q" placeholder="선수·구단·이적 키워드 검색 (예: 요케레스, 재계약)">
+  </label>
+  <span class="spacer"></span>
+  <button class="iconbtn" id="themeBtn" title="라이트/다크 전환">🌙</button>
+</div></div>
+
+<div class="scrim" onclick="document.querySelector('.side').classList.remove('open');this.classList.remove('open')"></div>
+
+<div class="shell">
+  <aside class="side">
+    <h4>팀</h4>
+    <label class="opt"><input type="checkbox" data-group="team" data-value="arsenal" checked> Arsenal <span class="ct">{{ facets.team.get('arsenal', 0) }}</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled> Manchester United <span class="soon">예정</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled> Chelsea <span class="soon">예정</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled> Liverpool <span class="soon">예정</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled> Tottenham <span class="soon">예정</span></label>
+
+    <h4>영입 단계</h4>
+    <label class="opt disabled"><input type="checkbox" disabled><span class="stage s-off"></span>오피셜 <span class="soon">예정</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled><span class="stage s-med"></span>메디컬 <span class="soon">예정</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled><span class="stage s-talk"></span>협상 중 <span class="soon">예정</span></label>
+    <label class="opt disabled"><input type="checkbox" disabled><span class="stage s-rum"></span>루머 <span class="soon">예정</span></label>
+
+    <h4>소스 (언론사)</h4>
+    {% for name, count in facets.outlets %}
+    <label class="opt"><input type="checkbox" data-group="outlet" data-value="{{ name }}"> {{ name }} <span class="ct">{{ count }}</span></label>
+    {% endfor %}
+
+    <h4>신뢰도 (Tier)</h4>
+    {% for t in range(5) %}
+    <label class="opt"><input type="checkbox" data-group="tier" data-value="{{ t }}"> tier {{ t }} <span class="ct">{{ facets.tiers[t] }}</span></label>
+    {% endfor %}
+
+    <h4>정렬</h4>
+    <label class="opt sortrow"><input type="radio" name="sort" data-value="latest" checked> 최신순</label>
+    <label class="opt sortrow"><input type="radio" name="sort" data-value="confidence"> 신뢰도순</label>
+
+    <div class="fstatus" id="fstatus">미적용 · 전체 표시</div>
+    <div class="actions">
+      <button class="btn reset" id="resetBtn">초기화</button>
+      <button class="btn apply" id="applyBtn">필터 적용</button>
+    </div>
+  </aside>
+
+  <main>{% block content %}{% endblock %}</main>
+</div>
+
+<script src="{{ root }}app.js"></script>
+</body>
+</html>

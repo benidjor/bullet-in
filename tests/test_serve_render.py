@@ -1,0 +1,145 @@
+from pathlib import Path
+
+STATIC = Path("src/bullet_in/serve/static")
+
+def test_static_assets_exist_and_nonempty():
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "data-theme" in css and "--bg" in css      # 테마 변수
+    assert ".card" in css and ".side" in css
+    assert "data-outlet" in js and "data-tier" in js   # 카드 필터 계약
+    assert "localStorage" in js                        # 테마 영속
+
+
+from datetime import datetime
+from bullet_in.serve.render import render_index
+
+NOW = datetime(2026, 6, 29, 12, 0, 0)
+SOURCES = {"bbc_sport": {"display_name": "BBC Sport"}}
+
+def _row(**kw):
+    base = dict(content_hash="h1", url="https://x/1", source_id="bbc_sport",
+                title_original="Original", title_ko="한국어 제목", summary_ko="한 줄 요약",
+                tier=2, confidence_score=0.5, image_url=None, outlet=None,
+                team="arsenal", published_at=datetime(2026, 6, 29, 10, 0, 0))
+    base.update(kw); return base
+
+def test_index_card_has_data_attrs_and_link():
+    html = render_index([_row()], SOURCES, NOW)
+    assert 'href="article/h1.html"' in html
+    assert 'data-outlet="BBC Sport"' in html   # outlet NULL → display_name 폴백
+    assert 'data-tier="2"' in html
+    assert 'data-published="2026-06-29T10:00:00"' in html
+    assert 'data-confidence="0.5"' in html
+
+def test_index_prefers_korean_title_and_escapes():
+    html = render_index([_row(title_ko=None, title_original="A & B <script>x</script>")], SOURCES, NOW)
+    assert "<script>x</script>" not in html
+    assert "&lt;script&gt;" in html
+    html2 = render_index([_row()], SOURCES, NOW)
+    assert "한국어 제목" in html2
+
+def test_index_placeholder_when_no_image():
+    html = render_index([_row(image_url=None)], SOURCES, NOW)
+    assert "PHOTO · 16:9" in html
+    html2 = render_index([_row(image_url="https://img/x.jpg")], SOURCES, NOW)
+    assert "https://img/x.jpg" in html2
+
+def test_index_sorts_latest_first():
+    old = _row(content_hash="old", title_ko="옛날", published_at=datetime(2026, 6, 28, 0, 0))
+    new = _row(content_hash="new", title_ko="최신", published_at=datetime(2026, 6, 29, 11, 0))
+    html = render_index([old, new], SOURCES, NOW)
+    assert html.index("최신") < html.index("옛날")
+
+def test_index_renders_facet_counts_and_disabled_stage():
+    html = render_index([_row(), _row(content_hash="h2")], SOURCES, NOW)
+    assert "tier 2" in html
+    # 영입 단계는 비활성 자리(2-b)
+    assert "영입 단계" in html and html.count("disabled") >= 4
+
+
+from bullet_in.serve.render import render_article, build_neighbors
+
+
+def _decorated(row):
+    from bullet_in.serve.render import _decorate
+    return _decorate(row, SOURCES, NOW)
+
+
+def test_detail_shows_summary3_body_and_origin():
+    a = _row(content_hash="cur", summary3_ko="첫째 줄\n둘째 줄\n셋째 줄",
+             body_ko="첫 문단입니다.\n둘째 문단입니다.", journalist="사미 목벨",
+             url="https://src/article")
+    nb = build_neighbors([a], 0, SOURCES, NOW)
+    html = render_article(_decorated(a), nb, "cur", SOURCES, NOW)
+    assert "3줄 요약" in html
+    assert "첫째 줄" in html and "셋째 줄" in html
+    assert "<li>첫째 줄</li>" in html
+    assert "<p>첫 문단입니다.</p>" in html and "<p>둘째 문단입니다.</p>" in html
+    assert "사미 목벨" in html
+    assert 'href="https://src/article"' in html
+
+
+def test_detail_neighbor_window_marks_current():
+    arts = [_row(content_hash=f"h{i}", title_ko=f"기사{i}",
+                 published_at=datetime(2026, 6, 29, 12 - i, 0)) for i in range(10)]
+    ordered = sorted(arts, key=lambda x: x["published_at"], reverse=True)
+    idx = 5
+    nb = build_neighbors(ordered, idx, SOURCES, NOW)
+    assert len(nb) == 5
+    cur = [n for n in nb if n["_is_current"]]
+    assert len(cur) == 1 and cur[0]["content_hash"] == ordered[idx]["content_hash"]
+    html = render_article(_decorated(ordered[idx]), nb, ordered[idx]["content_hash"], SOURCES, NOW)
+    assert html.count("지금") == 1
+
+
+def test_detail_small_corpus_shows_all():
+    arts = [_row(content_hash=f"h{i}", title_ko=f"기사{i}") for i in range(3)]
+    nb = build_neighbors(arts, 1, SOURCES, NOW)
+    assert len(nb) == 3
+
+
+from bullet_in.serve.render import write_site
+
+
+def test_write_site_creates_index_articles_and_assets(tmp_path):
+    arts = [_row(content_hash=f"h{i}", title_ko=f"기사{i}",
+                 published_at=datetime(2026, 6, 29, 12 - i, 0)) for i in range(3)]
+    write_site(arts, SOURCES, tmp_path, now=NOW)
+    assert (tmp_path / "index.html").exists()
+    assert (tmp_path / "style.css").exists()
+    assert (tmp_path / "app.js").exists()
+    for i in range(3):
+        assert (tmp_path / "article" / f"h{i}.html").exists()
+    # 상세에서 정적 자산은 ../ 로 참조
+    detail = (tmp_path / "article" / "h0.html").read_text(encoding="utf-8")
+    assert 'href="../style.css"' in detail and 'src="../app.js"' in detail
+    index = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert 'href="style.css"' in index
+    # 상세 사이드바에 실제 패싯(BBC Sport 언론사) 카운트가 반영됨 — 빈 패싯이 아닌 증거
+    assert 'data-value="BBC Sport"' in detail
+
+
+# ── 보안 픽스: image_url 인라인 CSS url() 탈출 · javascript: 스킴 차단 ──
+
+def test_index_rejects_malicious_image_url():
+    bad = "x'); } body{display:none} a{background:url('http://evil/leak"
+    html = render_index([_row(image_url=bad)], SOURCES, NOW)
+    assert "evil" not in html
+    assert "PHOTO · 16:9" in html  # falls back to placeholder
+
+def test_index_keeps_valid_image_url():
+    html = render_index([_row(image_url="https://picsum.photos/seed/1/800/450")], SOURCES, NOW)
+    assert "https://picsum.photos/seed/1/800/450" in html
+
+def test_detail_rejects_javascript_origin_url():
+    a = _row(url="javascript:alert(1)")
+    nb = build_neighbors([a], 0, SOURCES, NOW)
+    html = render_article(_decorated(a), nb, "h1", SOURCES, NOW)
+    assert "javascript:alert(1)" not in html
+
+def test_detail_keeps_valid_origin_url():
+    a = _row(url="https://src/article")
+    nb = build_neighbors([a], 0, SOURCES, NOW)
+    html = render_article(_decorated(a), nb, "h1", SOURCES, NOW)
+    assert 'href="https://src/article"' in html

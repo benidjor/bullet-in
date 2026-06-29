@@ -13,7 +13,7 @@ from bullet_in.credibility import load_registry
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import enrich_rows
-from bullet_in.serve.render import write_page
+from bullet_in.serve.render import write_site
 from bullet_in.quality import success_rate
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
@@ -54,9 +54,11 @@ async def main(concurrency: int):
 
     with engine.connect() as c:
         rows = [dict(r) for r in c.execute(text(
-            "SELECT title_original,title_ko,summary_ko,url,source_id,tier,confidence_score "
+            "SELECT content_hash,url,source_id,title_original,title_ko,summary_ko,"
+            "summary3_ko,body_ko,image_url,outlet,journalist,team,tier,"
+            "confidence_score,published_at "
             "FROM articles")).mappings().all()]
-    write_page(rows, "site/index.html")
+    write_site(rows, sources, "site")
 
     summary = {"new_or_changed": len(arts), "errors": errors,
                "success_rate": success_rate(len(adapters), len(errors)),
