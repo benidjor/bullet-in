@@ -66,7 +66,7 @@ def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate"
                 model=model,
                 contents=prompt.format(title=r["title_original"],
                                        body=r.get("body_source") or r.get("body_excerpt") or ""),
-                config={"max_output_tokens": 2048,
+                config={"max_output_tokens": 8192,
                         "response_mime_type": "application/json"})
         except Exception as e:
             if _is_rate_limit(e):
