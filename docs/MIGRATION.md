@@ -9,9 +9,9 @@
 
 ## 검증
 - 마이그레이션 시점 기준으로, `tests/test_dag_import.py`가 **각 버전의 코드 상태에서** 통과:
-  - 마이그레이션 직전 커밋의 DAG(2.9 import)를 2.9.3 환경에서 → PASS
-  - 마이그레이션 후 DAG(3.0 import)를 3.0.0 환경에서 → PASS
-- 같은 코드가 두 버전에서 동시에 통과한다는 의미가 아님 — 마이그레이션은 코드를 3.0 전용 import 경로로 옮기는 작업이라, post-migration DAG는 2.9에서 의도적으로 실패(=마이그레이션이 적용됐다는 증거).
+  - 마이그레이션 직전 커밋의 DAG (2.9 import)를 2.9.3 환경에서 → PASS
+  - 마이그레이션 후 DAG (3.0 import)를 3.0.0 환경에서 → PASS
+- 같은 코드가 두 버전에서 동시에 통과한다는 의미가 아님 — 마이그레이션은 코드를 3.0 전용 import 경로로 옮기는 작업이라, post-migration DAG는 2.9에서 의도적으로 실패 (=마이그레이션이 적용됐다는 증거).
 - 사후 재현 절차: `docs/runbook/2026-05-27-airflow-dag-verification.md`의 "마이그레이션 검증" 절 참고.
 
 ## 참고한 breaking-change 체크리스트

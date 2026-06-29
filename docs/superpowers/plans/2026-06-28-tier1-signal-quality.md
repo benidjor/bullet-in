@@ -1,21 +1,21 @@
-# Tier 1 데이터·신호 품질 정리 Implementation Plan
+# Tier 1 데이터 · 신호 품질 정리 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 일반 뉴스 소스에 이적 키워드 필터를 걸고, BBC 가십 소스를 추가하며, 관측 데이터(dup_count·source_counts)를 정확히 기록하고, arsenal 과거 데이터 정리 절차를 문서화한다.
+**Goal:** 일반 뉴스 소스에 이적 키워드 필터를 걸고, BBC 가십 소스를 추가하며, 관측 데이터 (dup_count · source_counts)를 정확히 기록하고, arsenal 과거 데이터 정리 절차를 문서화한다.
 
-**Architecture:** `HtmlAdapter.title_contains`를 리스트 지원으로 일반화해 config로 이적 키워드를 부여하고, bbc_gossip은 기존 어댑터를 config로만 추가한다. `to_articles`가 중복·소스별 신규 수를 집계해 `run.py`가 `pipeline_runs`에 실제 값을 적재한다.
+**Architecture:** `HtmlAdapter.title_contains`를 리스트 지원으로 일반화해 config로 이적 키워드를 부여하고, bbc_gossip은 기존 어댑터를 config로만 추가한다. `to_articles`가 중복 · 소스별 신규 수를 집계해 `run.py`가 `pipeline_runs`에 실제 값을 적재한다.
 
-**Tech Stack:** Python 3.11, httpx + BeautifulSoup, pydantic v2, SQLAlchemy, pytest(+respx), PyYAML.
+**Tech Stack:** Python 3.11, httpx + BeautifulSoup, pydantic v2, SQLAlchemy, pytest (+respx), PyYAML.
 
 ## Global Constraints
 
-- 변경 파일은 `src/bullet_in/adapters/html.py`, `src/bullet_in/pipeline.py`, `src/bullet_in/run.py`, `config/sources.yaml`, `tests/test_html_adapter.py`, `tests/test_pipeline.py`, `docs/runbook/`(신규)에 국한. enrich·credibility·storage 스키마·serve 무변경.
-- `title_contains`는 `str | list[str] | None`. 리스트면 제목(소문자) substring 중 **하나라도** 포함 시 통과. 단일 문자열·None은 현행 동작 유지(하위호환).
-- 이적 키워드(영어, verbatim): `transfer, sign, signed, signing, deal, loan, bid, fee, medical, agree, agreed, join, joins, target, linked, links, contract, swap, move, talks`.
+- 변경 파일은 `src/bullet_in/adapters/html.py`, `src/bullet_in/pipeline.py`, `src/bullet_in/run.py`, `config/sources.yaml`, `tests/test_html_adapter.py`, `tests/test_pipeline.py`, `docs/runbook/`(신규)에 국한. enrich · credibility · storage 스키마 · serve 무변경.
+- `title_contains`는 `str | list[str] | None`. 리스트면 제목 (소문자) substring 중 **하나라도** 포함 시 통과. 단일 문자열 · None은 현행 동작 유지 (하위호환).
+- 이적 키워드 (영어, verbatim): `transfer, sign, signed, signing, deal, loan, bid, fee, medical, agree, agreed, join, joins, target, linked, links, contract, swap, move, talks`.
 - bbc_gossip: `tier: 4`, 필터 없음, `enabled: true`, item_selector `a[href*='/sport/football/articles/']`.
 - `to_articles` 반환은 `tuple[list[Article], dict]`, `dict = {"dup_count": int, "source_counts": {source_id: int}}`.
-- 테스트: `uv run pytest -q`. 커밋 트레일러(verbatim): `Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.github.com>`.
+- 테스트: `uv run pytest -q`. 커밋 트레일러 (verbatim): `Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.github.com>`.
 
 ---
 
@@ -26,7 +26,7 @@
 - Test: `tests/test_html_adapter.py`
 
 **Interfaces:**
-- Produces: `HtmlAdapter(__init__)`가 `title_contains: str | list[str] | None`를 받음. 리스트면 키워드 중 하나라도 제목(소문자)에 substring으로 있으면 통과. 단일 문자열·None은 현행대로.
+- Produces: `HtmlAdapter(__init__)`가 `title_contains: str | list[str] | None`를 받음. 리스트면 키워드 중 하나라도 제목 (소문자)에 substring으로 있으면 통과. 단일 문자열 · None은 현행대로.
 
 - [ ] **Step 1: 실패 테스트 작성**
 
@@ -86,7 +86,7 @@ Expected: FAIL (`test_html_adapter_filters_by_keyword_list`에서 리스트가 `
 - [ ] **Step 4: 통과 확인**
 
 Run: `uv run pytest tests/test_html_adapter.py -v`
-Expected: PASS (신규 2개 + 기존 단일 문자열·매칭 테스트 전부)
+Expected: PASS (신규 2개 + 기존 단일 문자열 · 매칭 테스트 전부)
 
 - [ ] **Step 5: 커밋**
 
@@ -100,7 +100,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.gi
 
 ---
 
-### Task 2: to_articles 중복·소스별 신규 수 집계
+### Task 2: to_articles 중복 · 소스별 신규 수 집계
 
 **Files:**
 - Modify: `src/bullet_in/pipeline.py` (`to_articles`)
@@ -109,11 +109,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.gi
 
 **Interfaces:**
 - Produces: `to_articles(...) -> tuple[list[Article], dict]`. `dict = {"dup_count": int, "source_counts": {source_id: int}}`. `source_counts`는 실제 append된 Article의 source_id별 수.
-- Consumes(run.py): `arts, stats = to_articles(...)`.
+- Consumes (run.py): `arts, stats = to_articles(...)`.
 
 - [ ] **Step 1: 기존 테스트 unpack 수정 + 실패 테스트 작성**
 
-`tests/test_pipeline.py`의 기존 3개 테스트에서 `arts = to_articles(...)` 를 `arts, _ = to_articles(...)` 로 변경(3곳). 그리고 끝에 신규 테스트 추가:
+`tests/test_pipeline.py`의 기존 3개 테스트에서 `arts = to_articles(...)` 를 `arts, _ = to_articles(...)` 로 변경 (3곳). 그리고 끝에 신규 테스트 추가:
 
 ```python
 def test_to_articles_returns_dup_and_source_counts():
@@ -141,7 +141,7 @@ Expected: FAIL — `to_articles`가 아직 리스트를 반환하므로 `arts, _
 
 - [ ] **Step 3: 최소 구현**
 
-`src/bullet_in/pipeline.py`의 `to_articles` 본문 교체(시그니처 반환형 + 집계):
+`src/bullet_in/pipeline.py`의 `to_articles` 본문 교체 (시그니처 반환형 + 집계):
 
 ```python
 def to_articles(raw: list[RawItem], sources: dict[str, dict],
@@ -175,7 +175,7 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
 ```
 
 `src/bullet_in/run.py` 수정:
-- 호출부(현재 `arts = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)`):
+- 호출부 (현재 `arts = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)`):
 ```python
     arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
 ```
@@ -198,23 +198,23 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.gi
 
 ---
 
-### Task 3: config 적용(이적 필터 + bbc_gossip) + 라이브 스모크
+### Task 3: config 적용 (이적 필터 + bbc_gossip) + 라이브 스모크
 
 **Files:**
 - Modify: `config/sources.yaml`
 
-**Interfaces:** (설정·검증 태스크)
+**Interfaces:** (설정 · 검증 태스크)
 
 - [ ] **Step 1: 이적 키워드 필터 적용**
 
-`config/sources.yaml`의 `bbc_sport` config와 `football_london` config 각각에 아래 줄 추가(들여쓰기는 같은 config 블록의 `item_selector`와 동일 레벨):
+`config/sources.yaml`의 `bbc_sport` config와 `football_london` config 각각에 아래 줄 추가 (들여쓰기는 같은 config 블록의 `item_selector`와 동일 레벨):
 ```yaml
       title_contains: ["transfer", "sign", "signed", "signing", "deal", "loan", "bid", "fee", "medical", "agree", "agreed", "join", "joins", "target", "linked", "links", "contract", "swap", "move", "talks"]
 ```
 
 - [ ] **Step 2: bbc_gossip 소스 추가**
 
-`config/sources.yaml`의 `sources:` 목록에 항목 추가(기존 `bbc_sport` 블록 형식을 따름):
+`config/sources.yaml`의 `sources:` 목록에 항목 추가 (기존 `bbc_sport` 블록 형식을 따름):
 ```yaml
   - source_id: bbc_gossip
     display_name: BBC Football Gossip
@@ -243,7 +243,7 @@ for sid in ['bbc_gossip', 'bbc_sport', 'football_london']:
     for it in items[:5]: print('   -', it.raw_payload['title'][:60])
 "
 ```
-Expected: `bbc_gossip` >0건(아스날·타구단 가십 섞임). `bbc_sport`·`football_london`은 이적 키워드가 든 제목만(없으면 0건일 수 있음 — 정상). 셀렉터로 0건이면 실제 DOM 재확인(`docs/troubleshooting/2026-06-12-live-source-selector-drift.md`).
+Expected: `bbc_gossip` >0건 (아스날 · 타구단 가십 섞임). `bbc_sport` · `football_london`은 이적 키워드가 든 제목만 (없으면 0건일 수 있음 — 정상). 셀렉터로 0건이면 실제 DOM 재확인 (`docs/troubleshooting/2026-06-12-live-source-selector-drift.md`).
 
 - [ ] **Step 4: 전체 테스트 회귀 확인**
 
@@ -323,7 +323,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.gi
 ---
 
 ## 성공 기준 (전체)
-- `uv run pytest -q` 전체 통과(기존 회귀 없음, 신규 테스트 포함).
-- 라이브 스모크: bbc_gossip 수집 >0, bbc_sport·football_london 이적 키워드 필터 동작.
-- `to_articles`가 dup_count·source_counts 반환, run.py가 pipeline_runs에 실제 값 적재.
-- arsenal 정리 런북 존재(실행은 사용자).
+- `uv run pytest -q` 전체 통과 (기존 회귀 없음, 신규 테스트 포함).
+- 라이브 스모크: bbc_gossip 수집 >0, bbc_sport · football_london 이적 키워드 필터 동작.
+- `to_articles`가 dup_count · source_counts 반환, run.py가 pipeline_runs에 실제 값 적재.
+- arsenal 정리 런북 존재 (실행은 사용자).

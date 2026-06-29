@@ -4,24 +4,24 @@
 
 **Goal:** fmkorea '축구 소식통'의 '퍼가기 금지' 글을 감지해 번역 본문을 복제하지 않고, 본문에 박힌 원 출처 링크와 그 og 메타 기반 한국어 요약으로 대체 서빙한다.
 
-**Architecture:** `adapters/fmkorea.py` 단일 어댑터에 순수 헬퍼(감지·URL 추출)와 og fetch를 추가하고 `fetch()` 분기를 확장한다. 분기①(원문 대체)은 제목을 fmkorea 한국어 헤드라인으로, 요약 입력을 원문 og:description으로 두어 **기존 ko 경로에 그대로 올라탄다** → 스키마·enrich·models·pipeline 무변경.
+**Architecture:** `adapters/fmkorea.py` 단일 어댑터에 순수 헬퍼 (감지 · URL 추출)와 og fetch를 추가하고 `fetch()` 분기를 확장한다. 분기① (원문 대체)은 제목을 fmkorea 한국어 헤드라인으로, 요약 입력을 원문 og:description으로 두어 **기존 ko 경로에 그대로 올라탄다** → 스키마 · enrich · models · pipeline 무변경.
 
-**Tech Stack:** Python 3.11, httpx(AsyncClient), BeautifulSoup4, pydantic v2(RawItem), pytest+respx.
+**Tech Stack:** Python 3.11, httpx (AsyncClient), BeautifulSoup4, pydantic v2 (RawItem), pytest+respx.
 
 ## Global Constraints
 
-- 변경 파일은 `src/bullet_in/adapters/fmkorea.py`, `config/sources.yaml`, `tests/test_fmkorea_adapter.py`에 국한. 스키마·`enrich.py`·`models.py`·`pipeline.py` 무변경.
-- 차단글의 fmkorea **번역 본문(body)은 저장하지 않는다**(raw_payload에도 미포함).
+- 변경 파일은 `src/bullet_in/adapters/fmkorea.py`, `config/sources.yaml`, `tests/test_fmkorea_adapter.py`에 국한. 스키마 · `enrich.py` · `models.py` · `pipeline.py` 무변경.
+- 차단글의 fmkorea **번역 본문 (body)은 저장하지 않는다** (raw_payload에도 미포함).
 - 모든 fmkorea RawItem은 `raw_payload["lang"] == "ko"`.
-- 퍼가기 금지 표식 문자열(verbatim): `퍼가기가 금지된 글입니다`.
-- 커밋 트레일러(verbatim): `Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.github.com>`.
+- 퍼가기 금지 표식 문자열 (verbatim): `퍼가기가 금지된 글입니다`.
+- 커밋 트레일러 (verbatim): `Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.github.com>`.
 - 테스트 실행: `uv run pytest -q`. 단일: `uv run pytest tests/test_fmkorea_adapter.py::<name> -v`.
 
 ---
 
 ### Task 1: 퍼가기 금지 감지 + 원문 URL 추출 헬퍼
 
-순수 함수 2개. 모듈 상단 헬퍼로 추가(기존 `_matches`/`_body_text` 옆).
+순수 함수 2개. 모듈 상단 헬퍼로 추가 (기존 `_matches`/`_body_text` 옆).
 
 **Files:**
 - Modify: `src/bullet_in/adapters/fmkorea.py` (모듈 레벨 헬퍼 추가)
@@ -32,7 +32,7 @@
 - Produces:
   - `_REPOST_MARK: str = "퍼가기가 금지된 글입니다"`
   - `_is_repost_blocked(html: str) -> bool`
-  - `_extract_original_url(html: str, body_selector: str) -> str | None` — `body_selector` 요소 내부에서 첫 외부 http(s) URL(평문 텍스트 또는 `<a href>`), `fmkorea.com` 도메인 제외. 없으면 `None`.
+  - `_extract_original_url(html: str, body_selector: str) -> str | None` — `body_selector` 요소 내부에서 첫 외부 http(s) URL (평문 텍스트 또는 `<a href>`), `fmkorea.com` 도메인 제외. 없으면 `None`.
 
 - [ ] **Step 1: 실패 테스트 작성**
 
@@ -117,7 +117,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.gi
 
 ### Task 2: 원문 og:description fetch 헬퍼
 
-원문 URL을 fetch(리다이렉트 추적)해 한국어 요약 입력으로 쓸 텍스트를 얻는다.
+원문 URL을 fetch (리다이렉트 추적)해 한국어 요약 입력으로 쓸 텍스트를 얻는다.
 
 **Files:**
 - Modify: `src/bullet_in/adapters/fmkorea.py`
@@ -126,7 +126,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.gi
 **Interfaces:**
 - Consumes: `httpx.AsyncClient`(`fetch()`가 생성하는 클라이언트를 전달)
 - Produces:
-  - `async _fetch_og_description(client: httpx.AsyncClient, url: str) -> str | None` — `og:description` 우선, 없으면 `<meta name="description">`. fetch 실패(`httpx.HTTPError`)·둘 다 없음 → `None`. HTML 엔티티는 디코드한다.
+  - `async _fetch_og_description(client: httpx.AsyncClient, url: str) -> str | None` — `og:description` 우선, 없으면 `<meta name="description">`. fetch 실패 (`httpx.HTTPError`) · 둘 다 없음 → `None`. HTML 엔티티는 디코드한다.
 
 - [ ] **Step 1: 실패 테스트 작성**
 
@@ -221,7 +221,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.gi
 - Produces: `FmkoreaAdapter.fetch()` 동작 변경:
   - 차단 + 원문URL + og 성공 → `RawItem.url=원문`, `raw_payload={"title": fmkorea헤드라인, "body": og_description, "lang": "ko"}`
   - 차단 + (URL 없음 또는 og 실패) → `RawItem.url=원문URL or fmkorea URL`, `raw_payload={"title": 헤드라인, "body": "", "lang": "ko"}`
-  - 비차단 → 현행(`url=fmkorea`, `body=_body_text(html, body_selector)`)
+  - 비차단 → 현행 (`url=fmkorea`, `body=_body_text(html, body_selector)`)
 
 - [ ] **Step 1: 실패 테스트 작성**
 
@@ -278,7 +278,7 @@ def test_fetch_blocked_without_og_falls_back_to_headline_only():
 - [ ] **Step 2: 실패 확인**
 
 Run: `uv run pytest tests/test_fmkorea_adapter.py -k "blocked_replaces or without_og" -v`
-Expected: FAIL (현재 fetch는 무조건 fmkorea url·본문 저장이라 assert 불일치)
+Expected: FAIL (현재 fetch는 무조건 fmkorea url · 본문 저장이라 assert 불일치)
 
 - [ ] **Step 3: 최소 구현**
 
@@ -327,7 +327,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.gi
 
 ### Task 4: 리스트 fetch 429 가드
 
-레이트 제한을 정상 실패가 아닌 빈 결과로 구분(enrich 429 철학과 일관).
+레이트 제한을 정상 실패가 아닌 빈 결과로 구분 (enrich 429 철학과 일관).
 
 **Files:**
 - Modify: `src/bullet_in/adapters/fmkorea.py` (모듈 상단 logger, 리스트 fetch try)
@@ -357,7 +357,7 @@ Expected: FAIL (`raise_for_status()`가 `HTTPStatusError` 전파)
 
 - [ ] **Step 3: 최소 구현**
 
-모듈 상단(`import` 블록 직후)에 logger 추가:
+모듈 상단 (`import` 블록 직후)에 logger 추가:
 
 ```python
 import logging
@@ -401,7 +401,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.gi
 **Files:**
 - Modify: `config/sources.yaml` (fmkorea 블록)
 
-**Interfaces:** (없음 — 설정·검증 태스크)
+**Interfaces:** (없음 — 설정 · 검증 태스크)
 
 - [ ] **Step 1: 셀렉터 수정**
 
@@ -437,7 +437,7 @@ for it in items[:5]:
 ```
 Expected: `fetched: N`(N>0)이고, 차단 글은 `url`이 fmkorea가 아닌 원 출처 도메인으로, 비차단 글은 fmkorea url로 나온다. fmkorea 번역 본문이 차단 글 body에 들어있지 않은지 육안 확인.
 
-> 0건이면 셀렉터가 또 드리프트된 것 — 실제 페이지 DOM을 다시 확인해 `item_selector`를 갱신하고 Step 2 반복(`docs/troubleshooting/2026-06-12-live-source-selector-drift.md` 참조).
+> 0건이면 셀렉터가 또 드리프트된 것 — 실제 페이지 DOM을 다시 확인해 `item_selector`를 갱신하고 Step 2 반복 (`docs/troubleshooting/2026-06-12-live-source-selector-drift.md` 참조).
 
 - [ ] **Step 3: 활성화**
 
@@ -446,7 +446,7 @@ Expected: `fetched: N`(N>0)이고, 차단 글은 `url`이 fmkorea가 아닌 원 
 - [ ] **Step 4: 전체 테스트 회귀 확인**
 
 Run: `uv run pytest -q`
-Expected: 전체 PASS(통합 테스트는 DB 없으면 skip).
+Expected: 전체 PASS (통합 테스트는 DB 없으면 skip).
 
 - [ ] **Step 5: 커밋**
 
@@ -466,4 +466,4 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.gi
 
 - `uv run pytest tests/test_fmkorea_adapter.py -v` 신규/기존 테스트 전부 통과.
 - 라이브 스모크: 차단 아스날 글이 원 출처 링크로 치환되고 fmkorea 번역 본문이 body에 없음.
-- `enabled: true` 상태로 종단 실행(`uv run python -m bullet_in.run`) 시 fmkorea 글이 서빙 페이지에 원 출처 링크로 노출.
+- `enabled: true` 상태로 종단 실행 (`uv run python -m bullet_in.run`) 시 fmkorea 글이 서빙 페이지에 원 출처 링크로 노출.
