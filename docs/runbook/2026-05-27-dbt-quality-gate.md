@@ -46,7 +46,7 @@ cd dbt && uv run dbt build --profiles-dir .
   - `unique` 실패 → dedup 키 충돌. canonicalization/`content_hash` 점검.
   - `not_null` 실패 → 어댑터가 필수 필드를 못 채움. 파서 점검.
   - `accepted_values` 실패 → `sources.yaml`의 tier 값 오류.
-- 상세 복구: `docs/runbook/incident-recovery.md`의 "품질 게이트 실패" 절.
+- 상세 복구: `docs/runbook/2026-05-27-incident-recovery.md`의 "품질 게이트 실패" 절.
 
 ## 비고
 - 산출물 `bullet_in.duckdb`, `dbt/target/`, `dbt/logs/`는 커밋하지 않는다(.gitignore).

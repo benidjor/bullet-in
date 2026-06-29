@@ -26,7 +26,7 @@ docker compose ps           # 두 컨테이너 running 확인
 ```bash
 cd dbt && uv run dbt build --profiles-dir .
 ```
-`unique`(중복 0)·`not_null`(필수 필드)·`accepted_values`(tier 0~4) 테스트가 모두 PASS여야 한다. 실패 = 데이터 이상 → incident-recovery.md.
+`unique`(중복 0)·`not_null`(필수 필드)·`accepted_values`(tier 0~4) 테스트가 모두 PASS여야 한다. 실패 = 데이터 이상 → 2026-05-27-incident-recovery.md.
 
 ## 6. 서빙 확인
 `site/index.html` 가 갱신되고 confidence 내림차순으로 기사가 나열되는지 확인.

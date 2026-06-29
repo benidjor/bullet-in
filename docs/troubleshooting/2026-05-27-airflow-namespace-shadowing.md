@@ -50,4 +50,4 @@ from airflow.models import DagBag
 
 ## 예방
 - 패키지명과 동일한 이름의 디렉터리(`airflow/`, `dbt/` 등)가 리포 루트에 있으면, `importorskip`/`import` 가드는 항상 **실제 사용할 서브모듈**을 지정한다.
-- DAG 검증은 프로젝트 venv가 아니라 격리 venv에서 수행한다 → `docs/runbook/airflow-dag-verification.md`.
+- DAG 검증은 프로젝트 venv가 아니라 격리 venv에서 수행한다 → `docs/runbook/2026-05-27-airflow-dag-verification.md`.

@@ -68,7 +68,7 @@ docker compose up -d                                        # mongo, mariadb
 set -a; source .env; set +a                                 # 이 프로젝트는 dotenv 미사용 → 셸 export 필요
 uv run python -m bullet_in.run --concurrency 8              # 종단 실행
 ```
-첫 라이브 실행 절차·제약: `docs/runbook/live-e2e-bootstrap.md`.
+첫 라이브 실행 절차·제약: `docs/runbook/2026-06-12-live-e2e-bootstrap.md`.
 
 ## 커밋 & PR 컨벤션 (필독)
 SoT: `docs/conventions/2026-06-11-commit-pr-convention.md`. 핵심:

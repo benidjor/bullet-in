@@ -872,11 +872,11 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ## Task 9: 문서 정리 (runbook Guardian 참조)
 
 **Files:**
-- Modify: `docs/runbook/daily-operations.md`
+- Modify: `docs/runbook/2026-05-27-daily-operations.md`
 
 - [ ] **Step 1: Guardian 참조 확인**
 
-Run: `grep -n "GUARDIAN\|Guardian\|가디언" docs/runbook/daily-operations.md`
+Run: `grep -n "GUARDIAN\|Guardian\|가디언" docs/runbook/2026-05-27-daily-operations.md`
 Expected: 자격증명 표/소스 목록에 Guardian 항목이 보임.
 
 - [ ] **Step 2: 참조 갱신**
@@ -887,7 +887,7 @@ Expected: 자격증명 표/소스 목록에 Guardian 항목이 보임.
 - [ ] **Step 3: 커밋**
 
 ```bash
-git add docs/runbook/daily-operations.md
+git add docs/runbook/2026-05-27-daily-operations.md
 git commit -m "docs(runbook): Guardian 제거·afcstuff·fmkorea 반영
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
