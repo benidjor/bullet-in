@@ -59,6 +59,22 @@ def test_extract_original_url_from_plaintext_body():
 def test_extract_original_url_none_when_no_external_link():
     assert _extract_original_url(NORMAL, ".xe_content") is None
 
+def test_extract_original_url_prefers_trailing_plaintext_over_author_anchor():
+    # 실측 post 10007542458: 본문에 기자 프로필 앵커 + 끝에 평문 기사 URL
+    html = ('<div class="xe_content">'
+            '<p>By <a href="https://www.nytimes.com/athletic/author/david-ornstein/">'
+            'David Ornstein</a> 앤더슨 결장.</p>'
+            '<p>https://www.nytimes.com/athletic/7398614/2026/06/26/england-anderson/</p>'
+            '</div>')
+    assert _extract_original_url(html, ".xe_content") == \
+        "https://www.nytimes.com/athletic/7398614/2026/06/26/england-anderson/"
+
+def test_extract_original_url_uses_anchor_when_no_plaintext():
+    html = ('<div class="xe_content"><p>출처: '
+            '<a href="https://www.bbc.com/sport/football/articles/abc">BBC</a></p></div>')
+    assert _extract_original_url(html, ".xe_content") == \
+        "https://www.bbc.com/sport/football/articles/abc"
+
 from bullet_in.adapters.fmkorea import _fetch_og_description
 
 OG_HTML = (

@@ -51,14 +51,16 @@ def _extract_original_url(html: str, body_selector: str) -> str | None:
     el = soup.select_one(body_selector)
     if el is None:
         return None
-    # href 우선, 없으면 본문 텍스트의 평문 URL
+    # 1) 본문 평문 출처 URL 우선 (fmkorea 관례: 본문 끝). 여럿이면 마지막.
+    plains = [m.group(0) for m in _URL_RE.finditer(el.get_text(" ", strip=True))
+              if "fmkorea.com" not in m.group(0)]
+    if plains:
+        return plains[-1]
+    # 2) 폴백: 외부 앵커 (기자 프로필일 수 있으나 평문 없을 때만)
     for a in el.select("a[href]"):
         href = a.get("href", "")
         if href.startswith("http") and "fmkorea.com" not in href:
             return href
-    for m in _URL_RE.finditer(el.get_text(" ", strip=True)):
-        if "fmkorea.com" not in m.group(0):
-            return m.group(0)
     return None
 
 async def _fetch_og_description(client: httpx.AsyncClient, url: str) -> str | None:
