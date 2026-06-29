@@ -10,6 +10,7 @@ sources:
       item_selector: "a.responsive-card__wrapper"
       base_url: "https://www.arsenal.com"
       title_contains: "sign"
+      body_selector: "div.article-body, article"
     enabled: true
   - source_id: bbc_sport
     display_name: BBC Sport
@@ -20,6 +21,7 @@ sources:
       list_url: "https://www.bbc.com/sport/football/teams/arsenal"
       item_selector: "a[href*='/sport/football/articles/']"
       title_contains: ["transfer", "sign", "signed", "signing", "deal", "loan", "bid", "fee", "medical", "agree", "agreed", "join", "joins", "target", "linked", "links", "contract", "swap", "move", "talks"]
+      body_selector: "article"
     enabled: true
   - source_id: bbc_gossip
     display_name: BBC Football Gossip
@@ -48,6 +50,7 @@ sources:
       list_url: "https://www.football.london/arsenal-fc/"
       item_selector: "a.headline"
       title_contains: ["transfer", "sign", "signed", "signing", "deal", "loan", "bid", "fee", "medical", "agree", "agreed", "join", "joins", "target", "linked", "links", "contract", "swap", "move", "talks"]
+      body_selector: "article"
     enabled: true
   - source_id: x_afcstuff
     display_name: afcstuff (aggregator)
