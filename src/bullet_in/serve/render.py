@@ -98,6 +98,24 @@ def render_index(articles: list[dict], sources: dict, now: datetime) -> str:
         articles=ordered, facets=facets, active="home", root="")
 
 
+def build_neighbors(ordered: list[dict], idx: int, sources: dict,
+                    now: datetime) -> list[dict]:
+    start, end = neighbor_window(len(ordered), idx)
+    out = []
+    for j in range(start, end):
+        d = _decorate(ordered[j], sources, now)
+        d["_is_current"] = (j == idx)
+        out.append(d)
+    return out
+
+
+def render_article(article: dict, neighbors: list[dict], current_hash: str,
+                   sources: dict, now: datetime) -> str:
+    empty_facets = {"team": {}, "outlets": [], "tiers": {t: 0 for t in range(5)}, "total": 0}
+    return _env().get_template("detail.html.j2").render(
+        a=article, neighbors=neighbors, active=None, root="../", facets=empty_facets)
+
+
 def render_page(articles: list[dict]) -> str:
     # Task 5에서 제거 예정. 템플릿이 _layout을 상속하므로 최소 컨텍스트 보완.
     now = datetime.utcnow()

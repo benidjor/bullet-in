@@ -1,0 +1,45 @@
+{% extends "_layout.html.j2" %}
+{% block title %}{{ a._title }} · Bullet-in{% endblock %}
+{% block content %}
+<a class="back" href="{{ root }}index.html">← 목록으로</a>
+<article class="article">
+  {% if a.image_url %}
+  <div class="hero" style="background-image:url('{{ a.image_url }}');background-size:cover;background-position:center"></div>
+  {% else %}
+  <div class="hero">HERO IMAGE · 21:9</div>
+  {% endif %}
+  <div class="pad">
+    <div class="chips">
+      <span class="chip team">{{ '아스날' if (a.team or 'arsenal') == 'arsenal' else a.team }}</span>
+      <span class="chip src">{{ a._outlet }}</span>
+      <span class="chip tier">{{ a._tier_label }}</span>
+      <span class="when">{{ a._date }}</span>
+    </div>
+    <h2 class="title">{{ a._title }}</h2>
+    {% if a.summary3_ko %}
+    <section class="summary">
+      <h3>3줄 요약</h3>
+      <ul>{% for line in a.summary3_ko.split('\n') if line.strip() %}<li>{{ line }}</li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+    <div class="body">
+      {% for para in (a.body_ko or "").split('\n') if para.strip() %}<p>{{ para }}</p>{% endfor %}
+    </div>
+    <p class="origin">출처: {{ a._outlet }}{% if a.journalist %} · {{ a.journalist }}{% endif %} · <a href="{{ a.url }}" target="_blank" rel="noopener">원문 기사 보기 ↗</a></p>
+  </div>
+</article>
+
+<section class="more">
+  <h3>기사 목록 · 현재 글 중심</h3>
+  <ul>
+  {% for n in neighbors %}
+    <li class="{{ 'cur' if n._is_current else '' }}">
+      <a href="{{ root }}article/{{ n.content_hash }}.html">
+        <span class="mt">{% if n._is_current %}<span class="nowtag">지금</span>{% endif %}{{ n._title }}</span>
+        <span class="ms">{{ n._outlet }} · {{ n._tier_label }}</span>
+      </a>
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+{% endblock %}

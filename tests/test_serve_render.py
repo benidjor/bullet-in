@@ -56,3 +56,44 @@ def test_index_renders_facet_counts_and_disabled_stage():
     assert "tier 2" in html
     # 영입 단계는 비활성 자리(2-b)
     assert "영입 단계" in html and html.count("disabled") >= 4
+
+
+from bullet_in.serve.render import render_article, build_neighbors
+
+
+def _decorated(row):
+    from bullet_in.serve.render import _decorate
+    return _decorate(row, SOURCES, NOW)
+
+
+def test_detail_shows_summary3_body_and_origin():
+    a = _row(content_hash="cur", summary3_ko="첫째 줄\n둘째 줄\n셋째 줄",
+             body_ko="첫 문단입니다.\n둘째 문단입니다.", journalist="사미 목벨",
+             url="https://src/article")
+    nb = build_neighbors([a], 0, SOURCES, NOW)
+    html = render_article(_decorated(a), nb, "cur", SOURCES, NOW)
+    assert "3줄 요약" in html
+    assert "첫째 줄" in html and "셋째 줄" in html
+    assert "<li>첫째 줄</li>" in html
+    assert "<p>첫 문단입니다.</p>" in html and "<p>둘째 문단입니다.</p>" in html
+    assert "사미 목벨" in html
+    assert 'href="https://src/article"' in html
+
+
+def test_detail_neighbor_window_marks_current():
+    arts = [_row(content_hash=f"h{i}", title_ko=f"기사{i}",
+                 published_at=datetime(2026, 6, 29, 12 - i, 0)) for i in range(10)]
+    ordered = sorted(arts, key=lambda x: x["published_at"], reverse=True)
+    idx = 5
+    nb = build_neighbors(ordered, idx, SOURCES, NOW)
+    assert len(nb) == 5
+    cur = [n for n in nb if n["_is_current"]]
+    assert len(cur) == 1 and cur[0]["content_hash"] == ordered[idx]["content_hash"]
+    html = render_article(_decorated(ordered[idx]), nb, ordered[idx]["content_hash"], SOURCES, NOW)
+    assert html.count("지금") == 1
+
+
+def test_detail_small_corpus_shows_all():
+    arts = [_row(content_hash=f"h{i}", title_ko=f"기사{i}") for i in range(3)]
+    nb = build_neighbors(arts, 1, SOURCES, NOW)
+    assert len(nb) == 3
