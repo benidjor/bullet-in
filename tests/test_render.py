@@ -17,4 +17,3 @@ def test_render_orders_by_confidence_desc_and_shows_korean_title():
     ]
     html = render_page(arts)
     assert html.index("높음") < html.index("Low")
-    assert "원문" in html

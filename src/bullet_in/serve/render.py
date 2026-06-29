@@ -66,11 +66,48 @@ def facet_counts(articles: list[dict], sources: dict) -> dict:
     return {"total": len(articles), "team": dict(teams),
             "outlets": outlets, "tiers": tiers}
 
+def _env() -> Environment:
+    return Environment(
+        loader=FileSystemLoader(_TPL_DIR),
+        autoescape=select_autoescape(default_for_string=True, default=True),
+    )
+
+
+def _decorate(row: dict, sources: dict, now: datetime) -> dict:
+    a = dict(row)
+    a["_title"] = row.get("title_ko") or row.get("title_original") or ""
+    a["_outlet"] = outlet_display(row, sources)
+    a["_tier_label"] = tier_label(row.get("tier"))
+    pub = row.get("published_at")
+    a["_when"] = humanize_when(pub, now) if pub else ""
+    a["_published_iso"] = pub.isoformat() if pub else ""
+    a["_date"] = fmt_date(pub) if pub else ""
+    return a
+
+
+def _sorted_latest(articles: list[dict]) -> list[dict]:
+    return sorted(articles,
+                  key=lambda a: a.get("published_at") or datetime.min,
+                  reverse=True)
+
+
+def render_index(articles: list[dict], sources: dict, now: datetime) -> str:
+    ordered = [_decorate(a, sources, now) for a in _sorted_latest(articles)]
+    facets = facet_counts(articles, sources)
+    return _env().get_template("index.html.j2").render(
+        articles=ordered, facets=facets, active="home", root="")
+
+
 def render_page(articles: list[dict]) -> str:
-    ordered = sorted(articles, key=lambda a: a.get("confidence_score") or 0.0, reverse=True)
-    env = Environment(loader=FileSystemLoader(_TPL_DIR),
-                      autoescape=select_autoescape(default_for_string=True, default=True))
-    return env.get_template("index.html.j2").render(articles=ordered)
+    # Task 5에서 제거 예정. 템플릿이 _layout을 상속하므로 최소 컨텍스트 보완.
+    now = datetime.utcnow()
+    ordered = [_decorate(a, {}, now)
+               for a in sorted(articles,
+                               key=lambda a: a.get("confidence_score") or 0.0,
+                               reverse=True)]
+    empty_facets = {"team": {}, "outlets": [], "tiers": {t: 0 for t in range(5)}, "total": 0}
+    return _env().get_template("index.html.j2").render(
+        articles=ordered, facets=empty_facets, active="home", root="")
 
 def write_page(articles: list[dict], out_path: str | Path) -> None:
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
