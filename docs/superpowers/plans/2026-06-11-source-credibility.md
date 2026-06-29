@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
-> **방법론 오버레이 (karpathy 가드레일):** 구현·리뷰 서브에이전트는 4원칙을 지킨다 — ① 가정·트레이드오프 표면화(불명확하면 질문) ② 단순함 우선(요청된 것만, 투기적 추상화 금지) ③ 수술적 변경(무관한 코드·주석 불간섭) ④ 목표주도(테스트 통과로 자체 루프).
+> **방법론 오버레이 (karpathy 가드레일):** 구현 · 리뷰 서브에이전트는 4원칙을 지킨다 — ① 가정 · 트레이드오프 표면화 (불명확하면 질문) ② 단순함 우선 (요청된 것만, 투기적 추상화 금지) ③ 수술적 변경 (무관한 코드 · 주석 불간섭) ④ 목표주도 (테스트 통과로 자체 루프).
 
-**Goal:** Guardian을 제거하고, X 수집을 afcstuff(애그리게이터)로 교체해 인용된 `@계정` 기반 동적 공신력을 부여하며, fmkorea '축구 소식통' 보드를 아스날 키워드로 크롤링해 대괄호 매체 기반 공신력으로 통합한다.
+**Goal:** Guardian을 제거하고, X 수집을 afcstuff (애그리게이터)로 교체해 인용된 `@계정` 기반 동적 공신력을 부여하며, fmkorea '축구 소식통' 보드를 아스날 키워드로 크롤링해 대괄호 매체 기반 공신력으로 통합한다.
 
-**Architecture:** 기자/매체 별칭→tier를 담은 공유 레지스트리(`config/credibility.yaml`)를 `credibility.py`가 로드하고, `resolve_tier(item, sources, registry)`가 항목별 tier를 산출한다(고정/`x_mentions`/`fmkorea` 3모드). `to_articles`가 이를 호출해 tier·confidence를 채우고 `None`이면 항목을 버린다. fmkorea는 전용 어댑터가 제목 키워드 필터 + 본문 수집을 수행하고, 한국어 소스는 Gemini 번역을 건너뛴다.
+**Architecture:** 기자/매체 별칭→tier를 담은 공유 레지스트리 (`config/credibility.yaml`)를 `credibility.py`가 로드하고, `resolve_tier(item, sources, registry)`가 항목별 tier를 산출한다 (고정/`x_mentions`/`fmkorea` 3모드). `to_articles`가 이를 호출해 tier · confidence를 채우고 `None`이면 항목을 버린다. fmkorea는 전용 어댑터가 제목 키워드 필터 + 본문 수집을 수행하고, 한국어 소스는 Gemini 번역을 건너뛴다.
 
-**Tech Stack:** Python 3.11, pydantic v2, httpx + BeautifulSoup, pytest(+respx), PyYAML, asyncio.
+**Tech Stack:** Python 3.11, pydantic v2, httpx + BeautifulSoup, pytest (+respx), PyYAML, asyncio.
 
 **전체 테스트 실행:** `uv run pytest -q` (개별: `uv run pytest tests/<file>::<test> -v`)
 
@@ -18,7 +18,7 @@
 
 | 파일 | 역할 |
 |---|---|
-| `config/credibility.yaml` | 신규 — 기자/매체 별칭·tier 레지스트리 |
+| `config/credibility.yaml` | 신규 — 기자/매체 별칭 · tier 레지스트리 |
 | `src/bullet_in/credibility.py` | 신규 — `Registry`, `load_registry`, `resolve_tier` |
 | `src/bullet_in/score.py` | `confidence_from_tier` 추가 |
 | `src/bullet_in/pipeline.py` | `to_articles`가 `resolve_tier` 사용 + body 폴백 |
@@ -27,7 +27,7 @@
 | `src/bullet_in/enrich.py` | `partition_translation_rows` 추가 |
 | `src/bullet_in/storage/mariadb.py` | `rows_missing_translation`에 `source_id` 포함 |
 | `src/bullet_in/run.py` | registry 주입 + ko/en 번역 분기 |
-| `config/sources.yaml` | guardian 삭제, afcstuff·fmkorea 반영 |
+| `config/sources.yaml` | guardian 삭제, afcstuff · fmkorea 반영 |
 | `.env.example` | `GUARDIAN_API_KEY` 제거 |
 
 ---
@@ -316,7 +316,7 @@ def confidence_from_tier(tier: float | None) -> float:
     return round(max(0.0, 1.0 - float(tier) / 4.0), 3)
 ```
 
-그리고 기존 `confidence()` 의 본문을 새 헬퍼에 위임하도록 교체(산술 중복 제거). 기존 시그니처·동작은 그대로 유지된다:
+그리고 기존 `confidence()` 의 본문을 새 헬퍼에 위임하도록 교체 (산술 중복 제거). 기존 시그니처 · 동작은 그대로 유지된다:
 
 ```python
 def confidence(source_id: str, sources: dict[str, dict]) -> float:
@@ -430,7 +430,7 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
 
 - [ ] **Step 4: 기존 테스트가 여전히 통과하는지 확인**
 
-기존 `test_to_articles_assigns_hash_tier_confidence_and_dedups`는 고정 소스(`tier: 0`)에 `registry` 인자를 주지 않는다. `resolve_tier`는 고정 소스에서 registry를 보지 않으므로 그대로 통과한다.
+기존 `test_to_articles_assigns_hash_tier_confidence_and_dedups`는 고정 소스 (`tier: 0`)에 `registry` 인자를 주지 않는다. `resolve_tier`는 고정 소스에서 registry를 보지 않으므로 그대로 통과한다.
 
 Run: `uv run pytest tests/test_pipeline.py -v`
 Expected: PASS (3 passed)
@@ -799,7 +799,7 @@ sources:
     enabled: true
 ```
 
-> 참고: fmkorea 의 `item_selector`·`body_selector` 는 라이브 페이지 구조에 맞춰
+> 참고: fmkorea 의 `item_selector` · `body_selector` 는 라이브 페이지 구조에 맞춰
 > 실제 크롤 테스트로 확정한다. 정적 httpx 가 차단되면 별도 Playwright 폴백을 검토한다.
 
 - [ ] **Step 2: run.py 에 registry 주입 + ko/en 분기 배선**
@@ -813,7 +813,7 @@ from bullet_in.credibility import load_registry
 from bullet_in.enrich import enrich_rows, partition_translation_rows
 ```
 
-기존 `from bullet_in.enrich import enrich_rows` 줄은 위 줄로 대체(중복 제거).
+기존 `from bullet_in.enrich import enrich_rows` 줄은 위 줄로 대체 (중복 제거).
 
 (b) `sources = load_sources("config/sources.yaml")` 다음 줄에 추가:
 
@@ -849,10 +849,10 @@ In `.env.example`, delete the line:
 GUARDIAN_API_KEY=REPLACE
 ```
 
-- [ ] **Step 4: DAG import·전체 스위트 회귀 확인**
+- [ ] **Step 4: DAG import · 전체 스위트 회귀 확인**
 
 Run: `uv run pytest -q`
-Expected: 전체 통과(실패 0). `tests/test_dag_import.py` 의 DagBag import 도 통과.
+Expected: 전체 통과 (실패 0). `tests/test_dag_import.py` 의 DagBag import 도 통과.
 
 - [ ] **Step 5: 커밋**
 
@@ -872,22 +872,22 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ## Task 9: 문서 정리 (runbook Guardian 참조)
 
 **Files:**
-- Modify: `docs/runbook/daily-operations.md`
+- Modify: `docs/runbook/2026-05-27-daily-operations.md`
 
 - [ ] **Step 1: Guardian 참조 확인**
 
-Run: `grep -n "GUARDIAN\|Guardian\|가디언" docs/runbook/daily-operations.md`
+Run: `grep -n "GUARDIAN\|Guardian\|가디언" docs/runbook/2026-05-27-daily-operations.md`
 Expected: 자격증명 표/소스 목록에 Guardian 항목이 보임.
 
 - [ ] **Step 2: 참조 갱신**
 
 해당 줄에서 `GUARDIAN_API_KEY` 자격증명 항목과 Guardian 소스 언급을 제거하고,
-소스 목록을 현재 구성(arsenal_official·bbc_sport·goal·football_london·x_afcstuff·fmkorea)으로 맞춘다. (문서 본문은 한국어 유지.)
+소스 목록을 현재 구성 (arsenal_official · bbc_sport · goal · football_london · x_afcstuff · fmkorea)으로 맞춘다. (문서 본문은 한국어 유지.)
 
 - [ ] **Step 3: 커밋**
 
 ```bash
-git add docs/runbook/daily-operations.md
+git add docs/runbook/2026-05-27-daily-operations.md
 git commit -m "docs(runbook): Guardian 제거·afcstuff·fmkorea 반영
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
@@ -897,12 +897,12 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ## 완료 기준
 
-- [ ] `uv run pytest -q` 전체 통과(실패 0)
-- [ ] `config/sources.yaml` 에 guardian 없음, x_afcstuff·fmkorea 존재
+- [ ] `uv run pytest -q` 전체 통과 (실패 0)
+- [ ] `config/sources.yaml` 에 guardian 없음, x_afcstuff · fmkorea 존재
 - [ ] `resolve_tier` 3모드 단위 테스트 통과
-- [ ] fmkorea 어댑터가 키워드 필터·본문 수집·본문 실패 스킵을 처리
-- [ ] ko 소스가 Gemini 호출 없이 원제목/본문발췌로 채워짐(`partition_translation_rows`)
+- [ ] fmkorea 어댑터가 키워드 필터 · 본문 수집 · 본문 실패 스킵을 처리
+- [ ] ko 소스가 Gemini 호출 없이 원제목/본문발췌로 채워짐 (`partition_translation_rows`)
 - [ ] `.env.example` 에 `GUARDIAN_API_KEY` 없음
 
-> 라이브 검증(실제 fmkorea/afcstuff 크롤, 셀렉터 확정, SLO 측정, 캡처 슬롯)은
+> 라이브 검증 (실제 fmkorea/afcstuff 크롤, 셀렉터 확정, SLO 측정, 캡처 슬롯)은
 > feat/live-e2e 트랙에서 수행한다. 이 계획은 코드/구성/단위테스트까지를 범위로 한다.

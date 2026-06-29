@@ -5,17 +5,17 @@
 - **심각도**: 높음 (스크래핑 입력의 HTML 인젝션/렌더 깨짐)
 
 ## 증상
-서빙 페이지(`site/index.html`) 렌더 시, 스크래핑한 기사 제목에 들어있는 `<`, `&`, `<script>` 같은 문자가 **이스케이프되지 않고 그대로** 출력된다. 제목에 특수문자가 있으면 레이아웃이 깨지고, 악의적 입력 시 스크립트 인젝션 위험.
+서빙 페이지 (`site/index.html`) 렌더 시, 스크래핑한 기사 제목에 들어있는 `<`, `&`, `<script>` 같은 문자가 **이스케이프되지 않고 그대로** 출력된다. 제목에 특수문자가 있으면 레이아웃이 깨지고, 악의적 입력 시 스크립트 인젝션 위험.
 
 예) 제목 `A & B <script>x</script>` → 출력에 `<script>x</script>`가 살아있음.
 
 ## 스크린샷 (수정 전/후)
 ![Jinja autoescape 수정 전/후 비교](../assets/jinja-autoescape-before-after.png)
 
-왼쪽(BEFORE·autoescape OFF)은 마크업이 실행되어 빨간 `INJECTED`가 주입됨. 오른쪽(AFTER·autoescape ON)은 이스케이프되어 문자 그대로 표시(안전). 실제 Jinja2 동작으로 렌더한 비교.
+왼쪽 (BEFORE · autoescape OFF)은 마크업이 실행되어 빨간 `INJECTED`가 주입됨. 오른쪽 (AFTER · autoescape ON)은 이스케이프되어 문자 그대로 표시 (안전). 실제 Jinja2 동작으로 렌더한 비교.
 
 ## 진단 과정 (왜 이렇게 판단했는가)
-1. **의심 지점**: 출력의 원천 데이터는 외부(스크래핑) 텍스트다. "Jinja autoescape가 켜져 있나?"를 먼저 의심.
+1. **의심 지점**: 출력의 원천 데이터는 외부 (스크래핑) 텍스트다. "Jinja autoescape가 켜져 있나?"를 먼저 의심.
 2. **직접 입증**: 가정하지 않고 실제로 호출해 확인했다.
    ```python
    from jinja2 import select_autoescape

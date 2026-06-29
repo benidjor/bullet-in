@@ -5,7 +5,7 @@
 - **심각도**: 중 (CI/로컬 테스트 그린을 막음)
 
 ## 증상
-프로젝트 venv(Apache Airflow 미설치)에서 `uv run pytest`를 돌리면, `tests/test_dag_import.py`가 **skip되지 않고** collection 단계에서 실패한다.
+프로젝트 venv (Apache Airflow 미설치)에서 `uv run pytest`를 돌리면, `tests/test_dag_import.py`가 **skip되지 않고** collection 단계에서 실패한다.
 
 ```
 ModuleNotFoundError: No module named 'airflow.models'
@@ -46,8 +46,8 @@ from airflow.models import DagBag
 ```
 
 - 프로젝트 venv: `airflow.models`가 없으므로 정상 skip.
-- Airflow 설치된 격리 venv: 통과(2.9.3·3.0.0 양쪽 확인).
+- Airflow 설치된 격리 venv: 통과 (2.9.3 · 3.0.0 양쪽 확인).
 
 ## 예방
-- 패키지명과 동일한 이름의 디렉터리(`airflow/`, `dbt/` 등)가 리포 루트에 있으면, `importorskip`/`import` 가드는 항상 **실제 사용할 서브모듈**을 지정한다.
-- DAG 검증은 프로젝트 venv가 아니라 격리 venv에서 수행한다 → `docs/runbook/airflow-dag-verification.md`.
+- 패키지명과 동일한 이름의 디렉터리 (`airflow/`, `dbt/` 등)가 리포 루트에 있으면, `importorskip`/`import` 가드는 항상 **실제 사용할 서브모듈**을 지정한다.
+- DAG 검증은 프로젝트 venv가 아니라 격리 venv에서 수행한다 → `docs/runbook/2026-05-27-airflow-dag-verification.md`.
