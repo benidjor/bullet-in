@@ -1,13 +1,18 @@
 import asyncio, respx, httpx
-from bullet_in.adapters.fmkorea import FmkoreaAdapter
+from bullet_in.adapters.fmkorea import FmkoreaAdapter, parse_bracket
 
 LIST = '''
 <a class="title" href="/1">[디 애슬레틱] 아스날 사카 재계약 임박</a>
 <a class="title" href="/2">[BBC] 첼시 이적 소식</a>
-<a class="title" href="/3">Arsenal target identified</a>
+<a class="title" href="/3">[BBC - 사미 목벨] Arsenal target identified</a>
 '''
-BODY1 = '<div class="xe_content">온스테인에 따르면 사카가 재계약한다.</div>'
-BODY3 = '<div class="xe_content">Arsenal scout report.</div>'
+BODY1 = ('<div class="xe_content">온스테인에 따르면 사카가 재계약한다.'
+         ' https://www.nytimes.com/athletic/123/saka/</div>')
+BODY3 = ('<div class="xe_content">Arsenal scout report.'
+         ' https://www.bbc.com/sport/football/x</div>')
+BBC_ART = ('<html><body><article>'
+           '<p>Arsenal scout seen at the stadium.</p>'
+           '</article></body></html>')
 
 @respx.mock
 def test_fmkorea_filters_by_keyword_and_fetches_body():
@@ -15,15 +20,24 @@ def test_fmkorea_filters_by_keyword_and_fetches_body():
         return_value=httpx.Response(200, text=LIST))
     respx.get("https://fm.test/1").mock(return_value=httpx.Response(200, text=BODY1))
     respx.get("https://fm.test/3").mock(return_value=httpx.Response(200, text=BODY3))
+    respx.get("https://www.bbc.com/sport/football/x").mock(
+        return_value=httpx.Response(200, text=BBC_ART))
+    # Athletic original — _fetch_og_image 호출용 (paywalled; og:image 없어도 무방)
+    respx.get("https://www.nytimes.com/athletic/123/saka/").mock(
+        return_value=httpx.Response(200, text=""))
     a = FmkoreaAdapter(source_id="fmkorea", list_url="https://fm.test/football_news",
                        item_selector="a.title", keywords=["아스날", "Arsenal"],
                        base_url="https://fm.test", body_selector=".xe_content")
     items = asyncio.run(a.fetch())
     urls = {i.url for i in items}
-    assert urls == {"https://fm.test/1", "https://fm.test/3"}  # [BBC] 첼시 글 제외
-    one = next(i for i in items if i.url == "https://fm.test/1")
+    # [BBC] 첼시 글 제외; 원문 URL 로 치환됨
+    assert urls == {
+        "https://www.nytimes.com/athletic/123/saka/",
+        "https://www.bbc.com/sport/football/x",
+    }
+    one = next(i for i in items if "athletic" in i.url)
     assert one.raw_payload["title"].startswith("[디 애슬레틱]")
-    assert "온스테인" in one.raw_payload["body"]
+    assert "온스테인" in one.raw_payload["body"]   # paywalled → fmkorea 번역본 유지
     assert one.raw_payload["lang"] == "ko"
     assert one.source_type == "html"
 
@@ -37,7 +51,7 @@ def test_fmkorea_skips_post_when_body_fetch_fails():
                        base_url="https://fm.test", body_selector=".xe_content")
     assert asyncio.run(a.fetch()) == []
 
-from bullet_in.adapters.fmkorea import _is_repost_blocked, _extract_original_url
+from bullet_in.adapters.fmkorea import _extract_original_url
 
 BLOCKED = (
     '<div class="xe_content"><p>유벤투스가 루쿠미를 원한다.</p><p></p>'
@@ -48,10 +62,6 @@ BLOCKED = (
 )
 NORMAL = '<div class="xe_content"><p>일반 글 본문.</p></div>'
 
-def test_is_repost_blocked_detects_marker():
-    assert _is_repost_blocked(BLOCKED) is True
-    assert _is_repost_blocked(NORMAL) is False
-
 def test_extract_original_url_from_plaintext_body():
     assert _extract_original_url(BLOCKED, ".xe_content") == \
         "https://m.gianlucadimarzio.com/calciomercato/juve-lucumi-493366"
@@ -59,88 +69,21 @@ def test_extract_original_url_from_plaintext_body():
 def test_extract_original_url_none_when_no_external_link():
     assert _extract_original_url(NORMAL, ".xe_content") is None
 
-from bullet_in.adapters.fmkorea import _fetch_og_description
+def test_extract_original_url_prefers_trailing_plaintext_over_author_anchor():
+    # 실측 post 10007542458: 본문에 기자 프로필 앵커 + 끝에 평문 기사 URL
+    html = ('<div class="xe_content">'
+            '<p>By <a href="https://www.nytimes.com/athletic/author/david-ornstein/">'
+            'David Ornstein</a> 앤더슨 결장.</p>'
+            '<p>https://www.nytimes.com/athletic/7398614/2026/06/26/england-anderson/</p>'
+            '</div>')
+    assert _extract_original_url(html, ".xe_content") == \
+        "https://www.nytimes.com/athletic/7398614/2026/06/26/england-anderson/"
 
-OG_HTML = (
-    '<html><head>'
-    '<meta property="og:title" content="La Juventus vuole Lucum&iacute;">'
-    '<meta property="og:description" content="I bianconeri vogliono il '
-    'difensore colombiano del Bologna.">'
-    '</head><body></body></html>'
-)
-META_ONLY = ('<html><head><meta name="description" content="Solo meta desc.">'
-             '</head></html>')
-
-@respx.mock
-def test_fetch_og_description_prefers_og():
-    respx.get("https://orig.test/a").mock(return_value=httpx.Response(200, text=OG_HTML))
-    async def run():
-        async with httpx.AsyncClient() as c:
-            return await _fetch_og_description(c, "https://orig.test/a")
-    assert asyncio.run(run()) == "I bianconeri vogliono il difensore colombiano del Bologna."
-
-@respx.mock
-def test_fetch_og_description_falls_back_to_meta():
-    respx.get("https://orig.test/b").mock(return_value=httpx.Response(200, text=META_ONLY))
-    async def run():
-        async with httpx.AsyncClient() as c:
-            return await _fetch_og_description(c, "https://orig.test/b")
-    assert asyncio.run(run()) == "Solo meta desc."
-
-@respx.mock
-def test_fetch_og_description_none_on_http_error():
-    respx.get("https://orig.test/c").mock(return_value=httpx.Response(404))
-    async def run():
-        async with httpx.AsyncClient() as c:
-            return await _fetch_og_description(c, "https://orig.test/c")
-    assert asyncio.run(run()) is None
-
-@respx.mock
-def test_fetch_blocked_replaces_with_original_og():
-    list_html = '<a class="title" href="/1">[디 마르지오] 아스날 수비수 노린다</a>'
-    blocked_body = (
-        '<div class="xe_content"><p>아스날이 수비수를 원한다.</p>'
-        '<p>https://orig.test/x</p></div><!--AfterDocument(1,2)--></article>'
-        '<strong>[퍼가기가 금지된 글입니다 - 캡처 방지 위해 글 열람 사용자 '
-        '아이디/아이피가 자동으로 표기됩니다]</strong>'
-    )
-    og = ('<meta property="og:description" content="Arsenal want a defender.">')
-    respx.get("https://fm.test/football_news").mock(return_value=httpx.Response(200, text=list_html))
-    respx.get("https://fm.test/1").mock(return_value=httpx.Response(200, text=blocked_body))
-    respx.get("https://orig.test/x").mock(return_value=httpx.Response(200, text=og))
-    a = FmkoreaAdapter(source_id="fmkorea", list_url="https://fm.test/football_news",
-                       item_selector="a.title", keywords=["아스날"],
-                       base_url="https://fm.test", body_selector=".xe_content")
-    items = asyncio.run(a.fetch())
-    assert len(items) == 1
-    it = items[0]
-    assert it.url == "https://orig.test/x"                 # 원 출처로 치환
-    assert it.raw_payload["title"].startswith("[디 마르지오]")  # fmkorea 헤드라인 유지
-    assert it.raw_payload["body"] == "Arsenal want a defender."  # og:description
-    assert "아스날이 수비수를 원한다" not in it.raw_payload["body"]  # fmkorea 번역 본문 미저장
-    assert it.raw_payload["lang"] == "ko"
-
-@respx.mock
-def test_fetch_blocked_without_og_falls_back_to_headline_only():
-    list_html = '<a class="title" href="/1">[ITK] 아스날 영입 임박</a>'
-    blocked_body = (
-        '<div class="xe_content"><p>본문 번역.</p><p>https://orig.test/y</p></div>'
-        '<strong>[퍼가기가 금지된 글입니다 - 캡처 방지 위해 글 열람 사용자 '
-        '아이디/아이피가 자동으로 표기됩니다]</strong>'
-    )
-    respx.get("https://fm.test/football_news").mock(return_value=httpx.Response(200, text=list_html))
-    respx.get("https://fm.test/1").mock(return_value=httpx.Response(200, text=blocked_body))
-    respx.get("https://orig.test/y").mock(return_value=httpx.Response(404))  # og fetch 실패
-    a = FmkoreaAdapter(source_id="fmkorea", list_url="https://fm.test/football_news",
-                       item_selector="a.title", keywords=["아스날"],
-                       base_url="https://fm.test", body_selector=".xe_content")
-    items = asyncio.run(a.fetch())
-    assert len(items) == 1
-    it = items[0]
-    assert it.url == "https://orig.test/y"   # 원문 URL은 있으므로 링크는 원 출처
-    assert it.raw_payload["body"] == ""       # 본문 미복제, 헤드라인만
-    assert it.raw_payload["title"].startswith("[ITK]")
-    assert it.raw_payload["lang"] == "ko"
+def test_extract_original_url_uses_anchor_when_no_plaintext():
+    html = ('<div class="xe_content"><p>출처: '
+            '<a href="https://www.bbc.com/sport/football/articles/abc">BBC</a></p></div>')
+    assert _extract_original_url(html, ".xe_content") == \
+        "https://www.bbc.com/sport/football/articles/abc"
 
 @respx.mock
 def test_fetch_returns_empty_on_list_429(caplog):
@@ -151,3 +94,73 @@ def test_fetch_returns_empty_on_list_429(caplog):
     with caplog.at_level("WARNING"):
         assert asyncio.run(a.fetch()) == []
     assert any("429" in r.message for r in caplog.records)
+
+def test_parse_bracket_outlet_and_journalist():
+    assert parse_bracket("[BBC - 사미 목벨] 토트넘, 페르난데스 영입 추진") == ("BBC", "사미 목벨", False)
+
+def test_parse_bracket_normalizes_korean_outlet():
+    assert parse_bracket("[디 애슬레틱 - 온스테인] 앤더슨 결장") == ("The Athletic", "온스테인", False)
+
+def test_parse_bracket_exclusive_flag():
+    assert parse_bracket("[디 애슬레틱-독점] 디오망데 PSG 선택") == ("The Athletic", None, True)
+
+def test_parse_bracket_outlet_only():
+    assert parse_bracket("[공홈] 요케레스 영입 완료") == ("공홈", None, False)
+
+def test_parse_bracket_no_bracket():
+    assert parse_bracket("Arsenal target identified") == (None, None, False)
+
+@respx.mock
+def test_fmkorea_paywalled_keeps_korean_body_and_outlet():
+    list_html = '<a class="title" href="/1">[디 애슬레틱 - 온스테인] 아스날 수비수 보강</a>'
+    body = ('<div class="xe_content"><p>아스날이 센터백을 원한다.</p>'
+            '<p>https://www.nytimes.com/athletic/7374647/2026/06/28/arsenal-cb/</p></div>')
+    respx.get("https://fm.test/football_news").mock(return_value=httpx.Response(200, text=list_html))
+    respx.get("https://fm.test/1").mock(return_value=httpx.Response(200, text=body))
+    # Athletic original — _fetch_og_image 호출용
+    respx.get("https://www.nytimes.com/athletic/7374647/2026/06/28/arsenal-cb/").mock(
+        return_value=httpx.Response(200, text=""))
+    a = FmkoreaAdapter(source_id="fmkorea", list_url="https://fm.test/football_news",
+                       item_selector="a.title", keywords=["아스날"], base_url="https://fm.test")
+    items = asyncio.run(a.fetch())
+    assert len(items) == 1
+    it = items[0]
+    assert it.url == "https://www.nytimes.com/athletic/7374647/2026/06/28/arsenal-cb/"
+    assert it.raw_payload["outlet"] == "The Athletic"
+    assert it.raw_payload["journalist"] == "온스테인"
+    assert it.raw_payload["lang"] == "ko"
+    assert "센터백" in it.raw_payload["body"]   # 디 애슬레틱: fmkorea 번역본 유지
+
+@respx.mock
+def test_fmkorea_free_outlet_fetches_original_english_body():
+    list_html = '<a class="title" href="/1">[BBC - 사미 목벨] 아스날 요케레스 영입</a>'
+    body = ('<div class="xe_content"><p>아스날이 요케레스를 영입한다.</p>'
+            '<p>https://www.bbc.com/sport/football/articles/gyo</p></div>')
+    original = ('<html><head><meta property="og:image" content="https://img.bbc/g.jpg"></head>'
+                '<body><article><p>Arsenal have signed Gyokeres.</p>'
+                '<p>The fee is 60m.</p></article></body></html>')
+    respx.get("https://fm.test/football_news").mock(return_value=httpx.Response(200, text=list_html))
+    respx.get("https://fm.test/1").mock(return_value=httpx.Response(200, text=body))
+    respx.get("https://www.bbc.com/sport/football/articles/gyo").mock(
+        return_value=httpx.Response(200, text=original))
+    a = FmkoreaAdapter(source_id="fmkorea", list_url="https://fm.test/football_news",
+                       item_selector="a.title", keywords=["아스날"], base_url="https://fm.test")
+    it = asyncio.run(a.fetch())[0]
+    assert it.url == "https://www.bbc.com/sport/football/articles/gyo"
+    assert it.raw_payload["outlet"] == "BBC"
+    assert it.raw_payload["lang"] == "en"
+    assert "Arsenal have signed Gyokeres." in it.raw_payload["body"]   # 원문 영어 본문
+    assert it.raw_payload["image_url"] == "https://img.bbc/g.jpg"
+
+@respx.mock
+def test_fmkorea_skips_when_no_original_url(caplog):
+    list_html = '<a class="title" href="/1">[BBC] 아스날 소식</a>'
+    body = '<div class="xe_content"><p>출처 링크 없는 본문.</p></div>'
+    respx.get("https://fm.test/football_news").mock(return_value=httpx.Response(200, text=list_html))
+    respx.get("https://fm.test/1").mock(return_value=httpx.Response(200, text=body))
+    a = FmkoreaAdapter(source_id="fmkorea", list_url="https://fm.test/football_news",
+                       item_selector="a.title", keywords=["아스날"], base_url="https://fm.test")
+    with caplog.at_level("WARNING"):
+        items = asyncio.run(a.fetch())
+    assert items == []
+    assert any("원문" in r.message or "skip" in r.message.lower() for r in caplog.records)

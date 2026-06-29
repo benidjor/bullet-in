@@ -21,6 +21,43 @@ def test_watermark_returns_seen_map(engine):
     seen = store.seen_map()
     assert seen["https://x.test/a"][0] == "h1"
 
+def test_set_translation_writes_all_four_fields(engine):
+    from sqlalchemy import text
+    store = MartStore(engine)
+    store.upsert([_art(h="h9", url="https://x.test/9", title="T")])
+    store.set_translation("h9", "제목", "한줄", "①\n②\n③", "전체 본문")
+    with engine.connect() as c:
+        r = dict(c.execute(text(
+            "SELECT title_ko,summary_ko,summary3_ko,body_ko "
+            "FROM articles WHERE content_hash='h9'")).mappings().one())
+    assert r["title_ko"] == "제목" and r["summary_ko"] == "한줄"
+    assert r["summary3_ko"] == "①\n②\n③" and r["body_ko"] == "전체 본문"
+
+def test_upsert_persists_image_outlet_team(engine):
+    from bullet_in.models import Article
+    from datetime import datetime, timezone
+    store = MartStore(engine)
+    store.upsert([Article(content_hash="hi", url="https://x.test/i", source_id="bbc_sport",
+                          title_original="T", outlet="BBC", journalist="Sami Mokbel",
+                          image_url="https://img.test/a.jpg", body_source="src", team="arsenal",
+                          published_at=datetime(2026,6,29,tzinfo=timezone.utc))])
+    from sqlalchemy import text
+    with engine.connect() as c:
+        r = dict(c.execute(text("SELECT outlet,journalist,image_url,team,body_source "
+                                "FROM articles WHERE content_hash='hi'")).mappings().one())
+    assert r["outlet"] == "BBC" and r["image_url"] == "https://img.test/a.jpg"
+    assert r["team"] == "arsenal" and r["body_source"] == "src"
+
+def test_rows_missing_translation_includes_outlet_and_body_source(engine):
+    from bullet_in.models import Article
+    from datetime import datetime, timezone
+    store = MartStore(engine)
+    store.upsert([Article(content_hash="hm", url="https://x.test/m", source_id="fmkorea",
+                          title_original="T", outlet="The Athletic", body_source="원문",
+                          published_at=datetime(2026,6,29,tzinfo=timezone.utc))])
+    row = next(r for r in store.rows_missing_translation() if r["content_hash"] == "hm")
+    assert row["outlet"] == "The Athletic" and row["body_source"] == "원문"
+
 def test_changed_url_updates_hash_and_resets_translation(engine):
     from bullet_in.models import Article
     from datetime import datetime, timezone

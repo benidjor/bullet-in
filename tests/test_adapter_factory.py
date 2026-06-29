@@ -19,3 +19,11 @@ def test_factory_builds_fmkorea_adapter():
     adapters = build_adapters(cfg)
     assert adapters[0].source_id == "fmkorea"
     assert adapters[0].keywords == ["아스날", "Arsenal"]
+
+def test_factory_passes_body_selector_to_html():
+    from bullet_in.adapters.html import HtmlAdapter
+    cfg = {"sources": [{"source_id": "bbc_sport", "adapter": "html", "enabled": True,
+            "config": {"list_url": "https://b.test", "item_selector": "a.card",
+                       "body_selector": ".article-body"}}]}
+    a = build_adapters(cfg)[0]
+    assert isinstance(a, HtmlAdapter) and a.body_selector == ".article-body"

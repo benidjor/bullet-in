@@ -1,6 +1,7 @@
 import asyncio, respx, httpx
 from pathlib import Path
 from bullet_in.adapters.html import HtmlAdapter
+from bullet_in.adapters.meta import extract_og_image  # noqa: F401 (의존 확인)
 
 HTML = (Path(__file__).parent / "fixtures" / "list.html").read_text()
 
@@ -49,3 +50,32 @@ def test_html_adapter_no_filter_returns_all():
     a = HtmlAdapter(source_id="bbc_gossip", list_url="https://a.test/all",
                     item_selector="a.card", base_url="https://a.test")
     assert len(asyncio.run(a.fetch())) == 2
+
+@respx.mock
+def test_html_adapter_fetches_body_and_image_when_selector_set():
+    list_html = ('<a class="card" href="/a">Arsenal sign Gyokeres</a>')
+    detail = ('<html><head><meta property="og:image" content="https://img.test/g.jpg">'
+              '</head><body><div class="article-body"><p>Deal done for 60m.</p>'
+              '<p>Five-year contract.</p></div></body></html>')
+    respx.get("https://a.test/news").mock(return_value=httpx.Response(200, text=list_html))
+    respx.get("https://a.test/a").mock(return_value=httpx.Response(200, text=detail))
+    a = HtmlAdapter(source_id="bbc_sport", list_url="https://a.test/news",
+                    item_selector="a.card", base_url="https://a.test",
+                    body_selector=".article-body")
+    items = asyncio.run(a.fetch())
+    assert len(items) == 1
+    assert "Deal done for 60m." in items[0].raw_payload["body"]
+    assert items[0].raw_payload["image_url"] == "https://img.test/g.jpg"
+
+@respx.mock
+def test_html_adapter_keeps_title_when_detail_fetch_fails():
+    list_html = '<a class="card" href="/a">Arsenal sign Gyokeres</a>'
+    respx.get("https://a.test/news").mock(return_value=httpx.Response(200, text=list_html))
+    respx.get("https://a.test/a").mock(return_value=httpx.Response(500))
+    a = HtmlAdapter(source_id="bbc_sport", list_url="https://a.test/news",
+                    item_selector="a.card", base_url="https://a.test",
+                    body_selector=".article-body")
+    items = asyncio.run(a.fetch())
+    assert len(items) == 1
+    assert items[0].raw_payload.get("body", "") == ""
+    assert items[0].raw_payload["title"] == "Arsenal sign Gyokeres"

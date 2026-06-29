@@ -24,6 +24,13 @@ class Article(BaseModel):
     title_ko: str | None = None
     summary_ko: str | None = None
     body_excerpt: str | None = None
+    summary3_ko: str | None = None
+    body_ko: str | None = None
+    body_source: str | None = None
+    image_url: str | None = None
+    outlet: str | None = None
+    journalist: str | None = None
+    team: str = "arsenal"
     published_at: datetime
     fetched_at: datetime | None = None
     revision: int = 1
