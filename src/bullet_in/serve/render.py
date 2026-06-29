@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 import shutil
 from collections import Counter
 from datetime import datetime
@@ -83,6 +84,10 @@ def _decorate(row: dict, sources: dict, now: datetime) -> dict:
     a["_when"] = humanize_when(pub, now) if pub else ""
     a["_published_iso"] = pub.isoformat() if pub else ""
     a["_date"] = fmt_date(pub) if pub else ""
+    iu = row.get("image_url")
+    a["image_url"] = iu if iu and re.match(r"^https?://[^\s'\"()]+$", iu) else None
+    u = row.get("url") or ""
+    a["url"] = u if re.match(r"^https?://", u) else "#"
     return a
 
 

@@ -118,3 +118,28 @@ def test_write_site_creates_index_articles_and_assets(tmp_path):
     assert 'href="style.css"' in index
     # 상세 사이드바에 실제 패싯(BBC Sport 언론사) 카운트가 반영됨 — 빈 패싯이 아닌 증거
     assert 'data-value="BBC Sport"' in detail
+
+
+# ── 보안 픽스: image_url 인라인 CSS url() 탈출 · javascript: 스킴 차단 ──
+
+def test_index_rejects_malicious_image_url():
+    bad = "x'); } body{display:none} a{background:url('http://evil/leak"
+    html = render_index([_row(image_url=bad)], SOURCES, NOW)
+    assert "evil" not in html
+    assert "PHOTO · 16:9" in html  # falls back to placeholder
+
+def test_index_keeps_valid_image_url():
+    html = render_index([_row(image_url="https://picsum.photos/seed/1/800/450")], SOURCES, NOW)
+    assert "https://picsum.photos/seed/1/800/450" in html
+
+def test_detail_rejects_javascript_origin_url():
+    a = _row(url="javascript:alert(1)")
+    nb = build_neighbors([a], 0, SOURCES, NOW)
+    html = render_article(_decorated(a), nb, "h1", SOURCES, NOW)
+    assert "javascript:alert(1)" not in html
+
+def test_detail_keeps_valid_origin_url():
+    a = _row(url="https://src/article")
+    nb = build_neighbors([a], 0, SOURCES, NOW)
+    html = render_article(_decorated(a), nb, "h1", SOURCES, NOW)
+    assert 'href="https://src/article"' in html
