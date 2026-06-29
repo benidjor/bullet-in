@@ -23,6 +23,26 @@ def _body_text(html: str, selector: str) -> str:
 _REPOST_MARK = "퍼가기가 금지된 글입니다"
 _URL_RE = re.compile(r"https?://[^\s\"'<>)]+")
 
+OUTLET_MAP = {
+    "디 애슬레틱": "The Athletic", "디애슬레틱": "The Athletic",
+    "골닷컴": "Goal", "르퀴프": "L'Équipe",
+}
+_BRACKET_RE = re.compile(r"^\s*\[([^\]]+)\]")
+
+def parse_bracket(title: str) -> tuple[str | None, str | None, bool]:
+    """fmkorea 말머리 [언론사] / [언론사 - 기자] / [언론사-독점] 파싱."""
+    m = _BRACKET_RE.match(title)
+    if not m:
+        return None, None, False
+    inner = m.group(1).strip()
+    is_excl = "독점" in inner
+    inner = inner.replace("독점", "")
+    parts = re.split(r"\s*-\s*", inner, maxsplit=1)
+    outlet = parts[0].strip(" -")
+    journalist = parts[1].strip(" -") if len(parts) > 1 and parts[1].strip(" -") else None
+    outlet = OUTLET_MAP.get(outlet, outlet)
+    return (outlet or None), journalist, is_excl
+
 def _is_repost_blocked(html: str) -> bool:
     return _REPOST_MARK in html
 

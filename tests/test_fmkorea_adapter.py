@@ -1,5 +1,5 @@
 import asyncio, respx, httpx
-from bullet_in.adapters.fmkorea import FmkoreaAdapter
+from bullet_in.adapters.fmkorea import FmkoreaAdapter, parse_bracket
 
 LIST = '''
 <a class="title" href="/1">[디 애슬레틱] 아스날 사카 재계약 임박</a>
@@ -151,3 +151,18 @@ def test_fetch_returns_empty_on_list_429(caplog):
     with caplog.at_level("WARNING"):
         assert asyncio.run(a.fetch()) == []
     assert any("429" in r.message for r in caplog.records)
+
+def test_parse_bracket_outlet_and_journalist():
+    assert parse_bracket("[BBC - 사미 목벨] 토트넘, 페르난데스 영입 추진") == ("BBC", "사미 목벨", False)
+
+def test_parse_bracket_normalizes_korean_outlet():
+    assert parse_bracket("[디 애슬레틱 - 온스테인] 앤더슨 결장") == ("The Athletic", "온스테인", False)
+
+def test_parse_bracket_exclusive_flag():
+    assert parse_bracket("[디 애슬레틱-독점] 디오망데 PSG 선택") == ("The Athletic", None, True)
+
+def test_parse_bracket_outlet_only():
+    assert parse_bracket("[공홈] 요케레스 영입 완료") == ("공홈", None, False)
+
+def test_parse_bracket_no_bracket():
+    assert parse_bracket("Arsenal target identified") == (None, None, False)
