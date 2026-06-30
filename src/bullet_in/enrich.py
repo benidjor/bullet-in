@@ -127,6 +127,10 @@ def summarize_ko_rows(rows: list[dict], client, model: str) -> dict[str, str]:
         result[h] = s
     return result
 
+# 주의: 아래 단계 목록(rumour·interest·negotiating·personal_terms·medical·official·other)은
+# transfer_stage.VALID_STAGES와 동기화되어야 한다. 새 단계를 추가하면 이 프롬프트도
+# 업데이트해야 하며, tests/test_enrich.py::test_stage_prompt_lists_every_valid_stage()에서
+# 불일치를 검출한다.
 STAGE_PROMPT = (
     "다음은 아스날 FC 관련 기사 목록이다. 각 기사를 이적 진행 단계로 분류한다.\n"
     "단계 (반드시 아래 영문 값 중 하나로 답한다):\n"

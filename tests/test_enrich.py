@@ -243,3 +243,12 @@ def test_classify_stops_on_rate_limit():
     out = classify_stage_rows(rows, client, "m", batch_size=2)
     assert out == {}
     assert client.models.n == 1   # 첫 배치에서 중단
+
+
+def test_stage_prompt_lists_every_valid_stage():
+    """STAGE_PROMPT가 transfer_stage.VALID_STAGES의 모든 enum을 포함하는지 검증.
+    새 단계를 추가하면 프롬프트도 업데이트해야 하며, 이 테스트가 실패해서 알린다."""
+    from bullet_in import transfer_stage as ts
+    from bullet_in.enrich import STAGE_PROMPT
+    for enum in ts.VALID_STAGES:
+        assert enum in STAGE_PROMPT, f"STAGE_PROMPT가 {enum} 단계를 누락 — transfer_stage와 동기화 필요"
