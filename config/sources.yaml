@@ -19,7 +19,8 @@ sources:
     adapter: html
     config:
       list_url: "https://www.bbc.com/sport/football/teams/arsenal"
-      item_selector: "a[href*='/sport/football/articles/']"
+      item_selector: "[data-testid='main-content'] a[href*='/sport/football/articles/']"
+      title_selector: "span[class*='LinkPostHeadline']"
       title_contains: ["transfer", "sign", "signed", "signing", "deal", "loan", "bid", "fee", "medical", "agree", "agreed", "join", "joins", "target", "linked", "links", "contract", "swap", "move", "talks"]
       body_selector: "article"
     enabled: true

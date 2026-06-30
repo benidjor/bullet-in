@@ -9,12 +9,13 @@ class HtmlAdapter:
     source_type = "html"
     def __init__(self, source_id: str, list_url: str, item_selector: str,
                  base_url: str | None = None, title_contains: str | list[str] | None = None,
-                 body_selector: str | None = None):
+                 body_selector: str | None = None, title_selector: str | None = None):
         self.source_id = source_id
         self.list_url = list_url
         self.item_selector = item_selector
         self.base_url = base_url or list_url
         self.body_selector = body_selector
+        self.title_selector = title_selector
         if title_contains is None:
             self.title_keywords: list[str] | None = None
         elif isinstance(title_contains, str):
@@ -37,7 +38,13 @@ class HtmlAdapter:
                 if url in seen:
                     continue
                 seen.add(url)
-                title = a.get_text(strip=True)
+                if self.title_selector:
+                    el = a.select_one(self.title_selector)
+                    if el is None:
+                        continue  # 헤드라인 sub-요소 없음 → 제목 없는 항목 적재 방지
+                    title = el.get_text(strip=True)
+                else:
+                    title = a.get_text(strip=True)
                 if self.title_keywords and not any(
                         k in title.lower() for k in self.title_keywords):
                     continue

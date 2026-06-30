@@ -1,5 +1,7 @@
 # 런북 — arsenal 과거 (비-영입) 데이터 정리
 
+> **상태(2026-06-30): 무효 — `articles` 의 `arsenal_official` 행 0건이라 정리 대상 없음.** ([[2026-06-30-bbc-collection-cleanup]] 참조)
+
 arsenal_official이 "영입 (sign) 전용 고정밀 소스"로 재정의되기 전 적재된 비-영입 기사
 (여자팀 · 잡다, 약 31건)가 `articles` · 서빙 페이지에 잔존한다. 일회성으로 정리한다.
 **실행은 라이브 MariaDB가 떠 있는 상태에서 직접 수행한다.**

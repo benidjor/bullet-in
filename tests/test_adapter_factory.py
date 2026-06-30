@@ -27,3 +27,12 @@ def test_factory_passes_body_selector_to_html():
                        "body_selector": ".article-body"}}]}
     a = build_adapters(cfg)[0]
     assert isinstance(a, HtmlAdapter) and a.body_selector == ".article-body"
+
+def test_factory_passes_title_selector_to_html():
+    from bullet_in.adapters.html import HtmlAdapter
+    cfg = {"sources": [{"source_id": "bbc_sport", "adapter": "html", "enabled": True,
+            "config": {"list_url": "https://b.test",
+                       "item_selector": "[data-testid='main-content'] a",
+                       "title_selector": "span[class*='LinkPostHeadline']"}}]}
+    a = build_adapters(cfg)[0]
+    assert isinstance(a, HtmlAdapter) and a.title_selector == "span[class*='LinkPostHeadline']"

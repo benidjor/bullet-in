@@ -79,3 +79,44 @@ def test_html_adapter_keeps_title_when_detail_fetch_fails():
     assert len(items) == 1
     assert items[0].raw_payload.get("body", "") == ""
     assert items[0].raw_payload["title"] == "Arsenal sign Gyokeres"
+
+@respx.mock
+def test_html_adapter_title_selector_extracts_clean_headline_and_scopes():
+    # content-post(임베드 인라인 링크)는 item_selector 스코프 밖 → 제외,
+    # main-content 카드만 수집하고 LinkPostHeadline 헤드라인만 추출(timestamp·visually-hidden 제거)
+    html = (
+        '<div data-testid="content-post">'
+        '<a href="/sport/football/articles/junk">Want more transfer stories? Read gossip column</a>'
+        '</div>'
+        '<div data-testid="main-content">'
+        '<a href="/sport/football/articles/abc">'
+        '<span class="ssrcss-1-Timestamp">21:19 BST 29 June</span>'
+        '<span class="visually-hidden ssrcss-2-VisuallyHidden">Bournemouth reject Arsenal interest, published at 21:19</span>'
+        '<span class="ssrcss-3-LinkPostHeadline">Bournemouth reject Arsenal interest</span>'
+        '</a>'
+        '</div>'
+    )
+    respx.get("https://bbc.test/arsenal").mock(return_value=httpx.Response(200, text=html))
+    a = HtmlAdapter(source_id="bbc_sport", list_url="https://bbc.test/arsenal",
+                    item_selector="[data-testid='main-content'] a[href*='/sport/football/articles/']",
+                    base_url="https://bbc.test",
+                    title_selector="span[class*='LinkPostHeadline']")
+    items = asyncio.run(a.fetch())
+    assert len(items) == 1
+    assert items[0].url == "https://bbc.test/sport/football/articles/abc"
+    assert items[0].raw_payload["title"] == "Bournemouth reject Arsenal interest"
+
+
+@respx.mock
+def test_html_adapter_skips_item_when_title_selector_not_found():
+    html = (
+        '<div data-testid="main-content">'
+        '<a href="/sport/football/articles/abc"><span class="other">no headline span</span></a>'
+        '</div>'
+    )
+    respx.get("https://bbc.test/arsenal").mock(return_value=httpx.Response(200, text=html))
+    a = HtmlAdapter(source_id="bbc_sport", list_url="https://bbc.test/arsenal",
+                    item_selector="[data-testid='main-content'] a[href*='/sport/football/articles/']",
+                    base_url="https://bbc.test",
+                    title_selector="span[class*='LinkPostHeadline']")
+    assert asyncio.run(a.fetch()) == []

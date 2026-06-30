@@ -28,7 +28,7 @@
 | 수집량 이상 탐지 + 알림 (SLO-6) | 부분 | `volume_anomaly()` 구현 · 테스트됐으나 run.py 미연결, 알림 (Slack/메일/webhook) 전무 |
 | 수집 현황 모니터링 뷰 (§4) | 미구현 | 기사 페이지만 존재, dbt 마트 `tier_distribution` · `slo_rollup` 없음 |
 | 병렬화 시간 단축 ~70% 실측 (SLO-1) | 부분 | `benchmark()`/`speedup_pct()` 코드는 있으나 호출 · 기록 없음, README SLO 공란 |
-| `dup_count` 하드코딩 0 (run.py) | 버그 | 중복률 SLO 측정 데이터 오염 |
+| ~~`dup_count` 하드코딩 0 (run.py)~~ | ✅ 완료 | `7ea0959`에서 `to_articles`가 집계·기록 (6/29 실행 `dup_count=31` 확인) |
 | 비활성 소스 — goal (Playwright JS) · x_afcstuff (ITK X) | 비활성 | v1 필수 소스 다양성 (JS 1+ / ITK X 1~2) 미충족 |
 
 ### 신규 사용자 요구 (현재 전무)
@@ -43,7 +43,7 @@
 
 ### Tier 1 — 빠른 교정 · 미션 직결 (작음, 차단 없음)
 1. **arsenal 기존 31건 데이터 정리** — 영입 전용 소스로 재정의 전의 여자팀/잡다 기사가 DB · 서빙 페이지에 남아 노출 중. 정리.
-2. **`dup_count` 버그 수정** — run.py가 항상 0으로 기록 → 중복률 SLO 근거 오염. 실제 중복 수 집계.
+2. ~~**`dup_count` 버그 수정**~~ — ✅ 완료 (`7ea0959`, `to_articles`가 `dup_count`·`source_counts` 집계·기록). 6/29 실행에 `dup_count=31` 정상 기록 확인.
 3. **이적 키워드 필터** — BBC · football.london이 아스날 일반 뉴스를 전부 수집 → 이적 (transfer · sign · deal · loan 등)만 통과. `HtmlAdapter.title_contains` 패턴 재사용.
    - 근거 (Tier 2-b 라이브 관찰, 2026-06-30): football.london의 비-기사 네비게이션 · teaser 링크 (예: "Want more transfer stories? Read Thursday's full gossip column") 까지 적재돼, 영입 단계 분류에서 `rumour` 등으로 오분류됨. 수집 단계 필터가 들어오면 이 잡음이 사라짐. 운영 절차 · 관찰: `docs/runbook/2026-06-30-transfer-stage-classification-ops.md`.
 
