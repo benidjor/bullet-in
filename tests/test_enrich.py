@@ -178,3 +178,68 @@ def test_partition_by_paywall_splits_by_outlet():
     para, trans = partition_by_paywall(rows)
     assert [r["content_hash"] for r in para] == ["a"]
     assert [r["content_hash"] for r in trans] == ["b"]
+
+from bullet_in.enrich import classify_stage_rows
+
+
+class _StageModels:
+    def __init__(self, text, exc=None):
+        self._t = text; self._exc = exc; self.n = 0
+    def generate_content(self, **kw):
+        self.n += 1
+        if self._exc:
+            raise self._exc
+        class R: pass
+        r = R(); r.text = self._t; return r
+
+
+class _StageClient:
+    def __init__(self, text, exc=None): self.models = _StageModels(text, exc)
+
+
+def test_classify_returns_hash_to_stage():
+    payload = ('[{"content_hash":"a","stage":"negotiating"},'
+               '{"content_hash":"b","stage":"official"}]')
+    rows = [{"content_hash": "a", "title_original": "Arsenal in talks", "summary_ko": "협상"},
+            {"content_hash": "b", "title_original": "Arsenal confirm", "summary_ko": "발표"}]
+    out = classify_stage_rows(rows, _StageClient(payload), "m")
+    assert out == {"a": "negotiating", "b": "official"}
+
+
+def test_classify_demotes_invalid_stage_to_other():
+    payload = '[{"content_hash":"a","stage":"bogus"}]'
+    out = classify_stage_rows([{"content_hash": "a", "title_original": "T", "summary_ko": ""}],
+                              _StageClient(payload), "m")
+    assert out == {"a": "other"}
+
+
+def test_classify_omits_missing_hashes():
+    payload = '[{"content_hash":"a","stage":"rumour"}]'   # b 누락
+    rows = [{"content_hash": "a", "title_original": "A", "summary_ko": ""},
+            {"content_hash": "b", "title_original": "B", "summary_ko": ""}]
+    out = classify_stage_rows(rows, _StageClient(payload), "m")
+    assert out == {"a": "rumour"}   # b는 NULL 유지 (다음 사이클 재시도)
+
+
+def test_classify_skips_unparseable_batch():
+    out = classify_stage_rows([{"content_hash": "a", "title_original": "A", "summary_ko": ""}],
+                              _StageClient("not json"), "m")
+    assert out == {}
+
+
+def test_classify_batches_by_size():
+    payload = '[{"content_hash":"a","stage":"rumour"}]'
+    client = _StageClient(payload)
+    rows = [{"content_hash": f"h{i}", "title_original": "T", "summary_ko": ""} for i in range(5)]
+    classify_stage_rows(rows, client, "m", batch_size=2)
+    assert client.models.n == 3   # 5건 → 2+2+1 = 3 배치
+
+
+def test_classify_stops_on_rate_limit():
+    class _RL(Exception):
+        code = 429
+    client = _StageClient("", exc=_RL("429"))
+    rows = [{"content_hash": f"h{i}", "title_original": "T", "summary_ko": ""} for i in range(5)]
+    out = classify_stage_rows(rows, client, "m", batch_size=2)
+    assert out == {}
+    assert client.models.n == 1   # 첫 배치에서 중단

@@ -5,6 +5,8 @@ log = logging.getLogger(__name__)
 
 PAYWALLED_OUTLETS = {"The Athletic"}
 
+from bullet_in import transfer_stage as _stage
+
 def _is_rate_limit(exc: Exception) -> bool:
     if getattr(exc, "code", None) == 429:
         return True
@@ -123,4 +125,70 @@ def summarize_ko_rows(rows: list[dict], client, model: str) -> dict[str, str]:
             log.warning("Gemini 응답 파싱 실패, 요약 스킵 content_hash=%s", h)
             continue
         result[h] = s
+    return result
+
+STAGE_PROMPT = (
+    "다음은 아스날 FC 관련 기사 목록이다. 각 기사를 이적 진행 단계로 분류한다.\n"
+    "단계 (반드시 아래 영문 값 중 하나로 답한다):\n"
+    "- rumour: 근거 약한 소문 · 연결설\n"
+    "- interest: 구단이 실제 관심 표명 · 스카우팅\n"
+    "- negotiating: 구단 간 · 에이전트와 이적료/조건 협상 중\n"
+    "- personal_terms: 선수와 개인 조건 (연봉 등) 합의\n"
+    "- medical: 메디컬 테스트 진행 · 통과\n"
+    "- official: 구단 공식 발표\n"
+    "- other: 이적과 무관하거나 단계를 판단할 수 없음\n"
+    "각 기사의 content_hash는 그대로 두고 stage만 채운다.\n"
+    'ONLY JSON 배열: [{{"content_hash":"...","stage":"rumour"}}]\n\n'
+    "기사 목록:\n{items}")
+
+
+def _extract_stages(text: str) -> dict[str, str] | None:
+    m = re.search(r"\[.*\]", text, re.DOTALL)
+    if not m:
+        return None
+    try:
+        data = json.loads(m.group(0))
+        out: dict[str, str] = {}
+        for item in data:
+            h, s = item.get("content_hash"), item.get("stage")
+            if h and s:
+                out[h] = s
+        return out
+    except (json.JSONDecodeError, TypeError, AttributeError):
+        return None
+
+
+def classify_stage_rows(rows: list[dict], client, model: str,
+                        batch_size: int = 20) -> dict[str, str]:
+    """미태깅 행을 batch_size 단위로 묶어 영입 단계를 분류한다.
+
+    content_hash -> stage(enum) 를 반환한다. 허용 enum 밖 값은 other로 강등하고,
+    응답에 없는 hash는 결과에서 빠져 (NULL 유지) 다음 사이클에 재시도된다.
+    429를 만나면 그 회차는 즉시 중단한다 (남은 배치 다음 사이클 누적)."""
+    result: dict[str, str] = {}
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i:i + batch_size]
+        items = json.dumps(
+            [{"content_hash": r["content_hash"],
+              "title": r["title_original"],
+              "summary": r.get("summary_ko") or ""} for r in batch],
+            ensure_ascii=False)
+        try:
+            msg = client.models.generate_content(
+                model=model,
+                contents=STAGE_PROMPT.format(items=items),
+                config={"max_output_tokens": 2048,
+                        "response_mime_type": "application/json"})
+        except Exception as e:
+            if _is_rate_limit(e):
+                log.warning("Gemini rate limit(429), 단계 분류 중단 — 남은 배치 다음 사이클")
+                break
+            log.warning("Gemini 호출 실패, 단계 분류 배치 스킵: %s", e)
+            continue
+        parsed = _extract_stages(msg.text)
+        if parsed is None:
+            log.warning("Gemini 응답 파싱 실패, 단계 분류 배치 스킵")
+            continue
+        for h, stage in parsed.items():
+            result[h] = _stage.normalize(stage)
     return result
