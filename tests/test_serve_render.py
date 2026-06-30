@@ -66,6 +66,22 @@ def _decorated(row):
     return _decorate(row, SOURCES, NOW)
 
 
+def test_decorate_sets_stage_fields():
+    from bullet_in.serve.render import _decorate
+    d = _decorate(_row(transfer_stage="medical"), SOURCES, NOW)
+    assert d["_stage"] == "medical"
+    assert d["_stage_badge"] is True
+    assert d["_stage_label"] == "메디컬"
+    assert d["_stage_class"] == "s-med"
+
+
+def test_decorate_other_stage_no_badge():
+    from bullet_in.serve.render import _decorate
+    d = _decorate(_row(transfer_stage="other"), SOURCES, NOW)
+    assert d["_stage"] == "other"
+    assert d["_stage_badge"] is False
+
+
 def test_detail_shows_summary3_body_and_origin():
     a = _row(content_hash="cur", summary3_ko="첫째 줄\n둘째 줄\n셋째 줄",
              body_ko="첫 문단입니다.\n둘째 문단입니다.", journalist="사미 목벨",

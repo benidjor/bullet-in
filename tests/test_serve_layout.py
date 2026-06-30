@@ -49,3 +49,18 @@ def test_facet_counts():
     assert f["team"] == {"arsenal": 3}
     assert f["outlets"] == [("BBC Sport", 2), ("afcstuff", 1)]
     assert f["tiers"] == {0: 1, 1: 0, 2: 2, 3: 0, 4: 0}
+
+def test_facet_counts_includes_stage_excluding_other():
+    arts = [
+        {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal", "transfer_stage": "rumour"},
+        {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal", "transfer_stage": "rumour"},
+        {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal", "transfer_stage": "official"},
+        {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal", "transfer_stage": "other"},
+        {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal"},   # 미태깅(None)
+    ]
+    f = facet_counts(arts, {})
+    assert f["stage"]["rumour"] == 2
+    assert f["stage"]["official"] == 1
+    assert "other" not in f["stage"]      # other는 집계 제외
+    assert set(f["stage"]) == {"official", "medical", "personal_terms",
+                               "negotiating", "interest", "rumour"}
