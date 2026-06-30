@@ -29,3 +29,20 @@ def test_article_tier2a_fields_default_none():
                   title_original="T", published_at=datetime(2026, 6, 29, tzinfo=timezone.utc))
     assert art.summary3_ko is None and art.body_ko is None and art.image_url is None
     assert art.outlet is None and art.journalist is None and art.team == "arsenal"
+
+def test_article_accepts_transfer_stage():
+    from datetime import datetime, timezone
+    from bullet_in.models import Article
+    a = Article(content_hash="h", url="https://x/1", source_id="s",
+                title_original="T", transfer_stage="rumour",
+                published_at=datetime(2026, 6, 30, tzinfo=timezone.utc))
+    assert a.transfer_stage == "rumour"
+
+
+def test_article_transfer_stage_defaults_none():
+    from datetime import datetime, timezone
+    from bullet_in.models import Article
+    a = Article(content_hash="h", url="https://x/1", source_id="s",
+                title_original="T",
+                published_at=datetime(2026, 6, 30, tzinfo=timezone.utc))
+    assert a.transfer_stage is None
