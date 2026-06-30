@@ -13,6 +13,7 @@
       <span class="chip team">{{ '아스날' if (a.team or 'arsenal') == 'arsenal' else a.team }}</span>
       <span class="chip src">{{ a._outlet }}</span>
       <span class="chip tier">{{ a._tier_label }}</span>
+      {% if a._stage_badge %}<span class="chip stagebadge"><span class="stage {{ a._stage_class }}"></span>{{ a._stage_label }}</span>{% endif %}
       <span class="when">{{ a._date }}</span>
     </div>
     <h2 class="title">{{ a._title }}</h2>
