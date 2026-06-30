@@ -1,4 +1,4 @@
-// DOM contract: a.card[data-outlet][data-tier][data-published][data-confidence][data-text]
+// DOM contract: a.card[data-outlet][data-tier][data-stage][data-published][data-confidence][data-text]
 
 // 테마 토글 (목업 이식: localStorage 영속, 페이지 간 유지)
 const root = document.documentElement, themeBtn = document.getElementById('themeBtn');
@@ -27,18 +27,20 @@ function applyFilters() {
   const q = (searchInput.value || '').trim().toLowerCase();
   const outlets = checkedValues('outlet');
   const tiers = checkedValues('tier');
+  const stages = checkedValues('stage');
   let shown = 0;
   for (const card of cards) {
     const okText = !q || (card.dataset.text || '').includes(q);
     const okOutlet = outlets.length === 0 || outlets.includes(card.dataset.outlet);
     const okTier = tiers.length === 0 || tiers.includes(card.dataset.tier);
-    const visible = okText && okOutlet && okTier;
+    const okStage = stages.length === 0 || stages.includes(card.dataset.stage);
+    const visible = okText && okOutlet && okTier && okStage;
     card.style.display = visible ? '' : 'none';
     if (visible) shown++;
   }
   sortCards();
   const sort = side.querySelector('input[name=sort]:checked').dataset.value;
-  const conds = outlets.length + tiers.length + (q ? 1 : 0);
+  const conds = outlets.length + tiers.length + stages.length + (q ? 1 : 0);
   fstatus.textContent = conds || q
     ? `적용됨 · 조건 ${conds}개 · ${shown}건`
     : `미적용 · 전체 ${shown}건`;

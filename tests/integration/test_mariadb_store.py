@@ -73,3 +73,39 @@ def test_changed_url_updates_hash_and_resets_translation(engine):
     assert store.seen_map()["https://x.test/a"] == ("h2", 2)
     missing = {r["content_hash"] for r in store.rows_missing_translation()}
     assert "h2" in missing  # translation reset so enrich re-runs
+
+
+def test_rows_missing_stage_and_set_stage(engine):
+    from bullet_in.models import Article
+    from datetime import datetime, timezone
+    store = MartStore(engine)
+    store.upsert([Article(content_hash="hs", url="https://x.test/s",
+                          source_id="bbc_sport",
+                          title_original="Arsenal close on Gyokeres",
+                          summary_ko="요케레스 임박",
+                          published_at=datetime(2026, 6, 30, tzinfo=timezone.utc))])
+    missing = {r["content_hash"]: r for r in store.rows_missing_stage()}
+    assert "hs" in missing
+    assert missing["hs"]["title_original"] == "Arsenal close on Gyokeres"
+    assert missing["hs"]["summary_ko"] == "요케레스 임박"
+    store.set_stage("hs", "negotiating")
+    assert "hs" not in {r["content_hash"] for r in store.rows_missing_stage()}
+
+
+def test_upsert_preserves_stage_on_revision_change(engine):
+    from bullet_in.models import Article
+    from datetime import datetime, timezone
+    from sqlalchemy import text
+    store = MartStore(engine)
+    store.upsert([Article(content_hash="h1", url="https://x.test/a", source_id="g",
+                          title_original="Old",
+                          published_at=datetime(2026, 5, 27, tzinfo=timezone.utc))])
+    store.set_stage("h1", "rumour")
+    # url 동일, hash · title 변경 (revision++) → 번역은 리셋되지만 단계는 보존
+    store.upsert([Article(content_hash="h2", url="https://x.test/a", source_id="g",
+                          title_original="New", revision=2,
+                          published_at=datetime(2026, 5, 27, tzinfo=timezone.utc))])
+    with engine.connect() as c:
+        stage = c.execute(text("SELECT transfer_stage FROM articles "
+                               "WHERE content_hash='h2'")).scalar_one()
+    assert stage == "rumour"

@@ -7,7 +7,9 @@ def test_static_assets_exist_and_nonempty():
     js = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "data-theme" in css and "--bg" in css      # 테마 변수
     assert ".card" in css and ".side" in css
+    assert "s-interest" in css and "s-personal" in css  # 신규 단계 점 색
     assert "data-outlet" in js and "data-tier" in js   # 카드 필터 계약
+    assert "data-stage" in js                          # 단계 필터 계약
     assert "localStorage" in js                        # 테마 영속
 
 
@@ -51,11 +53,16 @@ def test_index_sorts_latest_first():
     html = render_index([old, new], SOURCES, NOW)
     assert html.index("최신") < html.index("옛날")
 
-def test_index_renders_facet_counts_and_disabled_stage():
+def test_index_renders_active_stage_filter():
     html = render_index([_row(), _row(content_hash="h2")], SOURCES, NOW)
     assert "tier 2" in html
-    # 영입 단계는 비활성 자리(2-b)
-    assert "영입 단계" in html and html.count("disabled") >= 4
+    # 영입 단계 필터가 활성 (2-b): 체크박스 + data-group="stage"
+    assert "영입 단계" in html
+    assert 'data-group="stage"' in html
+    assert 'data-value="official"' in html and 'data-value="rumour"' in html
+    # 타 구단 자리 제거 + 단계 비활성 자리 제거 → disabled 없음
+    assert "Manchester United" not in html
+    assert "disabled" not in html
 
 
 from bullet_in.serve.render import render_article, build_neighbors
@@ -64,6 +71,22 @@ from bullet_in.serve.render import render_article, build_neighbors
 def _decorated(row):
     from bullet_in.serve.render import _decorate
     return _decorate(row, SOURCES, NOW)
+
+
+def test_decorate_sets_stage_fields():
+    from bullet_in.serve.render import _decorate
+    d = _decorate(_row(transfer_stage="medical"), SOURCES, NOW)
+    assert d["_stage"] == "medical"
+    assert d["_stage_badge"] is True
+    assert d["_stage_label"] == "메디컬"
+    assert d["_stage_class"] == "s-med"
+
+
+def test_decorate_other_stage_no_badge():
+    from bullet_in.serve.render import _decorate
+    d = _decorate(_row(transfer_stage="other"), SOURCES, NOW)
+    assert d["_stage"] == "other"
+    assert d["_stage_badge"] is False
 
 
 def test_detail_shows_summary3_body_and_origin():
@@ -143,3 +166,23 @@ def test_detail_keeps_valid_origin_url():
     nb = build_neighbors([a], 0, SOURCES, NOW)
     html = render_article(_decorated(a), nb, "h1", SOURCES, NOW)
     assert 'href="https://src/article"' in html
+
+
+def test_index_shows_stage_badge_and_data_attr():
+    html = render_index([_row(transfer_stage="negotiating")], SOURCES, NOW)
+    assert 'data-stage="negotiating"' in html
+    assert "협상 중" in html
+    assert "stagebadge" in html
+
+
+def test_index_other_stage_has_data_attr_but_no_badge():
+    html = render_index([_row(transfer_stage="other")], SOURCES, NOW)
+    assert 'data-stage="other"' in html   # 속성은 있음 (필터로 제외됨)
+    assert "stagebadge" not in html        # 배지는 없음
+
+
+def test_detail_shows_stage_badge():
+    a = _row(content_hash="cur", transfer_stage="medical")
+    nb = build_neighbors([a], 0, SOURCES, NOW)
+    html = render_article(_decorated(a), nb, "cur", SOURCES, NOW)
+    assert "메디컬" in html and "stagebadge" in html

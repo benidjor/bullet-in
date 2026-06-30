@@ -24,10 +24,12 @@ class MartStore:
             (content_hash,url,source_id,author,tier,confidence_score,
              title_original,title_ko,summary_ko,body_excerpt,
              summary3_ko,body_ko,body_source,image_url,outlet,journalist,team,
+             transfer_stage,
              published_at,fetched_at,revision)
           VALUES (:content_hash,:url,:source_id,:author,:tier,:confidence_score,
              :title_original,:title_ko,:summary_ko,:body_excerpt,
              :summary3_ko,:body_ko,:body_source,:image_url,:outlet,:journalist,:team,
+             :transfer_stage,
              :published_at,:fetched_at,:revision)
           ON DUPLICATE KEY UPDATE
              title_ko=IF(articles.content_hash=VALUES(content_hash), articles.title_ko, NULL),
@@ -71,3 +73,14 @@ class MartStore:
                            "summary3_ko=:s3, body_ko=:b WHERE content_hash=:h"),
                       {"t": title_ko, "s": summary_ko, "s3": summary3_ko,
                        "b": body_ko, "h": content_hash})
+    def rows_missing_stage(self) -> list[dict]:
+        with self.engine.connect() as c:
+            rows = c.execute(text(
+                "SELECT content_hash,title_original,summary_ko "
+                "FROM articles WHERE transfer_stage IS NULL")).mappings().all()
+        return [dict(r) for r in rows]
+
+    def set_stage(self, content_hash: str, stage: str) -> None:
+        with self.engine.begin() as c:
+            c.execute(text("UPDATE articles SET transfer_stage=:s WHERE content_hash=:h"),
+                      {"s": stage, "h": content_hash})

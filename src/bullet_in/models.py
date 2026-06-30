@@ -31,6 +31,7 @@ class Article(BaseModel):
     outlet: str | None = None
     journalist: str | None = None
     team: str = "arsenal"
+    transfer_stage: str | None = None
     published_at: datetime
     fetched_at: datetime | None = None
     revision: int = 1

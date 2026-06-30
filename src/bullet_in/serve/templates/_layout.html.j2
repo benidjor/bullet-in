@@ -29,16 +29,11 @@
   <aside class="side">
     <h4>팀</h4>
     <label class="opt"><input type="checkbox" data-group="team" data-value="arsenal" checked> Arsenal <span class="ct">{{ facets.team.get('arsenal', 0) }}</span></label>
-    <label class="opt disabled"><input type="checkbox" disabled> Manchester United <span class="soon">예정</span></label>
-    <label class="opt disabled"><input type="checkbox" disabled> Chelsea <span class="soon">예정</span></label>
-    <label class="opt disabled"><input type="checkbox" disabled> Liverpool <span class="soon">예정</span></label>
-    <label class="opt disabled"><input type="checkbox" disabled> Tottenham <span class="soon">예정</span></label>
 
     <h4>영입 단계</h4>
-    <label class="opt disabled"><input type="checkbox" disabled><span class="stage s-off"></span>오피셜 <span class="soon">예정</span></label>
-    <label class="opt disabled"><input type="checkbox" disabled><span class="stage s-med"></span>메디컬 <span class="soon">예정</span></label>
-    <label class="opt disabled"><input type="checkbox" disabled><span class="stage s-talk"></span>협상 중 <span class="soon">예정</span></label>
-    <label class="opt disabled"><input type="checkbox" disabled><span class="stage s-rum"></span>루머 <span class="soon">예정</span></label>
+    {% for enum, label, css in stages %}
+    <label class="opt"><input type="checkbox" data-group="stage" data-value="{{ enum }}"><span class="stage {{ css }}"></span>{{ label }} <span class="ct">{{ facets.stage.get(enum, 0) }}</span></label>
+    {% endfor %}
 
     <h4>소스 (언론사)</h4>
     {% for name, count in facets.outlets %}

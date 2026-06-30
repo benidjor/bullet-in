@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from bullet_in import transfer_stage as _stage
+
 _TPL_DIR = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
 
@@ -65,14 +67,21 @@ def facet_counts(articles: list[dict], sources: dict) -> dict:
         t = a.get("tier")
         if t is not None and 0 <= int(t) <= 4:
             tiers[int(t)] += 1
+    stage_counts = {e: 0 for e, _, _ in _stage.SIDEBAR_STAGES}
+    for a in articles:
+        s = a.get("transfer_stage")
+        if s in stage_counts:
+            stage_counts[s] += 1
     return {"total": len(articles), "team": dict(teams),
-            "outlets": outlets, "tiers": tiers}
+            "outlets": outlets, "tiers": tiers, "stage": stage_counts}
 
 def _env() -> Environment:
-    return Environment(
+    env = Environment(
         loader=FileSystemLoader(_TPL_DIR),
         autoescape=select_autoescape(default_for_string=True, default=True),
     )
+    env.globals["stages"] = _stage.SIDEBAR_STAGES
+    return env
 
 
 def _decorate(row: dict, sources: dict, now: datetime) -> dict:
@@ -88,6 +97,11 @@ def _decorate(row: dict, sources: dict, now: datetime) -> dict:
     a["image_url"] = iu if iu and re.match(r"^https?://[^\s'\"()]+$", iu) else None
     u = row.get("url") or ""
     a["url"] = u if re.match(r"^https?://", u) else "#"
+    st = row.get("transfer_stage")
+    a["_stage"] = st or ""
+    a["_stage_badge"] = _stage.is_displayable(st)
+    a["_stage_label"] = _stage.label_for(st)
+    a["_stage_class"] = _stage.css_for(st)
     return a
 
 
@@ -119,7 +133,8 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
                    sources: dict, now: datetime, facets: dict | None = None) -> str:
     # facets=None이면 빈 구조로 폴백 (하위 호환 유지)
     if facets is None:
-        facets = {"team": {}, "outlets": [], "tiers": {t: 0 for t in range(5)}, "total": 0}
+        facets = {"team": {}, "outlets": [], "tiers": {t: 0 for t in range(5)},
+                  "total": 0, "stage": {}}
     return _env().get_template("detail.html.j2").render(
         a=article, neighbors=neighbors, active=None, root="../", facets=facets)
 

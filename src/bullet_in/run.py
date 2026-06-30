@@ -12,7 +12,7 @@ from bullet_in.score import load_sources
 from bullet_in.credibility import load_registry
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
-from bullet_in.enrich import enrich_rows
+from bullet_in.enrich import enrich_rows, classify_stage_rows
 from bullet_in.serve.render import write_site
 from bullet_in.quality import success_rate
 
@@ -52,10 +52,15 @@ async def main(concurrency: int):
         mart.set_translation(h, v["title_ko"], v["summary_ko"],
                              v["summary3_ko"], v["body_ko"])
 
+    # 분류 패스: 미태깅 행 분류 및 저장
+    stage_rows = mart.rows_missing_stage()
+    for h, stage in classify_stage_rows(stage_rows, client, GEMINI_MODEL).items():
+        mart.set_stage(h, stage)
+
     with engine.connect() as c:
         rows = [dict(r) for r in c.execute(text(
             "SELECT content_hash,url,source_id,title_original,title_ko,summary_ko,"
-            "summary3_ko,body_ko,image_url,outlet,journalist,team,tier,"
+            "summary3_ko,body_ko,image_url,outlet,journalist,team,transfer_stage,tier,"
             "confidence_score,published_at "
             "FROM articles")).mappings().all()]
     write_site(rows, sources, "site")
