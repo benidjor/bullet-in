@@ -45,6 +45,7 @@
 1. **arsenal 기존 31건 데이터 정리** — 영입 전용 소스로 재정의 전의 여자팀/잡다 기사가 DB · 서빙 페이지에 남아 노출 중. 정리.
 2. **`dup_count` 버그 수정** — run.py가 항상 0으로 기록 → 중복률 SLO 근거 오염. 실제 중복 수 집계.
 3. **이적 키워드 필터** — BBC · football.london이 아스날 일반 뉴스를 전부 수집 → 이적 (transfer · sign · deal · loan 등)만 통과. `HtmlAdapter.title_contains` 패턴 재사용.
+   - 근거 (Tier 2-b 라이브 관찰, 2026-06-30): football.london의 비-기사 네비게이션 · teaser 링크 (예: "Want more transfer stories? Read Thursday's full gossip column") 까지 적재돼, 영입 단계 분류에서 `rumour` 등으로 오분류됨. 수집 단계 필터가 들어오면 이 잡음이 사라짐. 운영 절차 · 관찰: `docs/runbook/2026-06-30-transfer-stage-classification-ops.md`.
 
 ### Tier 2 — 신규 UX 기능 (사용자 핵심 요구, 큰 수직 기능)
 4. **전체 본문 번역 + 3줄 요약 + 기사 상세 페이지 + 웹 UI 개편** — 한 덩어리 기능:
