@@ -15,15 +15,15 @@ Tier 2-b 라이브 관찰에서 `bbc_sport` (`list_url: …/sport/football/teams
 ## 진단 과정 (왜 이렇게 판단했는가)
 어댑터를 실 URL로 단독 probe (파이프라인 · DB · LLM 없이) 하고 BeautifulSoup 으로 DOM 을 격리 분석.
 
-1. **링크 형태 분류** — `a[href*='/sport/football/articles/']` 가 19개 매칭. 각 anchor 의 가장 가까운 `data-testid` 조상으로 분류하니 깔끔히 갈림:
+1. **링크 종류 분류** — `a[href*='/sport/football/articles/']` 가 19개 매칭. 각 anchor 의 가장 가까운 `data-testid` 조상으로 나누니 종류가 깔끔하게 갈림:
    - `data-testid="main-content"` (4) — 진짜 promo 카드.
    - `data-testid="content-post"` (14) — 페이지에 임베드된 본문 · 라이브피드 안의 인라인 링크 (teaser · read-more · nav).
    - `data-testid="navigation"` (1) — 내비.
-2. **제목 깨짐 원인** — 진짜 카드 `<a>` 안에 span 이 셋: `class*="Timestamp"` (`21:19 BST 29 June`) · `class="visually-hidden …"` (헤드라인 중복 + `, published at …`) · `class*="LinkPostHeadline"` (시각 표시 헤드라인). `a.get_text()` 가 이 셋을 전부 이어붙여 제목이 오염됨. 깨끗한 헤드라인은 `span[class*="LinkPostHeadline"]` 하나에만 있음.
+2. **제목 깨짐 원인** — 진짜 카드 `<a>` 안에 span 이 셋: `class*="Timestamp"` (`21:19 BST 29 June`) · `class="visually-hidden …"` (헤드라인 중복 + `, published at …`) · `class*="LinkPostHeadline"` (화면에 보이는 헤드라인). `a.get_text()` 가 이 셋을 전부 이어붙여 제목이 오염됨. 깨끗한 헤드라인은 `span[class*="LinkPostHeadline"]` 하나에만 있음.
 
 ## 원인
 - BBC team 페이지는 promo 카드 + 임베드 본문 + nav 가 섞인 **혼합 피드**. `href` 패턴 (`/articles/`) 만으로는 링크 형태를 구분할 수 없음 — 진짜 카드도 임베드 본문 속 인라인 링크도 같은 href 형태.
-- `get_text()` 는 시각적으로 숨겨진 (`visually-hidden`) · 메타 (timestamp · `published at`) 텍스트까지 무차별 연결.
+- `get_text()` 는 화면에 안 보이는 (`visually-hidden`) · 메타 (timestamp · `published at`) 텍스트까지 가리지 않고 이어붙임.
 
 ## 해결 (PR #20)
 - **안정 컨테이너로 스코핑** — `item_selector` 를 href 패턴 단독에서 `data-testid` 조상 결합으로:
@@ -40,6 +40,6 @@ Tier 2-b 라이브 관찰에서 `bbc_sport` (`list_url: …/sport/football/teams
 ## 예방
 - **라이브 probe 시 건수만 보지 말 것** — 0건이 아니어도 정상이 아닐 수 있다. 제목 샘플 · 링크 형태를 눈으로 확인해 teaser · nav · 깨진 제목이 없는지 본다.
 - **혼합 피드 소스는 안정 컨테이너로 스코핑** — `href` 패턴 + semantic 컨테이너 (`data-testid` 등) 조합. 본문 임베드 영역 (`content-post`) 을 명시적으로 배제.
-- **get_text 가 chrome 을 흡수하면 `title_selector`** — 카드 안에 timestamp · visually-hidden 등이 섞이는 사이트는 헤드라인 요소를 sub-selector 로 직접 지정.
-- **해시 CSS 클래스는 드리프트 축** — `ssrcss-18dafkj-…` 같은 해시 prefix 는 BBC 빌드마다 바뀔 수 있다. 의미 접미사 (`*LinkPostHeadline`) · `data-testid` 같은 안정 축으로 매칭하고, 머지 전 라이브 `fetch()` 로 재검증. 0건/깨진 제목이면 드리프트 신호.
+- **get_text 가 헤드라인 외 텍스트까지 빨아들이면 `title_selector`** — 카드 안에 timestamp · 숨김 텍스트 등이 섞이는 사이트는 헤드라인 요소를 sub-selector 로 직접 지정.
+- **해시 CSS 클래스는 잘 깨진다** — `ssrcss-18dafkj-…` 같은 해시 prefix 는 BBC 빌드마다 바뀔 수 있다. 잘 안 바뀌는 의미 접미사 (`*LinkPostHeadline`) · `data-testid` 로 매칭하고, 머지 전 라이브 `fetch()` 로 재검증. 0건/깨진 제목이면 드리프트 신호.
 - 관련: 기본 드리프트 (0건 · 타임아웃) `2026-06-12-live-source-selector-drift.md`, 운영 알람 `docs/runbook/2026-05-27-daily-operations.md §4`.
