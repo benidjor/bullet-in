@@ -51,4 +51,5 @@ cd dbt && uv run dbt build --profiles-dir .
   - 429 (RESOURCE_EXHAUSTED) — `_is_rate_limit` 이 잡아 그 회차 즉시 중단 · 남은 행은 다음 회차 누적.
   - 503 — 개별 행만 스킵하고 배치는 지속 · 다음 회차 재시도. 503 급증 시 일부 행이 이번 회차에 안 채워지는 것은 정상.
 - **멱등**: 둘 다 `title_ko IS NULL` 로 다음 사이클 자동 재시도 · 중복 적재 없음.
-- 상세 — `docs/troubleshooting/2026-06-29-fmkorea-discovery-extraction.md` · `2026-05-27-llm-json-parsing-robustness.md`.
+- **글자수 갭 ≠ 번역 누락 (오판 주의)**: `body_ko` 가 `body_source` 보다 짧다는 것 자체는 충실도 문제가 아니다. `body_source` 는 `body_selector` (예: `"article"`) 가 기사 외 chrome (`Image source` · 이미지 캡션 · `Published` · `Related topics` · `More on this story` 등) 까지 흡수하고, 모델은 본문 산문만 번역하며, EN→KO 는 자연 압축된다 (관측: 1041→332자 · 4718→2118자인데 핵심 사실 누락 없음). 충실도는 글자수가 아니라 **원문 핵심 사실 대조** 로 판단한다.
+- 상세 — `docs/troubleshooting/2026-06-30-bbc-selector-wrong-shape-drift.md` · `2026-06-29-fmkorea-discovery-extraction.md` · `2026-05-27-llm-json-parsing-robustness.md`.
