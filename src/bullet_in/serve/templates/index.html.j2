@@ -3,7 +3,7 @@
 {% block content %}
 <div class="grid">
 {% for a in articles %}
-  <a class="card" href="article/{{ a.content_hash }}.html"
+  <a class="card"{% if not a._stage_badge %} style="display:none"{% endif %} href="article/{{ a.content_hash }}.html"
      data-team="{{ a.team or 'arsenal' }}"
      data-outlet="{{ a._outlet }}"
      data-tier="{{ a.tier | int if a.tier is not none else '' }}"
