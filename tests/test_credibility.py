@@ -66,3 +66,13 @@ def test_resolve_x_mentions_no_registry_drops():
     sources = {"x_afcstuff": {"credibility": "x_mentions"}}
     it = _item("x_afcstuff", {"text": "Per @David_Ornstein, deal close"})
     assert resolve_tier(it, sources, registry=None) is None
+
+def test_resolve_x_mentions_fallback_tier_when_unregistered():
+    r = load_registry(REG)
+    it = _item("x_afcstuff", {"text": "[@NobodyKnows] 루머"})
+    # fallback_tier 있으면 그 값으로 생존
+    src_fb = {"x_afcstuff": {"credibility": "x_mentions", "fallback_tier": 4}}
+    assert resolve_tier(it, src_fb, r) == 4.0
+    # fallback_tier 없으면 종전대로 None (drop)
+    src_no = {"x_afcstuff": {"credibility": "x_mentions"}}
+    assert resolve_tier(it, src_no, r) is None
