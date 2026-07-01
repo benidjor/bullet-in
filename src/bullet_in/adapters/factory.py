@@ -5,6 +5,7 @@ from bullet_in.adapters.guardian_api import GuardianAdapter
 from bullet_in.adapters.html import HtmlAdapter
 from bullet_in.adapters.playwright_news import PlaywrightAdapter
 from bullet_in.adapters.x_twikit import XAdapter
+from bullet_in.adapters.x_playwright import XPlaywrightAdapter
 from bullet_in.adapters.fmkorea import FmkoreaAdapter
 
 def build_adapters(cfg: dict) -> list:
@@ -28,6 +29,10 @@ def build_adapters(cfg: dict) -> list:
             out.append(PlaywrightAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url")))
         elif kind == "x_twikit":
             out.append(XAdapter(sid, c["handle"], c.get("max_tweets", 20)))
+        elif kind == "x_playwright":
+            out.append(XPlaywrightAdapter(sid, c["handle"],
+                                          c.get("max_tweets", 20),
+                                          c.get("cookies_path", "x_cookies.json")))
         elif kind == "fmkorea":
             out.append(FmkoreaAdapter(
                 sid, c["list_url"], c["item_selector"], c["keywords"],
