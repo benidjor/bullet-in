@@ -28,19 +28,24 @@ function applyFilters() {
   const outlets = checkedValues('outlet');
   const tiers = checkedValues('tier');
   const stages = checkedValues('stage');
+  const showOther = !!side.querySelector('input[data-group=bucket][data-value=other]')?.checked;
   let shown = 0;
   for (const card of cards) {
     const okText = !q || (card.dataset.text || '').includes(q);
     const okOutlet = outlets.length === 0 || outlets.includes(card.dataset.outlet);
     const okTier = tiers.length === 0 || tiers.includes(card.dataset.tier);
-    const okStage = stages.length === 0 || stages.includes(card.dataset.stage);
+    const st = card.dataset.stage;
+    const isOther = !st || st === 'other';
+    const okStage = isOther
+      ? showOther
+      : (stages.length === 0 || stages.includes(st));
     const visible = okText && okOutlet && okTier && okStage;
     card.style.display = visible ? '' : 'none';
     if (visible) shown++;
   }
   sortCards();
   const sort = side.querySelector('input[name=sort]:checked').dataset.value;
-  const conds = outlets.length + tiers.length + stages.length + (q ? 1 : 0);
+  const conds = outlets.length + tiers.length + stages.length + (showOther ? 1 : 0) + (q ? 1 : 0);
   fstatus.textContent = conds || q
     ? `적용됨 · 조건 ${conds}개 · ${shown}건`
     : `미적용 · 전체 ${shown}건`;

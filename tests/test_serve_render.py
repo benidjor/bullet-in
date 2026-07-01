@@ -204,3 +204,9 @@ def test_sidebar_has_other_bucket_checkbox():
     assert 'data-group="bucket"' in html
     assert 'data-value="other"' in html
     assert "기타" in html
+
+
+def test_app_js_has_other_bucket_toggle_contract():
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "data-group=bucket" in js   # '기타' 토글 셀렉터
+    assert "showOther" in js            # other 노출 분기
