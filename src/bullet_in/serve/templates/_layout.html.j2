@@ -34,6 +34,7 @@
     {% for enum, label, css in stages %}
     <label class="opt"><input type="checkbox" data-group="stage" data-value="{{ enum }}"><span class="stage {{ css }}"></span>{{ label }} <span class="ct">{{ facets.stage.get(enum, 0) }}</span></label>
     {% endfor %}
+    <label class="opt"><input type="checkbox" data-group="bucket" data-value="other"> 기타 <span class="ct">{{ facets.other or 0 }}</span></label>
 
     <h4>소스 (언론사)</h4>
     {% for name, count in facets.outlets %}

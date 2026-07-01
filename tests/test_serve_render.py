@@ -186,3 +186,27 @@ def test_detail_shows_stage_badge():
     nb = build_neighbors([a], 0, SOURCES, NOW)
     html = render_article(_decorated(a), nb, "cur", SOURCES, NOW)
     assert "메디컬" in html and "stagebadge" in html
+
+
+import re as _re
+
+def test_index_hides_offmission_card_by_default():
+    tr = _row(content_hash="t", transfer_stage="rumour")
+    ot = _row(content_hash="o", transfer_stage="other")
+    html = render_index([tr, ot], SOURCES, NOW)
+    o_tag = _re.search(r'<a class="card"[^>]*href="article/o\.html"', html).group(0)
+    t_tag = _re.search(r'<a class="card"[^>]*href="article/t\.html"', html).group(0)
+    assert "display:none" in o_tag       # off-mission(other) 카드만 숨김
+    assert "display:none" not in t_tag   # 이적 카드(rumour)는 노출
+
+def test_sidebar_has_other_bucket_checkbox():
+    html = render_index([_row(transfer_stage="other")], SOURCES, NOW)
+    assert 'data-group="bucket"' in html
+    assert 'data-value="other"' in html
+    assert "기타" in html
+
+
+def test_app_js_has_other_bucket_toggle_contract():
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "data-group=bucket" in js   # '기타' 토글 셀렉터
+    assert "showOther" in js            # other 노출 분기

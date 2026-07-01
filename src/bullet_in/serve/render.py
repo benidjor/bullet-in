@@ -68,12 +68,16 @@ def facet_counts(articles: list[dict], sources: dict) -> dict:
         if t is not None and 0 <= int(t) <= 4:
             tiers[int(t)] += 1
     stage_counts = {e: 0 for e, _, _ in _stage.SIDEBAR_STAGES}
+    other_count = 0
     for a in articles:
         s = a.get("transfer_stage")
         if s in stage_counts:
             stage_counts[s] += 1
+        else:
+            other_count += 1
     return {"total": len(articles), "team": dict(teams),
-            "outlets": outlets, "tiers": tiers, "stage": stage_counts}
+            "outlets": outlets, "tiers": tiers, "stage": stage_counts,
+            "other": other_count}
 
 def _env() -> Environment:
     env = Environment(
@@ -134,7 +138,7 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
     # facets=None이면 빈 구조로 폴백 (하위 호환 유지)
     if facets is None:
         facets = {"team": {}, "outlets": [], "tiers": {t: 0 for t in range(5)},
-                  "total": 0, "stage": {}}
+                  "total": 0, "stage": {}, "other": 0}
     return _env().get_template("detail.html.j2").render(
         a=article, neighbors=neighbors, active=None, root="../", facets=facets)
 

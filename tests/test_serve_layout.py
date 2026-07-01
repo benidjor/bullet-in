@@ -64,3 +64,14 @@ def test_facet_counts_includes_stage_excluding_other():
     assert "other" not in f["stage"]      # other는 집계 제외
     assert set(f["stage"]) == {"official", "medical", "personal_terms",
                                "negotiating", "interest", "rumour"}
+
+def test_facet_counts_other_bucket_counts_offmission():
+    arts = [
+        {"transfer_stage": "rumour"},
+        {"transfer_stage": "official"},
+        {"transfer_stage": "other"},
+        {},  # 미태깅(None)
+    ]
+    f = facet_counts(arts, {})
+    assert f["other"] == 2            # other + None (= 비-displayable)
+    assert "other" not in f["stage"]  # 기존 계약: stage에는 미포함
