@@ -76,3 +76,10 @@ def test_resolve_x_mentions_fallback_tier_when_unregistered():
     # fallback_tier 없으면 종전대로 None (drop)
     src_no = {"x_afcstuff": {"credibility": "x_mentions"}}
     assert resolve_tier(it, src_no, r) is None
+
+def test_registry_has_afcstuff_cited_handles():
+    r = load_registry(REG)
+    assert r.journalists["@samimokbel_bbc"] == 1.0      # BBC 현행 핸들
+    assert "@gunnerblog" in r.journalists
+    assert "@matt_law_dt" in r.journalists
+    assert "@lattefirm" in r.journalists                 # 팟캐스트 (2순위)
