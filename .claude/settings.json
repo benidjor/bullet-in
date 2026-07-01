@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-doc-format.py\"",
+            "statusMessage": "문서 서식 검사 (§2.2)"
+          }
+        ]
+      }
+    ]
+  }
+}

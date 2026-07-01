@@ -89,6 +89,9 @@ SoT: `docs/conventions/2026-06-11-commit-pr-convention.md`. 핵심:
 - 스펙: `docs/superpowers/specs/`, 계획: `docs/superpowers/plans/`.
 - 트러블슈팅: `docs/troubleshooting/`, 런북: `docs/runbook/`.
 - 산출물 본문은 한국어로 작성.
+- **서식 (필독, 초안부터 적용)**: spec · plan · runbook · troubleshooting 등 모든 생성 문서에 컨벤션 §2.2를 적용한다.
+  `→` · `—`는 줄 시작 (줄 끝 금지), 한 줄 = 한 문장 (마침표로 끊기면 줄 분리), `·` · `+` · 여는 괄호 양옆 띄우기 (코드 · URL · 경로 제외).
+  `docs/` 아래 .md 저장 시 PostToolUse 훅 (`.claude/hooks/check-doc-format.py`)이 이 규칙을 자동 검사한다.
 
 ## 자주 밟는 함정
 - **소스 셀렉터 드리프트**: `config/sources.yaml`의 selector/feed_url은 외부 사이트에 의존해 깨진다.
