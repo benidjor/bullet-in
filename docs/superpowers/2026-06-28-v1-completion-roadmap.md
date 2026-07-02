@@ -1,4 +1,4 @@
-# Bullet-in v1 완성 로드맵 (2026-06-28)
+# Bullet-in v1 완성 로드맵 (2026-06-28, 2026-07-03 갱신)
 
 초기 설계 (`specs/2026-05-27-bullet-in-design.md`) §4 · §8 · §10 · §15를 현재 코드와 대조한 갭 분석을 바탕으로,
 "완성까지 남은 작업"을 우선순위로 정리한 문서.
@@ -14,7 +14,24 @@
 
 ---
 
-## 갭 분석 요약 (2026-06-28)
+## 진행 현황 (2026-07-03 갱신)
+
+현재 위치: **Tier 4 (소스 다양성)의 afcstuff 애그리게이터 트랙** — SP1 (2순위 트윗 수집) ✅ 완료 (PR #24 · #25), SP2 (기자 역추적 → 1순위 원문)가 다음.
+
+| 단계 | 상태 | 대략 |
+|---|---|---|
+| Tier 1 빠른 교정 | 거의 완료 | ~90 % |
+| Tier 2 신규 UX | 거의 완료 | ~85 % |
+| Tier 3 SLO 완성 | 거의 미착수 | ~15 % |
+| Tier 4 소스 다양성 | SP1 ✅ · SP2 · goal 남음 | ~55 % |
+| Tier 5 폴리시 | 부분 | ~40 % |
+
+종합 (v1 완성 기준): 대략 ~65–70 %. 핵심 제품 (수집 → 번역 · 요약 → 서빙 · UI → 영입 단계 → afcstuff 2순위)은 동작하고, 가장 큰 남은 블록은 **Tier 3 (SLO · 운영 완성도)**.
+(% 는 티어 균등 가중 어림.)
+
+---
+
+## 갭 분석 요약 (2026-06-28, 상태 2026-07-03)
 
 ### 이미 구현됨 (작업 불필요)
 - asyncio 병렬 수집, 단일 어댑터 인터페이스, dedup (content_hash + URL 정규화 + MariaDB UNIQUE),
@@ -24,47 +41,44 @@
 ### 미구현 / 부분 (완성까지 남은 갭)
 | 항목 | 상태 | 근거 |
 |---|---|---|
-| 신선도 (SLO-5) · 증분 워터마크 | 미구현 | dbt에 `sources:`/freshness 블록 없음, 워터마크 테이블 없음 (전량 수집 + dedup만) |
-| 수집량 이상 탐지 + 알림 (SLO-6) | 부분 | `volume_anomaly()` 구현 · 테스트됐으나 run.py 미연결, 알림 (Slack/메일/webhook) 전무 |
-| 수집 현황 모니터링 뷰 (§4) | 미구현 | 기사 페이지만 존재, dbt 마트 `tier_distribution` · `slo_rollup` 없음 |
-| 병렬화 시간 단축 ~70% 실측 (SLO-1) | 부분 | `benchmark()`/`speedup_pct()` 코드는 있으나 호출 · 기록 없음, README SLO 공란 |
-| ~~`dup_count` 하드코딩 0 (run.py)~~ | ✅ 완료 | `7ea0959`에서 `to_articles`가 집계·기록 (6/29 실행 `dup_count=31` 확인) |
-| 비활성 소스 — goal (Playwright JS) · x_afcstuff (ITK X) | 비활성 | v1 필수 소스 다양성 (JS 1+ / ITK X 1~2) 미충족 |
+| 신선도 (SLO-5) · 증분 워터마크 | 남음 (미구현) | dbt에 `sources:`/freshness 블록 없음, 워터마크 테이블 없음 (전량 수집 + dedup만) |
+| 수집량 이상 탐지 + 알림 (SLO-6) | 남음 (부분) | `volume_anomaly()` 구현 · 테스트됐으나 run.py 미연결, 알림 (Slack/메일/webhook) 전무 |
+| 수집 현황 모니터링 뷰 (§4) | 남음 (미구현) | 기사 페이지만 존재, dbt 마트 `tier_distribution` · `slo_rollup` 없음 |
+| 병렬화 시간 단축 ~70% 실측 (SLO-1) | 남음 (부분) | `benchmark()`/`speedup_pct()` 코드는 있으나 호출 · 기록 없음, README SLO 공란 |
+| `dup_count` 하드코딩 0 (run.py) | ✅ 완료 | `7ea0959`에서 `to_articles`가 집계 · 기록 (6/29 실행 `dup_count=31` 확인) |
+| 비활성 소스 — goal (Playwright JS) · x_afcstuff (ITK X) | **x_afcstuff ✅ (SP1, PR #24)** · goal 남음 | x_afcstuff는 twikit 폐기 · Playwright로 복구, goal은 셀렉터/동의창 드리프트 미대응 |
 
-### 신규 사용자 요구 (현재 전무)
-- 기사 상세 페이지 (헤드라인 클릭 → 상단 3줄 요약 + 하단 전체 번역 본문 + 출처): 상세 템플릿 · 라우팅 없음.
-- 전체 기사 본문 번역: EN 소스 본문 미수집 · 미번역.
-- 3줄 요약: 현재 1문장 `summary_ko`.
-- 웹 UI 디자인: CSS · JS 없는 단순 HTML.
+### 신규 사용자 요구
+- Tier 2-a/2-b로 **대부분 구현**: 기사 상세 페이지 · 전체 본문 번역 · 3줄 요약 · 웹 UI (#11~#16 · #18 · #19).
+- 잔여: 본문 인라인 이미지 · 타 구단 실데이터 · 소개/일정 페이지.
 
 ---
 
 ## 우선순위 (Tier)
 
 ### Tier 1 — 빠른 교정 · 미션 직결 (작음, 차단 없음)
-1. **arsenal 기존 31건 데이터 정리** — 영입 전용 소스로 재정의 전의 여자팀/잡다 기사가 DB · 서빙 페이지에 남아 노출 중. 정리.
-2. ~~**`dup_count` 버그 수정**~~ — ✅ 완료 (`7ea0959`, `to_articles`가 `dup_count`·`source_counts` 집계·기록). 6/29 실행에 `dup_count=31` 정상 기록 확인.
-3. **이적 키워드 필터** — BBC · football.london이 아스날 일반 뉴스를 전부 수집 → 이적 (transfer · sign · deal · loan 등)만 통과. `HtmlAdapter.title_contains` 패턴 재사용.
-   - 근거 (Tier 2-b 라이브 관찰, 2026-06-30): football.london의 비-기사 네비게이션 · teaser 링크 (예: "Want more transfer stories? Read Thursday's full gossip column") 까지 적재돼, 영입 단계 분류에서 `rumour` 등으로 오분류됨. 수집 단계 필터가 들어오면 이 잡음이 사라짐. 운영 절차 · 관찰: `docs/runbook/2026-06-30-transfer-stage-classification-ops.md`.
+1. **[부분]** **arsenal 기존 데이터 정리** — 영입 전용 재정의 전의 여자팀/잡다 기사 정리. 정리 런북 존재, BBC 정리는 #20에서 실행, arsenal 잔여는 라이브 DB에서 직접 실행 필요.
+2. **[✅ 완료]** **`dup_count` 버그 수정** — `7ea0959`, `to_articles`가 `dup_count` · `source_counts` 집계 · 기록.
+3. **[✅ 완료]** **이적 무관 기사 대응** — 수집 단계 하드 키워드 필터 대신, BBC 수집 드리프트 교정 (#20 · #21) + 비-이적 'other' 서빙 opt-in 토글 (#22, 정책 ⓑ = 서빙에서 숨김 · DB 무삭제 · 가역)로 해결.
 
 ### Tier 2 — 신규 UX 기능 (사용자 핵심 요구, 큰 수직 기능)
-4. **전체 본문 번역 + 3줄 요약 + 기사 상세 페이지 + 웹 UI 개편** — 한 덩어리 기능:
-   - EN 소스 본문 (body) 수집 (어댑터) → 본문 번역 필드 · 3줄 요약 프롬프트 (enrich) → 상세 페이지 · 라우팅 · 디자인 (serve).
-   - 규모 큼 → 착수 시 별도 brainstorming/spec로 데이터 모델 · 서빙 방식 확정.
+4. **[✅ 거의 완료]** **전체 본문 번역 + 3줄 요약 + 기사 상세 페이지 + 웹 UI 개편** — Tier 2-a 백엔드 (#11~#13) + 서빙 · UI (#14~#16) + Tier 2-b 영입 단계 분류 · 필터 (#18 · #19).
+   - 잔여: 본문 인라인 이미지 · 타 구단 실데이터 · 소개/일정 페이지.
 
-### Tier 3 — v1/SLO 완성 (설계 약속 잔여)
-5. **신선도 (dbt freshness) + 증분 워터마크** (SLO-5).
-6. **수집량 이상 탐지 연결 + 알림** (SLO-6) — `volume_anomaly()`를 run.py에 연결, 알림 채널 추가.
-7. **수집 현황 모니터링 뷰 + dbt 마트** (tier_distribution · slo_rollup) (§4).
-8. **병렬화 ~70% 실측 · 기록** (SLO-1) + README SLO 표 채우기.
+### Tier 3 — v1/SLO 완성 (설계 약속 잔여, **가장 큰 남은 블록**)
+5. **[남음]** **신선도 (dbt freshness) + 증분 워터마크** (SLO-5).
+6. **[남음]** **수집량 이상 탐지 연결 + 알림** (SLO-6) — `volume_anomaly()`를 run.py에 연결, 알림 채널 추가.
+7. **[남음]** **수집 현황 모니터링 뷰 + dbt 마트** (tier_distribution · slo_rollup) (§4).
+8. **[남음]** **병렬화 ~70% 실측 · 기록** (SLO-1) + README SLO 표 채우기.
 
 ### Tier 4 — 소스 다양성 복구 (v1 필수)
-9. **x_afcstuff (ITK X) 복구** — ⚠️ 사용자가 버너 X 계정 자격증명 (.env `REPLACE`) 입력 선행 필요.
-10. **goal (Playwright) 복구** — 셀렉터/동의창 드리프트 대응.
+9. **[✅ SP1 / 진행 SP2]** **x_afcstuff (ITK X) 애그리게이터** — twikit 폐기 · Playwright 쿠키주입 어댑터로 afcstuff 인용 트윗을 2순위 수집 (SP1, PR #24 · #25).
+   - 다음 = **SP2**: 기자 타임라인 역추적 → 1순위 언론사 원문. 선행 게이트 = 비-월드컵 구간 라우팅 1/2순위 비율 실측.
+10. **[남음]** **goal (Playwright) 복구** — 셀렉터/동의창 드리프트 대응.
 
 ### Tier 5 — 폴리시
-11. 요약 말투 미세조정 ('합니다체' 잔존).
-12. 캡처 2건 · README · SLO 문서 갱신.
+11. **[남음]** 요약 말투 미세조정 ('합니다체' 잔존).
+12. **[남음]** 캡처 2건 · README · SLO 문서 갱신.
 
 ---
 
@@ -76,5 +90,5 @@
 
 ## 참조
 - 초기 설계: `docs/superpowers/specs/2026-05-27-bullet-in-design.md` (§4 · §8 · §10 · §13 · §15)
-- 직전 완료: PR #6 (라이브 e2e 부트스트랩), PR #7 (fmkorea 퍼가기 금지 정책)
+- 직전 완료: PR #24 · #25 (SP1 afcstuff Playwright 리더 · 문서)
 - 상태 스냅샷: 메모리 `bullet-in-status`
