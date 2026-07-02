@@ -26,6 +26,17 @@ els => els.map(a => {
 _CITE_RE = re.compile(r"\[\s*@([A-Za-z0-9_]{1,15})\s*\]")
 
 
+def _accumulate_tweets(acc: dict[str, dict], batch: list[dict]) -> None:
+    """스크롤 스냅샷(batch)을 status_id 기준으로 acc에 누적. 이미 본 것은 무시, 삽입 순서 보존.
+
+    DOM 가상화로 화면 밖 트윗이 스냅샷에서 사라져도 acc에 남으므로 수율이 단조 증가한다.
+    """
+    for t in batch:
+        sid = t.get("status_id")
+        if sid and sid not in acc:
+            acc[sid] = t
+
+
 def _x_cookies(cookies_path: str) -> list[dict]:
     """x_cookies.json({auth_token, ct0}) → Playwright 쿠키 목록(.x.com · .twitter.com). SP2 재사용."""
     if not os.path.exists(cookies_path):
@@ -60,17 +71,25 @@ class XPlaywrightAdapter:
             await page.goto(f"https://x.com/{self.handle}",
                             wait_until="domcontentloaded")
             await page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
-            seen = 0
-            for _ in range(6):  # max_tweets 채울 때까지 소폭 스크롤
-                raw_tweets = await page.eval_on_selector_all(
+            acc: dict[str, dict] = {}
+            stagnant = 0
+            for _ in range(12):  # max_tweets 채울 때까지 스크롤하며 status_id 누적
+                batch = await page.eval_on_selector_all(
                     'article[data-testid="tweet"]', _TWEET_JS)
-                if len(raw_tweets) >= self.max_tweets or len(raw_tweets) == seen:
+                before = len(acc)
+                _accumulate_tweets(acc, batch)
+                if len(acc) >= self.max_tweets:
                     break
-                seen = len(raw_tweets)
+                if len(acc) == before:  # 새 트윗 없음 → 타임라인 끝 (일시적 빈 스냅샷은 1회 허용)
+                    stagnant += 1
+                    if stagnant >= 2:
+                        break
+                else:
+                    stagnant = 0
                 await page.mouse.wheel(0, 3000)
                 await page.wait_for_timeout(800)
             await browser.close()
-        raw_tweets = raw_tweets[: self.max_tweets]
+        raw_tweets = list(acc.values())[: self.max_tweets]
         return parse_afcstuff_tweets(self.source_id, self.handle, raw_tweets,
                                      datetime.now(timezone.utc))
 

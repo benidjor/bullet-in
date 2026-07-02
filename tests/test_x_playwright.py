@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from bullet_in.adapters.x_playwright import parse_afcstuff_tweets
+from bullet_in.adapters.x_playwright import parse_afcstuff_tweets, _accumulate_tweets
 
 NOW = datetime(2026, 7, 1, 3, 30, tzinfo=timezone.utc)
 
@@ -34,3 +34,22 @@ def test_passes_image_and_created_at():
     it = parse_afcstuff_tweets("x_afcstuff", "afcstuff", rts, NOW)[0]
     assert it.raw_payload["image_url"] == "https://img/x.jpg"
     assert it.raw_payload["created_at"] == "2026-07-01T02:00:00.000Z"
+
+
+def test_accumulate_dedupes_overlapping_snapshots():
+    acc: dict[str, dict] = {}
+    _accumulate_tweets(acc, [_rt(status_id="1"), _rt(status_id="2"), _rt(status_id="3")])
+    _accumulate_tweets(acc, [_rt(status_id="2"), _rt(status_id="3"), _rt(status_id="4")])
+    assert list(acc.keys()) == ["1", "2", "3", "4"]
+
+def test_accumulate_retains_tweets_dropped_by_virtualization():
+    # DOM 가상화: 두 번째 스냅샷에서 1~3이 화면 밖으로 밀려 사라져도 누적 유지돼야 한다.
+    acc: dict[str, dict] = {}
+    _accumulate_tweets(acc, [_rt(status_id="1"), _rt(status_id="2"), _rt(status_id="3")])
+    _accumulate_tweets(acc, [_rt(status_id="4"), _rt(status_id="5"), _rt(status_id="6")])
+    assert list(acc.keys()) == ["1", "2", "3", "4", "5", "6"]
+
+def test_accumulate_skips_missing_status_id():
+    acc: dict[str, dict] = {}
+    _accumulate_tweets(acc, [_rt(status_id=""), _rt(status_id="7")])
+    assert list(acc.keys()) == ["7"]

@@ -43,9 +43,10 @@ PY
 - **쿠키 부재 · 만료**: `_x_cookies`가 `FileNotFoundError`, 로그인 만료는 로드 후 `TimeoutError`.
   `ingest.gather_all`의 소스별 격리로 `errors[x_afcstuff]`에 로깅되고 타 소스는 무영향.
   → 조치: 쿠키 재추출 (위 사전 준비).
-- **DOM 가상화로 인한 저수율**: X 타임라인은 스크롤 시 화면 밖 옛 트윗을 DOM에서 제거한다 (virtualization).
-  `eval_on_selector_all`은 그 순간 렌더된 트윗만 반환하므로 `len(raw_tweets)`가 단조 증가하지 않고 정체할 수 있고, 스크롤 루프의 `len == seen` 조기 종료가 `max_tweets`에 못 미쳐 걸릴 수 있다.
-  → **수율이 기대보다 낮으면 여기부터 의심.** 근본 개선은 스크롤마다 DOM 스냅샷을 다시 읽지 말고 `status_id`로 dedup하며 누적하는 방식 (추후 처리).
+- **DOM 가상화**: X 타임라인은 스크롤 시 화면 밖 옛 트윗을 DOM에서 제거한다 (virtualization).
+  `eval_on_selector_all`은 그 순간 렌더된 트윗만 반환하므로 단일 스냅샷은 8건 안팎에서 정체한다.
+  어댑터는 스크롤마다 `status_id`로 dedup · 누적 (`_accumulate_tweets`)하므로 수율이 단조 증가해 `max_tweets`에 근접한다.
+  → 그래도 수율이 낮으면 아래 셀렉터 드리프트를 의심.
 - **셀렉터 드리프트**: X가 `data-testid` (`tweet` · `tweetText` 등)를 바꾸면 수집 0건.
   → 위 라이브 검증으로 조기 발견하고 셀렉터를 갱신.
 
