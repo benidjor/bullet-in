@@ -20,7 +20,8 @@ def violations(path: str):
     out = []
     infence = False
     try:
-        lines = open(path, encoding="utf-8").read().splitlines()
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().splitlines()
     except OSError:
         return out
     for i, line in enumerate(lines, 1):

@@ -30,7 +30,8 @@ def _x_cookies(cookies_path: str) -> list[dict]:
     """x_cookies.json({auth_token, ct0}) → Playwright 쿠키 목록(.x.com · .twitter.com). SP2 재사용."""
     if not os.path.exists(cookies_path):
         raise FileNotFoundError(f"X 쿠키 파일 없음: {cookies_path}")
-    raw = json.load(open(cookies_path, encoding="utf-8"))
+    with open(cookies_path, encoding="utf-8") as f:
+        raw = json.load(f)
     out = []
     for dom in (".x.com", ".twitter.com"):
         for name in ("auth_token", "ct0"):
