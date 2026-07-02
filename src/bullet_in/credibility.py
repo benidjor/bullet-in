@@ -38,7 +38,10 @@ def resolve_tier(item, sources: dict, registry: "Registry | None") -> float | No
         text = item.raw_payload.get("text", "")
         handles = {("@" + h).lower() for h in _HANDLE_RE.findall(text)}
         tiers = [registry.journalists[k] for k in handles if k in registry.journalists]
-        return min(tiers) if tiers else None
+        if tiers:
+            return min(tiers)
+        fb = src.get("fallback_tier")
+        return float(fb) if fb is not None else None
 
     if mode == "fmkorea":
         if registry is None:

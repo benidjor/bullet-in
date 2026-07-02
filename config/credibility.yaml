@@ -1,6 +1,6 @@
 journalists:
   - {name: David Ornstein,    tier: 1,   aliases: ["@David_Ornstein", "온스테인", "Ornstein"]}
-  - {name: Sami Mokbel,       tier: 1,   aliases: ["@SamiMokbel1_DM", "목벨", "Mokbel"]}
+  - {name: Sami Mokbel,       tier: 1,   aliases: ["@SamiMokbel1_DM", "@SamiMokbel_BBC", "목벨", "Mokbel"]}
   - {name: Fabrizio Romano,   tier: 1.5, aliases: ["@FabrizioRomano", "로마노", "Romano"]}
   - {name: James McNicholas,  tier: 1.5, aliases: ["@_JamesMcNicholas", "맥니콜라스", "McNicholas"]}
   - {name: handofarsnal,      tier: 1.5, aliases: ["@handofarsnal"]}
@@ -11,6 +11,9 @@ journalists:
   - {name: Gary Jacob,        tier: 3,   aliases: ["게리 제이콥", "Jacob"]}
   - {name: Simon Collings,    tier: 3,   aliases: ["사이먼 콜링스", "Collings"]}
   - {name: Gianluca Di Marzio,tier: 3,   aliases: ["디 마르지오", "Di Marzio"]}
+  - {name: gunnerblog,        tier: 2,   aliases: ["@gunnerblog"]}
+  - {name: Matt Law,          tier: 2,   aliases: ["@Matt_Law_DT"]}
+  - {name: LatteFirm,         tier: 3,   aliases: ["@LatteFirm"]}
 outlets:
   - {name: The Athletic,    tier: 1,   aliases: ["디 애슬레틱", "애슬레틱", "The Athletic"]}
   - {name: BBC,             tier: 1,   aliases: ["BBC"]}

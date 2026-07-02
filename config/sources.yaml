@@ -56,10 +56,11 @@ sources:
   - source_id: x_afcstuff
     display_name: afcstuff (aggregator)
     medium: x
-    adapter: x_twikit
+    adapter: x_playwright
     credibility: x_mentions
-    config: { handle: "afcstuff", max_tweets: 20 }
-    enabled: false  # 후속: X 버너 자격증명 필요
+    fallback_tier: 4
+    config: { handle: "afcstuff", max_tweets: 30, cookies_path: "x_cookies.json" }
+    enabled: true
   - source_id: fmkorea
     display_name: fmkorea 축구 소식통
     medium: community
