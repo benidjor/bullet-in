@@ -1,4 +1,5 @@
-from bullet_in.adapters.x_backtrack import extract_entities
+from datetime import datetime, timezone, timedelta
+from bullet_in.adapters.x_backtrack import extract_entities, match_original_tweet
 
 def test_extract_entities_multiword():
     assert "Jeremy Monga" in extract_entities("Man City working to sign Jeremy Monga")
@@ -9,3 +10,26 @@ def test_extract_entities_keeps_accent():
 
 def test_extract_entities_skips_single_word():
     assert extract_entities("Arsenal are active") == []
+
+_AF = datetime(2026, 7, 2, 21, 0, tzinfo=timezone.utc)
+
+def _jt(text, minutes_before):
+    return {"text": text, "created_at": (_AF - timedelta(minutes=minutes_before)).isoformat()}
+
+def test_matcher_picks_highest_overlap_in_window():
+    tweets = [
+        _jt("Man City working to complete signing of Leicester winger Jeremy Monga proposed fee", 13),
+        _jt("Man City pushing hard to sign Jeremy Monga from Leicester", 108),
+    ]
+    af = "Manchester City are working to complete a deal for Jeremy Monga fee region Leicester winger"
+    assert match_original_tweet(af, _AF, tweets, 180, 4) is tweets[0]
+
+def test_matcher_none_below_threshold():
+    tweets = [_jt("Newcastle eye Felix Nmecha midfielder shortlist", 20)]
+    af = "Arsenal monitoring William Saliba fitness back problem"
+    assert match_original_tweet(af, _AF, tweets, 180, 4) is None
+
+def test_matcher_excludes_later_tweets():
+    tweets = [_jt("Arsenal agree Bruno Guimaraes deal Newcastle package worth", -30)]
+    af = "Arsenal agree Bruno Guimaraes deal Newcastle package worth"
+    assert match_original_tweet(af, _AF, tweets, 180, 4) is None
