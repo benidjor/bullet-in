@@ -144,14 +144,17 @@ class XPlaywrightAdapter:
             handles = handles[:cap]
         timelines = {}
         for h in handles:
+            page = None
             try:
                 page = await ctx.new_page()
                 await page.goto(f"https://x.com/{h}", wait_until="domcontentloaded")
                 await page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
                 timelines[h.lower()] = await _scroll_collect(page, _JOURN_JS, depth)
-                await page.close()
             except Exception as e:  # 소스 격리 : 한 핸들 실패는 그 인용만 2순위로 강등
                 log.warning("backtrack 타임라인 실패 handle=%s err=%s", h, e)
+            finally:
+                if page is not None:
+                    await page.close()
         return timelines
 
 

@@ -137,3 +137,9 @@ def test_backtrack_keeps_item_when_matched_tweet_has_no_card():
                                  "created_at": "2026-07-02T19:30:00Z", "card_href": ""}]}
     out = asyncio.run(backtrack_promote([it], timelines, _CFG))
     assert out[0] is it
+
+def test_backtrack_degrades_item_on_unexpected_error():
+    # timeline에 잘못된(None) 항목 → 내부 예외 → 그 인용만 2순위 강등, 크래시 없음
+    it = _cited("@gunnerblog", "Arsenal sign Bruno Guimaraes Newcastle package worth", "2026-07-02T20:00:00Z")
+    out = asyncio.run(backtrack_promote([it], {"gunnerblog": [None]}, _CFG))
+    assert out[0] is it

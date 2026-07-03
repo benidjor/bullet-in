@@ -106,26 +106,30 @@ async def backtrack_promote(items, timelines, cfg):
     async with httpx.AsyncClient(timeout=20, follow_redirects=True,
                                  headers={"User-Agent": "Mozilla/5.0 bullet-in/0.1"}) as c:
         for it in items:
-            handle = (it.raw_payload.get("journalist") or "").lstrip("@").lower()
-            tl = timelines.get(handle)
-            if not tl:
-                out.append(it); continue
-            af_dt = _parse_dt(it.raw_payload.get("created_at"))
-            m = match_original_tweet(it.raw_payload.get("text", ""), af_dt, tl, wmin, omin)
-            card = (m or {}).get("card_href")
-            if not m or not card:
-                if m:
-                    log.info("backtrack near-miss (카드 없음) handle=%s", handle)
-                out.append(it); continue
-            final_url, body, title, image = await resolve_and_fetch(c, card)
-            if final_url is None or not body:
-                out.append(it); continue
-            if is_paywalled(final_url):
-                log.info("backtrack 페이월 (Athletic) url=%s", final_url)
-                out.append(it); continue
-            outlet = outlet_for_domain(final_url, domains)
-            if outlet is None:
-                log.info("backtrack 미등록 도메인 url=%s", final_url)
-                out.append(it); continue
-            out.append(promote_cited_item(it, final_url, outlet, title, body, image))
+            try:
+                handle = (it.raw_payload.get("journalist") or "").lstrip("@").lower()
+                tl = timelines.get(handle)
+                if not tl:
+                    out.append(it); continue
+                af_dt = _parse_dt(it.raw_payload.get("created_at"))
+                m = match_original_tweet(it.raw_payload.get("text", ""), af_dt, tl, wmin, omin)
+                card = (m or {}).get("card_href")
+                if not m or not card:
+                    if m:
+                        log.info("backtrack near-miss (카드 없음) handle=%s", handle)
+                    out.append(it); continue
+                final_url, body, title, image = await resolve_and_fetch(c, card)
+                if final_url is None or not body:
+                    out.append(it); continue
+                if is_paywalled(final_url):
+                    log.info("backtrack 페이월 (Athletic) url=%s", final_url)
+                    out.append(it); continue
+                outlet = outlet_for_domain(final_url, domains)
+                if outlet is None:
+                    log.info("backtrack 미등록 도메인 url=%s", final_url)
+                    out.append(it); continue
+                out.append(promote_cited_item(it, final_url, outlet, title, body, image))
+            except Exception as e:
+                log.warning("backtrack 항목 처리 실패 (2순위 강등) err=%s", e)
+                out.append(it)
     return out
