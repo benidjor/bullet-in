@@ -30,8 +30,5 @@ def test_extract_og_title_prefers_og():
 def test_extract_og_title_fallback_title_tag():
     assert extract_og_title("<title>Fallback</title>") == "Fallback"
 
-def test_extract_og_title_nested_title_tag():
-    assert extract_og_title("<title>Foo <b>Bar</b></title>") == "Foo Bar"
-
 def test_extract_og_title_none():
     assert extract_og_title("<p>no title</p>") is None

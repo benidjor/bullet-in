@@ -1,5 +1,4 @@
 from __future__ import annotations
-import html
 from bs4 import BeautifulSoup
 
 def extract_og_image(html: str) -> str | None:
@@ -10,19 +9,13 @@ def extract_og_image(html: str) -> str | None:
             return tag["content"].strip()
     return None
 
-def extract_og_title(html_str: str) -> str | None:
-    soup = BeautifulSoup(html_str, "html.parser")
+def extract_og_title(html: str) -> str | None:
+    soup = BeautifulSoup(html, "html.parser")
     tag = soup.find("meta", attrs={"property": "og:title"})
     if tag and tag.get("content"):
         return tag["content"].strip()
-    if soup.title:
-        text = soup.title.get_text(" ", strip=True)
-        text = html.unescape(text)
-        # Handle malformed HTML where tags appear as text (e.g., "Foo <b>Bar</b>")
-        inner_soup = BeautifulSoup(text, "html.parser")
-        text = inner_soup.get_text(" ", strip=True)
-        if text:
-            return text
+    if soup.title and soup.title.string:
+        return soup.title.string.strip()
     return None
 
 def extract_article_body(html: str, max_chars: int = 8000) -> str:
