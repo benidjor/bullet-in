@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 import re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -6,6 +7,8 @@ import yaml
 import httpx
 from bullet_in.adapters.meta import extract_article_body, extract_og_title, extract_og_image
 from bullet_in.models import RawItem
+
+log = logging.getLogger(__name__)
 
 _NAME_RE = re.compile(r"[A-Z][A-Za-zÀ-ÿ''.\-]*(?:\s+[A-Z][A-Za-zÀ-ÿ''.\-]*)+")
 
@@ -93,3 +96,36 @@ async def resolve_and_fetch(client: httpx.AsyncClient, url: str) -> tuple[str | 
     except httpx.HTTPError:
         return None, "", None, None
     return str(r.url), extract_article_body(r.text), extract_og_title(r.text), extract_og_image(r.text)
+
+async def backtrack_promote(items, timelines, cfg):
+    """인용 항목별 매칭 · 해석 · fetch · 승격. 실패는 2순위 유지 + 로깅."""
+    params = cfg.get("params", {})
+    domains = cfg.get("domains", {})
+    wmin, omin = params.get("window_min", 180), params.get("overlap_min", 4)
+    out = []
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True,
+                                 headers={"User-Agent": "Mozilla/5.0 bullet-in/0.1"}) as c:
+        for it in items:
+            handle = (it.raw_payload.get("journalist") or "").lstrip("@").lower()
+            tl = timelines.get(handle)
+            if not tl:
+                out.append(it); continue
+            af_dt = _parse_dt(it.raw_payload.get("created_at"))
+            m = match_original_tweet(it.raw_payload.get("text", ""), af_dt, tl, wmin, omin)
+            card = (m or {}).get("card_href")
+            if not m or not card:
+                if m:
+                    log.info("backtrack near-miss (카드 없음) handle=%s", handle)
+                out.append(it); continue
+            final_url, body, title, image = await resolve_and_fetch(c, card)
+            if final_url is None or not body:
+                out.append(it); continue
+            if is_paywalled(final_url):
+                log.info("backtrack 페이월 (Athletic) url=%s", final_url)
+                out.append(it); continue
+            outlet = outlet_for_domain(final_url, domains)
+            if outlet is None:
+                log.info("backtrack 미등록 도메인 url=%s", final_url)
+                out.append(it); continue
+            out.append(promote_cited_item(it, final_url, outlet, title, body, image))
+    return out

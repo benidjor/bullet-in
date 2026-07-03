@@ -2,7 +2,7 @@ import asyncio
 import httpx
 from datetime import datetime, timezone, timedelta
 from bullet_in.models import RawItem
-from bullet_in.adapters.x_backtrack import extract_entities, match_original_tweet, outlet_for_domain, is_paywalled, load_backtrack_config, resolve_and_fetch, promote_cited_item
+from bullet_in.adapters.x_backtrack import extract_entities, match_original_tweet, outlet_for_domain, is_paywalled, load_backtrack_config, resolve_and_fetch, promote_cited_item, backtrack_promote
 
 def test_extract_entities_multiword():
     assert "Jeremy Monga" in extract_entities("Man City working to sign Jeremy Monga")
@@ -116,3 +116,24 @@ def test_promote_title_falls_back_to_tweet_text():
                  raw_payload={"text": "Tweet headline", "journalist": "@x"})
     p = promote_cited_item(it, "https://bbc.co.uk/a", "BBC", None, "B", None)
     assert p.raw_payload["title"] == "Tweet headline"
+
+def _cited(handle, text, created):
+    return RawItem(source_id="x_afcstuff", source_type="x",
+                   url="https://x.com/afcstuff/status/9", fetched_at=datetime(2026,7,3,tzinfo=timezone.utc),
+                   raw_payload={"text": text, "journalist": handle, "created_at": created})
+
+_CFG = {"params": {"window_min": 180, "overlap_min": 4}, "domains": {"bbc.co.uk": "BBC"}}
+
+def test_backtrack_keeps_item_when_no_timeline():
+    # 기자 타임라인 없음 → 2순위 그대로
+    it = _cited("@gunnerblog", "Arsenal sign X", "2026-07-02T20:00:00Z")
+    out = asyncio.run(backtrack_promote([it], {}, _CFG))
+    assert out[0] is it
+
+def test_backtrack_keeps_item_when_matched_tweet_has_no_card():
+    # 정책 Y : 매칭돼도 카드 없으면 승격 안 함
+    it = _cited("@gunnerblog", "Arsenal sign Bruno Guimaraes Newcastle package worth", "2026-07-02T20:00:00Z")
+    timelines = {"gunnerblog": [{"text": "Arsenal sign Bruno Guimaraes Newcastle package worth",
+                                 "created_at": "2026-07-02T19:30:00Z", "card_href": ""}]}
+    out = asyncio.run(backtrack_promote([it], timelines, _CFG))
+    assert out[0] is it
