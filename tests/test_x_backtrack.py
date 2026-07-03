@@ -83,3 +83,12 @@ def test_resolve_and_fetch_follows_redirect():
     assert url == "https://www.bbc.co.uk/sport/article"
     assert "Body text" in body
     assert title == "Head"
+
+def test_resolve_and_fetch_returns_empty_on_http_error():
+    def handler(request):
+        return httpx.Response(500)
+    async def run():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport, follow_redirects=True) as c:
+            return await resolve_and_fetch(c, "https://t.co/bad")
+    assert asyncio.run(run()) == (None, "", None, None)
