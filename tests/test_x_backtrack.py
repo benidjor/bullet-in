@@ -1,7 +1,8 @@
 import asyncio
 import httpx
 from datetime import datetime, timezone, timedelta
-from bullet_in.adapters.x_backtrack import extract_entities, match_original_tweet, outlet_for_domain, is_paywalled, load_backtrack_config, resolve_and_fetch
+from bullet_in.models import RawItem
+from bullet_in.adapters.x_backtrack import extract_entities, match_original_tweet, outlet_for_domain, is_paywalled, load_backtrack_config, resolve_and_fetch, promote_cited_item
 
 def test_extract_entities_multiword():
     assert "Jeremy Monga" in extract_entities("Man City working to sign Jeremy Monga")
@@ -92,3 +93,26 @@ def test_resolve_and_fetch_returns_empty_on_http_error():
         async with httpx.AsyncClient(transport=transport, follow_redirects=True) as c:
             return await resolve_and_fetch(c, "https://t.co/bad")
     assert asyncio.run(run()) == (None, "", None, None)
+
+def test_promote_builds_html_item():
+    it = RawItem(source_id="x_afcstuff", source_type="x",
+                 url="https://x.com/afcstuff/status/1",
+                 fetched_at=datetime(2026, 7, 3, tzinfo=timezone.utc),
+                 raw_payload={"text": "Arsenal sign X [ @gunnerblog ]",
+                              "journalist": "@gunnerblog",
+                              "created_at": "2026-07-02T20:00:00Z"})
+    p = promote_cited_item(it, "https://arseblog.com/a", "arseblog", "Arsenal sign X", "Body.", "https://img")
+    assert p.url == "https://arseblog.com/a"
+    assert p.source_type == "html"
+    assert p.raw_payload["outlet"] == "arseblog"
+    assert p.raw_payload["lang"] == "en"
+    assert p.raw_payload["journalist"] == "@gunnerblog"
+    assert p.raw_payload["title"] == "Arsenal sign X"
+    assert p.raw_payload["body"] == "Body."
+
+def test_promote_title_falls_back_to_tweet_text():
+    it = RawItem(source_id="x_afcstuff", source_type="x", url="https://x.com/a/status/1",
+                 fetched_at=datetime(2026, 7, 3, tzinfo=timezone.utc),
+                 raw_payload={"text": "Tweet headline", "journalist": "@x"})
+    p = promote_cited_item(it, "https://bbc.co.uk/a", "BBC", None, "B", None)
+    assert p.raw_payload["title"] == "Tweet headline"

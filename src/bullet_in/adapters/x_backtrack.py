@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 import yaml
 import httpx
 from bullet_in.adapters.meta import extract_article_body, extract_og_title, extract_og_image
+from bullet_in.models import RawItem
 
 _NAME_RE = re.compile(r"[A-Z][A-Za-zÀ-ÿ''.\-]*(?:\s+[A-Z][A-Za-zÀ-ÿ''.\-]*)+")
 
@@ -70,6 +71,19 @@ def is_paywalled(url: str) -> bool:
     if host == "theathletic.com" or host.endswith(".theathletic.com"):
         return True
     return host.endswith("nytimes.com") and (path == "/athletic" or path.startswith("/athletic/"))
+
+def promote_cited_item(item: RawItem, article_url: str, outlet: str, title: str | None, body: str, image: str | None) -> RawItem:
+    """인용 RawItem을 무료 기사로 제자리 승격. raw_payload를 fmkorea 무료 경로와 동형으로."""
+    return RawItem(
+        source_id=item.source_id, source_type="html", url=article_url,
+        fetched_at=item.fetched_at,
+        raw_payload={
+            "title": title or item.raw_payload.get("text", ""),
+            "body": body, "lang": "en", "outlet": outlet,
+            "journalist": item.raw_payload.get("journalist"),
+            "image_url": image,
+            "created_at": item.raw_payload.get("created_at"),
+        })
 
 async def resolve_and_fetch(client: httpx.AsyncClient, url: str) -> tuple[str | None, str, str | None, str | None]:
     """t.co (또는 실 URL) → 최종 URL · 본문 · 제목 · 이미지. 실패 시 (None, '', None, None)."""
