@@ -15,6 +15,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 #
 # 본문: '무엇'이 아니라 '왜' 중심, 72자 wrap, 5~15줄
 #   - 도입 문장(맥락·왜)을 먼저, 세부·변경 항목은 명사형 불릿으로
+#   - 불릿은 '**핵심어** — 설명' 라벨 형식 · '단어+임' 명사형은 임 떼고 끝냄(예: 컨슈머임→컨슈머)
 #
 # Refs: plan/spec/task/PR/runbook 링크
 # 트레일러: 모델 버전 반영(4.8 등). co-author 이메일은 noreply@anthropic.com
