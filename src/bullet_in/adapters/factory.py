@@ -33,10 +33,11 @@ def build_adapters(cfg: dict) -> list:
                                           c.get("backtrack_config")))
         elif kind == "fmkorea":
             out.append(FmkoreaAdapter(
-                sid, c["list_url"], c["item_selector"], c["keywords"],
-                base_url=c.get("base_url"),
+                sid, c["search_url"], c["search_keywords"],
+                item_selector=c.get("item_selector", "a.hx"),
+                base_url=c.get("base_url", "https://www.fmkorea.com"),
                 body_selector=c.get("body_selector", ".xe_content"),
-                max_posts=c.get("max_posts", 10)))
+                max_posts=c.get("max_posts", 15)))
         else:
             raise ValueError(f"unknown adapter: {kind}")
     return out
