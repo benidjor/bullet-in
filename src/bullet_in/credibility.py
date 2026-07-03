@@ -40,6 +40,9 @@ def resolve_tier(item, sources: dict, registry: "Registry | None") -> float | No
         tiers = [registry.journalists[k] for k in handles if k in registry.journalists]
         if tiers:
             return min(tiers)
+        outlet = (item.raw_payload.get("outlet") or "").lower()
+        if outlet and outlet in registry.outlets:   # 승격 항목 : 아웃렛 폴백
+            return registry.outlets[outlet]
         fb = src.get("fallback_tier")
         return float(fb) if fb is not None else None
 

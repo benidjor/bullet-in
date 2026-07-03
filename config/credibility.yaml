@@ -32,3 +32,4 @@ outlets:
   - {name: football.london, tier: 4,   aliases: ["풋볼런던", "football.london"]}
   - {name: 90min,           tier: 4,   aliases: ["90min"]}
   - {name: HITC,            tier: 4,   aliases: ["HITC"]}
+  - {name: arseblog,        tier: 2,   aliases: ["arseblog"]}

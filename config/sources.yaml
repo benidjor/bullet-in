@@ -59,7 +59,7 @@ sources:
     adapter: x_playwright
     credibility: x_mentions
     fallback_tier: 4
-    config: { handle: "afcstuff", max_tweets: 30, cookies_path: "x_cookies.json" }
+    config: { handle: "afcstuff", max_tweets: 30, cookies_path: "x_cookies.json", backtrack_config: "config/backtrack.yaml" }
     enabled: true
   - source_id: fmkorea
     display_name: fmkorea 축구 소식통

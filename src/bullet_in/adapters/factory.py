@@ -29,7 +29,8 @@ def build_adapters(cfg: dict) -> list:
         elif kind == "x_playwright":
             out.append(XPlaywrightAdapter(sid, c["handle"],
                                           c.get("max_tweets", 20),
-                                          c.get("cookies_path", "x_cookies.json")))
+                                          c.get("cookies_path", "x_cookies.json"),
+                                          c.get("backtrack_config")))
         elif kind == "fmkorea":
             out.append(FmkoreaAdapter(
                 sid, c["list_url"], c["item_selector"], c["keywords"],

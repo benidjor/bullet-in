@@ -9,6 +9,15 @@ def extract_og_image(html: str) -> str | None:
             return tag["content"].strip()
     return None
 
+def extract_og_title(html: str) -> str | None:
+    soup = BeautifulSoup(html, "html.parser")
+    tag = soup.find("meta", attrs={"property": "og:title"})
+    if tag and tag.get("content"):
+        return tag["content"].strip()
+    if soup.title and soup.title.string:
+        return soup.title.string.strip()
+    return None
+
 def extract_article_body(html: str, max_chars: int = 8000) -> str:
     """임의 도메인 기사 본문을 휴리스틱으로 추출: <article>/<main>/<body> 안의
     <p> 텍스트를 이어붙인다. 알 수 없는 도메인용 폴백 (등록 소스는 body_selector 사용)."""

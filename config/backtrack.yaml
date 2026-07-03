@@ -1,0 +1,25 @@
+params:
+  window_min: 180        # afcstuff가 기자 원본을 인용하기까지 시간창 (분)
+  overlap_min: 4         # 매칭 최소 토큰 겹침
+  timeline_depth: 25     # 기자당 스크레이프 트윗 수
+  max_journalists: 15    # 실행당 기자 스크레이프 상한
+skip_handles:            # 기사 없는 트윗-only 핸들 (역추적 제외)
+  - LatteFirm
+domains:                 # 무료 아웃렛 도메인 → 아웃렛명 (credibility.yaml outlet과 일치)
+  bbc.co.uk: BBC
+  standard.co.uk: Evening Standard
+  thesun.co.uk: The Sun
+  dailymail.co.uk: Daily Mail
+  telegraph.co.uk: The Telegraph
+  thetimes.co.uk: The Times
+  theguardian.com: The Guardian
+  skysports.com: Sky Sports
+  football.london: football.london
+  90min.com: 90min
+  hitc.com: HITC
+  espn.com: ESPN
+  espn.co.uk: ESPN
+  goal.com: Goal
+  arseblog.com: arseblog
+  mirror.co.uk: Mirror
+  express.co.uk: Express
