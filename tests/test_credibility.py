@@ -62,6 +62,13 @@ def test_resolve_fmkorea_fallback_tier_four():
     it = _item("fmkorea", {"title": "[무명 블로그] 카더라", "body": "출처 불명"})
     assert resolve_tier(it, sources, r) == 4.0
 
+def test_resolve_fmkorea_de_roche_journalist_tier():
+    r = load_registry(REG)
+    sources = {"fmkorea": {"credibility": "fmkorea"}}
+    it = _item("fmkorea", {"title": "[디 애슬레틱] 아스날 공격진 분석",
+                           "body": "By 드 로셰. 아스날의 하베르츠 복귀."})
+    assert resolve_tier(it, sources, r) == 1.5
+
 def test_resolve_x_mentions_no_registry_drops():
     sources = {"x_afcstuff": {"credibility": "x_mentions"}}
     it = _item("x_afcstuff", {"text": "Per @David_Ornstein, deal close"})
