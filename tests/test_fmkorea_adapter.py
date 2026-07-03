@@ -1,5 +1,5 @@
 import asyncio, respx, httpx
-from bullet_in.adapters.fmkorea import FmkoreaAdapter, parse_bracket
+from bullet_in.adapters.fmkorea import FmkoreaAdapter, parse_bracket, _post_url_from_href
 
 LIST = '''
 <a class="title" href="/1">[디 애슬레틱] 아스날 사카 재계약 임박</a>
@@ -171,3 +171,16 @@ def test_parse_bracket_athletic_rae_variant():
 
 def test_parse_bracket_athletic_english_literal():
     assert parse_bracket("[The Athletic] 아스날 재계약")[0] == "The Athletic"
+
+def test_post_url_from_document_srl_query():
+    href = "/index.php?mid=football_news&document_srl=10035196191&search_keyword=x&page=1"
+    assert _post_url_from_href(href, "https://www.fmkorea.com") == \
+        "https://www.fmkorea.com/10035196191"
+
+def test_post_url_from_clean_path():
+    assert _post_url_from_href("/10035196191", "https://www.fmkorea.com") == \
+        "https://www.fmkorea.com/10035196191"
+
+def test_post_url_none_when_no_srl():
+    assert _post_url_from_href("/index.php?mid=football_news&act=dispBoard",
+                               "https://www.fmkorea.com") is None

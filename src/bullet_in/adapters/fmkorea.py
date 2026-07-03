@@ -22,6 +22,13 @@ def _body_text(html: str, selector: str) -> str:
 
 _URL_RE = re.compile(r"https?://[^\s\"'<>)]+")
 
+_SRL_RE = re.compile(r"document_srl=(\d+)")
+
+def _post_url_from_href(href: str, base_url: str) -> str | None:
+    """검색결과 앵커 href → 정규 글 URL. document_srl 우선 · /NNNNN 폴백 · 없으면 None."""
+    m = _SRL_RE.search(href or "") or re.match(r"/(\d{6,})", href or "")
+    return f"{base_url.rstrip('/')}/{m.group(1)}" if m else None
+
 PAYWALLED_OUTLETS = {"The Athletic"}
 
 OUTLET_MAP = {
