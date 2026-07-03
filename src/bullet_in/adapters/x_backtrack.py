@@ -3,6 +3,8 @@ import re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 import yaml
+import httpx
+from bullet_in.adapters.meta import extract_article_body, extract_og_title, extract_og_image
 
 _NAME_RE = re.compile(r"[A-Z][A-Za-zÀ-ÿ''.\-]*(?:\s+[A-Z][A-Za-zÀ-ÿ''.\-]*)+")
 
@@ -68,3 +70,12 @@ def is_paywalled(url: str) -> bool:
     if host == "theathletic.com" or host.endswith(".theathletic.com"):
         return True
     return host.endswith("nytimes.com") and (path == "/athletic" or path.startswith("/athletic/"))
+
+async def resolve_and_fetch(client: httpx.AsyncClient, url: str) -> tuple[str | None, str, str | None, str | None]:
+    """t.co (또는 실 URL) → 최종 URL · 본문 · 제목 · 이미지. 실패 시 (None, '', None, None)."""
+    try:
+        r = await client.get(url, follow_redirects=True)
+        r.raise_for_status()
+    except httpx.HTTPError:
+        return None, "", None, None
+    return str(r.url), extract_article_body(r.text), extract_og_title(r.text), extract_og_image(r.text)

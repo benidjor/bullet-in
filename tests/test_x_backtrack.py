@@ -1,5 +1,7 @@
+import asyncio
+import httpx
 from datetime import datetime, timezone, timedelta
-from bullet_in.adapters.x_backtrack import extract_entities, match_original_tweet, outlet_for_domain, is_paywalled, load_backtrack_config
+from bullet_in.adapters.x_backtrack import extract_entities, match_original_tweet, outlet_for_domain, is_paywalled, load_backtrack_config, resolve_and_fetch
 
 def test_extract_entities_multiword():
     assert "Jeremy Monga" in extract_entities("Man City working to sign Jeremy Monga")
@@ -66,3 +68,18 @@ def test_load_backtrack_config():
     cfg = load_backtrack_config("config/backtrack.yaml")
     assert cfg["domains"]["bbc.co.uk"] == "BBC"
     assert cfg["params"]["overlap_min"] == 4
+
+def test_resolve_and_fetch_follows_redirect():
+    def handler(request):
+        if request.url.host == "t.co":
+            return httpx.Response(301, headers={"location": "https://www.bbc.co.uk/sport/article"})
+        return httpx.Response(200, headers={"content-type": "text/html"},
+                              html='<meta property="og:title" content="Head"><article><p>Body text here.</p></article>')
+    async def run():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport, follow_redirects=True) as c:
+            return await resolve_and_fetch(c, "https://t.co/abc")
+    url, body, title, _img = asyncio.run(run())
+    assert url == "https://www.bbc.co.uk/sport/article"
+    assert "Body text" in body
+    assert title == "Head"

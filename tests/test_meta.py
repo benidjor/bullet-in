@@ -1,4 +1,4 @@
-from bullet_in.adapters.meta import extract_og_image, extract_article_body
+from bullet_in.adapters.meta import extract_og_image, extract_article_body, extract_og_title
 
 def test_extract_og_image_prefers_og():
     html = ('<meta property="og:image" content="https://img.test/a.jpg">'
@@ -22,3 +22,13 @@ def test_extract_article_body_joins_paragraphs_in_article():
 def test_extract_article_body_truncates():
     html = "<article>" + "<p>" + ("가" * 50) + "</p>" * 1 + "</article>"
     assert len(extract_article_body(html, max_chars=10)) == 10
+
+def test_extract_og_title_prefers_og():
+    html = '<meta property="og:title" content="Arsenal sign X"><title>ignored</title>'
+    assert extract_og_title(html) == "Arsenal sign X"
+
+def test_extract_og_title_fallback_title_tag():
+    assert extract_og_title("<title>Fallback</title>") == "Fallback"
+
+def test_extract_og_title_none():
+    assert extract_og_title("<p>no title</p>") is None
