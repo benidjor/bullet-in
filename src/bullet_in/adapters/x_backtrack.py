@@ -82,6 +82,7 @@ def promote_cited_item(item: RawItem, article_url: str, outlet: str, title: str 
         fetched_at=item.fetched_at,
         raw_payload={
             "title": title or item.raw_payload.get("text", ""),
+            "text": item.raw_payload.get("text", ""),
             "body": body, "lang": "en", "outlet": outlet,
             "journalist": item.raw_payload.get("journalist"),
             "image_url": image,

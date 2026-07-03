@@ -143,3 +143,15 @@ def test_backtrack_degrades_item_on_unexpected_error():
     it = _cited("@gunnerblog", "Arsenal sign Bruno Guimaraes Newcastle package worth", "2026-07-02T20:00:00Z")
     out = asyncio.run(backtrack_promote([it], {"gunnerblog": [None]}, _CFG))
     assert out[0] is it
+
+def test_promoted_item_resolves_journalist_tier():
+    from bullet_in.credibility import resolve_tier, Registry
+    reg = Registry(journalists={"@sr_collings": 3.0}, outlets={"the sun": 4.0})
+    sources = {"x_afcstuff": {"credibility": "x_mentions", "fallback_tier": 4}}
+    it = RawItem(source_id="x_afcstuff", source_type="x", url="https://x.com/afcstuff/status/1",
+                 fetched_at=datetime(2026, 7, 3, tzinfo=timezone.utc),
+                 raw_payload={"text": "Arsenal target [ @sr_collings ]",
+                              "journalist": "@sr_collings", "created_at": "2026-07-02T20:00:00Z"})
+    p = promote_cited_item(it, "https://thesun.co.uk/a", "The Sun", "T", "B", None)
+    # 승격 후에도 기자 먼저: Collings(3) < The Sun 아웃렛(4)
+    assert resolve_tier(p, sources, reg) == 3.0
