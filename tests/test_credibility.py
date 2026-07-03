@@ -83,3 +83,29 @@ def test_registry_has_afcstuff_cited_handles():
     assert "@gunnerblog" in r.journalists
     assert "@matt_law_dt" in r.journalists
     assert "@lattefirm" in r.journalists                 # 팟캐스트 (2순위)
+
+# Task 5: x_mentions 아웃렛 폴백 테스트
+
+def _reg():
+    from bullet_in.credibility import Registry
+    return Registry(journalists={"@samimokbel_bbc": 1.0}, outlets={"bbc": 1.0, "the sun": 4.0})
+
+_SOURCES = {"x_afcstuff": {"credibility": "x_mentions", "fallback_tier": 4}}
+
+class _Item:
+    def __init__(self, payload):
+        self.source_id = "x_afcstuff"
+        self.raw_payload = payload
+
+def test_tier_journalist_first():
+    it = _Item({"text": "[ @SamiMokbel_BBC ] news", "outlet": "BBC"})
+    assert resolve_tier(it, _SOURCES, _reg()) == 1.0
+
+def test_tier_outlet_fallback_for_unregistered_journalist():
+    # 미등록 기자 + known 아웃렛(BBC=1) → 아웃렛 tier(1), fallback(4) 아님
+    it = _Item({"text": "[ @UnknownGuy ] news", "outlet": "BBC"})
+    assert resolve_tier(it, _SOURCES, _reg()) == 1.0
+
+def test_tier_fallback_when_neither():
+    it = _Item({"text": "[ @UnknownGuy ] news"})
+    assert resolve_tier(it, _SOURCES, _reg()) == 4.0
