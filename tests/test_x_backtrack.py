@@ -1,5 +1,5 @@
 from datetime import datetime, timezone, timedelta
-from bullet_in.adapters.x_backtrack import extract_entities, match_original_tweet
+from bullet_in.adapters.x_backtrack import extract_entities, match_original_tweet, outlet_for_domain, is_paywalled, load_backtrack_config
 
 def test_extract_entities_multiword():
     assert "Jeremy Monga" in extract_entities("Man City working to sign Jeremy Monga")
@@ -40,3 +40,22 @@ def test_matcher_handles_naive_created_at():
                "created_at": "2026-07-02T20:30:00"}]
     af = "Arsenal sign Bruno Guimaraes Newcastle package worth"
     assert match_original_tweet(af, _AF, tweets, 180, 4) is tweets[0]
+
+_DOMAINS = {"bbc.co.uk": "BBC", "thesun.co.uk": "The Sun"}
+
+def test_outlet_for_domain_exact_and_subdomain():
+    assert outlet_for_domain("https://www.bbc.co.uk/sport/x", _DOMAINS) == "BBC"
+    assert outlet_for_domain("https://thesun.co.uk/a", _DOMAINS) == "The Sun"
+
+def test_outlet_for_domain_unknown():
+    assert outlet_for_domain("https://example.com/a", _DOMAINS) is None
+
+def test_is_paywalled_athletic():
+    assert is_paywalled("https://www.nytimes.com/athletic/123/") is True
+    assert is_paywalled("https://theathletic.com/123/") is True
+    assert is_paywalled("https://www.bbc.co.uk/x") is False
+
+def test_load_backtrack_config():
+    cfg = load_backtrack_config("config/backtrack.yaml")
+    assert cfg["domains"]["bbc.co.uk"] == "BBC"
+    assert cfg["params"]["overlap_min"] == 4

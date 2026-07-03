@@ -1,6 +1,8 @@
 from __future__ import annotations
 import re
 from datetime import datetime, timezone
+from urllib.parse import urlparse
+import yaml
 
 _NAME_RE = re.compile(r"[A-Z][A-Za-zÀ-ÿ''.\-]*(?:\s+[A-Z][A-Za-zÀ-ÿ''.\-]*)+")
 
@@ -39,3 +41,25 @@ def match_original_tweet(af_text, af_dt, journ_tweets, window_min, overlap_min):
         if score > best_score or (score == best_score and best_dt is not None and jdt > best_dt):
             best, best_score, best_dt = jt, score, jdt
     return best if best_score >= overlap_min else None
+
+def load_backtrack_config(path: str) -> dict:
+    """backtrack.yaml → 딕셔너리. 파일 없으면 빈 딕셔너리."""
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+def _host(url: str) -> str:
+    """URL hostname → www. 제거 후 소문자."""
+    h = (urlparse(url).hostname or "").lower()
+    return h[4:] if h.startswith("www.") else h
+
+def outlet_for_domain(url: str, domains: dict[str, str]) -> str | None:
+    """URL 도메인 → domains 딕셔너리 lookup. subdomain 포함, 없으면 None."""
+    host = _host(url)
+    for dom, name in domains.items():
+        if host == dom or host.endswith("." + dom):
+            return name
+    return None
+
+def is_paywalled(url: str) -> bool:
+    """URL이 유료 아웃렛 (The Athletic · nytimes.com/athletic)이면 True."""
+    return "theathletic.com" in url or "nytimes.com/athletic" in url
