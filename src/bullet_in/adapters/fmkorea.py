@@ -26,6 +26,8 @@ PAYWALLED_OUTLETS = {"The Athletic"}
 
 OUTLET_MAP = {
     "디 애슬레틱": "The Athletic", "디애슬레틱": "The Athletic",
+    "디 애슬래틱": "The Athletic", "디애슬래틱": "The Athletic",  # '래' 변종
+    "The Athletic": "The Athletic",                              # 리터럴 명시
     "골닷컴": "Goal", "르퀴프": "L'Équipe",
 }
 _BRACKET_RE = re.compile(r"^\s*\[([^\]]+)\]")

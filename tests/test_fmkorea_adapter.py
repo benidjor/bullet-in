@@ -164,3 +164,10 @@ def test_fmkorea_skips_when_no_original_url(caplog):
         items = asyncio.run(a.fetch())
     assert items == []
     assert any("원문" in r.message or "skip" in r.message.lower() for r in caplog.records)
+
+def test_parse_bracket_athletic_rae_variant():
+    # '디 애슬래틱'(래) 변종도 The Athletic 으로 정규화
+    assert parse_bracket("[디 애슬래틱] 아스날 0-2 맨시티")[0] == "The Athletic"
+
+def test_parse_bracket_athletic_english_literal():
+    assert parse_bracket("[The Athletic] 아스날 재계약")[0] == "The Athletic"
