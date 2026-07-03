@@ -50,10 +50,17 @@ def test_outlet_for_domain_exact_and_subdomain():
 def test_outlet_for_domain_unknown():
     assert outlet_for_domain("https://example.com/a", _DOMAINS) is None
 
+def test_outlet_for_domain_real_subdomain():
+    assert outlet_for_domain("https://sport.bbc.co.uk/x", _DOMAINS) == "BBC"
+
 def test_is_paywalled_athletic():
     assert is_paywalled("https://www.nytimes.com/athletic/123/") is True
     assert is_paywalled("https://theathletic.com/123/") is True
     assert is_paywalled("https://www.bbc.co.uk/x") is False
+
+def test_is_paywalled_no_false_positive():
+    assert is_paywalled("https://www.nytimes.com/athletics-fanzone/x") is False
+    assert is_paywalled("https://t.co/x?u=theathletic.com") is False
 
 def test_load_backtrack_config():
     cfg = load_backtrack_config("config/backtrack.yaml")

@@ -43,7 +43,7 @@ def match_original_tweet(af_text, af_dt, journ_tweets, window_min, overlap_min):
     return best if best_score >= overlap_min else None
 
 def load_backtrack_config(path: str) -> dict:
-    """backtrack.yaml → 딕셔너리. 파일 없으면 빈 딕셔너리."""
+    """backtrack.yaml → 딕셔너리. 빈 파일이면 빈 딕셔너리."""
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
@@ -62,4 +62,9 @@ def outlet_for_domain(url: str, domains: dict[str, str]) -> str | None:
 
 def is_paywalled(url: str) -> bool:
     """URL이 유료 아웃렛 (The Athletic · nytimes.com/athletic)이면 True."""
-    return "theathletic.com" in url or "nytimes.com/athletic" in url
+    p = urlparse(url)
+    host = (p.hostname or "").lower()
+    path = p.path.lower()
+    if host == "theathletic.com" or host.endswith(".theathletic.com"):
+        return True
+    return host.endswith("nytimes.com") and (path == "/athletic" or path.startswith("/athletic/"))
