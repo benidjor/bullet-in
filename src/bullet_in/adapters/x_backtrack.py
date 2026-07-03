@@ -1,6 +1,6 @@
 from __future__ import annotations
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 _NAME_RE = re.compile(r"[A-Z][A-Za-zÀ-ÿ''.\-]*(?:\s+[A-Z][A-Za-zÀ-ÿ''.\-]*)+")
 
@@ -18,9 +18,12 @@ def _sig_tokens(text: str) -> set[str]:
 
 def _parse_dt(s: str | None) -> datetime | None:
     try:
-        return datetime.fromisoformat((s or "").replace("Z", "+00:00"))
+        dt = datetime.fromisoformat((s or "").replace("Z", "+00:00"))
     except (ValueError, TypeError):
         return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 def match_original_tweet(af_text, af_dt, journ_tweets, window_min, overlap_min):
     """4단계 ①~③ : 기자 트윗 중 afcstuff 원본을 특정. 없으면 None."""

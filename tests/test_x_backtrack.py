@@ -33,3 +33,10 @@ def test_matcher_excludes_later_tweets():
     tweets = [_jt("Arsenal agree Bruno Guimaraes deal Newcastle package worth", -30)]
     af = "Arsenal agree Bruno Guimaraes deal Newcastle package worth"
     assert match_original_tweet(af, _AF, tweets, 180, 4) is None
+
+def test_matcher_handles_naive_created_at():
+    # tz 없는 created_at도 UTC로 간주해 비교 크래시 없이 매칭
+    tweets = [{"text": "Arsenal sign Bruno Guimaraes Newcastle package worth",
+               "created_at": "2026-07-02T20:30:00"}]
+    af = "Arsenal sign Bruno Guimaraes Newcastle package worth"
+    assert match_original_tweet(af, _AF, tweets, 180, 4) is tweets[0]
