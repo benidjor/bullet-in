@@ -22,7 +22,7 @@ def extract_entities(text: str) -> list[str]:
 
 def _sig_tokens(text: str) -> set[str]:
     words = re.findall(r"[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ''\-]+", text or "")
-    return {w for w in words if len(w) > 3 and w.lower() not in _STOP}
+    return {w.lower() for w in words if len(w) > 3 and w.lower() not in _STOP}
 
 def _parse_dt(s: str | None) -> datetime | None:
     try:
@@ -118,6 +118,8 @@ async def backtrack_promote(items, timelines, cfg):
                 if not m or not card:
                     if m:
                         log.info("backtrack near-miss (카드 없음) handle=%s", handle)
+                    else:
+                        log.info("backtrack 매칭 실패 handle=%s", handle)
                     out.append(it); continue
                 final_url, body, title, image = await resolve_and_fetch(c, card)
                 if final_url is None or not body:
