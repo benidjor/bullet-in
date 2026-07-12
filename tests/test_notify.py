@@ -58,3 +58,23 @@ def test_build_anomaly_alert_formats_lines_and_fields():
     assert "▼ fmkorea: 0건 (평소 ~14)" in alert["description"]
     assert "▲ bbc: 30건 (평소 ~9)" in alert["description"]
     assert alert["fields"][0]["value"] == "최근 12회 기준"
+
+
+def test_build_failure_alert_maps_context():
+    from types import SimpleNamespace
+
+    ti = SimpleNamespace(dag_id="bullet_in_daily", task_id="run_pipeline",
+                         try_number=2, hostname="host.local", duration=12.0,
+                         log_url="http://localhost:8080/log")
+    ctx = {"task_instance": ti, "run_id": "manual__2026-07-13",
+           "exception": ValueError("boom")}
+    alert = notify.build_failure_alert(ctx)
+    assert alert["color"] == notify.COLOR_FAILURE
+    assert "run_pipeline" in alert["title"]
+    names = {f["name"]: f["value"] for f in alert["fields"]}
+    assert names["DAG / Task"] == "bullet_in_daily / run_pipeline"
+    assert names["Try"] == "2"
+    assert names["Duration"] == "12s"
+    assert names["Host"] == "host.local"
+    assert "열기" in names["로그"] and "http://localhost:8080/log" in names["로그"]
+    assert "boom" in alert["description"]

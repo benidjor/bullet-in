@@ -34,3 +34,22 @@ def build_anomaly_alert(anomalies, history_count: int) -> dict:
             "color": COLOR_ANOMALY,
             "fields": [{"name": "회차", "value": f"최근 {history_count}회 기준",
                         "inline": True}]}
+
+
+def build_failure_alert(context) -> dict:
+    ti = context["task_instance"]
+    exc = context.get("exception")
+    dur = getattr(ti, "duration", None)
+    fields = [
+        {"name": "DAG / Task", "value": f"{ti.dag_id} / {ti.task_id}", "inline": True},
+        {"name": "Run", "value": str(context.get("run_id", "-")), "inline": True},
+        {"name": "Try", "value": str(ti.try_number), "inline": True},
+        {"name": "Duration",
+         "value": f"{dur:.0f}s" if dur is not None else "-", "inline": True},
+        {"name": "Host", "value": str(getattr(ti, "hostname", "-") or "-"),
+         "inline": True},
+        {"name": "로그", "value": f"[열기]({ti.log_url})", "inline": True},
+    ]
+    return {"title": "❌ 파이프라인 실패 — run_pipeline",
+            "description": f"수집 파이프라인이 예외로 중단되었습니다.\n```\n{str(exc)[:400]}\n```",
+            "color": COLOR_FAILURE, "fields": fields}
