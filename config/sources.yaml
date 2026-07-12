@@ -68,10 +68,13 @@ sources:
     credibility: fmkorea
     lang: ko
     config:
-      list_url: "https://www.fmkorea.com/football_news"
-      item_selector: "a.title"
-      keywords: ["아스날", "Arsenal"]
-      body_selector: ".xe_content"
+      search_url: "https://www.fmkorea.com/search.php?mid=football_news&search_target={target}&search_keyword={keyword}"
+      search_keywords:
+        - {keyword: "아스날", target: "title"}
+        - {keyword: '"de roche"', target: "title_content"}
+        - {keyword: "온스테인", target: "title_content"}
+      item_selector: "a.hx"
       base_url: "https://www.fmkorea.com"
-      max_posts: 10
+      body_selector: ".xe_content"
+      max_posts: 15
     enabled: true  # 퍼가기 금지 정책·429 대응 구현 완료(2026-06-28)

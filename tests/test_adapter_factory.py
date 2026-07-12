@@ -13,12 +13,15 @@ def test_factory_builds_enabled_adapters(monkeypatch):
 def test_factory_builds_fmkorea_adapter():
     cfg = {"sources": [
         {"source_id": "fmkorea", "adapter": "fmkorea", "enabled": True,
-         "config": {"list_url": "https://fm.test/football_news",
-                    "item_selector": "a.title", "keywords": ["아스날", "Arsenal"]}},
+         "config": {"search_url": "https://fm.test/s?t={target}&kw={keyword}",
+                    "search_keywords": [{"keyword": "아스날", "target": "title"},
+                                        {"keyword": "온스테인", "target": "title_content"}],
+                    "item_selector": "a.hx"}},
     ]}
     adapters = build_adapters(cfg)
     assert adapters[0].source_id == "fmkorea"
-    assert adapters[0].keywords == ["아스날", "Arsenal"]
+    assert adapters[0].search_keywords == [{"keyword": "아스날", "target": "title"},
+                                           {"keyword": "온스테인", "target": "title_content"}]
 
 def test_factory_passes_body_selector_to_html():
     from bullet_in.adapters.html import HtmlAdapter

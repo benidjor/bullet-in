@@ -14,6 +14,7 @@ journalists:
   - {name: gunnerblog,        tier: 2,   aliases: ["@gunnerblog"]}
   - {name: Matt Law,          tier: 2,   aliases: ["@Matt_Law_DT"]}
   - {name: LatteFirm,         tier: 3,   aliases: ["@LatteFirm"]}
+  - {name: Art de Roché,     tier: 1.5, aliases: ["드 로셰", "드로셰", "de roche"]}
 outlets:
   - {name: The Athletic,    tier: 1,   aliases: ["디 애슬레틱", "애슬레틱", "The Athletic"]}
   - {name: BBC,             tier: 1,   aliases: ["BBC"]}
