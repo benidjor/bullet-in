@@ -78,3 +78,15 @@ def test_build_failure_alert_maps_context():
     assert names["Host"] == "host.local"
     assert "열기" in names["로그"] and "http://localhost:8080/log" in names["로그"]
     assert "boom" in alert["description"]
+
+
+def test_send_alert_swallows_non_httperror(monkeypatch, caplog):
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.test/webhook")
+
+    def boom(*a, **k):
+        raise ValueError("unexpected")
+
+    monkeypatch.setattr(notify.httpx, "post", boom)
+    with caplog.at_level(logging.WARNING):
+        notify.send_alert("제목", "설명", color=notify.COLOR_FAILURE)
+    assert "제목" in caplog.text

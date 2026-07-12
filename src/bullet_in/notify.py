@@ -21,7 +21,7 @@ def send_alert(title: str, description: str, *, color: int,
         resp = httpx.post(url, json={"embeds": [embed]}, timeout=10)
         if resp.status_code >= 300:
             logger.warning("알림 발송 실패 (status %s): %s", resp.status_code, title)
-    except httpx.HTTPError as e:
+    except Exception as e:
         logger.warning("알림 발송 오류: %s (%s)", title, e)
 
 
