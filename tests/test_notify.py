@@ -1,6 +1,7 @@
 import logging
 import pytest
 from bullet_in import notify
+from bullet_in.quality import Anomaly
 
 
 def test_send_alert_warns_when_webhook_unset(monkeypatch, caplog):
@@ -46,3 +47,14 @@ def test_send_alert_swallows_post_error(monkeypatch, caplog):
     with caplog.at_level(logging.WARNING):
         notify.send_alert("제목", "설명", color=notify.COLOR_FAILURE)
     assert "제목" in caplog.text
+
+
+def test_build_anomaly_alert_formats_lines_and_fields():
+    anomalies = [Anomaly("fmkorea", 0, 14.0, "drop"),
+                 Anomaly("bbc", 30, 9.0, "spike")]
+    alert = notify.build_anomaly_alert(anomalies, history_count=12)
+    assert alert["title"] == "⚠️ 수집량 이상"
+    assert alert["color"] == notify.COLOR_ANOMALY
+    assert "▼ fmkorea: 0건 (평소 ~14)" in alert["description"]
+    assert "▲ bbc: 30건 (평소 ~9)" in alert["description"]
+    assert alert["fields"][0]["value"] == "최근 12회 기준"

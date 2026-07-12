@@ -14,7 +14,8 @@ from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import enrich_rows, classify_stage_rows
 from bullet_in.serve.render import write_site
-from bullet_in.quality import success_rate
+from bullet_in.quality import success_rate, volume_anomalies
+from bullet_in import notify
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 
@@ -64,6 +65,15 @@ async def main(concurrency: int):
             "confidence_score,published_at "
             "FROM articles")).mappings().all()]
     write_site(rows, sources, "site")
+
+    # 수집량 이상탐지 (SLO-6): 지난 12회 source_counts 대비 소스별 드롭 · 스파이크 알림
+    with engine.connect() as c:
+        hist = [json.loads(s) for s in c.execute(text(
+            "SELECT source_counts FROM pipeline_runs "
+            "ORDER BY started_at DESC LIMIT 12")).scalars().all() if s]
+    anomalies = volume_anomalies(stats["source_counts"], hist)
+    if anomalies:
+        notify.send_alert(**notify.build_anomaly_alert(anomalies, len(hist)))
 
     summary = {"new_or_changed": len(arts), "errors": errors,
                "success_rate": success_rate(len(adapters), len(errors)),
