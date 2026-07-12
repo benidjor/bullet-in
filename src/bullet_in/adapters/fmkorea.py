@@ -94,7 +94,7 @@ class FmkoreaAdapter:
                  base_url: str = "https://www.fmkorea.com",
                  body_selector: str = ".xe_content", max_posts: int = 15):
         self.source_id = source_id
-        self.search_url = search_url            # {keyword} 자리표시 포함
+        self.search_url = search_url            # {keyword} · {target} 자리표시 포함
         self.search_keywords = search_keywords
         self.item_selector = item_selector
         self.base_url = base_url
