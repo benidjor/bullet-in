@@ -2,11 +2,15 @@ from __future__ import annotations
 import pendulum
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
+from bullet_in import notify
 
 def _run():
     import asyncio
     from bullet_in.run import main
     asyncio.run(main(concurrency=8))
+
+def _notify_failure(context) -> None:
+    notify.send_alert(**notify.build_failure_alert(context))
 
 with DAG(
     dag_id="bullet_in_daily",
@@ -15,4 +19,5 @@ with DAG(
     catchup=False,
     tags=["bullet-in"],
 ) as dag:
-    PythonOperator(task_id="run_pipeline", python_callable=_run)
+    PythonOperator(task_id="run_pipeline", python_callable=_run,
+                   on_failure_callback=_notify_failure)
