@@ -25,6 +25,18 @@ def _post_url_from_href(href: str, base_url: str) -> str | None:
     m = _SRL_RE.search(href or "") or re.match(r"/(\d{6,})", href or "")
     return f"{base_url.rstrip('/')}/{m.group(1)}" if m else None
 
+def _round_robin(per_kw: list[list[tuple[str, str]]], limit: int) -> list[tuple[str, str]]:
+    """키워드별 결과 리스트를 라운드로빈으로 최대 limit개 뽑는다 (앞 키워드 독식 방지)."""
+    out, i = [], 0
+    while len(out) < limit and any(i < len(r) for r in per_kw):
+        for r in per_kw:
+            if i < len(r):
+                out.append(r[i])
+                if len(out) >= limit:
+                    break
+        i += 1
+    return out
+
 PAYWALLED_OUTLETS = {"The Athletic"}
 
 OUTLET_MAP = {
@@ -77,7 +89,7 @@ async def _fetch_og_image(client: httpx.AsyncClient, url: str) -> str | None:
 
 class FmkoreaAdapter:
     source_type = "html"
-    def __init__(self, source_id: str, search_url: str, search_keywords: list[str],
+    def __init__(self, source_id: str, search_url: str, search_keywords: list[dict],
                  item_selector: str = "a.hx",
                  base_url: str = "https://www.fmkorea.com",
                  body_selector: str = ".xe_content", max_posts: int = 15):
@@ -90,29 +102,33 @@ class FmkoreaAdapter:
         self.max_posts = max_posts
 
     async def _discover(self, c: httpx.AsyncClient) -> list[tuple[str, str]]:
-        """키워드별 검색 → a.hx 파싱 → 정규 글 URL union·dedup. (title, url) 목록."""
-        matched, seen = [], set()
+        """키워드별 검색 → a.hx 파싱 → 정규 글 URL. 키워드별 결과를 라운드로빈으로 max_posts 배분."""
+        per_kw, seen = [], set()
         for kw in self.search_keywords:
-            url = self.search_url.format(keyword=quote(kw))
+            url = self.search_url.format(keyword=quote(kw["keyword"]), target=kw["target"])
             try:
                 r = await c.get(url)
                 r.raise_for_status()
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 429:
-                    log.warning("fmkorea 검색 429(rate limit) kw=%s — 스킵", kw)
-                    continue
-                raise
+                    log.warning("fmkorea 검색 429(rate limit) kw=%s — 스킵", kw["keyword"])
+                else:
+                    log.warning("fmkorea 검색 HTTP %s kw=%s — 스킵", e.response.status_code, kw["keyword"])
+                continue
+            except httpx.HTTPError as e:
+                log.warning("fmkorea 검색 실패 kw=%s err=%s — 스킵", kw["keyword"], e)
+                continue
             soup = BeautifulSoup(r.text, "html.parser")
+            results = []
             for a in soup.select(self.item_selector):
                 title = a.get_text(strip=True)
                 post_url = _post_url_from_href(a.get("href", ""), self.base_url)
                 if not title or not post_url or post_url in seen:
                     continue
                 seen.add(post_url)
-                matched.append((title, post_url))
-                if len(matched) >= self.max_posts:
-                    return matched
-        return matched
+                results.append((title, post_url))
+            per_kw.append(results)
+        return _round_robin(per_kw, self.max_posts)
 
     async def _process(self, c: httpx.AsyncClient,
                        matched: list[tuple[str, str]]) -> list[RawItem]:

@@ -68,8 +68,11 @@ sources:
     credibility: fmkorea
     lang: ko
     config:
-      search_url: "https://www.fmkorea.com/search.php?mid=football_news&search_target=title_content&search_keyword={keyword}"
-      search_keywords: ["아스날", '"de roche"', "온스테인"]
+      search_url: "https://www.fmkorea.com/search.php?mid=football_news&search_target={target}&search_keyword={keyword}"
+      search_keywords:
+        - {keyword: "아스날", target: "title"}
+        - {keyword: '"de roche"', target: "title_content"}
+        - {keyword: "온스테인", target: "title_content"}
       item_selector: "a.hx"
       base_url: "https://www.fmkorea.com"
       body_selector: ".xe_content"

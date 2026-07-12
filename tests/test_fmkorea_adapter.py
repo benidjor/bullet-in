@@ -14,17 +14,18 @@ FREE_ART = '<html><body><article><p>Arsenal news.</p></article></body></html>'
 
 @respx.mock
 def test_fmkorea_search_union_dedup():
-    respx.get("https://fm.test/s?kw=kw1").mock(return_value=httpx.Response(200, text=SEARCH_KW1))
-    respx.get("https://fm.test/s?kw=kw2").mock(return_value=httpx.Response(200, text=SEARCH_KW2))
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(200, text=SEARCH_KW1))
+    respx.get("https://fm.test/s?t=title_content&kw=kw2").mock(return_value=httpx.Response(200, text=SEARCH_KW2))
     respx.get("https://www.fmkorea.com/111").mock(return_value=httpx.Response(200, text=FREE_BODY))
     respx.get("https://www.fmkorea.com/222").mock(return_value=httpx.Response(200, text=PAY_BODY))
     respx.get("https://www.fmkorea.com/333").mock(return_value=httpx.Response(200, text=FREE_BODY))
     respx.get("https://ex.test/a").mock(return_value=httpx.Response(200, text=FREE_ART))
     respx.get("https://www.nytimes.com/athletic/9/b").mock(return_value=httpx.Response(200, text=""))
-    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?kw={keyword}",
-                       search_keywords=["kw1", "kw2"], base_url="https://www.fmkorea.com")
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"},
+                                        {"keyword": "kw2", "target": "title_content"}],
+                       base_url="https://www.fmkorea.com")
     items = asyncio.run(a.fetch())
-    # 222 는 두 키워드에 걸려도 1건 → 총 3건 (111·222·333), replyNum 제외
     assert len(items) == 3
     pay = next(i for i in items if "athletic" in i.url)
     assert pay.raw_payload["outlet"] == "The Athletic"
@@ -35,36 +36,79 @@ def test_fmkorea_search_respects_max_posts():
     html = ('<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날 1</a>'
             '<a class="hx" href="/index.php?document_srl=2">[BBC] 아스날 2</a>'
             '<a class="hx" href="/index.php?document_srl=3">[BBC] 아스날 3</a>')
-    respx.get("https://fm.test/s?kw=kw1").mock(return_value=httpx.Response(200, text=html))
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(200, text=html))
     for n in (1, 2, 3):
-        respx.get(f"https://www.fmkorea.com/{n}").mock(
-            return_value=httpx.Response(200, text=FREE_BODY))
+        respx.get(f"https://www.fmkorea.com/{n}").mock(return_value=httpx.Response(200, text=FREE_BODY))
     respx.get("https://ex.test/a").mock(return_value=httpx.Response(200, text=FREE_ART))
-    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?kw={keyword}",
-                       search_keywords=["kw1"], base_url="https://www.fmkorea.com", max_posts=2)
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com", max_posts=2)
     assert len(asyncio.run(a.fetch())) == 2
 
 @respx.mock
 def test_fmkorea_search_429_skips_keyword_continues(caplog):
-    respx.get("https://fm.test/s?kw=kw1").mock(return_value=httpx.Response(429))
-    respx.get("https://fm.test/s?kw=kw2").mock(return_value=httpx.Response(
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(429))
+    respx.get("https://fm.test/s?t=title_content&kw=kw2").mock(return_value=httpx.Response(
         200, text='<a class="hx" href="/index.php?document_srl=9">[BBC] 아스날</a>'))
     respx.get("https://www.fmkorea.com/9").mock(return_value=httpx.Response(200, text=FREE_BODY))
     respx.get("https://ex.test/a").mock(return_value=httpx.Response(200, text=FREE_ART))
-    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?kw={keyword}",
-                       search_keywords=["kw1", "kw2"], base_url="https://www.fmkorea.com")
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"},
+                                        {"keyword": "kw2", "target": "title_content"}],
+                       base_url="https://www.fmkorea.com")
     with caplog.at_level("WARNING"):
         items = asyncio.run(a.fetch())
-    assert len(items) == 1  # kw1 429 스킵 · kw2 수집
+    assert len(items) == 1
     assert any("429" in r.message for r in caplog.records)
 
 @respx.mock
+def test_fmkorea_round_robin_represents_all_keywords():
+    # kw1 이 결과를 많이 내도, max_posts 안에서 kw2 도 대표돼야 한다 (앞 키워드 독식 금지)
+    kw1_html = "".join(f'<a class="hx" href="/index.php?document_srl=10{n}">[BBC] 아스날 A{n}</a>' for n in range(5))
+    kw2_html = "".join(f'<a class="hx" href="/index.php?document_srl=20{n}">[BBC] 아스날 B{n}</a>' for n in range(5))
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(200, text=kw1_html))
+    respx.get("https://fm.test/s?t=title_content&kw=kw2").mock(return_value=httpx.Response(200, text=kw2_html))
+    import re as _re
+    def body_for(srl):
+        return (f'<div class="xe_content"><p>아스날 본문.</p>'
+                f'<p>https://ex.test/{srl}</p></div>')
+    for m in _re.finditer(r"document_srl=(\d+)", kw1_html + kw2_html):
+        srl = m.group(1)
+        respx.get(f"https://www.fmkorea.com/{srl}").mock(return_value=httpx.Response(200, text=body_for(srl)))
+        respx.get(f"https://ex.test/{srl}").mock(return_value=httpx.Response(200, text=FREE_ART))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"},
+                                        {"keyword": "kw2", "target": "title_content"}],
+                       base_url="https://www.fmkorea.com", max_posts=4)
+    urls = {i.url for i in asyncio.run(a.fetch())}
+    # 총 4건, kw1(10x)·kw2(20x) 양쪽이 대표돼야 함
+    assert len(urls) == 4
+    assert any("/10" in u for u in urls) and any("/20" in u for u in urls)
+
+@respx.mock
+def test_fmkorea_non_429_error_skips_keyword_continues(caplog):
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(403))
+    respx.get("https://fm.test/s?t=title_content&kw=kw2").mock(return_value=httpx.Response(
+        200, text='<a class="hx" href="/index.php?document_srl=9">[BBC] 아스날</a>'))
+    respx.get("https://www.fmkorea.com/9").mock(return_value=httpx.Response(200, text=FREE_BODY))
+    respx.get("https://ex.test/a").mock(return_value=httpx.Response(200, text=FREE_ART))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"},
+                                        {"keyword": "kw2", "target": "title_content"}],
+                       base_url="https://www.fmkorea.com")
+    with caplog.at_level("WARNING"):
+        items = asyncio.run(a.fetch())
+    assert len(items) == 1  # kw1 403 스킵, kw2 수집 보존
+    assert any("403" in r.message for r in caplog.records)
+
+@respx.mock
 def test_fmkorea_skips_post_when_body_fetch_fails():
-    respx.get("https://fm.test/s?kw=kw1").mock(return_value=httpx.Response(
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(
         200, text='<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날 속보</a>'))
     respx.get("https://www.fmkorea.com/1").mock(return_value=httpx.Response(500))
-    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?kw={keyword}",
-                       search_keywords=["kw1"], base_url="https://www.fmkorea.com")
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
     assert asyncio.run(a.fetch()) == []
 
 from bullet_in.adapters.fmkorea import _extract_original_url
@@ -121,12 +165,13 @@ def test_fmkorea_paywalled_keeps_korean_body_and_outlet():
     search_html = '<a class="hx" href="/index.php?document_srl=1">[디 애슬레틱 - 온스테인] 아스날 수비수 보강</a>'
     body = ('<div class="xe_content"><p>아스날이 센터백을 원한다.</p>'
             '<p>https://www.nytimes.com/athletic/7374647/2026/06/28/arsenal-cb/</p></div>')
-    respx.get("https://fm.test/s?kw=kw1").mock(return_value=httpx.Response(200, text=search_html))
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(200, text=search_html))
     respx.get("https://www.fmkorea.com/1").mock(return_value=httpx.Response(200, text=body))
     respx.get("https://www.nytimes.com/athletic/7374647/2026/06/28/arsenal-cb/").mock(
         return_value=httpx.Response(200, text=""))
-    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?kw={keyword}",
-                       search_keywords=["kw1"], base_url="https://www.fmkorea.com")
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
     items = asyncio.run(a.fetch())
     assert len(items) == 1
     it = items[0]
@@ -144,12 +189,13 @@ def test_fmkorea_free_outlet_fetches_original_english_body():
     original = ('<html><head><meta property="og:image" content="https://img.bbc/g.jpg"></head>'
                 '<body><article><p>Arsenal have signed Gyokeres.</p>'
                 '<p>The fee is 60m.</p></article></body></html>')
-    respx.get("https://fm.test/s?kw=kw1").mock(return_value=httpx.Response(200, text=search_html))
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(200, text=search_html))
     respx.get("https://www.fmkorea.com/1").mock(return_value=httpx.Response(200, text=body))
     respx.get("https://www.bbc.com/sport/football/articles/gyo").mock(
         return_value=httpx.Response(200, text=original))
-    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?kw={keyword}",
-                       search_keywords=["kw1"], base_url="https://www.fmkorea.com")
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
     it = asyncio.run(a.fetch())[0]
     assert it.url == "https://www.bbc.com/sport/football/articles/gyo"
     assert it.raw_payload["outlet"] == "BBC"
@@ -161,10 +207,11 @@ def test_fmkorea_free_outlet_fetches_original_english_body():
 def test_fmkorea_skips_when_no_original_url(caplog):
     search_html = '<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날 소식</a>'
     body = '<div class="xe_content"><p>출처 링크 없는 본문.</p></div>'
-    respx.get("https://fm.test/s?kw=kw1").mock(return_value=httpx.Response(200, text=search_html))
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(200, text=search_html))
     respx.get("https://www.fmkorea.com/1").mock(return_value=httpx.Response(200, text=body))
-    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?kw={keyword}",
-                       search_keywords=["kw1"], base_url="https://www.fmkorea.com")
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
     with caplog.at_level("WARNING"):
         items = asyncio.run(a.fetch())
     assert items == []
