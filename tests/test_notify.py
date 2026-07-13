@@ -50,15 +50,6 @@ def test_send_alert_swallows_post_error(monkeypatch, caplog):
     assert "제목" in caplog.text
 
 
-def test_build_anomaly_alert_formats_lines_and_fields():
-    anomalies = [Anomaly("fmkorea", 0, 14.0, "drop"),
-                 Anomaly("bbc", 30, 9.0, "spike")]
-    alert = notify.build_anomaly_alert(anomalies, history_count=12)
-    assert alert["title"] == "⚠️ 수집량 이상"
-    assert alert["color"] == notify.COLOR_ANOMALY
-    assert "▼ fmkorea: 0건 (평소 ~14)" in alert["description"]
-    assert "▲ bbc: 30건 (평소 ~9)" in alert["description"]
-    assert alert["fields"][0]["value"] == "최근 12회 기준"
 
 
 def test_build_failure_alert_maps_context():
@@ -194,3 +185,39 @@ def test_discord_ts_renders_utc_epoch():
     dt = datetime(2026, 7, 13, 6, 0, 0)  # naive UTC
     assert notify._discord_ts(dt, "R") == "<t:1783922400:R>"
     assert notify._discord_ts(dt, "f") == "<t:1783922400:f>"
+
+
+_HIST = [{"fmkorea": 14, "bbc": 9}, {"fmkorea": 13}, {"fmkorea": 15},
+         {"fmkorea": 12, "bbc": 8}, {"fmkorea": 14}, {"fmkorea": 11}]  # 최신순
+
+
+def test_build_anomaly_alert_drop_field_sequence_and_hint():
+    anomalies = [Anomaly("fmkorea", 0, 14.0, "drop")]
+    srcs = {"fmkorea": {"display_name": "fmkorea 축구 소식통", "adapter": "fmkorea"}}
+    alert = notify.build_anomaly_alert(anomalies, 12, hist=_HIST, sources=srcs,
+                                       run_id="3f2a9c12abcd")
+    assert alert["title"] == "⚠️ 수집량 이상 — 1건 (드롭 1 · 스파이크 0)"
+    assert alert["description"] == "최근 12회 대비 소스별 수집량 이상"
+    assert alert["url"] == notify.RUNBOOK_ANOMALY
+    field = alert["fields"][0]
+    assert field["name"] == "fmkorea 축구 소식통 (fmkorea)"
+    assert field["inline"] is False
+    assert "▼ 0건 (평소 ~14)" in field["value"]
+    assert "최근: 14 → 12 → 15 → 13 → 14 → (오늘) 0" in field["value"]
+    assert "원인 후보: 검색 URL 변경 · 429 차단" in field["value"]
+    assert alert["fields"][-1] == {"name": "회차",
+                                   "value": "최근 12회 기준 · run 3f2a9c12",
+                                   "inline": True}
+
+
+def test_build_anomaly_alert_spike_hint_and_missing_hist_source():
+    anomalies = [Anomaly("bbc", 30, 9.0, "spike"), Anomaly("ghost", 0, 5.0, "drop")]
+    alert = notify.build_anomaly_alert(anomalies, 12, hist=[], sources={},
+                                       run_id="rrrrrrrrrrrr")
+    assert alert["title"] == "⚠️ 수집량 이상 — 2건 (드롭 1 · 스파이크 1)"
+    spike_field, ghost_field = alert["fields"][0], alert["fields"][1]
+    assert spike_field["name"] == "bbc"
+    assert "▲ 30건 (평소 ~9)" in spike_field["value"]
+    assert "원인 후보: 중복 유입 · 파싱 회귀 의심" in spike_field["value"]
+    assert "최근:" not in ghost_field["value"]      # hist 에 없음 → 시퀀스 생략
+    assert "원인 후보" not in ghost_field["value"]  # 미지 어댑터 드롭 → 힌트 생략

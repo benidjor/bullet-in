@@ -52,15 +52,30 @@ def send_alert(title: str, description: str, *, color: int,
         logger.warning("알림 발송 오류: %s (%s)", title, e)
 
 
-def build_anomaly_alert(anomalies, history_count: int) -> dict:
-    lines = "\n".join(
-        f"{'▼' if a.direction == 'drop' else '▲'} {a.source_id}: "
-        f"{a.today}건 (평소 ~{a.baseline:g})"
-        for a in anomalies)
-    return {"title": "⚠️ 수집량 이상", "description": lines,
-            "color": COLOR_ANOMALY,
-            "fields": [{"name": "회차", "value": f"최근 {history_count}회 기준",
-                        "inline": True}]}
+def build_anomaly_alert(anomalies, history_count: int, *,
+                        hist: list[dict], sources: dict, run_id: str) -> dict:
+    drops = sum(1 for a in anomalies if a.direction == "drop")
+    fields = []
+    for a in anomalies:
+        arrow = "▼" if a.direction == "drop" else "▲"
+        lines = [f"{arrow} {a.today}건 (평소 ~{a.baseline:g})"]
+        recent = [h[a.source_id] for h in hist[:5] if a.source_id in h]
+        if recent:
+            seq = " → ".join(str(n) for n in reversed(recent))
+            lines.append(f"최근: {seq} → (오늘) {a.today}")
+        hint = (ADAPTER_HINTS.get((sources.get(a.source_id) or {}).get("adapter"))
+                if a.direction == "drop" else SPIKE_HINT)
+        if hint:
+            lines.append(f"원인 후보: {hint}")
+        fields.append({"name": _source_field_name(a.source_id, sources),
+                       "value": "\n".join(lines), "inline": False})
+    fields.append({"name": "회차",
+                   "value": f"최근 {history_count}회 기준 · run {run_id[:8]}",
+                   "inline": True})
+    return {"title": (f"⚠️ 수집량 이상 — {len(anomalies)}건 "
+                      f"(드롭 {drops} · 스파이크 {len(anomalies) - drops})"),
+            "description": f"최근 {history_count}회 대비 소스별 수집량 이상",
+            "color": COLOR_ANOMALY, "fields": fields, "url": RUNBOOK_ANOMALY}
 
 
 def _source_field_name(source_id: str, sources: dict) -> str:
