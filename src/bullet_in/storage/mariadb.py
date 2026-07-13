@@ -1,8 +1,10 @@
 from __future__ import annotations
+from datetime import datetime
 from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from bullet_in.models import Article
+from bullet_in.quality import SourceFreshness
 
 _SCHEMA = Path(__file__).with_name("schema.sql")
 
@@ -84,3 +86,29 @@ class MartStore:
         with self.engine.begin() as c:
             c.execute(text("UPDATE articles SET transfer_stage=:s WHERE content_hash=:h"),
                       {"s": stage, "h": content_hash})
+
+    def source_watermarks(self) -> dict[str, datetime]:
+        """소스별 MAX(fetched_at) 워터마크. 기사 0건 소스는 키가 없다."""
+        with self.engine.connect() as c:
+            rows = c.execute(text(
+                "SELECT source_id, MAX(fetched_at) FROM articles "
+                "GROUP BY source_id")).all()
+        return {sid: wm for sid, wm in rows}
+
+    def db_now(self) -> datetime:
+        with self.engine.connect() as c:
+            return c.execute(text("SELECT NOW()")).scalar_one()
+
+    def record_freshness(self, run_id: str, checked_at: datetime,
+                         records: list[SourceFreshness]) -> None:
+        if not records:  # 빈 executemany 는 SQLAlchemy 가 거부
+            return
+        with self.engine.begin() as c:
+            c.execute(text(
+                "INSERT INTO source_freshness (run_id,checked_at,source_id,"
+                "last_fetched_at,age_hours,threshold_hours,stale) "
+                "VALUES (:rid,:at,:sid,:wm,:age,:thr,:stale)"),
+                [{"rid": run_id, "at": checked_at, "sid": r.source_id,
+                  "wm": r.last_fetched_at, "age": r.age_hours,
+                  "thr": r.threshold_hours, "stale": r.stale}
+                 for r in records])

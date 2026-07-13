@@ -25,4 +25,5 @@ def engine():
 def clean(engine):
     with engine.begin() as c:
         c.execute(text("DELETE FROM articles"))
+        c.execute(text("DELETE FROM source_freshness"))
     yield
