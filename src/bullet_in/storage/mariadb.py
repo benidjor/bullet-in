@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 from datetime import datetime
 from pathlib import Path
 from sqlalchemy import text
@@ -113,3 +114,34 @@ class MartStore:
                   "wm": r.last_fetched_at, "age": r.age_hours,
                   "thr": r.threshold_hours, "stale": r.stale}
                  for r in records])
+
+    def ops_snapshot(self, chart_runs: int = 30, trend_runs: int = 12) -> dict:
+        """운영 뷰 (ops.html) 집계 스냅샷. 지표 정의는 spec §5 표가 기준.
+        pending 은 rows_missing_translation/stage 와 동일 술어로 카운트."""
+        with self.engine.connect() as c:
+            runs = [dict(r) for r in c.execute(text(
+                "SELECT run_id,started_at,duration_sec,source_counts,"
+                "new_count,dup_count,error_count,success_rate "
+                "FROM pipeline_runs ORDER BY started_at DESC LIMIT :n"),
+                {"n": chart_runs}).mappings().all()]
+            freshness = [dict(r) for r in c.execute(text(
+                "SELECT run_id,checked_at,source_id,last_fetched_at,"
+                "age_hours,threshold_hours,stale FROM source_freshness "
+                "WHERE run_id IN (SELECT run_id FROM ("
+                " SELECT DISTINCT run_id, checked_at FROM source_freshness"
+                " ORDER BY checked_at DESC LIMIT :n) w) "
+                "ORDER BY checked_at, source_id"),
+                {"n": trend_runs}).mappings().all()]
+            tier_rows = c.execute(text(
+                "SELECT tier, COUNT(*) FROM articles GROUP BY tier")).all()
+            pending_rows = c.execute(text(
+                "SELECT source_id, SUM(title_ko IS NULL), "
+                "SUM(transfer_stage IS NULL) FROM articles "
+                "GROUP BY source_id")).all()
+        for r in runs:
+            r["source_counts"] = (json.loads(r["source_counts"])
+                                  if r["source_counts"] else {})
+        return {"runs": runs, "freshness": freshness,
+                "tier_counts": {t: int(n) for t, n in tier_rows},
+                "pending": {sid: {"translate": int(tr), "stage": int(st)}
+                            for sid, tr, st in pending_rows}}

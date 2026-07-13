@@ -132,7 +132,7 @@ def test_ops_snapshot_tier_counts_and_pending(engine):
     snap = store.ops_snapshot()
     assert snap["tier_counts"] == {2.0: 2, 3.0: 1}
     # rows_missing_translation (title_ko IS NULL) · rows_missing_stage 와 동일 술어
-    assert snap["pending"]["bbc_sport"] == {"translate": 2, "stage": 3}
+    assert snap["pending"]["bbc_sport"] == {"translate": 2, "stage": 2}
 
 
 def test_ops_snapshot_cold_start_returns_empty_shapes(engine):
