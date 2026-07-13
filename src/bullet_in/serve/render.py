@@ -79,6 +79,128 @@ def facet_counts(articles: list[dict], sources: dict) -> dict:
             "outlets": outlets, "tiers": tiers, "stage": stage_counts,
             "other": other_count}
 
+# ---- 운영 뷰 (ops.html) 뷰모델 ----
+# 지표 정의 · 데이터 계약: docs/superpowers/specs/2026-07-14-ops-monitoring-view-design.md §5 · §6
+
+TIER_BUCKETS = [(1.0, "Tier 1 — 공식 · 1군 언론"),
+                (2.0, "Tier 2 — 2군 · 애그리게이터"),
+                (3.0, "Tier 3 — ITK · 루머")]
+ETC_TIER_LABEL = "기타 (0 · 1.5 · 4)"
+
+
+def spark_points(values: list[float], width: int = 84, height: int = 18) -> str:
+    if not values:
+        return ""
+    vmin, vmax = min(values), max(values)
+    span = max(vmax - vmin, 1)                      # 전부 동일값 → 분모 1 (평평한 선)
+    n = len(values)
+    pts = []
+    for i, v in enumerate(values):
+        x = 0 if n == 1 else i * width / (n - 1)
+        y = (height - 2) - (v - vmin) / span * (height - 4)
+        pts.append(f"{x:.0f},{y:.0f}")
+    return " ".join(pts)
+
+
+def _kpi(runs: list[dict], stale_count: int | None, pending_total: int) -> dict:
+    if not runs:
+        return {"new": "—", "dup": "—", "err": "—", "success": "—",
+                "stale": "—", "pending": str(pending_total)}
+    top = runs[0]
+    return {"new": str(top["new_count"]), "dup": str(top["dup_count"]),
+            "err": str(top["error_count"]),
+            "success": f"{top['success_rate'] * 100:.0f}%",
+            "stale": "—" if stale_count is None else str(stale_count),
+            "pending": str(pending_total)}
+
+
+def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int,
+                   now: datetime) -> dict:
+    runs = snapshot["runs"]                          # 최신순
+    chrono = list(reversed(runs))                    # 차트는 과거 → 최신
+
+    max_new = max((r["new_count"] for r in chrono), default=0) or 1
+    runs_chart = [{
+        "h": round(r["new_count"] / max_new * 100),
+        "err": r["error_count"] > 0,
+        "label": (f"{r['started_at']:%m-%d %H:%M} UTC · 신규 {r['new_count']}"
+                  f" · 중복 {r['dup_count']} · 에러 {r['error_count']}"),
+    } for r in chrono]
+
+    fresh_rows = snapshot["freshness"]               # checked_at 오름차순
+    latest_run = fresh_rows[-1]["run_id"] if fresh_rows else None
+    latest = {r["source_id"]: r for r in fresh_rows if r["run_id"] == latest_run}
+    history: dict[str, list[float]] = {}
+    for r in fresh_rows:                              # 부재 회차 없음 = 진짜 결측 (§6.1)
+        if r["age_hours"] is not None:
+            history.setdefault(r["source_id"], []).append(float(r["age_hours"]))
+    freshness = []
+    for sid, row in sorted(latest.items()):
+        disp = sources.get(sid, {}).get("display_name") or sid
+        if row["age_hours"] is None:
+            freshness.append({"display": disp, "last": "이력 없음", "age": "—",
+                              "thr": f"{row['threshold_hours']:.0f}h",
+                              "points": "", "status": "none"})
+            continue
+        freshness.append({
+            "display": disp,
+            "last": f"{row['last_fetched_at']:%m-%d %H:%M}",
+            "age": f"{row['age_hours']:.1f}h",
+            "thr": f"{row['threshold_hours']:.0f}h",
+            "points": spark_points(history.get(sid, [])),
+            "status": "stale" if row["stale"] else "fresh",   # 저장값 그대로 (§6.2)
+        })
+    stale_count = (sum(1 for r in latest.values() if r["stale"])
+                   if latest else None)
+
+    trend = runs[:12]                                 # 신선도 추세와 같은 12회 창
+    totals = {sid: sum(r["source_counts"].get(sid, 0) for r in trend)  # 부재 = 0 (§6.1)
+              for sid in sources}
+    max_total = max(totals.values(), default=0) or 1
+    pending = snapshot["pending"]
+    volume = [{
+        "display": sources.get(sid, {}).get("display_name") or sid,
+        "total": total,
+        "bar_pct": round(total / max_total * 100),
+        "translate": pending.get(sid, {}).get("translate", 0),
+        "stage": pending.get(sid, {}).get("stage", 0),
+    } for sid, total in sorted(totals.items(), key=lambda kv: -kv[1])]
+    pending_total = sum(p["translate"] + p["stage"] for p in pending.values())
+
+    tier_counts = snapshot["tier_counts"]
+    total_articles = sum(tier_counts.values()) or 1
+    known = {t for t, _ in TIER_BUCKETS}
+    tiers = [{"label": label, "count": tier_counts.get(t, 0),
+              "pct": round(tier_counts.get(t, 0) / total_articles * 100)}
+             for t, label in TIER_BUCKETS]
+    etc = sum(n for t, n in tier_counts.items() if t not in known)
+    tiers.append({"label": ETC_TIER_LABEL, "count": etc,
+                  "pct": round(etc / total_articles * 100)})
+
+    if runs:
+        avg_sr = sum(r["success_rate"] for r in runs) / len(runs)
+        avg_dur = sum(r["duration_sec"] for r in runs) / len(runs)
+        slo = [
+            {"slo_id": "SLO-2", "definition": "최근 30회 평균 success_rate",
+             "value": f"{avg_sr * 100:.1f}%",
+             "status": "ok" if avg_sr >= 0.9 else "bad"},
+            {"slo_id": "SLO-5", "definition": "수집 끊긴 소스 수 (최신 run)",
+             "value": "—" if stale_count is None else str(stale_count),
+             "status": "info" if stale_count is None else ("ok" if not stale_count else "bad")},
+            {"slo_id": "SLO-6", "definition": "현재 회차 이상 감지 소스 수",
+             "value": str(anomaly_count),
+             "status": "ok" if anomaly_count == 0 else "bad"},
+            {"slo_id": "duration", "definition": "최근 30회 평균 소요 시간",
+             "value": f"{avg_dur:.0f}s", "status": "info"},
+        ]
+    else:
+        slo = []
+
+    return {"generated_at": f"{now:%Y-%m-%d %H:%M} UTC",
+            "kpi": _kpi(runs, stale_count, pending_total),
+            "runs_chart": runs_chart, "freshness": freshness,
+            "volume": volume, "tiers": tiers, "slo": slo}
+
 def _env() -> Environment:
     env = Environment(
         loader=FileSystemLoader(_TPL_DIR),
