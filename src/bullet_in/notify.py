@@ -36,6 +36,16 @@ def build_anomaly_alert(anomalies, history_count: int) -> dict:
                         "inline": True}]}
 
 
+def build_freshness_alert(breaches, default_hours: float) -> dict:
+    lines = "\n".join(
+        f"⏳ {b.source_id}: {b.age_hours:.1f}h 경과 (임계 {b.threshold_hours:g}h)"
+        for b in breaches)
+    return {"title": "🕰️ 신선도 경고 — 오래된 소스", "description": lines,
+            "color": COLOR_ANOMALY,
+            "fields": [{"name": "기본 임계", "value": f"전역 {default_hours:g}h",
+                        "inline": True}]}
+
+
 def build_failure_alert(context) -> dict:
     ti = context["task_instance"]
     exc = context.get("exception")
