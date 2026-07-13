@@ -80,9 +80,9 @@ def build_freshness_alert(records, default_hours, *,
 감시 5소스: stale 1 · 정상 3 · 워터마크 없음 1   ← description
 
 [afcstuff (aggregator) (x_afcstuff)]        ← stale 소스당 field (inline=False)
-⏳ 61.4h 경과 (임계 24h)
-마지막 수집: 2일 전 (2026년 7월 11일 오전 1:30)   ← <t:..:R> (<t:..:f>)
-원인 후보: X 쿠키 만료 · 핸들 변경
+- ⏳ 61.4h 경과 (임계 24h)
+- 마지막 수집: 2일 전 (2026년 7월 11일 오전 1:30)   ← <t:..:R> (<t:..:f>)
+- 원인 후보: X 쿠키 만료 · 핸들 변경
 
 [기본 임계]  [회차]                          ← 공통 field (inline=True)
 전역 48h    run 3f2a9c12                    ← run_id 앞 8자
@@ -111,9 +111,9 @@ def build_anomaly_alert(anomalies, history_count, *,
 최근 12회 대비 소스별 수집량 이상            ← description
 
 [fmkorea 축구 소식통 (fmkorea)]             ← 이상 소스당 field (inline=False)
-▼ 0건 (평소 ~14)
-최근: 15 → 13 → 14 → (오늘) 0               ← 직전 5회 (오래된 것부터) + 오늘
-원인 후보: 검색 URL 변경 · 429 차단
+- ▼ 0건 (평소 ~14)
+- 최근: 15 → 13 → 14 → (오늘) 0             ← 직전 5회 (오래된 것부터) + 오늘
+- 원인 후보: 검색 URL 변경 · 429 차단
 
 [회차] 최근 12회 기준 · run 3f2a9c12         ← 공통 field
 ```

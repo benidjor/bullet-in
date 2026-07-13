@@ -68,7 +68,8 @@ def build_anomaly_alert(anomalies, history_count: int, *,
         if hint:
             lines.append(f"원인 후보: {hint}")
         fields.append({"name": _source_field_name(a.source_id, sources),
-                       "value": "\n".join(lines), "inline": False})
+                       "value": "\n".join(f"- {ln}" for ln in lines),
+                       "inline": False})
     fields.append({"name": "회차",
                    "value": f"최근 {history_count}회 기준 · run {run_id[:8]}",
                    "inline": True})
@@ -99,7 +100,8 @@ def build_freshness_alert(records, default_hours: float, *,
         if hint:
             lines.append(f"원인 후보: {hint}")
         fields.append({"name": _source_field_name(b.source_id, sources),
-                       "value": "\n".join(lines), "inline": False})
+                       "value": "\n".join(f"- {ln}" for ln in lines),
+                       "inline": False})
     fields.append({"name": "기본 임계", "value": f"전역 {default_hours:g}h",
                    "inline": True})
     fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})

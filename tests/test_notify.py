@@ -119,11 +119,11 @@ def test_build_freshness_alert_stale_field_detail():
     [field] = [f for f in alert["fields"] if f["name"].startswith("afcstuff")]
     assert field["name"] == "afcstuff (aggregator) (x_afcstuff)"
     assert field["inline"] is False
-    assert "⏳ 61.4h 경과 (임계 24h)" in field["value"]
+    assert "- ⏳ 61.4h 경과 (임계 24h)" in field["value"]
     epoch = int((checked - timedelta(hours=61.4))
                 .replace(tzinfo=timezone.utc).timestamp())
-    assert f"마지막 수집: <t:{epoch}:R> (<t:{epoch}:f>)" in field["value"]
-    assert "원인 후보: X 쿠키 만료 · 핸들 변경" in field["value"]
+    assert f"- 마지막 수집: <t:{epoch}:R> (<t:{epoch}:f>)" in field["value"]
+    assert "- 원인 후보: X 쿠키 만료 · 핸들 변경" in field["value"]
 
 
 def test_build_freshness_alert_common_fields():
@@ -202,9 +202,9 @@ def test_build_anomaly_alert_drop_field_sequence_and_hint():
     field = alert["fields"][0]
     assert field["name"] == "fmkorea 축구 소식통 (fmkorea)"
     assert field["inline"] is False
-    assert "▼ 0건 (평소 ~14)" in field["value"]
-    assert "최근: 14 → 12 → 15 → 13 → 14 → (오늘) 0" in field["value"]
-    assert "원인 후보: 검색 URL 변경 · 429 차단" in field["value"]
+    assert "- ▼ 0건 (평소 ~14)" in field["value"]
+    assert "- 최근: 14 → 12 → 15 → 13 → 14 → (오늘) 0" in field["value"]
+    assert "- 원인 후보: 검색 URL 변경 · 429 차단" in field["value"]
     assert alert["fields"][-1] == {"name": "회차",
                                    "value": "최근 12회 기준 · run 3f2a9c12",
                                    "inline": True}
@@ -217,8 +217,8 @@ def test_build_anomaly_alert_spike_hint_and_missing_hist_source():
     assert alert["title"] == "⚠️ 수집량 이상 — 2건 (드롭 1 · 스파이크 1)"
     spike_field, ghost_field = alert["fields"][0], alert["fields"][1]
     assert spike_field["name"] == "bbc"
-    assert "▲ 30건 (평소 ~9)" in spike_field["value"]
-    assert "원인 후보: 중복 유입 · 파싱 회귀 의심" in spike_field["value"]
+    assert "- ▲ 30건 (평소 ~9)" in spike_field["value"]
+    assert "- 원인 후보: 중복 유입 · 파싱 회귀 의심" in spike_field["value"]
     assert "최근:" not in ghost_field["value"]      # hist 에 없음 → 시퀀스 생략
     assert "원인 후보" not in ghost_field["value"]  # 미지 어댑터 드롭 → 힌트 생략
 
@@ -228,4 +228,4 @@ def test_build_anomaly_alert_sequence_counts_absent_rounds_as_zero():
     hist = [{}, {"fmkorea": 14}, {"fmkorea": 14}, {"fmkorea": 14}, {"fmkorea": 14}]
     alert = notify.build_anomaly_alert([Anomaly("fmkorea", 0, 11.2, "drop")], 12,
                                        hist=hist, sources={}, run_id="rrrrrrrrrrrr")
-    assert "최근: 14 → 14 → 14 → 14 → 0 → (오늘) 0" in alert["fields"][0]["value"]
+    assert "- 최근: 14 → 14 → 14 → 14 → 0 → (오늘) 0" in alert["fields"][0]["value"]
