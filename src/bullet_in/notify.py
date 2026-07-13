@@ -1,50 +1,117 @@
 from __future__ import annotations
 import logging, os
 import httpx
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
 COLOR_ANOMALY = 0xF2A600
 COLOR_FAILURE = 0xE01E5A
 
+ADAPTER_HINTS = {
+    "x_playwright": "X 쿠키 만료 · 핸들 변경",
+    "x_backtrack": "X 쿠키 만료 · 핸들 변경",
+    "html": "셀렉터 드리프트 · 사이트 개편",
+    "playwright": "셀렉터 · 동의창 드리프트",
+    "rss": "피드 URL 변경",
+    "fmkorea": "검색 URL 변경 · 429 차단",
+}
+SPIKE_HINT = "중복 유입 · 파싱 회귀 의심"
+RUNBOOK_FRESHNESS = ("https://github.com/benidjor/bullet-in/blob/main/"
+                     "docs/runbook/2026-07-13-freshness-watermark-ops.md")
+RUNBOOK_ANOMALY = ("https://github.com/benidjor/bullet-in/blob/main/"
+                   "docs/runbook/2026-07-13-collection-alerts-ops.md")
+
+
+def _discord_ts(dt: datetime, style: str) -> str:
+    """naive UTC datetime → Discord 시각 마크업 (R=상대 · f=절대)."""
+    return f"<t:{int(dt.replace(tzinfo=timezone.utc).timestamp())}:{style}>"
+
 
 def send_alert(title: str, description: str, *, color: int,
-               fields: list[dict] | None = None) -> None:
+               fields: list[dict] | None = None, url: str | None = None,
+               timestamp: str | None = None, footer: str | None = None) -> None:
     embed: dict = {"title": title, "description": description, "color": color}
     if fields:
         embed["fields"] = fields
-    url = os.environ.get("DISCORD_WEBHOOK_URL")
-    if not url:
+    if url:
+        embed["url"] = url
+    if timestamp:
+        embed["timestamp"] = timestamp
+    if footer:
+        embed["footer"] = {"text": footer}
+    webhook = os.environ.get("DISCORD_WEBHOOK_URL")
+    if not webhook:
         logger.warning("알림 (webhook 미설정): %s — %s", title, description)
         return
     try:
-        resp = httpx.post(url, json={"embeds": [embed]}, timeout=10)
+        resp = httpx.post(webhook, json={"embeds": [embed]}, timeout=10)
         if resp.status_code >= 300:
             logger.warning("알림 발송 실패 (status %s): %s", resp.status_code, title)
     except Exception as e:
         logger.warning("알림 발송 오류: %s (%s)", title, e)
 
 
-def build_anomaly_alert(anomalies, history_count: int) -> dict:
-    lines = "\n".join(
-        f"{'▼' if a.direction == 'drop' else '▲'} {a.source_id}: "
-        f"{a.today}건 (평소 ~{a.baseline:g})"
-        for a in anomalies)
-    return {"title": "⚠️ 수집량 이상", "description": lines,
-            "color": COLOR_ANOMALY,
-            "fields": [{"name": "회차", "value": f"최근 {history_count}회 기준",
-                        "inline": True}]}
+def build_anomaly_alert(anomalies, history_count: int, *,
+                        hist: list[dict], sources: dict, run_id: str) -> dict:
+    drops = sum(1 for a in anomalies if a.direction == "drop")
+    fields = []
+    for a in anomalies:
+        arrow = "▼" if a.direction == "drop" else "▲"
+        lines = [f"{arrow} {a.today}건 (평소 ~{a.baseline:g})"]
+        if any(a.source_id in h for h in hist):
+            recent = [h.get(a.source_id, 0) for h in hist[:5]]
+            seq = " → ".join(str(n) for n in reversed(recent))
+            lines.append(f"최근: {seq} → (오늘) {a.today}")
+        hint = (ADAPTER_HINTS.get((sources.get(a.source_id) or {}).get("adapter"))
+                if a.direction == "drop" else SPIKE_HINT)
+        if hint:
+            lines.append(f"원인 후보: {hint}")
+        fields.append({"name": _source_field_name(a.source_id, sources),
+                       "value": "\n".join(f"- {ln}" for ln in lines),
+                       "inline": False})
+    fields.append({"name": "회차",
+                   "value": f"최근 {history_count}회 기준 · run {run_id[:8]}",
+                   "inline": True})
+    return {"title": (f"⚠️ 수집량 이상 — {len(anomalies)}건 "
+                      f"(드롭 {drops} · 스파이크 {len(anomalies) - drops})"),
+            "description": f"최근 {history_count}회 대비 소스별 수집량 이상",
+            "color": COLOR_ANOMALY, "fields": fields, "url": RUNBOOK_ANOMALY}
 
 
-def build_freshness_alert(breaches, default_hours: float) -> dict:
-    """stale=True 레코드만 받는다 (stale 레코드는 age_hours 가 항상 존재)."""
-    lines = "\n".join(
-        f"⏳ {b.source_id}: {b.age_hours:.1f}h 경과 (임계 {b.threshold_hours:g}h)"
-        for b in breaches)
-    return {"title": "🕰️ 신선도 경고 — 오래된 소스", "description": lines,
-            "color": COLOR_ANOMALY,
-            "fields": [{"name": "기본 임계", "value": f"전역 {default_hours:g}h",
-                        "inline": True}]}
+def _source_field_name(source_id: str, sources: dict) -> str:
+    name = (sources.get(source_id) or {}).get("display_name")
+    return f"{name} ({source_id})" if name else source_id
+
+
+def build_freshness_alert(records, default_hours: float, *,
+                          sources: dict, run_id: str,
+                          checked_at: datetime) -> dict:
+    """전체 판정 레코드를 받아 stale 소스만 필드로 펼친다 (stale=True 는 age_hours 존재)."""
+    breaches = [r for r in records if r.stale]
+    no_wm = sum(1 for r in records if r.last_fetched_at is None)
+    ok = len(records) - len(breaches) - no_wm
+    fields = []
+    for b in breaches:
+        lines = [f"⏳ {b.age_hours:.1f}h 경과 (임계 {b.threshold_hours:g}h)",
+                 f"마지막 수집: {_discord_ts(b.last_fetched_at, 'R')} "
+                 f"({_discord_ts(b.last_fetched_at, 'f')})"]
+        hint = ADAPTER_HINTS.get((sources.get(b.source_id) or {}).get("adapter"))
+        if hint:
+            lines.append(f"원인 후보: {hint}")
+        fields.append({"name": _source_field_name(b.source_id, sources),
+                       "value": "\n".join(f"- {ln}" for ln in lines),
+                       "inline": False})
+    fields.append({"name": "기본 임계", "value": f"전역 {default_hours:g}h",
+                   "inline": True})
+    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    return {"title": f"🕰️ 신선도 경고 — 오래된 소스 {len(breaches)}건",
+            "description": (f"감시 {len(records)}소스: stale {len(breaches)} · "
+                            f"정상 {ok} · 워터마크 없음 {no_wm}"),
+            "color": COLOR_ANOMALY, "fields": fields,
+            "url": RUNBOOK_FRESHNESS,
+            "timestamp": checked_at.replace(tzinfo=timezone.utc).isoformat(),
+            "footer": "bullet-in"}
 
 
 def build_failure_alert(context) -> dict:

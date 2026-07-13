@@ -74,7 +74,8 @@ async def main(concurrency: int):
             "ORDER BY started_at DESC LIMIT 12")).scalars().all() if s]
     anomalies = volume_anomalies(stats["source_counts"], hist)
     if anomalies:
-        notify.send_alert(**notify.build_anomaly_alert(anomalies, len(hist)))
+        notify.send_alert(**notify.build_anomaly_alert(
+            anomalies, len(hist), hist=hist, sources=sources, run_id=run_id))
 
     # 신선도 워터마크 감시 (SLO-5): 소스별 MAX(fetched_at) 경과가 임계 초과면 알림
     default_hours = cfg.get("freshness_default_hours", 48)
@@ -87,7 +88,9 @@ async def main(concurrency: int):
     mart.record_freshness(run_id, checked_at, records)
     breaches = [r for r in records if r.stale]
     if breaches:
-        notify.send_alert(**notify.build_freshness_alert(breaches, default_hours))
+        notify.send_alert(**notify.build_freshness_alert(
+            records, default_hours, sources=sources, run_id=run_id,
+            checked_at=checked_at))
 
     summary = {"new_or_changed": len(arts), "errors": errors,
                "success_rate": success_rate(len(adapters), len(errors)),

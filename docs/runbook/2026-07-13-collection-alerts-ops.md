@@ -25,10 +25,13 @@
 - **⚠️ 수집량 이상 (주황)** — 소프트 드리프트.
   실행은 성공했으나 소스별 수집량이 지난 이력 대비 2σ 밖.
   `▼` 는 드롭 (평소보다 급감, 셀렉터 드리프트 의심) · `▲` 는 스파이크 (급증, 중복 유입 · 페이지 구조 변화 의심) .
-  라인 예: `▼ fmkorea: 0건 (평소 ~14)`.
+  제목이 이상 건수 (드롭 · 스파이크 분해) 를 보여주고, 제목 클릭은 이 런북으로 연결된다.
+- **소스당 필드** — `▼ 0건 (평소 ~14)` + 최근 5회 → (오늘) 수집량 시퀀스 + 원인 후보 (드롭 = 어댑터 힌트 · 스파이크 = 중복 유입 · 파싱 회귀 의심).
+  `회차` 필드의 run_id 앞 8자로 회차를 특정한다.
 - **❌ 파이프라인 실패 (빨강)** — 하드 실패.
   `run_pipeline` 태스크가 예외로 중단.
   fields 의 `로그` 링크 · `Try` · `Host` 로 Airflow 태스크를 특정하고, description 의 예외 요약 (최대 400자) 으로 원인을 좁힌다.
+- **실물 캡처** — 개편 수집량 embed: `docs/assets/discord-alert-embed-after.png` · 개편 전: `docs/assets/discord-alert-embed-before.png`.
 
 ## 대응
 
@@ -76,7 +79,7 @@ uv run python -c "from bullet_in import notify; assert callable(notify.build_fai
 
 - **webhook 오설정 · 만료** — `send_alert` 가 모든 예외를 삼켜 파이프라인을 죽이지 않는다 (미설정과 동일하게 WARNING 만) .
   좁은 except 로 인한 파이프라인 crash 함정은 `docs/troubleshooting/2026-07-13-alert-exception-swallow-gap.md` 참조.
-- **알림 폭주** — 여러 소스가 동시에 드리프트하면 한 회차에 여러 라인이 한 embed 로 묶여 온다 (소스당 별도 메시지 아님) .
+- **알림 폭주** — 여러 소스가 동시에 드리프트하면 한 회차에 소스당 필드로 한 embed 에 묶여 온다 (소스당 별도 메시지 아님) .
 - **초기 데이터 부족** — 파이프라인 초기엔 소스별 history 가 2 회 미만이라 이상탐지가 무발화한다 (안전한 무알림) .
 
 ## 롤백
