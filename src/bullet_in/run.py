@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse, asyncio, json, os, time, uuid, yaml
+import argparse, asyncio, json, logging, os, time, uuid, yaml
 from pathlib import Path
 from pymongo import MongoClient
 from sqlalchemy import create_engine, text
@@ -13,7 +13,7 @@ from bullet_in.credibility import load_registry
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import enrich_rows, classify_stage_rows
-from bullet_in.serve.render import write_site
+from bullet_in.serve.render import write_site, write_ops
 from bullet_in.quality import success_rate, volume_anomalies, evaluate_freshness
 from bullet_in import notify
 
@@ -106,6 +106,16 @@ async def main(concurrency: int):
              "counts": json.dumps(stats["source_counts"]),
              "new": len(arts), "dup": stats["dup_count"],
              "err": len(errors), "sr": summary["success_rate"]})
+
+    # 운영 뷰 (ops.html): pipeline_runs 기록 후 DB 한 경로로 집계 · 렌더.
+    # 실패해도 파이프라인은 계속 (spec §4 실패 격리).
+    try:
+        write_ops(mart.ops_snapshot(), sources, "site",
+                  anomaly_count=len(anomalies), now=mart.db_now())
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "ops 뷰 생성 실패 — 파이프라인은 계속 진행", exc_info=True)
+
     print(summary)
 
 if __name__ == "__main__":

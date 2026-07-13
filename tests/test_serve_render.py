@@ -210,3 +210,8 @@ def test_app_js_has_other_bucket_toggle_contract():
     js = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "data-group=bucket" in js   # '기타' 토글 셀렉터
     assert "showOther" in js            # other 노출 분기
+
+
+def test_index_footer_links_to_ops_page():
+    html = render_index([_row()], SOURCES, NOW)
+    assert '<a href="ops.html">수집 현황</a>' in html

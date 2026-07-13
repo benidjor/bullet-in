@@ -117,3 +117,8 @@ h2.title{margin:0 0 18px;font-size:28px;line-height:1.3;font-weight:900;letter-s
   .scrim{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:35;display:none}
   .scrim.open{display:block}
 }
+
+/* 운영 뷰 진입 푸터 */
+.sitefoot { margin: 24px 0 8px; text-align: center; font-size: 12px; }
+.sitefoot a { color: var(--muted, #898781); text-decoration: none; }
+.sitefoot a:hover { text-decoration: underline; }
