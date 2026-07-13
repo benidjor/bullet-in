@@ -19,6 +19,7 @@
 - **제목 클릭** — 이 런북으로 연결된다.
 - **무알림** — 모든 소스가 임계 안이거나, 워터마크 자체가 없는 소스뿐인 경우.
   워터마크 없음 ( 기사 0건 ) 은 "신규 추가" 와 "처음부터 죽음" 을 구분할 수 없어 알림에서 제외한다 — 이 케이스는 SLO-6 · 에러 로그가 담당.
+- **실물 캡처** — 개편 embed: `docs/assets/discord-alert-embed-after.png` · 개편 전: `docs/assets/discord-alert-embed-before.png`.
 
 ## 대응 — 원인 → 처방 진단표
 

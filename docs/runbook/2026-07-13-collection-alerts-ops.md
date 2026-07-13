@@ -31,6 +31,7 @@
 - **❌ 파이프라인 실패 (빨강)** — 하드 실패.
   `run_pipeline` 태스크가 예외로 중단.
   fields 의 `로그` 링크 · `Try` · `Host` 로 Airflow 태스크를 특정하고, description 의 예외 요약 (최대 400자) 으로 원인을 좁힌다.
+- **실물 캡처** — 개편 수집량 embed: `docs/assets/discord-alert-embed-after.png` · 개편 전: `docs/assets/discord-alert-embed-before.png`.
 
 ## 대응
 
