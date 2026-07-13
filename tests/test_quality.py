@@ -1,4 +1,6 @@
-from bullet_in.quality import success_rate, volume_anomaly, volume_anomalies, Anomaly
+from datetime import datetime, timedelta
+from bullet_in.quality import (success_rate, volume_anomaly, volume_anomalies,
+                               Anomaly, evaluate_freshness)
 
 def test_success_rate_excludes_errored_sources():
     assert success_rate(total_sources=5, errored=1) == 0.8
@@ -50,3 +52,52 @@ def test_volume_anomalies_quiet_when_within_band():
     history = _hist({"a": 20, "b": 18}, {"a": 21, "b": 19},
                     {"a": 19, "b": 20}, {"a": 20, "b": 18})
     assert volume_anomalies(today, history) == []
+
+
+_NOW = datetime(2026, 7, 13, 12, 0, 0)
+
+
+def _wm(hours_ago: float):
+    return _NOW - timedelta(hours=hours_ago)
+
+
+def test_evaluate_freshness_flags_source_over_default_threshold():
+    [r] = evaluate_freshness({"bbc_sport": _wm(50)}, _NOW, default_hours=48)
+    assert r.stale is True
+    assert r.age_hours == 50.0
+    assert r.threshold_hours == 48.0
+    assert r.last_fetched_at == _wm(50)
+
+
+def test_evaluate_freshness_quiet_within_threshold():
+    [r] = evaluate_freshness({"bbc_sport": _wm(10)}, _NOW, default_hours=48)
+    assert r.stale is False
+
+
+def test_evaluate_freshness_applies_source_override():
+    [r] = evaluate_freshness({"x_afcstuff": _wm(30)}, _NOW, default_hours=48,
+                             overrides={"x_afcstuff": 24})
+    assert r.stale is True
+    assert r.threshold_hours == 24.0
+
+
+def test_evaluate_freshness_null_watermark_recorded_but_not_stale():
+    [r] = evaluate_freshness({"new_source": None}, _NOW, default_hours=48)
+    assert r.last_fetched_at is None
+    assert r.age_hours is None
+    assert r.stale is False
+
+
+def test_evaluate_freshness_exact_threshold_not_stale():
+    [r] = evaluate_freshness({"bbc_sport": _wm(48)}, _NOW, default_hours=48)
+    assert r.age_hours == 48.0
+    assert r.stale is False
+
+
+def test_evaluate_freshness_empty_input():
+    assert evaluate_freshness({}, _NOW, default_hours=48) == []
+
+
+def test_evaluate_freshness_returns_all_sources_sorted():
+    records = evaluate_freshness({"b": _wm(1), "a": None}, _NOW, default_hours=48)
+    assert [r.source_id for r in records] == ["a", "b"]
