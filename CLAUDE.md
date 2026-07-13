@@ -72,10 +72,13 @@ uv run python -m bullet_in.run --concurrency 8              # 종단 실행
 
 ## 커밋 & PR 컨벤션 (필독)
 SoT: `docs/conventions/2026-06-11-commit-pr-convention.md`. 핵심:
-- 커밋: `<type>(<scope>): 한국어 제목` + 본문 (왜) + `Refs:` + 트레일러. type/scope는 영어.
-- **co-author 트레일러는 Claude 공식 noreply**:
-  `Co-Authored-By: Claude Opus <버전> (1M context) <noreply@anthropic.com>`
-  이 주소는 현재 GitHub "Claude" 계정으로 매핑돼 co-author 아바타가 정상 표시됨.
+- 커밋: `<type>(<scope>): 한국어 제목` + 본문 + `Refs:` + 트레일러. type/scope는 영어.
+  본문은 도입 1–2문장 (맥락 · 왜) + 명사형 불릿 — 산문만 나열 금지 (§1.1).
+- **co-author 트레일러는 실제 작업 모델 + Claude 공식 noreply** (§1.3 개정 2026-07-13):
+  설계 · 구현 모델이 다르면 (subagent 위임) 역할 라벨로 두 줄 병기, 같으면 라벨 없이 한 줄.
+  `Co-Authored-By: Claude Fable 5 (설계) <noreply@anthropic.com>`
+  `Co-Authored-By: Claude Haiku 4.5 (구현) <noreply@anthropic.com>`
+  리뷰 전용 모델은 co-author 제외. 이메일 주소는 현재 GitHub "Claude" 계정으로 매핑돼 co-author 아바타가 정상 표시됨.
   (author/git 신원은 소유자 noreply 유지 — 아래 'git 신원' 참조. 과거 선점자 이슈 · 잔여 캐시는
   `docs/troubleshooting/2026-06-28-github-contributor-misattribution.md`.)
 - PR 본문: 7섹션 한국어 구조, `--body-file`로 전달, **Claude 서명 금지** (§2.7).

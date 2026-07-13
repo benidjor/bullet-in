@@ -17,7 +17,7 @@
 본문 ("왜" 중심, 72자 wrap)
 
 Refs: <plan/spec/task/PR/runbook 링크>
-Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.github.com>
+Co-Authored-By: Claude <모델> (<역할>) <noreply@anthropic.com>
 ```
 
 - 언어: `type` · `scope`는 영어, 제목 · 본문은 한국어.
@@ -40,14 +40,18 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <94089198+benidjor@users.noreply.gi
 
 ### 1.3. 트레일러
 
-모든 커밋 본문 끝에 아래 트레일러를 붙임.
+모든 커밋 본문 끝에 실제 작업한 모델을 반영한 트레일러를 붙임 (2026-07-13 개정).
 
 ```
-Co-Authored-By: Claude Opus <버전> (1M context) <noreply@anthropic.com>
+Co-Authored-By: Claude Fable 5 (설계) <noreply@anthropic.com>
+Co-Authored-By: Claude Haiku 4.5 (구현) <noreply@anthropic.com>
 ```
 
-- `<버전>`은 실제 작업한 모델을 반영함.
-  4.8로 작업하면 `4.8`, 과거 4.7로 작업한 커밋은 `4.7`.
+- 모델명은 실제 작업한 모델을 그대로 적음 (예: `Fable 5` · `Haiku 4.5` · `Sonnet 5` · `Opus 4.8`).
+- 설계 모델과 구현 모델이 다르면 (subagent 위임 실행 등) 위 예시처럼 역할 라벨 `(설계)` · `(구현)` 으로 두 줄 병기함.
+- 설계와 구현이 같은 단독 작업 커밋은 라벨 없이 한 줄만 씀: `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
+- 리뷰만 수행한 모델은 코드 작성자가 아니므로 co-author 로 넣지 않음 (리뷰 체계는 PR 본문에 기술).
+- 과거 커밋의 `Claude Opus <버전> (1M context)` 단일 표기는 소급 수정하지 않음 (당시 실제 작업 모델의 정확한 귀속).
 - 이 트레일러는 커밋 단위로 AI 활용을 투명하게 남기기 위한 것이며, PR에는 적용하지 않음 (§2.7 참조)
 - **co-author 이메일은 Claude 공식 noreply (`noreply@anthropic.com`)를 씀.**
   현재 이 주소는 GitHub "Claude" 계정으로 매핑돼 co-author 아바타가 정상 표시되며,
