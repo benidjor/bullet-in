@@ -1,7 +1,8 @@
 import logging
+from datetime import datetime, timedelta, timezone
 import pytest
 from bullet_in import notify
-from bullet_in.quality import Anomaly
+from bullet_in.quality import Anomaly, SourceFreshness
 
 
 def test_send_alert_warns_when_webhook_unset(monkeypatch, caplog):
@@ -107,3 +108,44 @@ def test_build_freshness_alert_formats_lines_and_threshold_field():
     assert "⏳ bbc_sport: 72.0h 경과 (임계 48h)" in alert["description"]
     assert alert["fields"][0] == {"name": "기본 임계", "value": "전역 48h",
                                   "inline": True}
+
+
+class _Resp:
+    status_code = 204
+
+
+def _capture_post(monkeypatch):
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.test/webhook")
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured["json"] = json
+        return _Resp()
+
+    monkeypatch.setattr(notify.httpx, "post", fake_post)
+    return captured
+
+
+def test_send_alert_maps_url_timestamp_footer(monkeypatch):
+    captured = _capture_post(monkeypatch)
+    notify.send_alert("제목", "설명", color=0x1, url="https://runbook.test",
+                      timestamp="2026-07-13T06:29:00+00:00", footer="bullet-in")
+    embed = captured["json"]["embeds"][0]
+    assert embed["url"] == "https://runbook.test"
+    assert embed["timestamp"] == "2026-07-13T06:29:00+00:00"
+    assert embed["footer"] == {"text": "bullet-in"}
+
+
+def test_send_alert_omits_optional_keys_by_default(monkeypatch):
+    captured = _capture_post(monkeypatch)
+    notify.send_alert("제목", "설명", color=0x1)
+    embed = captured["json"]["embeds"][0]
+    assert "url" not in embed
+    assert "timestamp" not in embed
+    assert "footer" not in embed
+
+
+def test_discord_ts_renders_utc_epoch():
+    dt = datetime(2026, 7, 13, 6, 0, 0)  # naive UTC
+    assert notify._discord_ts(dt, "R") == "<t:1783922400:R>"
+    assert notify._discord_ts(dt, "f") == "<t:1783922400:f>"

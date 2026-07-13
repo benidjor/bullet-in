@@ -1,24 +1,51 @@
 from __future__ import annotations
 import logging, os
 import httpx
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
 COLOR_ANOMALY = 0xF2A600
 COLOR_FAILURE = 0xE01E5A
 
+ADAPTER_HINTS = {
+    "x_playwright": "X 쿠키 만료 · 핸들 변경",
+    "x_backtrack": "X 쿠키 만료 · 핸들 변경",
+    "html": "셀렉터 드리프트 · 사이트 개편",
+    "playwright": "셀렉터 · 동의창 드리프트",
+    "rss": "피드 URL 변경",
+    "fmkorea": "검색 URL 변경 · 429 차단",
+}
+SPIKE_HINT = "중복 유입 · 파싱 회귀 의심"
+RUNBOOK_FRESHNESS = ("https://github.com/benidjor/bullet-in/blob/main/"
+                     "docs/runbook/2026-07-13-freshness-watermark-ops.md")
+RUNBOOK_ANOMALY = ("https://github.com/benidjor/bullet-in/blob/main/"
+                   "docs/runbook/2026-07-13-collection-alerts-ops.md")
+
+
+def _discord_ts(dt: datetime, style: str) -> str:
+    """naive UTC datetime → Discord 시각 마크업 (R=상대 · f=절대)."""
+    return f"<t:{int(dt.replace(tzinfo=timezone.utc).timestamp())}:{style}>"
+
 
 def send_alert(title: str, description: str, *, color: int,
-               fields: list[dict] | None = None) -> None:
+               fields: list[dict] | None = None, url: str | None = None,
+               timestamp: str | None = None, footer: str | None = None) -> None:
     embed: dict = {"title": title, "description": description, "color": color}
     if fields:
         embed["fields"] = fields
-    url = os.environ.get("DISCORD_WEBHOOK_URL")
-    if not url:
+    if url:
+        embed["url"] = url
+    if timestamp:
+        embed["timestamp"] = timestamp
+    if footer:
+        embed["footer"] = {"text": footer}
+    webhook = os.environ.get("DISCORD_WEBHOOK_URL")
+    if not webhook:
         logger.warning("알림 (webhook 미설정): %s — %s", title, description)
         return
     try:
-        resp = httpx.post(url, json={"embeds": [embed]}, timeout=10)
+        resp = httpx.post(webhook, json={"embeds": [embed]}, timeout=10)
         if resp.status_code >= 300:
             logger.warning("알림 발송 실패 (status %s): %s", resp.status_code, title)
     except Exception as e:
