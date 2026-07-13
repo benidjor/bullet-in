@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from datetime import datetime
 from statistics import mean, pstdev
 
 def success_rate(total_sources: int, errored: int) -> float:
@@ -40,4 +41,30 @@ def volume_anomalies(today_counts: dict[str, int],
         if volume_anomaly(today, hist, sigma):
             out.append(Anomaly(sid, today, round(mu, 1),
                                "drop" if today < mu else "spike"))
+    return out
+
+
+@dataclass
+class SourceFreshness:
+    source_id: str
+    last_fetched_at: datetime | None
+    threshold_hours: float
+    age_hours: float | None   # 워터마크 없으면 None
+    stale: bool               # 워터마크 없으면 False (알림 제외)
+
+
+def evaluate_freshness(watermarks: dict[str, datetime | None], now: datetime,
+                       default_hours: float,
+                       overrides: dict[str, float] | None = None
+                       ) -> list[SourceFreshness]:
+    overrides = overrides or {}
+    out: list[SourceFreshness] = []
+    for sid in sorted(watermarks):
+        wm = watermarks[sid]
+        thr = float(overrides.get(sid, default_hours))
+        if wm is None:
+            out.append(SourceFreshness(sid, None, thr, None, False))
+            continue
+        age = (now - wm).total_seconds() / 3600
+        out.append(SourceFreshness(sid, wm, thr, age, age > thr))
     return out

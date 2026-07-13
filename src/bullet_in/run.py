@@ -14,12 +14,13 @@ from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import enrich_rows, classify_stage_rows
 from bullet_in.serve.render import write_site
-from bullet_in.quality import success_rate, volume_anomalies
+from bullet_in.quality import success_rate, volume_anomalies, evaluate_freshness
 from bullet_in import notify
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 async def main(concurrency: int):
+    run_id = str(uuid.uuid4())
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
     sources = load_sources("config/sources.yaml")
     registry = load_registry("config/credibility.yaml")
@@ -75,6 +76,19 @@ async def main(concurrency: int):
     if anomalies:
         notify.send_alert(**notify.build_anomaly_alert(anomalies, len(hist)))
 
+    # 신선도 워터마크 감시 (SLO-5): 소스별 MAX(fetched_at) 경과가 임계 초과면 알림
+    default_hours = cfg.get("freshness_default_hours", 48)
+    overrides = {sid: float(s["freshness_hours"])
+                 for sid, s in sources.items() if "freshness_hours" in s}
+    checked_at = mart.db_now()
+    wm = mart.source_watermarks()
+    records = evaluate_freshness({sid: wm.get(sid) for sid in sources},
+                                 checked_at, default_hours, overrides)
+    mart.record_freshness(run_id, checked_at, records)
+    breaches = [r for r in records if r.stale]
+    if breaches:
+        notify.send_alert(**notify.build_freshness_alert(breaches, default_hours))
+
     summary = {"new_or_changed": len(arts), "errors": errors,
                "success_rate": success_rate(len(adapters), len(errors)),
                "elapsed_sec": round(time.perf_counter() - t0, 2)}
@@ -83,7 +97,7 @@ async def main(concurrency: int):
             "INSERT INTO pipeline_runs (run_id,dag_run_id,started_at,finished_at,"
             "duration_sec,source_counts,new_count,dup_count,error_count,success_rate) "
             "VALUES (:rid,:drid,FROM_UNIXTIME(:t0),NOW(),:dur,:counts,:new,:dup,:err,:sr)"),
-            {"rid": str(uuid.uuid4()),
+            {"rid": run_id,
              "drid": os.environ.get("AIRFLOW_CTX_DAG_RUN_ID", "manual"),
              "t0": int(started_epoch), "dur": summary["elapsed_sec"],
              "counts": json.dumps(stats["source_counts"]),
