@@ -59,8 +59,8 @@ def build_anomaly_alert(anomalies, history_count: int, *,
     for a in anomalies:
         arrow = "▼" if a.direction == "drop" else "▲"
         lines = [f"{arrow} {a.today}건 (평소 ~{a.baseline:g})"]
-        recent = [h[a.source_id] for h in hist[:5] if a.source_id in h]
-        if recent:
+        if any(a.source_id in h for h in hist):
+            recent = [h.get(a.source_id, 0) for h in hist[:5]]
             seq = " → ".join(str(n) for n in reversed(recent))
             lines.append(f"최근: {seq} → (오늘) {a.today}")
         hint = (ADAPTER_HINTS.get((sources.get(a.source_id) or {}).get("adapter"))

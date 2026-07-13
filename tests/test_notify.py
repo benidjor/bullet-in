@@ -221,3 +221,11 @@ def test_build_anomaly_alert_spike_hint_and_missing_hist_source():
     assert "원인 후보: 중복 유입 · 파싱 회귀 의심" in spike_field["value"]
     assert "최근:" not in ghost_field["value"]      # hist 에 없음 → 시퀀스 생략
     assert "원인 후보" not in ghost_field["value"]  # 미지 어댑터 드롭 → 힌트 생략
+
+
+def test_build_anomaly_alert_sequence_counts_absent_rounds_as_zero():
+    # 직전 회차에 이미 0건(키 부재)이던 소스 — 부재를 생략하면 추세가 미화된다
+    hist = [{}, {"fmkorea": 14}, {"fmkorea": 14}, {"fmkorea": 14}, {"fmkorea": 14}]
+    alert = notify.build_anomaly_alert([Anomaly("fmkorea", 0, 11.2, "drop")], 12,
+                                       hist=hist, sources={}, run_id="rrrrrrrrrrrr")
+    assert "최근: 14 → 14 → 14 → 14 → 0 → (오늘) 0" in alert["fields"][0]["value"]
