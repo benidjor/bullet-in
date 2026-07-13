@@ -810,6 +810,7 @@ from maria.source_freshness
 `dbt/models/marts/tier_distribution.sql`:
 
 ```sql
+{{ config(materialized='table') }}
 with counted as (
     select tier, count(*) as n_articles
     from {{ ref('stg_articles') }}
@@ -823,6 +824,7 @@ from counted
 `dbt/models/marts/slo_rollup.sql` ( SLO-6 은 감지 결과가 DB 에 없어 제외 — spec §7.2 ):
 
 ```sql
+{{ config(materialized='table') }}
 with recent as (
     select * from {{ ref('stg_pipeline_runs') }}
     order by started_at desc limit 30
