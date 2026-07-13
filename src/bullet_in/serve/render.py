@@ -287,3 +287,16 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
 
     for asset in ("style.css", "app.js"):
         shutil.copyfile(_STATIC_DIR / asset, out / asset)
+
+
+def render_ops(view: dict) -> str:
+    return _env().get_template("ops.html.j2").render(view=view)
+
+
+def write_ops(snapshot: dict, sources: dict, out_dir: str | Path,
+              anomaly_count: int, now: datetime) -> None:
+    """운영 뷰 site/ops.html 생성. 실패 격리는 호출부 (run.py) 책임."""
+    view = build_ops_view(snapshot, sources, anomaly_count, now)
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "ops.html").write_text(render_ops(view), encoding="utf-8")

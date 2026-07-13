@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bullet-in 수집 현황</title>
+<style>
+  :root { --surface:#fcfcfb; --ink:#0b0b0b; --sec:#52514e; --mut:#898781;
+          --grid:#e1e0d9; --line:#c3c2b7; --blue:#2a78d6; --red:#d03b3b;
+          --ok-bg:rgba(12,163,12,.12); --ok-fg:#006300;
+          --crit-bg:rgba(208,59,59,.12); --crit-fg:#d03b3b;
+          --none-bg:rgba(137,135,129,.15); --none-fg:#52514e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --surface:#1a1a19; --ink:#fff; --sec:#c3c2b7; --grid:#2c2c2a;
+            --line:#383835; --blue:#3987e5; --ok-fg:#0ca30c; --none-fg:#c3c2b7; }
+  }
+  body { margin:0 auto; max-width:860px; padding:24px 16px; background:var(--surface);
+         color:var(--ink); font:14px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  header { display:flex; justify-content:space-between; align-items:baseline; }
+  h1 { font-size:18px; margin:0; }
+  .mut { color:var(--mut); font-size:11px; }
+  h2 { font-size:14px; margin:22px 0 6px; }
+  table { width:100%; border-collapse:collapse; margin:4px 0; }
+  th { text-align:left; font-weight:600; color:var(--mut); font-size:10px;
+       text-transform:uppercase; letter-spacing:.04em; padding:4px 8px;
+       border-bottom:1px solid var(--line); }
+  td { padding:4px 8px; border-bottom:1px solid var(--grid);
+       font-variant-numeric:tabular-nums; }
+  .sec { color:var(--sec); }
+  .badge { display:inline-block; padding:0 6px; border-radius:8px;
+           font-size:11px; font-weight:600; }
+  .b-fresh { background:var(--ok-bg); color:var(--ok-fg); }
+  .b-stale { background:var(--crit-bg); color:var(--crit-fg); }
+  .b-none  { background:var(--none-bg); color:var(--none-fg); }
+  .tiles { display:flex; gap:8px; margin:14px 0; flex-wrap:wrap; }
+  .tile { flex:1 1 110px; border:1px solid var(--grid); border-radius:8px;
+          padding:8px 10px; }
+  .tile .v { font-size:22px; font-weight:700; }
+  .tile .v.bad { color:var(--red); }
+  .tile .k { font-size:9px; color:var(--mut); text-transform:uppercase;
+             letter-spacing:.04em; }
+  .bars { display:flex; align-items:flex-end; gap:2px; height:56px; margin:6px 0 2px; }
+  .bars div { flex:1; background:var(--blue); border-radius:3px 3px 0 0; min-height:2px; }
+  .bars div.err { background:var(--red); }
+  .hbar { height:12px; background:var(--blue); border-radius:3px;
+          display:inline-block; vertical-align:middle; }
+  footer { margin-top:20px; border-top:1px solid var(--grid); padding-top:8px; }
+  footer a { color:var(--sec); }
+</style>
+</head>
+<body>
+<header>
+  <h1>bullet-in 수집 현황</h1>
+  <span class="mut">생성: {{ view.generated_at }}</span>
+</header>
+
+<div class="tiles">
+  <div class="tile"><div class="v">{{ view.kpi.new }}</div><div class="k">신규 (최근 회차)</div></div>
+  <div class="tile"><div class="v">{{ view.kpi.dup }}</div><div class="k">중복 차단</div></div>
+  <div class="tile"><div class="v">{{ view.kpi.err }}</div><div class="k">에러</div></div>
+  <div class="tile"><div class="v">{{ view.kpi.success }}</div><div class="k">성공률</div></div>
+  <div class="tile"><div class="v{{ ' bad' if view.kpi.stale not in ('0', '—') }}">{{ view.kpi.stale }}</div><div class="k">수집 끊긴 소스</div></div>
+  <div class="tile"><div class="v">{{ view.kpi.pending }}</div><div class="k">번역 · 분류 대기</div></div>
+</div>
+
+<h2>① 회차별 수집량 (최근 30회)</h2>
+{% if view.runs_chart %}
+<div class="bars">
+  {% for b in view.runs_chart %}<div class="{{ 'err' if b.err }}" style="height:{{ b.h }}%" title="{{ b.label }}"></div>{% endfor %}
+</div>
+<div class="mut">막대 = 회차 신규 건수 · 빨강 = 에러 있던 회차 · 마우스를 올리면 회차 상세</div>
+{% else %}<p class="mut">이력 없음</p>{% endif %}
+
+<h2>② 소스별 신선도</h2>
+{% if view.freshness %}
+<table>
+  <tr><th>소스</th><th>마지막 수집</th><th>경과 / 임계</th><th>age 추세 (12회)</th><th>상태</th></tr>
+  {% for f in view.freshness %}
+  <tr>
+    <td>{{ f.display }}</td><td class="sec">{{ f.last }}</td>
+    <td>{{ f.age }} / {{ f.thr }}</td>
+    <td>{% if f.points %}<svg width="84" height="18"><polyline points="{{ f.points }}" fill="none" stroke="{{ 'var(--red)' if f.status == 'stale' else 'var(--blue)' }}" stroke-width="2"><title>최근 12회 age_hours 추세</title></polyline></svg>{% endif %}</td>
+    <td>{% if f.status == 'fresh' %}<span class="badge b-fresh">✓ 신선</span>{% elif f.status == 'stale' %}<span class="badge b-stale">✕ 초과</span>{% else %}<span class="badge b-none">이력 없음</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="mut">이력 없음</p>{% endif %}
+
+<h2>③ 소스별 수집량 · 번역 · 분류 대기 (최근 12회)</h2>
+{% if view.volume %}
+<table>
+  <tr><th>소스</th><th>수집량 (12회 합)</th><th>번역 대기</th><th>분류 대기</th></tr>
+  {% for v in view.volume %}
+  <tr><td style="width:130px">{{ v.display }}</td>
+      <td><span class="hbar" style="width:{{ [v.bar_pct, 2] | max }}%"></span> {{ v.total }}</td>
+      <td>{{ v.translate }}</td><td>{{ v.stage }}</td></tr>
+  {% endfor %}
+</table>
+<div class="mut">번역 대기 = 한국어 제목 · 본문 아직 없음 · 분류 대기 = 영입 단계 태그 아직 없음</div>
+{% else %}<p class="mut">이력 없음</p>{% endif %}
+
+<h2>④ tier 분포 (전체 기사)</h2>
+<table>
+  {% for t in view.tiers %}
+  <tr><td style="width:200px">{{ t.label }}</td>
+      <td><span class="hbar" style="width:{{ [t.pct, 2] | max }}%"></span> {{ t.pct }}% ({{ t.count }})</td></tr>
+  {% endfor %}
+</table>
+
+<h2>⑤ SLO 롤업 (최근 30회 기준)</h2>
+{% if view.slo %}
+<table>
+  <tr><th>SLO</th><th>정의</th><th>현재</th><th>상태</th></tr>
+  {% for s in view.slo %}
+  <tr><td>{{ s.slo_id }}</td><td class="sec">{{ s.definition }}</td><td>{{ s.value }}</td>
+      <td>{% if s.status == 'ok' %}<span class="badge b-fresh">✓</span>{% elif s.status == 'bad' %}<span class="badge b-stale">✕</span>{% else %}<span class="mut">참고치</span>{% endif %}</td></tr>
+  {% endfor %}
+</table>
+{% else %}<p class="mut">이력 없음</p>{% endif %}
+
+<footer><a href="index.html">← 기사 페이지로</a></footer>
+</body>
+</html>
