@@ -1,0 +1,127 @@
+<h2>운영 뷰 레이아웃 v3 — 확정안</h2>
+<p class="subtitle">변경점: "인리치 잔량" → "번역 · 분류 대기"로 표현 변경 (KPI 타일 · 섹션 3 제목 · 열 이름). 이 화면이 구현 기준 목업입니다.</p>
+
+<style>
+  .mock { font-size: 12px; line-height: 1.55; }
+  .mock table { width: 100%; border-collapse: collapse; margin: 4px 0; }
+  .mock th { text-align: left; font-weight: 600; color: #898781; font-size: 10px;
+             text-transform: uppercase; letter-spacing: .04em; padding: 4px 8px;
+             border-bottom: 1px solid #c3c2b7; }
+  .mock td { padding: 4px 8px; border-bottom: 1px solid #e1e0d9;
+             font-variant-numeric: tabular-nums; }
+  .mock .sec { color: #52514e; }
+  .mock .mut { color: #898781; font-size: 10px; }
+  .mock h4 { margin: 18px 0 4px; font-size: 13px; }
+  .mock h4 .no { display: inline-block; width: 16px; height: 16px; border-radius: 50%;
+                 background: #2a78d6; color: #fff; font-size: 10px; text-align: center;
+                 line-height: 16px; margin-right: 6px; }
+  .badge { display: inline-block; padding: 0 6px; border-radius: 8px;
+           font-size: 10px; font-weight: 600; }
+  .b-ok   { background: rgba(12,163,12,.12);  color: #006300; }
+  .b-crit { background: rgba(208,59,59,.12);  color: #d03b3b; }
+  .tile-row { display: flex; gap: 8px; margin: 8px 0; }
+  .tile { flex: 1; border: 1px solid #e1e0d9; border-radius: 8px; padding: 8px 10px; }
+  .tile .v { font-size: 22px; font-weight: 700; }
+  .tile .k { font-size: 9px; color: #898781; text-transform: uppercase; letter-spacing: .04em; }
+  .bars { display: flex; align-items: flex-end; gap: 2px; height: 56px; margin: 6px 0 2px; }
+  .bars div { flex: 1; background: #2a78d6; border-radius: 3px 3px 0 0; min-height: 2px; }
+  .bars div.err { background: #d03b3b; }
+  .hbar { height: 12px; background: #2a78d6; border-radius: 3px; display: inline-block; vertical-align: middle; }
+  @media (prefers-color-scheme: dark) {
+    .mock th { border-bottom-color: #383835; }
+    .mock td { border-bottom-color: #2c2c2a; }
+    .mock .sec { color: #c3c2b7; }
+    .b-ok { color: #0ca30c; }
+    .tile { border-color: #2c2c2a; }
+    .bars div { background: #3987e5; }
+    .hbar { background: #3987e5; }
+  }
+</style>
+
+<div class="mockup">
+  <div class="mockup-header">site/ops.html — 수집 현황 (매 파이프라인 회차 재생성)</div>
+  <div class="mockup-body">
+    <div class="mock">
+      <div style="display:flex; justify-content:space-between; align-items:baseline;">
+        <strong style="font-size:15px">bullet-in 수집 현황</strong>
+        <span class="mut">생성: 2026-07-14 09:12 UTC · run 3f2a…</span>
+      </div>
+
+      <div class="tile-row">
+        <div class="tile"><div class="v">12</div><div class="k">신규 (최근 회차)</div></div>
+        <div class="tile"><div class="v">31</div><div class="k">중복 차단</div></div>
+        <div class="tile"><div class="v">0</div><div class="k">에러</div></div>
+        <div class="tile"><div class="v">100%</div><div class="k">성공률</div></div>
+        <div class="tile"><div class="v" style="color:#d03b3b">1</div><div class="k">Stale 소스</div></div>
+        <div class="tile"><div class="v">9</div><div class="k">번역 · 분류 대기</div></div>
+      </div>
+
+      <h4><span class="no">1</span>회차별 수집량 (최근 30회)</h4>
+      <div class="bars">
+        <div style="height:48%"></div><div style="height:35%"></div><div style="height:60%"></div>
+        <div style="height:28%"></div><div style="height:42%"></div><div style="height:80%"></div>
+        <div style="height:38%"></div><div style="height:55%"></div><div style="height:33%"></div>
+        <div style="height:70%"></div><div style="height:45%"></div><div style="height:52%"></div>
+        <div style="height:26%"></div><div class="err" style="height:20%"></div><div style="height:64%"></div>
+        <div style="height:41%"></div><div style="height:58%"></div><div style="height:36%"></div>
+        <div style="height:49%"></div><div style="height:31%"></div><div style="height:67%"></div>
+        <div style="height:44%"></div><div style="height:53%"></div><div style="height:29%"></div>
+        <div style="height:61%"></div><div style="height:39%"></div><div style="height:56%"></div>
+        <div style="height:34%"></div><div style="height:72%"></div><div style="height:47%"></div>
+      </div>
+      <div class="mut">막대 = 회차 신규 건수 · 빨강 = 에러 있던 회차 · 호버 시 회차 상세 (시각 · 신규/중복/에러)</div>
+
+      <h4><span class="no">2</span>소스별 신선도</h4>
+      <table>
+        <tr><th>소스</th><th>마지막 수집</th><th>경과 / 임계</th><th>age 추세 (12회)</th><th>상태</th></tr>
+        <tr><td>bbc</td><td class="sec">07-14 07:03</td><td>2.1h / 48h</td>
+          <td><svg width="84" height="18"><polyline points="0,14 14,10 28,12 42,8 56,11 70,6 84,9" fill="none" stroke="#2a78d6" stroke-width="2"/></svg></td>
+          <td><span class="badge b-ok">✓ 신선</span></td></tr>
+        <tr><td>x_afcstuff</td><td class="sec">07-13 07:12</td><td>26.0h / 24h</td>
+          <td><svg width="84" height="18"><polyline points="0,13 14,12 28,10 42,9 56,6 70,4 84,2" fill="none" stroke="#d03b3b" stroke-width="2"/></svg></td>
+          <td><span class="badge b-crit">✕ 초과</span></td></tr>
+        <tr><td>arseblog</td><td class="sec">07-13 21:40</td><td>12.3h / 48h</td>
+          <td><svg width="84" height="18"><polyline points="0,8 14,11 28,7 42,12 56,9 70,11 84,8" fill="none" stroke="#2a78d6" stroke-width="2"/></svg></td>
+          <td><span class="badge b-ok">✓ 신선</span></td></tr>
+        <tr><td>fmkorea</td><td class="sec">07-14 06:55</td><td>3.2h / 48h</td>
+          <td><svg width="84" height="18"><polyline points="0,10 14,9 28,11 42,8 56,10 70,7 84,9" fill="none" stroke="#2a78d6" stroke-width="2"/></svg></td>
+          <td><span class="badge b-ok">✓ 신선</span></td></tr>
+      </table>
+
+      <h4><span class="no">3</span>소스별 수집량 · 번역 · 분류 대기 (최근 12회)</h4>
+      <table>
+        <tr><th>소스</th><th>수집량 (12회 합)</th><th>번역 대기</th><th>분류 대기</th></tr>
+        <tr><td style="width:110px">bbc</td><td><span class="hbar" style="width:70%"></span> 41</td><td>0</td><td>0</td></tr>
+        <tr><td>fmkorea</td><td><span class="hbar" style="width:56%"></span> 33</td><td>5</td><td>2</td></tr>
+        <tr><td>arseblog</td><td><span class="hbar" style="width:34%"></span> 20</td><td>2</td><td>0</td></tr>
+        <tr><td>x_afcstuff</td><td><span class="hbar" style="width:7%"></span> 4</td><td>0</td><td>0</td></tr>
+      </table>
+      <div class="mut">번역 대기 = 한국어 제목 · 본문 아직 없음, 분류 대기 = 영입 단계 태그 아직 없음 (Gemini 무료 티어 → 하루 4회 나눠 처리, 대기가 줄어드는지가 관건)</div>
+
+      <h4><span class="no">4</span>tier 분포 (전체 기사)</h4>
+      <table>
+        <tr><td style="width:180px">Tier 1 — 공식 · 1군 언론</td><td><span class="hbar" style="width:41%"></span> 41%</td></tr>
+        <tr><td>Tier 2 — 2군 · 애그리게이터</td><td><span class="hbar" style="width:33%"></span> 33%</td></tr>
+        <tr><td>Tier 3 — ITK · 루머</td><td><span class="hbar" style="width:14%"></span> 14%</td></tr>
+        <tr><td>기타 (0 · 1.5 · 4)</td><td><span class="hbar" style="width:12%"></span> 12%</td></tr>
+      </table>
+
+      <h4><span class="no">5</span>SLO 롤업 (최근 30회 기준)</h4>
+      <table>
+        <tr><th>SLO</th><th>정의</th><th>현재</th><th>상태</th></tr>
+        <tr><td>SLO-2 수집 성공률</td><td class="sec">회차 평균 success_rate</td><td>97.2%</td><td><span class="badge b-ok">✓</span></td></tr>
+        <tr><td>SLO-5 신선도</td><td class="sec">stale 소스 수 (현재 회차)</td><td>1</td><td><span class="badge b-crit">✕</span></td></tr>
+        <tr><td>SLO-6 수집량 이상</td><td class="sec">이상 감지 회차 비율</td><td>3.3%</td><td><span class="badge b-ok">✓</span></td></tr>
+        <tr><td>회차 소요 시간</td><td class="sec">평균 duration</td><td>84s</td><td class="mut">참고치</td></tr>
+      </table>
+
+      <div class="mut" style="margin-top:14px; border-top:1px solid #e1e0d9; padding-top:6px;">
+        ← 기사 페이지로 &nbsp;·&nbsp; (index 푸터의 '수집 현황' 링크로 진입)
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="subtitle">구성 확정 — 이후 설계 논의는 터미널에서 이어집니다. 이 화면은 참고용으로 남겨둡니다.</p>
+</div>

@@ -13,3 +13,11 @@ models:
           - accepted_values:
               arguments:
                 values: [0, 1, 1.5, 2, 3, 4]
+  - name: tier_distribution
+    columns:
+      - name: tier
+        tests: [unique, not_null]
+  - name: slo_rollup
+    columns:
+      - name: slo_id
+        tests: [unique, not_null]

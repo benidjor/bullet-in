@@ -26,4 +26,5 @@ def clean(engine):
     with engine.begin() as c:
         c.execute(text("DELETE FROM articles"))
         c.execute(text("DELETE FROM source_freshness"))
+        c.execute(text("DELETE FROM pipeline_runs"))
     yield

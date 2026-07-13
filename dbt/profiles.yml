@@ -5,6 +5,11 @@ bullet_in:
       type: duckdb
       path: "bullet_in.duckdb"
       extensions: [mysql_scanner]
+      settings:
+        # duckdb 1.5.3 + mysql_scanner: extension 옵티마이저가 attach 테이블 위
+        # 집계 쿼리에서 binder 내부 오류(Failed to bind column reference)를 일으킴.
+        # pushdown 최적화만 끄는 우회 — 데이터 소량이라 성능 영향 없음.
+        disabled_optimizers: "extension"
       attach:
         - path: "host=localhost user=root password=bulletin port=3306 database=bulletin"
           type: mysql
