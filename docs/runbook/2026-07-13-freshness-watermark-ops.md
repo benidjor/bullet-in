@@ -61,8 +61,8 @@ uv run pytest tests/integration/test_source_freshness.py -v  # 테이블 적재 
 - **알림 실패 무해** — `send_alert` 가 모든 예외를 삼켜 파이프라인을 죽이지 않는다 ( `docs/troubleshooting/2026-07-13-alert-exception-swallow-gap.md` ).
 - **워터마크 없음 무알림** — 기사 0건 소스는 행만 남고 조용하다.
   신규 소스를 붙였는데 며칠째 `last_fetched_at` 이 NULL 이면 어댑터 자체가 죽은 것 — SLO-6 드롭 알림 · 에러 로그를 본다.
-- **DB 시계 기준** — `age_hours` 는 DB `NOW()` 기준이라 앱 서버 시계와 무관하다.
-  컨테이너 TZ 를 바꿔도 판정이 흔들리지 않는다.
+- **UTC 시계 기준** — 워터마크 (`fetched_at`) 는 어댑터가 UTC 로 저장하고, `now` 도 DB `UTC_TIMESTAMP()` 로 받는다.
+  양쪽 시계가 UTC 로 고정되어 앱 · DB 컨테이너의 TZ 설정과 무관하게 판정이 흔들리지 않는다.
 
 ## 롤백
 

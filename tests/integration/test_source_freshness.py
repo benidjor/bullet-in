@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import text
 from bullet_in.models import Article
 from bullet_in.quality import evaluate_freshness
@@ -18,8 +18,11 @@ def test_source_watermarks_returns_max_fetched_at(engine):
     assert wm["bbc_sport"] == datetime(2026, 7, 12, 9, 30)
 
 
-def test_db_now_returns_datetime(engine):
-    assert isinstance(MartStore(engine).db_now(), datetime)
+def test_db_now_returns_utc_datetime(engine):
+    now = MartStore(engine).db_now()
+    assert isinstance(now, datetime)
+    drift = abs((datetime.now(timezone.utc).replace(tzinfo=None) - now).total_seconds())
+    assert drift < 300  # UTC 계약: 세션 TZ 와 무관하게 UTC 현재 시각
 
 
 def test_record_freshness_persists_rows_with_shared_run_id(engine):

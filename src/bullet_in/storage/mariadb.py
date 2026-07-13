@@ -96,8 +96,9 @@ class MartStore:
         return {sid: wm for sid, wm in rows}
 
     def db_now(self) -> datetime:
+        """UTC 기준 DB 시각. fetched_at (어댑터가 UTC 저장) 과 같은 시계로 비교."""
         with self.engine.connect() as c:
-            return c.execute(text("SELECT NOW()")).scalar_one()
+            return c.execute(text("SELECT UTC_TIMESTAMP()")).scalar_one()
 
     def record_freshness(self, run_id: str, checked_at: datetime,
                          records: list[SourceFreshness]) -> None:
