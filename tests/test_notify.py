@@ -93,21 +93,66 @@ def test_send_alert_swallows_non_httperror(monkeypatch, caplog):
     assert "제목" in caplog.text
 
 
-def test_build_freshness_alert_formats_lines_and_threshold_field():
-    from datetime import datetime, timedelta
-    from bullet_in.quality import SourceFreshness
+_FRESH_SOURCES = {
+    "x_afcstuff": {"display_name": "afcstuff (aggregator)", "adapter": "x_playwright"},
+    "bbc_sport": {"display_name": "BBC Sport", "adapter": "html"},
+    "new_source": {"adapter": "html"},
+}
 
-    now = datetime(2026, 7, 13, 12, 0, 0)
-    breaches = [
-        SourceFreshness("x_afcstuff", now - timedelta(hours=61.4), 24.0, 61.4, True),
-        SourceFreshness("bbc_sport", now - timedelta(hours=72), 48.0, 72.0, True)]
-    alert = notify.build_freshness_alert(breaches, default_hours=48)
-    assert alert["title"] == "🕰️ 신선도 경고 — 오래된 소스"
+
+def _freshness_inputs():
+    checked = datetime(2026, 7, 13, 6, 0, 0)
+    records = [
+        SourceFreshness("x_afcstuff", checked - timedelta(hours=61.4), 24.0, 61.4, True),
+        SourceFreshness("bbc_sport", checked - timedelta(hours=10), 48.0, 10.0, False),
+        SourceFreshness("new_source", None, 48.0, None, False)]
+    return checked, records
+
+
+def test_build_freshness_alert_title_overview_and_meta():
+    checked, records = _freshness_inputs()
+    alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
+                                         run_id="3f2a9c12abcd", checked_at=checked)
+    assert alert["title"] == "🕰️ 신선도 경고 — 오래된 소스 1건"
+    assert alert["description"] == "감시 3소스: stale 1 · 정상 1 · 워터마크 없음 1"
     assert alert["color"] == notify.COLOR_ANOMALY
-    assert "⏳ x_afcstuff: 61.4h 경과 (임계 24h)" in alert["description"]
-    assert "⏳ bbc_sport: 72.0h 경과 (임계 48h)" in alert["description"]
-    assert alert["fields"][0] == {"name": "기본 임계", "value": "전역 48h",
-                                  "inline": True}
+    assert alert["url"] == notify.RUNBOOK_FRESHNESS
+    assert alert["timestamp"] == "2026-07-13T06:00:00+00:00"
+    assert alert["footer"] == "bullet-in"
+
+
+def test_build_freshness_alert_stale_field_detail():
+    checked, records = _freshness_inputs()
+    alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
+                                         run_id="3f2a9c12abcd", checked_at=checked)
+    [field] = [f for f in alert["fields"] if f["name"].startswith("afcstuff")]
+    assert field["name"] == "afcstuff (aggregator) (x_afcstuff)"
+    assert field["inline"] is False
+    assert "⏳ 61.4h 경과 (임계 24h)" in field["value"]
+    epoch = int((checked - timedelta(hours=61.4))
+                .replace(tzinfo=timezone.utc).timestamp())
+    assert f"마지막 수집: <t:{epoch}:R> (<t:{epoch}:f>)" in field["value"]
+    assert "원인 후보: X 쿠키 만료 · 핸들 변경" in field["value"]
+
+
+def test_build_freshness_alert_common_fields():
+    checked, records = _freshness_inputs()
+    alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
+                                         run_id="3f2a9c12abcd", checked_at=checked)
+    assert {"name": "기본 임계", "value": "전역 48h", "inline": True} in alert["fields"]
+    assert {"name": "회차", "value": "run 3f2a9c12", "inline": True} in alert["fields"]
+    assert len([f for f in alert["fields"] if f["inline"] is False]) == 1  # stale 1건만
+
+
+def test_build_freshness_alert_fallbacks_unknown_adapter_no_display_name():
+    checked = datetime(2026, 7, 13, 6, 0, 0)
+    records = [SourceFreshness("mystery", checked - timedelta(hours=50), 48.0, 50.0, True)]
+    alert = notify.build_freshness_alert(records, 48,
+                                         sources={"mystery": {"adapter": "weird"}},
+                                         run_id="rrrrrrrrrrrr", checked_at=checked)
+    field = alert["fields"][0]
+    assert field["name"] == "mystery"
+    assert "원인 후보" not in field["value"]
 
 
 class _Resp:
