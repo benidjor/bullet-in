@@ -75,6 +75,38 @@ uv run python -c "from bullet_in import notify; assert callable(notify.build_fai
 - **참고** — 로컬 `airflow/` 디렉터리가 pip `airflow` 패키지명을 가려, airflow 미설치 시 `test_dag_import` 는 `importorskip("airflow.models")` 로 skip 된다.
   전체 DAG 로드 검증은 airflow 가 설치된 환경 (Docker `apache/airflow:3.0.0`) 에서 DagBag 으로 확인.
 
+### 실발송 스모크
+
+단위 테스트는 httpx 를 모킹하므로 "Discord 가 payload 를 수락하고 의도대로 렌더링하는가" 는 실발송으로만 확인된다.
+알림 포맷을 바꿨거나 webhook 을 새로 발급했으면 아래로 샘플 2건 (신선도 · 수집량) 을 실발송한다.
+
+```bash
+set -a; source .env; set +a        # DISCORD_WEBHOOK_URL 주입
+uv run python - <<'EOF'
+import logging
+logging.basicConfig(level=logging.WARNING)   # 실패 시 WARNING · 무음이면 2xx 수락
+from datetime import datetime, timedelta, timezone
+from bullet_in import notify
+from bullet_in.quality import SourceFreshness, Anomaly
+
+now = datetime.now(timezone.utc).replace(tzinfo=None)
+sources = {"x_afcstuff": {"display_name": "afcstuff (aggregator)", "adapter": "x_playwright"},
+           "fmkorea": {"display_name": "fmkorea 축구 소식통", "adapter": "fmkorea"}}
+records = [SourceFreshness("x_afcstuff", now - timedelta(hours=61.4), 24.0, 61.4, True)]
+notify.send_alert(**notify.build_freshness_alert(records, 48, sources=sources,
+                                                 run_id="smoke-test-0000", checked_at=now))
+hist = [{}, {"fmkorea": 14}, {"fmkorea": 13}, {"fmkorea": 15}, {"fmkorea": 12}]  # 직전 회차 0건 샘플
+notify.send_alert(**notify.build_anomaly_alert([Anomaly("fmkorea", 0, 14.0, "drop")], 12,
+                                               hist=hist, sources=sources,
+                                               run_id="smoke-test-0000"))
+EOF
+```
+
+- **판독** — WARNING 없이 끝나면 Discord 2xx 수락 · 채널에서 불릿 · 상대시간 · 시퀀스 렌더링을 눈으로 확인.
+- **캡처 갱신** — embed 형식을 바꾼 변경이면 `docs/assets/discord-alert-embed-after.png` 를 새 캡처로 교체해 문서와 실물을 맞춘다.
+- **함정** — webhook 미설정이면 알림 기능 전체가 WARNING 폴백으로만 돌아 "코드는 정상 · 도달은 0" 상태가 된다.
+  SLO-6 머지 후 이 상태가 한동안 지속된 적 있음 — 알림 기능 배포 시 실발송 스모크를 필수 체크로.
+
 ## 실패 모드
 
 - **webhook 오설정 · 만료** — `send_alert` 가 모든 예외를 삼켜 파이프라인을 죽이지 않는다 (미설정과 동일하게 WARNING 만) .
@@ -91,5 +123,5 @@ uv run python -c "from bullet_in import notify; assert callable(notify.build_fai
 ## 참고
 
 - PR #34 · spec/plan `docs/superpowers/{specs,plans}/2026-07-13-slo6-collection-alerts*`.
-- 함정: `docs/troubleshooting/2026-07-13-alert-exception-swallow-gap.md`.
+- 함정: `docs/troubleshooting/2026-07-13-alert-exception-swallow-gap.md` (예외 삼킴) · `docs/troubleshooting/2026-07-13-sparse-source-counts-trend-bias.md` (희소 표현 추세 왜곡).
 - 로드맵: `docs/superpowers/2026-06-28-v1-completion-roadmap.md` (Tier 3 · SLO-6) .

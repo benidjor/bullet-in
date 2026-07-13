@@ -60,6 +60,8 @@ uv run pytest tests/test_notify.py -v                        # build_freshness_a
 uv run pytest tests/integration/test_source_freshness.py -v  # 테이블 적재 (MariaDB 필요 · 없으면 skip)
 ```
 
+- **실발송 스모크** — Discord 수락 · 렌더링 확인 절차는 `docs/runbook/2026-07-13-collection-alerts-ops.md` 의 "실발송 스모크" 절 참조 (신선도 샘플 포함).
+
 ## 실패 모드
 
 - **알림 실패 무해** — `send_alert` 가 모든 예외를 삼켜 파이프라인을 죽이지 않는다 ( `docs/troubleshooting/2026-07-13-alert-exception-swallow-gap.md` ).
@@ -78,5 +80,6 @@ uv run pytest tests/integration/test_source_freshness.py -v  # 테이블 적재 
 ## 참고
 
 - spec · plan: `docs/superpowers/{specs,plans}/2026-07-13-slo5-freshness-watermark*`.
+- 함정: `docs/troubleshooting/2026-07-13-freshness-clock-mixing-gap.md` (시계 혼합 · UTC 고정 경위).
 - SLO-6 알림 운영: `docs/runbook/2026-07-13-collection-alerts-ops.md`.
 - 로드맵: `docs/superpowers/2026-06-28-v1-completion-roadmap.md` ( Tier 3 · SLO-5 ).
