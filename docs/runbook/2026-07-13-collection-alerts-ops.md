@@ -78,7 +78,7 @@ uv run python -c "from bullet_in import notify; assert callable(notify.build_fai
 
 - **webhook 오설정 · 만료** — `send_alert` 가 모든 예외를 삼켜 파이프라인을 죽이지 않는다 (미설정과 동일하게 WARNING 만) .
   좁은 except 로 인한 파이프라인 crash 함정은 `docs/troubleshooting/2026-07-13-alert-exception-swallow-gap.md` 참조.
-- **알림 폭주** — 여러 소스가 동시에 드리프트하면 한 회차에 여러 라인이 한 embed 로 묶여 온다 (소스당 별도 메시지 아님) .
+- **알림 폭주** — 여러 소스가 동시에 드리프트하면 한 회차에 소스당 필드로 한 embed 에 묶여 온다 (소스당 별도 메시지 아님) .
 - **초기 데이터 부족** — 파이프라인 초기엔 소스별 history 가 2 회 미만이라 이상탐지가 무발화한다 (안전한 무알림) .
 
 ## 롤백
