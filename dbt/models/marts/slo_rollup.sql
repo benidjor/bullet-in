@@ -22,3 +22,8 @@ select 'duration',
        '최근 30회 평균 duration_sec',
        avg(duration_sec)
 from recent
+union all
+select 'fetch_duration',
+       '최근 30회 평균 fetch_duration_sec',
+       avg(fetch_duration_sec)
+from recent
