@@ -7,6 +7,7 @@ SOURCES = {"bbc_sport": {"display_name": "BBC Sport"}}
 
 def _snapshot():
     return {"runs": [{"run_id": "r1", "started_at": NOW, "duration_sec": 80.0,
+                      "fetch_duration_sec": 10.0,
                       "source_counts": {"bbc_sport": 4}, "new_count": 4,
                       "dup_count": 2, "error_count": 0, "success_rate": 1.0}],
             "freshness": [{"run_id": "r1", "checked_at": NOW,
@@ -36,3 +37,26 @@ def test_write_ops_creates_file(tmp_path):
     write_ops(_snapshot(), SOURCES, tmp_path, anomaly_count=0, now=NOW)
     out = tmp_path / "ops.html"
     assert out.exists() and "bullet-in 수집 현황" in out.read_text(encoding="utf-8")
+
+
+def test_build_ops_view_fetch_duration_row():
+    view = build_ops_view(_snapshot(), SOURCES, 0, NOW)
+    row = next(s for s in view["slo"] if s["slo_id"] == "fetch_duration")
+    # 10.0 하나의 평균 = 10.0 → "10s" (손 재계산)
+    assert row["value"] == "10s" and row["status"] == "info"
+    assert row["definition"] == "최근 30회 평균 fetch 시간"
+
+
+def test_build_ops_view_fetch_duration_all_null_shows_dash():
+    snap = _snapshot()
+    snap["runs"][0]["fetch_duration_sec"] = None      # 기존 13회 이력 = NULL 계약
+    view = build_ops_view(snap, SOURCES, 0, NOW)
+    row = next(s for s in view["slo"] if s["slo_id"] == "fetch_duration")
+    assert row["value"] == "—"
+
+
+def test_render_ops_stale_badge_renders():
+    snap = _snapshot()
+    snap["freshness"][0]["stale"] = 1                 # PR #39 이월 ③ — 미검증 경로
+    html = render_ops(build_ops_view(snap, SOURCES, 0, NOW))
+    assert "✕ 초과" in html and "b-stale" in html

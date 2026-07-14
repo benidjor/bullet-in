@@ -8,6 +8,7 @@ from bullet_in.storage.mariadb import MartStore
 def _seed_runs(engine, n, base=datetime(2026, 7, 1, 0, 0)):
     rows = [{"rid": f"run-{i:03d}", "t": base + timedelta(hours=6 * i),
              "dur": 60.0 + i,
+             "fetch": None if i % 2 == 0 else 4.0 + i,   # NULL 혼재 이력
              # i % 2 회차만 bbc_sport 키 존재 → 희소 표현 (부재 = 0 계약은 Task 2 가공에서 검증)
              "counts": json.dumps({"bbc_sport": 3} if i % 2 else {}),
              "new": i % 3, "dup": 2, "err": 1 if i == n - 1 else 0, "sr": 0.9}
@@ -15,8 +16,9 @@ def _seed_runs(engine, n, base=datetime(2026, 7, 1, 0, 0)):
     with engine.begin() as c:
         c.execute(text(
             "INSERT INTO pipeline_runs (run_id,dag_run_id,started_at,finished_at,"
-            "duration_sec,source_counts,new_count,dup_count,error_count,success_rate) "
-            "VALUES (:rid,'test',:t,:t,:dur,:counts,:new,:dup,:err,:sr)"), rows)
+            "duration_sec,fetch_duration_sec,source_counts,new_count,dup_count,"
+            "error_count,success_rate) "
+            "VALUES (:rid,'test',:t,:t,:dur,:fetch,:counts,:new,:dup,:err,:sr)"), rows)
 
 
 def _seed_freshness(engine, n_runs, base=datetime(2026, 7, 1, 0, 0)):
@@ -77,3 +79,11 @@ def test_ops_snapshot_tier_counts_and_pending(engine):
 def test_ops_snapshot_cold_start_returns_empty_shapes(engine):
     snap = MartStore(engine).ops_snapshot()
     assert snap == {"runs": [], "freshness": [], "tier_counts": {}, "pending": {}}
+
+
+def test_ops_snapshot_includes_fetch_duration_with_nulls(engine):
+    _seed_runs(engine, 3)
+    snap = MartStore(engine).ops_snapshot()
+    # 최신순: run-002 (i=2, NULL) · run-001 (i=1, 4.0+1=5.0) · run-000 (NULL) — 손 재계산
+    assert snap["runs"][0]["fetch_duration_sec"] is None
+    assert snap["runs"][1]["fetch_duration_sec"] == 5.0

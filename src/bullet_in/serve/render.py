@@ -180,6 +180,9 @@ def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int,
     if runs:
         avg_sr = sum(r["success_rate"] for r in runs) / len(runs)
         avg_dur = sum(r["duration_sec"] for r in runs) / len(runs)
+        fetch_vals = [r["fetch_duration_sec"] for r in runs
+                      if r.get("fetch_duration_sec") is not None]  # NULL 이력 제외 (§6)
+        avg_fetch = sum(fetch_vals) / len(fetch_vals) if fetch_vals else None
         slo = [
             {"slo_id": "SLO-2", "definition": "최근 30회 평균 success_rate",
              "value": f"{avg_sr * 100:.1f}%",
@@ -192,6 +195,9 @@ def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int,
              "status": "ok" if anomaly_count == 0 else "bad"},
             {"slo_id": "duration", "definition": "최근 30회 평균 소요 시간",
              "value": f"{avg_dur:.0f}s", "status": "info"},
+            {"slo_id": "fetch_duration", "definition": "최근 30회 평균 fetch 시간",
+             "value": "—" if avg_fetch is None else f"{avg_fetch:.0f}s",
+             "status": "info"},
         ]
     else:
         slo = []
