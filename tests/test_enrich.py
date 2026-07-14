@@ -252,3 +252,53 @@ def test_stage_prompt_lists_every_valid_stage():
     from bullet_in.enrich import STAGE_PROMPT
     for enum in ts.VALID_STAGES:
         assert enum in STAGE_PROMPT, f"STAGE_PROMPT가 {enum} 단계를 누락 — transfer_stage와 동기화 필요"
+
+from bullet_in.enrich import resummarize_rows
+
+def test_resummarize_returns_summary_fields_only():
+    class M:
+        def generate_content(self, **kw):
+            class R: pass
+            r = R(); r.text = '{"summary_ko":"확정했다.","summary3_ko":["a","b","c"]}'
+            return r
+    class C:
+        def __init__(self): self.models = M()
+    rows = [{"content_hash": "h", "title_original": "T",
+             "title_ko": "제목", "body_ko": "본문"}]
+    out = resummarize_rows(rows, C(), "gemini-2.5-flash-lite")
+    assert out["h"] == {"summary_ko": "확정했다.", "summary3_ko": "a\nb\nc"}
+
+def test_resummarize_stops_and_logs_on_rate_limit(caplog):
+    class M:
+        def __init__(self): self.n = 0
+        def generate_content(self, **kw):
+            self.n += 1
+            raise _RateLimit("429")
+    class C:
+        def __init__(self): self.models = M()
+    c = C()
+    rows = [{"content_hash": "a", "title_original": "A", "body_ko": "b"},
+            {"content_hash": "b", "title_original": "B", "body_ko": "b"}]
+    with caplog.at_level(logging.WARNING):
+        out = resummarize_rows(rows, c, "m")
+    assert out == {}
+    assert c.models.n == 1
+    assert any("429" in r.message or "rate limit" in r.message.lower()
+               for r in caplog.records)
+
+def test_resummarize_skips_unparseable_row_without_aborting():
+    class M:
+        def __init__(self): self.n = 0
+        def generate_content(self, **kw):
+            self.n += 1
+            class R: pass
+            r = R()
+            r.text = "garbage" if self.n == 1 else '{"summary_ko":"됐다.","summary3_ko":["a","b","c"]}'
+            return r
+    class C:
+        def __init__(self): self.models = M()
+    rows = [{"content_hash": "bad", "title_original": "A", "body_ko": "b"},
+            {"content_hash": "ok", "title_original": "B", "body_ko": "b"}]
+    out = resummarize_rows(rows, C(), "gemini-2.5-flash-lite")
+    assert "bad" not in out
+    assert out["ok"]["summary_ko"] == "됐다."
