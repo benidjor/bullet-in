@@ -61,9 +61,9 @@ spec §6.1 표를 그대로 옮긴다 (`docs/superpowers/specs/2026-07-14-ops-mo
   자세한 경위 → `docs/troubleshooting/2026-07-13-sparse-source-counts-trend-bias.md`.
 - "생성" 시각과 `source_freshness` 의 `age_hours` 는 모두 UTC 로 고정된 시계 (`MartStore.db_now()` = `SELECT UTC_TIMESTAMP()`) 를 쓴다.
   naive DATETIME 두 값을 다른 시계로 비교하면 오프셋만큼 전 소스가 동시 오탐할 수 있었던 함정 → `docs/troubleshooting/2026-07-13-freshness-clock-mixing-gap.md`.
-- **예외 — 섹션 ① 호버 라벨의 시각** 은 `pipeline_runs.started_at` 인데, 이 값은 run.py 가 `FROM_UNIXTIME()` (DB 세션 TZ 의존) 으로 기록한 것이다.
-  현 배포 (mariadb 컨테이너 TZ = UTC) 에서는 라벨의 "UTC" 표기가 참이지만, DB 세션 TZ 가 비 UTC 로 바뀌면 이 라벨만 오프셋된다.
-  판정 (stale · 이상 탐지) 과 무관한 표시 전용 잠복 가정이며, `started_at` 기록을 UTC 고정 경로로 옮기는 일은 후속 트랙 몫이다 (PR #39 최종 리뷰 이월 항목).
+- **섹션 ① 호버 라벨의 시각** (`pipeline_runs.started_at`) 도 이제 UTC 고정이다 — 해소됨 (2026-07-15).
+  과거에는 run.py 가 `FROM_UNIXTIME()` · `NOW()` (DB 세션 TZ 의존) 로 기록해 "세션 TZ 가 비 UTC 로 바뀌면 이 라벨만 오프셋" 이라는 표시 전용 잠복 가정이 있었다.
+  PR #42 (PR #39 최종 리뷰 이월 ①) 가 기록 경로를 Python UTC 바인딩 · `UTC_TIMESTAMP()` 로 이관해, 뷰의 전 시계가 세션 TZ 무관 UTC 로 통일됐다.
 
 ## 실패 모드
 
