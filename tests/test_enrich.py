@@ -302,3 +302,10 @@ def test_resummarize_skips_unparseable_row_without_aborting():
     out = resummarize_rows(rows, C(), "gemini-2.5-flash-lite")
     assert "bad" not in out
     assert out["ok"]["summary_ko"] == "됐다."
+
+def test_all_prompts_carry_polite_ban_example():
+    # 존댓말 금지 대비 예시가 프롬프트에서 빠지면 회귀 — 4종 모두 검사
+    from bullet_in.enrich import (SUMMARY_PROMPT, TRANSLATE_PROMPT,
+                                  PARAPHRASE_PROMPT, RESUMMARY_PROMPT)
+    for p in (SUMMARY_PROMPT, TRANSLATE_PROMPT, PARAPHRASE_PROMPT, RESUMMARY_PROMPT):
+        assert "했습니다" in p and "했다" in p

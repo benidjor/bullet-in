@@ -15,6 +15,7 @@ def _is_rate_limit(exc: Exception) -> bool:
 
 SUMMARY_PROMPT = ("다음 한국어 축구 뉴스를 한 문장으로 요약한다. "
                   "신문 평어체(종결어미 '~다'), 사실 중심, 추측·과장 금지. "
+                  "존댓말 금지: '영입을 확정했습니다' ❌ → '영입을 확정했다' ⭕. "
                   "고유명사는 통용 한글 표기(Arsenal=아스날). "
                   'JSON만 반환: {{"summary_ko": "..."}}\n\n제목: {title}\n본문: {body}')
 
@@ -32,6 +33,7 @@ TRANSLATE_PROMPT = (
     "- title_ko: 한국 스포츠 기사 제목체로 간결하게 (명사형 위주).\n"
     "- summary_ko: 한 문장, 신문 평어체(종결어미 '~다'), 사실 중심.\n"
     "- summary3_ko: 핵심을 3문장으로, 각 문장 평어체. 문자열 3개 배열.\n"
+    "- summary_ko·summary3_ko 존댓말 금지: '확정했습니다' ❌ → '확정했다' ⭕.\n"
     "- body_ko: 본문 전체를 자연스러운 한국어로 번역. 단락 유지.\n"
     "- 고유명사는 통용 한글 표기(Arsenal=아스날).\n"
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],"body_ko":"..."}}'
@@ -43,6 +45,7 @@ PARAPHRASE_PROMPT = (
     "- title_ko: 제목을 간결한 기사 제목체로 다시 쓴다(말머리 대괄호 제거).\n"
     "- summary_ko: 한 문장 요약, 평어체.\n"
     "- summary3_ko: 핵심 3문장 배열, 평어체.\n"
+    "- summary_ko·summary3_ko 존댓말 금지: '확정했습니다' ❌ → '확정했다' ⭕.\n"
     "- body_ko: 본문 전체를 문장 표현만 바꿔 다시 쓴다. 내용 추가·삭제 금지.\n"
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],"body_ko":"..."}}'
     "\n\nTitle: {title}\nBody: {body}")
