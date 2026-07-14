@@ -1,5 +1,6 @@
 from __future__ import annotations
 import argparse, asyncio, json, logging, os, time, uuid, yaml
+from datetime import datetime, timezone
 from pathlib import Path
 from pymongo import MongoClient
 from sqlalchemy import create_engine, text
@@ -19,6 +20,14 @@ from bullet_in import notify
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 
+# started_at 은 Python UTC 바인딩 · finished_at 은 UTC_TIMESTAMP() — 세션 TZ 무관 (spec §5)
+RUN_INSERT_SQL = (
+    "INSERT INTO pipeline_runs (run_id,dag_run_id,started_at,finished_at,"
+    "duration_sec,fetch_duration_sec,source_counts,new_count,dup_count,"
+    "error_count,success_rate) "
+    "VALUES (:rid,:drid,:started,UTC_TIMESTAMP(),:dur,:fetch,:counts,"
+    ":new,:dup,:err,:sr)")
+
 async def main(concurrency: int):
     run_id = str(uuid.uuid4())
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
@@ -27,8 +36,9 @@ async def main(concurrency: int):
     adapters = build_adapters(cfg)
 
     t0 = time.perf_counter()
-    started_epoch = time.time()
+    started_at_utc = datetime.now(timezone.utc).replace(tzinfo=None)
     raw, errors = await gather_all(adapters, concurrency=concurrency)
+    fetch_sec = round(time.perf_counter() - t0, 2)
     for it in raw:
         it.content_hash = content_hash(
             it.raw_payload.get("title") or it.raw_payload.get("text") or "",
@@ -96,13 +106,11 @@ async def main(concurrency: int):
                "success_rate": success_rate(len(adapters), len(errors)),
                "elapsed_sec": round(time.perf_counter() - t0, 2)}
     with engine.begin() as c:
-        c.execute(text(
-            "INSERT INTO pipeline_runs (run_id,dag_run_id,started_at,finished_at,"
-            "duration_sec,source_counts,new_count,dup_count,error_count,success_rate) "
-            "VALUES (:rid,:drid,FROM_UNIXTIME(:t0),NOW(),:dur,:counts,:new,:dup,:err,:sr)"),
+        c.execute(text(RUN_INSERT_SQL),
             {"rid": run_id,
              "drid": os.environ.get("AIRFLOW_CTX_DAG_RUN_ID", "manual"),
-             "t0": int(started_epoch), "dur": summary["elapsed_sec"],
+             "started": started_at_utc, "dur": summary["elapsed_sec"],
+             "fetch": fetch_sec,
              "counts": json.dumps(stats["source_counts"]),
              "new": len(arts), "dup": stats["dup_count"],
              "err": len(errors), "sr": summary["success_rate"]})
