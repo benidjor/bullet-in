@@ -1,11 +1,14 @@
 from __future__ import annotations
 import os
+import logging
 from bullet_in.adapters.rss import RssAdapter
 from bullet_in.adapters.guardian_api import GuardianAdapter
 from bullet_in.adapters.html import HtmlAdapter
 from bullet_in.adapters.playwright_news import PlaywrightAdapter
 from bullet_in.adapters.x_playwright import XPlaywrightAdapter
 from bullet_in.adapters.fmkorea import FmkoreaAdapter
+
+log = logging.getLogger(__name__)
 
 def build_adapters(cfg: dict) -> list:
     out = []
@@ -17,8 +20,13 @@ def build_adapters(cfg: dict) -> list:
         if kind == "rss":
             out.append(RssAdapter(sid, c["feed_url"]))
         elif kind == "guardian_api":
-            out.append(GuardianAdapter(sid, os.environ["GUARDIAN_API_KEY"],
-                                       c.get("query", "Arsenal"), c.get("section", "football")))
+            key = os.environ.get("GUARDIAN_API_KEY")
+            if not key:
+                log.warning("GUARDIAN_API_KEY 미설정 — %s 소스 스킵 (다음 사이클 재시도)", sid)
+                continue
+            out.append(GuardianAdapter(sid, key,
+                                       tag=c.get("tag", "football/arsenal"),
+                                       title_contains=c.get("title_contains")))
         elif kind == "html":
             out.append(HtmlAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url"),
                                    title_contains=c.get("title_contains"),
