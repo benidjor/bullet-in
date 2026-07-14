@@ -39,11 +39,15 @@ sources:
     display_name: Goal.com
     tier: 2
     medium: newspaper
-    adapter: playwright
+    adapter: html
     config:
-      list_url: "https://www.goal.com/en/team/arsenal/news/4dsgumo7d4ztgmgmcwzj0scnv"
-      item_selector: "a[data-testid='article-link']"
-    enabled: false  # 라이브 점검: 셀렉터/동의월 문제로 일시 비활성 (후속 수정)
+      # 2026-07 팀 슬러그 갱신 · 정적 서빙 확인 → playwright 에서 전환 (spec §4.1)
+      list_url: "https://www.goal.com/en/team/arsenal/news/4dsgumo7d4zupm2ugsvm4zm4d"
+      item_selector: "a[href^='/en/news/']:not([aria-label]), a[href^='/en/lists/']:not([aria-label])"
+      base_url: "https://www.goal.com"
+      title_contains: ["transfer", "sign", "signed", "signing", "deal", "loan", "bid", "fee", "medical", "agree", "agreed", "join", "joins", "target", "linked", "links", "contract", "swap", "move", "talks"]
+      body_selector: "article"
+    enabled: true
   - source_id: football_london
     display_name: football.london
     tier: 4
@@ -54,6 +58,28 @@ sources:
       item_selector: "a.headline"
       title_contains: ["transfer", "sign", "signed", "signing", "deal", "loan", "bid", "fee", "medical", "agree", "agreed", "join", "joins", "target", "linked", "links", "contract", "swap", "move", "talks"]
       body_selector: "article"
+    enabled: true
+  - source_id: guardian
+    display_name: The Guardian
+    tier: 1.5
+    medium: newspaper
+    adapter: guardian_api
+    config:
+      tag: "football/arsenal"
+      title_contains: ["transfer", "sign", "signed", "signing", "deal", "loan", "bid", "fee", "medical", "agree", "agreed", "join", "joins", "target", "linked", "links", "contract", "swap", "move", "talks"]
+    enabled: true
+  - source_id: skysports
+    display_name: Sky Sports
+    tier: 1.5
+    medium: newspaper
+    adapter: html
+    config:
+      # 네비게이션 /football/news/ 혼입 배제 — 타일 헤드라인 스코프 (spec §4.3)
+      list_url: "https://www.skysports.com/arsenal"
+      item_selector: "h3.sdc-site-tile__headline a[href*='/football/news/']"
+      base_url: "https://www.skysports.com"
+      title_contains: ["transfer", "sign", "signed", "signing", "deal", "loan", "bid", "fee", "medical", "agree", "agreed", "join", "joins", "target", "linked", "links", "contract", "swap", "move", "talks"]
+      body_selector: "div.sdc-article-body"
     enabled: true
   - source_id: x_afcstuff
     display_name: afcstuff (aggregator)

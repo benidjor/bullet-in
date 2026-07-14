@@ -4,11 +4,33 @@ def test_factory_builds_enabled_adapters(monkeypatch):
     monkeypatch.setenv("GUARDIAN_API_KEY", "k")
     cfg = {"sources": [
         {"source_id": "guardian", "adapter": "guardian_api", "enabled": True,
-         "config": {"query": "Arsenal", "section": "football"}},
+         "config": {"tag": "football/arsenal", "title_contains": ["sign"]}},
         {"source_id": "off", "adapter": "rss", "enabled": False, "config": {"feed_url": "x"}},
     ]}
     adapters = build_adapters(cfg)
     assert [a.source_id for a in adapters] == ["guardian"]
+
+def test_factory_passes_tag_and_title_contains_to_guardian(monkeypatch):
+    monkeypatch.setenv("GUARDIAN_API_KEY", "k")
+    cfg = {"sources": [{"source_id": "guardian", "adapter": "guardian_api",
+            "enabled": True,
+            "config": {"tag": "football/arsenal", "title_contains": ["sign"]}}]}
+    a = build_adapters(cfg)[0]
+    assert a.params["tag"] == "football/arsenal"
+    assert a.title_keywords == ["sign"]
+
+def test_factory_skips_guardian_without_key(monkeypatch, caplog):
+    monkeypatch.delenv("GUARDIAN_API_KEY", raising=False)
+    cfg = {"sources": [
+        {"source_id": "guardian", "adapter": "guardian_api", "enabled": True,
+         "config": {"tag": "football/arsenal"}},
+        {"source_id": "feed", "adapter": "rss", "enabled": True,
+         "config": {"feed_url": "x"}},
+    ]}
+    with caplog.at_level("WARNING"):
+        adapters = build_adapters(cfg)
+    assert [a.source_id for a in adapters] == ["feed"]
+    assert "GUARDIAN_API_KEY" in caplog.text
 
 def test_factory_builds_fmkorea_adapter():
     cfg = {"sources": [
