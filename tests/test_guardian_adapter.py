@@ -60,3 +60,12 @@ def test_guardian_adapter_missing_fields_defaults():
     assert p["summary"] == ""
     assert p["body"] == ""
     assert p["image_url"] is None
+
+@respx.mock
+def test_guardian_adapter_strips_markup_from_summary():
+    respx.get("https://content.guardianapis.com/search").mock(return_value=_resp([
+        {"webTitle": "Arsenal sign X", "webUrl": "https://g.test/1",
+         "fields": {"trailText": "<strong>In today's Football Daily: </strong>a big deal"}}]))
+    a = GuardianAdapter(source_id="guardian", api_key="k")
+    p = asyncio.run(a.fetch())[0].raw_payload
+    assert p["summary"] == "In today's Football Daily: a big deal"

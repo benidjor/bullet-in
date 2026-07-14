@@ -1,6 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 import httpx
+from bs4 import BeautifulSoup
 from bullet_in.models import RawItem
 
 class GuardianAdapter:
@@ -36,7 +37,8 @@ class GuardianAdapter:
                                url=x["webUrl"], fetched_at=now,
                                raw_payload={"title": title,
                                             "published": x.get("webPublicationDate"),
-                                            "summary": f.get("trailText", ""),
+                                            # trailText 는 인라인 HTML 포함 가능 — 태그 제거 (autoescape 리터럴 노출 방지)
+                                            "summary": BeautifulSoup(f.get("trailText", ""), "html.parser").get_text(" ", strip=True),
                                             "body": f.get("bodyText", ""),
                                             "image_url": f.get("thumbnail")}))
         return out
