@@ -309,3 +309,21 @@ def test_all_prompts_carry_polite_ban_example():
                                   PARAPHRASE_PROMPT, RESUMMARY_PROMPT)
     for p in (SUMMARY_PROMPT, TRANSLATE_PROMPT, PARAPHRASE_PROMPT, RESUMMARY_PROMPT):
         assert "했습니다" in p and "했다" in p
+
+def test_resummarize_skips_empty_or_null_summary():
+    # 빈/비문자열 summary_ko가 기존 요약을 덮어쓰지 않도록 행 단위 스킵 (M2 가드)
+    class M:
+        def __init__(self): self.n = 0
+        def generate_content(self, **kw):
+            self.n += 1
+            class R: pass
+            r = R()
+            r.text = ('{"summary_ko":"","summary3_ko":["a","b","c"]}' if self.n == 1
+                      else '{"summary_ko":null,"summary3_ko":["a","b","c"]}')
+            return r
+    class C:
+        def __init__(self): self.models = M()
+    rows = [{"content_hash": "empty", "title_original": "A", "body_ko": "b"},
+            {"content_hash": "null", "title_original": "B", "body_ko": "b"}]
+    out = resummarize_rows(rows, C(), "gemini-2.5-flash-lite")
+    assert out == {}

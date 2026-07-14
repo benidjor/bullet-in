@@ -145,9 +145,12 @@ def _extract_resummary(text: str) -> dict | None:
         return None
     try:
         d = json.loads(m.group(0))
+        s = d["summary_ko"]
+        if not isinstance(s, str) or not s.strip():
+            return None  # 빈/비문자열 요약이 기존 값을 덮어쓰지 않게 스킵
         s3 = d["summary3_ko"]
         s3 = "\n".join(s3) if isinstance(s3, list) else str(s3)
-        return {"summary_ko": d["summary_ko"], "summary3_ko": s3}
+        return {"summary_ko": s, "summary3_ko": s3}
     except (json.JSONDecodeError, KeyError, TypeError):
         return None
 
