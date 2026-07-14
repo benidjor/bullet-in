@@ -18,9 +18,9 @@ journalists:
 outlets:
   - {name: The Athletic,    tier: 1,   aliases: ["디 애슬레틱", "애슬레틱", "The Athletic"]}
   - {name: BBC,             tier: 1,   aliases: ["BBC"]}
-  - {name: The Guardian,    tier: 1.5, aliases: ["가디언", "The Guardian"]}
+  - {name: The Guardian,    tier: 3,   aliases: ["가디언", "The Guardian"]}
   - {name: Sky Sports,      tier: 1.5, aliases: ["스카이 스포츠", "스카이", "Sky Sports"]}
-  - {name: Goal.com,        tier: 2,   aliases: ["골닷컴", "Goal"]}
+  - {name: Goal.com,        tier: 4,   aliases: ["골닷컴", "Goal"]}
   - {name: ESPN,            tier: 2,   aliases: ["ESPN"]}
   - {name: The Times,       tier: 3,   aliases: ["더 타임스", "타임스", "The Times"]}
   - {name: Evening Standard,tier: 3,   aliases: ["이브닝 스탠다드", "Evening Standard"]}
