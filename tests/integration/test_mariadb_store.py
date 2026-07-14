@@ -109,3 +109,41 @@ def test_upsert_preserves_stage_on_revision_change(engine):
         stage = c.execute(text("SELECT transfer_stage FROM articles "
                                "WHERE content_hash='h2'")).scalar_one()
     assert stage == "rumour"
+
+
+def test_rows_enriched_summaries_returns_only_summarized(engine):
+    from sqlalchemy import text
+    store = MartStore(engine)
+    store.upsert([_art(h="he", url="https://x.test/e", title="E"),
+                  _art(h="hn", url="https://x.test/n", title="N")])
+    store.set_translation("he", "제목", "확정했습니다.", "①\n②\n③", "본문")
+    pool = {r["content_hash"]: r for r in store.rows_enriched_summaries()}
+    assert "he" in pool and "hn" not in pool
+    assert pool["he"]["summary_ko"] == "확정했습니다."
+    assert pool["he"]["body_ko"] == "본문"
+    assert pool["he"]["title_ko"] == "제목"
+
+def test_set_summary_updates_summary_fields_only(engine):
+    from sqlalchemy import text
+    store = MartStore(engine)
+    store.upsert([_art(h="ht", url="https://x.test/t", title="T")])
+    store.set_translation("ht", "제목", "확정했습니다.", "A입니다.\nB다.\nC다.", "본문")
+    store.set_summary("ht", "확정했다.", "A다.\nB다.\nC다.")
+    with engine.connect() as c:
+        r = dict(c.execute(text(
+            "SELECT title_ko,summary_ko,summary3_ko,body_ko "
+            "FROM articles WHERE content_hash='ht'")).mappings().one())
+    assert r["summary_ko"] == "확정했다." and r["summary3_ko"] == "A다.\nB다.\nC다."
+    assert r["title_ko"] == "제목" and r["body_ko"] == "본문"
+
+def test_set_summary_without_s3_preserves_existing(engine):
+    from sqlalchemy import text
+    store = MartStore(engine)
+    store.upsert([_art(h="hp", url="https://x.test/p", title="P")])
+    store.set_translation("hp", "제목", "확정했습니다.", "기존3줄", "본문")
+    store.set_summary("hp", "확정했다.")
+    with engine.connect() as c:
+        r = dict(c.execute(text(
+            "SELECT summary_ko,summary3_ko FROM articles "
+            "WHERE content_hash='hp'")).mappings().one())
+    assert r["summary_ko"] == "확정했다." and r["summary3_ko"] == "기존3줄"
