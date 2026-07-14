@@ -20,6 +20,10 @@ def test_polite_stem_mid_sentence_is_not_flagged():
     # '필요'처럼 '요'로 끝나는 명사 · 문장 중간의 존댓말 어간은 잡지 않는다
     assert not has_polite_ending("추가 보강이 필요하다는 관측이 나왔다.")
 
+def test_curly_quoted_polite_speech_is_ignored():
+    s = "킴은 다음과 같이 말했다. “우리는 준비돼 있습니다. 발표는 곧 있을 예정입니다.” 그는 웃으며 자리를 떴다."
+    assert not has_polite_ending(s)
+
 def test_none_and_empty_are_false():
     assert not has_polite_ending(None)
     assert not has_polite_ending("")
