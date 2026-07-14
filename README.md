@@ -56,6 +56,29 @@
 - **LLM 번역 · 요약** — Gemini 2.5 Flash-Lite로 한국어 번역 · 한 줄 요약. 신규 항목만 처리해 멱등 · 저비용.
 - **데이터 품질 게이트** — dbt test (unique · not_null · accepted_values · freshness)로 "이상 점검"을 선언적으로.
 
+**수집 소스** — 고정 tier 7종 + 항목별 동적 tier 2종 (X · 커뮤니티는 언급된 기자 · 매체의 공신력으로 산출). 언론 5종은 공통 이적 키워드 필터를 공유한다 (`config/sources.yaml`).
+
+| 소스 | tier | 어댑터 | 비고 |
+|---|---|---|---|
+| Arsenal.com | 0 | html | 공식 — 영입 확정 (sign) 제목 전용 고정밀 필터 |
+| BBC Sport | 1 | html | |
+| Sky Sports | 1.5 | html | |
+| The Guardian | 3 | guardian_api | Open Platform API (`GUARDIAN_API_KEY` 필요) |
+| Goal.com | 4 | html | 정적 서빙 확인으로 playwright → html 전환 · 재활성 (2026-07) |
+| BBC Football Gossip | 4 | html | 타 매체 루머 라운드업 |
+| football.london | 4 | html | |
+| afcstuff (X) | 동적 | x_playwright | 트윗 내 언급 기자 · 매체 tier로 라우팅 (fallback 4) |
+| fmkorea 축구 소식통 | 동적 | fmkorea | 한국 커뮤니티 — 언급 기자 · 매체 tier로 라우팅 (기본 4) |
+
+**기자 · ITK 공신력** — 동적 소스 항목의 tier 산출 기준 (기자 먼저 → 매체 → 기본 4). 전체 레지스트리는 `config/credibility.yaml`.
+
+| tier | 기자 · ITK |
+|---|---|
+| 1 | David Ornstein (The Athletic) · Sami Mokbel (BBC) |
+| 1.5 | Fabrizio Romano (독립) · James McNicholas (The Athletic) · Art de Roché (The Athletic) · Dharmesh Sheth (Sky Sports) · handofarsnal (ITK) |
+| 2 | Amy Lawrence (The Athletic) · James Olley (ESPN) · Matt Law (The Telegraph) · Teamnewsandtix (ITK) |
+| 3 | Charles Watts (독립) · Simon Collings (Evening Standard) · Gary Jacob (The Times) · Sam Dean (The Telegraph) · Gianluca Di Marzio (Sky Italia) · LatteFirm (ITK) |
+
 ## 4. 정량 지표 (SLO)
 
 > 목표치와 측정 방법. 병렬화 실측 절차 · 로그는 [SLO-1 벤치마크 런북](docs/runbook/2026-07-14-slo1-benchmark.md).
