@@ -70,6 +70,15 @@
 | afcstuff (X) | 동적 | x_playwright | 트윗 내 언급 기자 · 매체 tier로 라우팅 (fallback 4) |
 | fmkorea 축구 소식통 | 동적 | fmkorea | 한국 커뮤니티 — 언급 기자 · 매체 tier로 라우팅 (기본 4) |
 
+**기자 · ITK 공신력** — 동적 소스 항목의 tier 산출 기준 (기자 먼저 → 매체 → 기본 4). 전체 레지스트리는 `config/credibility.yaml`.
+
+| tier | 기자 · ITK |
+|---|---|
+| 1 | David Ornstein (The Athletic) · Sami Mokbel (BBC) |
+| 1.5 | Fabrizio Romano (독립) · James McNicholas (The Athletic) · Art de Roché (The Athletic) · Dharmesh Sheth (Sky Sports) · handofarsnal (ITK) |
+| 2 | Amy Lawrence (The Athletic) · James Olley (ESPN) · Matt Law (The Telegraph) · gunnerblog (블로그) · Teamnewsandtix (ITK) |
+| 3 | Charles Watts (독립) · Simon Collings (Evening Standard) · Gary Jacob (The Times) · Sam Dean (The Telegraph) · Gianluca Di Marzio (Sky Italia) · LatteFirm (ITK) |
+
 ## 4. 정량 지표 (SLO)
 
 > 목표치와 측정 방법. 병렬화 실측 절차 · 로그는 [SLO-1 벤치마크 런북](docs/runbook/2026-07-14-slo1-benchmark.md).
