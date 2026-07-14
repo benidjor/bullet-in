@@ -27,10 +27,12 @@ ALTER TABLE articles ADD COLUMN IF NOT EXISTS transfer_stage VARCHAR(32);
 CREATE TABLE IF NOT EXISTS pipeline_runs (
   run_id VARCHAR(64) PRIMARY KEY, dag_run_id VARCHAR(128),
   started_at DATETIME, finished_at DATETIME, duration_sec FLOAT,
+  fetch_duration_sec FLOAT,
   source_counts JSON, new_count INT, dup_count INT, error_count INT,
   success_rate FLOAT);
 CREATE TABLE IF NOT EXISTS source_freshness (
   run_id VARCHAR(64), checked_at DATETIME, source_id VARCHAR(64),
   last_fetched_at DATETIME, age_hours FLOAT, threshold_hours FLOAT,
   stale BOOLEAN,
-  PRIMARY KEY (run_id, source_id))
+  PRIMARY KEY (run_id, source_id));
+ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS fetch_duration_sec FLOAT;

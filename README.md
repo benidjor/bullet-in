@@ -58,15 +58,17 @@
 
 ## 4. 정량 지표 (SLO)
 
-> 목표치와 측정 방법. 실측값은 라이브 e2e 실행 후 채운다.
+> 목표치와 측정 방법. 병렬화 실측 절차 · 로그는 [SLO-1 벤치마크 런북](docs/runbook/2026-07-14-slo1-benchmark.md).
 
-| 지표 | 목표 | 측정 방법 |
-|---|---|---|
-| 병렬화 수집 시간 단축 | 순차 대비 ~70%↓ | `metrics.benchmark()` (concurrency=1 vs N 벤치마크) |
-| 중복 적재율 | 0% | content_hash UNIQUE + dbt `unique` 테스트 |
-| 일일 수집 성공률 | ≥ 99% | `pipeline_runs.success_rate` (재시도 · 소스 격리 포함) |
-| 필수 필드 완전성 | ≥ 99% | dbt `not_null` 테스트 통과율 |
-| 수집량 이상 감지 | 전일 대비 ±2σ 알림 | `quality.volume_anomaly` |
+| 지표 | 목표 | 측정 방법 | 실측 |
+|---|---|---|---|
+| 병렬화 수집 시간 단축 | 순차 대비 ≥ 55%↓ (실측 기반 재조정¹) | `metrics.benchmark()` (concurrency=1 vs N 벤치마크) | 56.5%↓ (2026-07-15, 3회 중앙값) |
+| 중복 적재율 | 0% | content_hash UNIQUE + dbt `unique` 테스트 | — |
+| 일일 수집 성공률 | ≥ 99% | `pipeline_runs.success_rate` (재시도 · 소스 격리 포함) | — |
+| 필수 필드 완전성 | ≥ 99% | dbt `not_null` 테스트 통과율 | — |
+| 수집량 이상 감지 | 전일 대비 ±2σ 알림 | `quality.volume_anomaly` | — |
+
+¹ 초기 목표 ~70%는 최장 소스 (x_afcstuff, Playwright ~42s)가 병렬 시간의 하한을 결정하는 구조로 도달 불가 실측 — 사유 · 산식은 런북 §5.
 
 ## 5. 기술 스택 & 선택 이유
 

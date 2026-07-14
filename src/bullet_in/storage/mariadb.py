@@ -120,8 +120,8 @@ class MartStore:
         pending 은 rows_missing_translation/stage 와 동일 술어로 카운트."""
         with self.engine.connect() as c:
             runs = [dict(r) for r in c.execute(text(
-                "SELECT run_id,started_at,duration_sec,source_counts,"
-                "new_count,dup_count,error_count,success_rate "
+                "SELECT run_id,started_at,duration_sec,fetch_duration_sec,"
+                "source_counts,new_count,dup_count,error_count,success_rate "
                 "FROM pipeline_runs ORDER BY started_at DESC LIMIT :n"),
                 {"n": chart_runs}).mappings().all()]
             freshness = [dict(r) for r in c.execute(text(
