@@ -4,6 +4,7 @@ journalists:
   - {name: Fabrizio Romano,   tier: 1.5, aliases: ["@FabrizioRomano", "로마노", "Romano"]}
   - {name: James McNicholas,  tier: 1.5, aliases: ["@_JamesMcNicholas", "맥니콜라스", "McNicholas"]}
   - {name: handofarsnal,      tier: 1.5, aliases: ["@handofarsnal"]}
+  - {name: Dharmesh Sheth,    tier: 1.5, aliases: ["@skysports_sheth", "셰스", "Sheth"]}
   - {name: Charles Watts,     tier: 2,   aliases: ["@charles_watts", "찰스 와츠", "Watts"]}
   - {name: Amy Lawrence,      tier: 2,   aliases: ["@amylawrence71", "에이미 로런스", "Lawrence"]}
   - {name: Teamnewsandtix,    tier: 2,   aliases: ["@Teamnewsandtix", "팀뉴스앤틱스"]}
