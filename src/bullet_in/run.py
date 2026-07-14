@@ -13,7 +13,8 @@ from bullet_in.score import load_sources
 from bullet_in.credibility import load_registry
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
-from bullet_in.enrich import enrich_rows, classify_stage_rows
+from bullet_in.enrich import enrich_rows, classify_stage_rows, resummarize_rows
+from bullet_in.tone import select_tone_backfill
 from bullet_in.serve.render import write_site, write_ops
 from bullet_in.quality import success_rate, volume_anomalies, evaluate_freshness
 from bullet_in import notify
@@ -68,6 +69,18 @@ async def main(concurrency: int):
     stage_rows = mart.rows_missing_stage()
     for h, stage in classify_stage_rows(stage_rows, client, GEMINI_MODEL).items():
         mart.set_stage(h, stage)
+
+    # 말투 백필: 요약에 존댓말이 남은 행을 회차 상한 내에서 재생성 (멱등 — 검출 기반 재선별)
+    tone_limit = int(cfg.get("tone_backfill_limit", 20))
+    tone_rows = select_tone_backfill(mart.rows_enriched_summaries(), tone_limit)
+    if tone_rows:
+        fixed = resummarize_rows(tone_rows, client, GEMINI_MODEL)
+        for h, v in fixed.items():
+            orig = next(r for r in tone_rows if r["content_hash"] == h)
+            mart.set_summary(h, v["summary_ko"],
+                             v["summary3_ko"] if orig.get("summary3_ko") else None)
+        logging.getLogger(__name__).info(
+            "말투 백필: 대상 %d건 중 %d건 재생성", len(tone_rows), len(fixed))
 
     with engine.connect() as c:
         rows = [dict(r) for r in c.execute(text(
