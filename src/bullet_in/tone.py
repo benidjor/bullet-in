@@ -20,3 +20,14 @@ def has_polite_ending(text: str | None) -> bool:
         if _POLITE_END.search(sent.strip()):
             return True
     return False
+
+
+def select_tone_backfill(rows: list[dict], limit: int) -> list[dict]:
+    """summary_ko · summary3_ko 에 존댓말이 남은 행을 limit 건까지 선별한다."""
+    picked: list[dict] = []
+    for r in rows:
+        if has_polite_ending(r.get("summary_ko")) or has_polite_ending(r.get("summary3_ko")):
+            picked.append(r)
+            if len(picked) >= limit:
+                break
+    return picked

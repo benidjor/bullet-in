@@ -1,4 +1,21 @@
-from bullet_in.tone import has_polite_ending
+from bullet_in.tone import has_polite_ending, select_tone_backfill
+
+def _row(h, s, s3=None):
+    return {"content_hash": h, "summary_ko": s, "summary3_ko": s3}
+
+def test_select_picks_rows_flagged_in_either_field():
+    rows = [_row("a", "합의했다."),
+            _row("b", "합의했습니다."),
+            _row("c", "협상했다.", "발표했다.\n메디컬이 남았습니다.")]
+    picked = select_tone_backfill(rows, limit=10)
+    assert [r["content_hash"] for r in picked] == ["b", "c"]
+
+def test_select_respects_limit():
+    rows = [_row(str(i), "확정했습니다.") for i in range(5)]
+    assert len(select_tone_backfill(rows, limit=2)) == 2
+
+def test_select_empty_pool_returns_empty():
+    assert select_tone_backfill([], limit=20) == []
 
 def test_detects_hamnida_ending():
     assert has_polite_ending("아스날이 기마랑이스 영입에 합의했습니다.")
