@@ -215,3 +215,59 @@ def test_app_js_has_other_bucket_toggle_contract():
 def test_index_footer_links_to_ops_page():
     html = render_index([_row()], SOURCES, NOW)
     assert '<a href="ops.html">수집 현황</a>' in html
+
+
+from bullet_in.serve.render import interleave_body, _decorate as _dec, render_article as _ra
+
+def test_interleave_every_two_paragraphs():
+    blocks = interleave_body(["p1", "p2", "p3", "p4"], ["i1", "i2"])
+    assert [b["type"] for b in blocks] == ["p", "p", "img", "p", "p", "img"]
+    assert blocks[2]["url"] == "i1"
+
+def test_interleave_images_exhausted_then_paragraphs_only():
+    blocks = interleave_body(["p1", "p2", "p3", "p4", "p5", "p6"], ["i1"])
+    assert [b["type"] for b in blocks].count("img") == 1
+
+def test_interleave_surplus_images_dropped():
+    blocks = interleave_body(["p1", "p2"], ["i1", "i2", "i3"])
+    assert [b["type"] for b in blocks].count("img") == 1
+
+def test_interleave_empty_inputs():
+    assert interleave_body([], ["i1"]) == []
+    assert [b["type"] for b in interleave_body(["p1"], [])] == ["p"]
+
+def test_decorate_dedups_hero_from_inline_images():
+    row = _row(image_url="https://img/x.jpg",
+               images_json='["https://img/x.jpg?w=1200", "https://img/y.jpg"]')
+    a = _dec(row, SOURCES, NOW)
+    assert a["_images"] == ["https://img/y.jpg"]
+
+def test_decorate_promotes_first_inline_to_hero():
+    row = _row(image_url=None,
+               images_json='["https://img/a.jpg", "https://img/b.jpg"]')
+    a = _dec(row, SOURCES, NOW)
+    assert a["image_url"] == "https://img/a.jpg"
+    assert a["_images"] == ["https://img/b.jpg"]
+
+def test_decorate_rejects_invalid_inline_urls_and_bad_json():
+    row = _row(image_url="https://img/hero.jpg",
+               images_json='["javascript:alert(1)", "https://img/ok.jpg"]')
+    assert _dec(row, SOURCES, NOW)["_images"] == ["https://img/ok.jpg"]
+    row2 = _row(image_url="https://img/hero.jpg", images_json="not json")
+    assert _dec(row2, SOURCES, NOW)["_images"] == []
+
+def test_detail_interleaves_inline_images_with_defenses():
+    row = _row(body_ko="""문단1
+문단2
+문단3""", image_url="https://img/hero.jpg",
+               images_json='["https://img/in1.jpg"]')
+    a = _dec(row, SOURCES, NOW)
+    html = _ra(a, [], "h1", SOURCES, NOW)
+    assert '<img src="https://img/in1.jpg"' in html
+    assert 'loading="lazy"' in html and 'referrerpolicy="no-referrer"' in html
+    assert "onerror" in html
+    assert html.index("문단2") < html.index("in1.jpg") < html.index("문단3")
+
+def test_css_has_inline_image_style():
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
+    assert ".body figure img" in css

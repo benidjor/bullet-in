@@ -90,6 +90,7 @@ h2.title{margin:0 0 18px;font-size:28px;line-height:1.3;font-weight:900;letter-s
 .body figure{margin:24px 0}
 .body .imgph{aspect-ratio:16/9;background:linear-gradient(135deg,var(--thumb1),var(--thumb2));border-radius:10px;display:grid;place-items:center;color:var(--thumbfg);font-size:12px;font-weight:800;letter-spacing:.12em}
 .body figcaption{margin-top:7px;font-size:13px;color:var(--muted);text-align:center}
+.body figure img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;display:block}
 .origin{margin-top:8px;padding-top:16px;border-top:1px solid var(--line);font-size:14px;color:var(--muted)}
 .origin a{color:var(--red);font-weight:700}
 

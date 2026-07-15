@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 import re
 import shutil
 from collections import Counter
@@ -216,6 +217,23 @@ def _env() -> Environment:
     return env
 
 
+def _norm_img(url: str) -> str:
+    """CDN 리사이즈 변형 (쿼리스트링) 을 무시한 이미지 동일성 비교 키."""
+    return url.split("?", 1)[0]
+
+
+def interleave_body(paras: list[str], images: list[str], every: int = 2) -> list[dict]:
+    """번역 문단과 인라인 이미지의 교차 블록 시퀀스.
+    every 문단마다 이미지 1장, 이미지 소진 후엔 문단만, 남는 이미지는 버린다."""
+    blocks, qi = [], 0
+    for i, p in enumerate(paras, 1):
+        blocks.append({"type": "p", "text": p})
+        if qi < len(images) and i % every == 0:
+            blocks.append({"type": "img", "url": images[qi]})
+            qi += 1
+    return blocks
+
+
 def _decorate(row: dict, sources: dict, now: datetime) -> dict:
     a = dict(row)
     a["_title"] = row.get("title_ko") or row.get("title_original") or ""
@@ -227,6 +245,19 @@ def _decorate(row: dict, sources: dict, now: datetime) -> dict:
     a["_date"] = fmt_date(pub) if pub else ""
     iu = row.get("image_url")
     a["image_url"] = iu if iu and re.match(r"^https?://[^\s'\"()]+$", iu) else None
+    try:
+        parsed = json.loads(row.get("images_json") or "[]")
+    except (TypeError, ValueError):
+        parsed = []
+    imgs = [u for u in parsed
+            if isinstance(u, str) and re.match(r"^https?://[^\s'\"()]+$", u)]
+    if a["image_url"]:
+        hero = _norm_img(a["image_url"])
+        imgs = [u for u in imgs if _norm_img(u) != hero]
+    elif imgs:
+        a["image_url"] = imgs[0]  # og:image 부재 → 인라인 1번을 히어로·카드 썸네일로 승격
+        imgs = imgs[1:]
+    a["_images"] = imgs
     u = row.get("url") or ""
     a["url"] = u if re.match(r"^https?://", u) else "#"
     st = row.get("transfer_stage")
@@ -267,6 +298,9 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
     if facets is None:
         facets = {"team": {}, "outlets": [], "tiers": {t: 0 for t in range(5)},
                   "total": 0, "stage": {}, "other": 0}
+    article = dict(article)
+    paras = [p for p in (article.get("body_ko") or "").split("\n") if p.strip()]
+    article["_body_blocks"] = interleave_body(paras, article.get("_images") or [])
     return _env().get_template("detail.html.j2").render(
         a=article, neighbors=neighbors, active=None, root="../", facets=facets)
 
