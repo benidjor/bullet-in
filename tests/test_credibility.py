@@ -153,3 +153,45 @@ def test_journalist_directory_maps_alias_and_name():
     assert d["fabrizio romano"]["outlet"] is None      # 프리랜서
     assert d["sami mokbel"] == {"name": "Sami Mokbel", "outlet": "BBC"}
     assert "kaya kaynak" not in d                       # 미등재
+
+def test_fixed_source_promotes_tier_for_affiliated_journalist():
+    # Sheth (1.5, Sky Sports) @ skysports (1.5) → min(1.5, 1.5)
+    r = load_registry(REG)
+    sources = {"skysports": {"tier": 1.5, "outlet": "Sky Sports"}}
+    it = _item("skysports", {"title": "Alvarez latest"})
+    assert resolve_tier(it, sources, r, journalist="Dharmesh Sheth") == 1.5
+    # 가상의 승격: 같은 기자가 tier 4 소스에 실렸다면 1.5 로 승격
+    sources4 = {"skysports": {"tier": 4, "outlet": "Sky Sports"}}
+    assert resolve_tier(it, sources4, r, journalist="Dharmesh Sheth") == 1.5
+
+def test_fixed_source_min_guard_never_demotes():
+    # 레지스트리 실수로 기자 tier 가 소스보다 낮아도 (Delaney 3 @ tier 1 소스) 강등 없음
+    r = load_registry(REG)
+    sources = {"indep": {"tier": 1, "outlet": "The Independent"}}
+    it = _item("indep", {"title": "x"})
+    assert resolve_tier(it, sources, r, journalist="Miguel Delaney") == 1.0
+
+def test_fixed_source_freelancer_does_not_adjust_tier():
+    # Watts (3) 는 여러 매체 기고 — 소속 미지정 → 표시 전용, tier 무조정 (사용자 결정)
+    r = load_registry(REG)
+    sources = {"goal": {"tier": 4, "outlet": "Goal.com"}}
+    it = _item("goal", {"title": "x"})
+    assert resolve_tier(it, sources, r, journalist="Charles Watts") == 4.0
+
+def test_fixed_source_mismatched_outlet_does_not_adjust_tier():
+    # 등재 기자라도 소속이 기사 소스와 다르면 보정하지 않는다
+    r = load_registry(REG)
+    sources = {"goal": {"tier": 4, "outlet": "Goal.com"}}
+    it = _item("goal", {"title": "x"})
+    assert resolve_tier(it, sources, r, journalist="Sami Mokbel") == 4.0
+
+def test_fixed_source_unregistered_journalist_keeps_source_tier():
+    r = load_registry(REG)
+    sources = {"football_london": {"tier": 4, "outlet": "football.london"}}
+    it = _item("football_london", {"title": "x"})
+    assert resolve_tier(it, sources, r, journalist="Raff Tindale") == 4.0
+
+def test_fixed_source_without_journalist_keeps_legacy_behavior():
+    r = load_registry(REG)
+    sources = {"bbc_sport": {"tier": 1, "outlet": "BBC"}}
+    assert resolve_tier(_item("bbc_sport", {"title": "x"}), sources, r) == 1.0

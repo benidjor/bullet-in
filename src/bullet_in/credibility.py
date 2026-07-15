@@ -57,7 +57,8 @@ def journalist_directory(path) -> dict[str, dict]:
             out.setdefault(key.lower(), entry)
     return out
 
-def resolve_tier(item, sources: dict, registry: "Registry | None") -> float | None:
+def resolve_tier(item, sources: dict, registry: "Registry | None",
+                 journalist: str | None = None) -> float | None:
     """항목 1건의 tier 를 산출. None 이면 호출측에서 그 항목을 버린다."""
     src = sources.get(item.source_id, {})
     mode = src.get("credibility")
@@ -92,4 +93,15 @@ def resolve_tier(item, sources: dict, registry: "Registry | None") -> float | No
 
     # 고정 소스: tier 미지정(설정 누락 등)이면 None → 항목 drop
     tier = src.get("tier")
-    return float(tier) if tier is not None else None
+    if tier is None:
+        return None
+    tier = float(tier)
+    # 소속이 기사 소스와 일치하는 등재 기자만 min 가드로 승격 (spec §2).
+    # 프리랜서 (outlet 미지정) · 미등재 기자는 표시 전용 — tier 무조정.
+    if journalist and registry is not None:
+        key = journalist.lower()
+        j_tier = registry.journalists.get(key)
+        j_outlet = registry.journalist_outlets.get(key)
+        if j_tier is not None and j_outlet and j_outlet == src.get("outlet"):
+            return min(j_tier, tier)
+    return tier
