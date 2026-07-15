@@ -648,6 +648,12 @@ def test_sidebar_tier_facet_lists_one_point_five():
     html = render_index([_row(tier=1.5)], SOURCES, NOW)
     assert 'data-group="tier" data-value="1.5"' in html
     assert "Tier 1.5" in html
+
+def test_layout_emits_no_whitespace_before_doctype():
+    """매크로 정의를 {% endmacro %} 로 닫으면 개행이 새어나와 doctype 앞에 붙는다.
+    눈에 안 띄는 회귀라 고정한다 — {% endmacro -%} 를 쓸 것."""
+    html = render_index([_row()], SOURCES, NOW)
+    assert html.startswith("<!doctype html>")
 ```
 
 - [ ] **Step 2: 실패를 확인한다**
@@ -674,15 +680,21 @@ Expected: FAIL — 템플릿이 옛 키를 읽어 `UndefinedError` 또는 assert
 - [ ] **Step 5: _layout.html.j2 의 facet 블록을 교체한다**
 
 `src/bullet_in/serve/templates/_layout.html.j2` 의 39–60행 ( `<h4>소스 (언론사)</h4>` 부터 신뢰도 facet 끝까지 ) 을 교체한다.
-파일 맨 위 ( `{% extends %}` 가 없는 레이아웃이므로 1행 `<!doctype html>` 바로 위 ) 에 매크로를 정의한다.
+매크로는 1행 `<!doctype html>` **바로 위**에 정의한다.
+
+**검증된 사항 · 그대로 따를 것** — 이 배치는 실제 Jinja 렌더로 확인했다.
+
+- `_layout.html.j2` 는 `{% extends %}` 되는 **부모**이므로, 최상단 매크로가 자기 `<aside>` 안에서 정상적으로 잡힌다.
+- `{% endmacro %}` 를 **`{% endmacro -%}` 로 써야 한다**.
+  `-%}` 를 빼면 정의 뒤 개행이 그대로 출력돼 `<!doctype html>` 앞에 빈 줄 3개가 붙는다 ( `_env()` 가 `trim_blocks` 를 안 켠다 ).
+  `-%}` 를 넣으면 doctype 이 첫 문자로 붙는다.
 
 ```jinja
 {% macro facet_opts(group, items) %}
   {% for it in items %}
   <label class="opt"><input type="checkbox" data-group="{{ group }}" data-value="{{ it.value }}"> {{ it.label }} <span class="ct">{{ it.count }}</span></label>
   {% endfor %}
-{% endmacro %}
-
+{% endmacro -%}
 {% macro facet_block(group, data) %}
 <div class="facetgroup">
   {% for g in data.initial %}
@@ -703,7 +715,7 @@ Expected: FAIL — 템플릿이 옛 키를 읽어 `UndefinedError` 또는 assert
   <button class="morebtn" type="button" hidden>{{ st.label }}</button>
   {% endfor %}
 </div>
-{% endmacro %}
+{% endmacro -%}
 ```
 
 39–60행을 아래로 교체한다.
