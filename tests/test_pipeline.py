@@ -86,3 +86,20 @@ def test_to_articles_prefers_en_source_over_fmkorea_for_same_url():
     assert len(arts) == 1
     assert arts[0].source_id == "bbc_sport"   # EN 우선, fmkorea 스킵
     assert stats["dup_count"] == 1
+
+def test_to_articles_passes_inline_images():
+    raw = [RawItem(source_id="bbc_sport", source_type="html",
+                   url="https://x.test/g", fetched_at=datetime.now(timezone.utc),
+                   raw_payload={"title": "Arsenal sign G", "body": "B",
+                                "images": ["https://img.test/1.jpg"]})]
+    sources = {"bbc_sport": {"source_id": "bbc_sport", "tier": 2}}
+    arts, _ = to_articles(raw, sources, seen={})
+    assert arts[0].images == ["https://img.test/1.jpg"]
+
+def test_to_articles_defaults_images_empty():
+    raw = [RawItem(source_id="bbc_sport", source_type="html",
+                   url="https://x.test/h", fetched_at=datetime.now(timezone.utc),
+                   raw_payload={"title": "Arsenal sign H"})]
+    sources = {"bbc_sport": {"source_id": "bbc_sport", "tier": 2}}
+    arts, _ = to_articles(raw, sources, seen={})
+    assert arts[0].images == []
