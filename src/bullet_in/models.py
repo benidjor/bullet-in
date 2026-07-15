@@ -28,6 +28,7 @@ class Article(BaseModel):
     body_ko: str | None = None
     body_source: str | None = None
     image_url: str | None = None
+    images: list[str] = []
     outlet: str | None = None
     journalist: str | None = None
     team: str = "arsenal"

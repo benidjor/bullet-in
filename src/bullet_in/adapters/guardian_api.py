@@ -3,6 +3,24 @@ from datetime import datetime, timezone
 import httpx
 from bs4 import BeautifulSoup
 from bullet_in.models import RawItem
+from bullet_in.adapters.meta import extract_body_images
+
+def _element_images(elements: list, limit: int = 10) -> list[str]:
+    """elements(type=image) → element당 최대 폭 asset URL. 라이브 실측상 API body
+    HTML에는 <img>가 없어 인라인 이미지는 이 경로로만 온다 (assets 순서는 폭 무관)."""
+    out: list[str] = []
+    for el in elements:
+        if el.get("type") != "image":
+            continue
+        assets = [a for a in el.get("assets") or [] if a.get("file")]
+        if not assets:
+            continue
+        best = max(assets, key=lambda a: (a.get("typeData") or {}).get("width") or 0)
+        if best["file"] not in out:
+            out.append(best["file"])
+        if len(out) >= limit:
+            break
+    return out
 
 class GuardianAdapter:
     source_type = "api"
@@ -12,7 +30,8 @@ class GuardianAdapter:
         self.source_id = source_id
         # q= 전문검색은 타 구단 기사 혼입 → tag 스코프 (spec §5.1)
         self.params = {"tag": tag, "api-key": api_key,
-                       "show-fields": "trailText,bodyText,thumbnail",
+                       "show-fields": "trailText,bodyText,body,thumbnail",
+                       "show-elements": "image",
                        "order-by": "newest", "page-size": 20}
         if title_contains is None:
             self.title_keywords: list[str] | None = None
@@ -40,5 +59,8 @@ class GuardianAdapter:
                                             # trailText 는 인라인 HTML 포함 가능 — 태그 제거 (autoescape 리터럴 노출 방지)
                                             "summary": BeautifulSoup(f.get("trailText", ""), "html.parser").get_text(" ", strip=True),
                                             "body": f.get("bodyText", ""),
-                                            "image_url": f.get("thumbnail")}))
+                                            "image_url": f.get("thumbnail"),
+                                            "images": _element_images(x.get("elements", []))
+                                                or extract_body_images(
+                                                    f.get("body", ""), base_url=x["webUrl"])}))
         return out

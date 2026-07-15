@@ -236,3 +236,34 @@ def test_post_url_from_clean_path():
 def test_post_url_none_when_no_srl():
     assert _post_url_from_href("/index.php?mid=football_news&act=dispBoard",
                                "https://www.fmkorea.com") is None
+
+FREE_ART_IMG = ('<html><body><article><p>Arsenal news.</p>'
+                '<img src="https://art.test/1.jpg"></article></body></html>')
+PAY_BODY_IMG = ('<div class="xe_content"><p>아스날 본문.</p>'
+                '<img src="https://fmimg.test/p.jpg">'
+                '<p>https://www.nytimes.com/athletic/9/b</p></div>')
+
+@respx.mock
+def test_fmkorea_free_path_collects_original_article_images():
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(
+        200, text='<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날</a>'))
+    respx.get("https://www.fmkorea.com/1").mock(return_value=httpx.Response(200, text=FREE_BODY))
+    respx.get("https://ex.test/a").mock(return_value=httpx.Response(200, text=FREE_ART_IMG))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    items = asyncio.run(a.fetch())
+    assert items[0].raw_payload["images"] == ["https://art.test/1.jpg"]
+
+@respx.mock
+def test_fmkorea_paywalled_path_collects_post_images():
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(
+        200, text='<a class="hx" href="/index.php?document_srl=2">[디 애슬레틱] 아스날</a>'))
+    respx.get("https://www.fmkorea.com/2").mock(return_value=httpx.Response(200, text=PAY_BODY_IMG))
+    respx.get("https://www.nytimes.com/athletic/9/b").mock(
+        return_value=httpx.Response(200, text="<html></html>"))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    items = asyncio.run(a.fetch())
+    assert items[0].raw_payload["images"] == ["https://fmimg.test/p.jpg"]

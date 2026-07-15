@@ -9,6 +9,12 @@ from bullet_in.quality import SourceFreshness
 
 _SCHEMA = Path(__file__).with_name("schema.sql")
 
+def _article_row(a: Article) -> dict:
+    """Article → upsert 파라미터 행. images 는 JSON 직렬화, 빈 목록은 NULL."""
+    row = a.model_dump(exclude={"images"})
+    row["images_json"] = json.dumps(a.images) if a.images else None
+    return row
+
 class MartStore:
     def __init__(self, engine: Engine):
         self.engine = engine
@@ -26,12 +32,12 @@ class MartStore:
           INSERT INTO articles
             (content_hash,url,source_id,author,tier,confidence_score,
              title_original,title_ko,summary_ko,body_excerpt,
-             summary3_ko,body_ko,body_source,image_url,outlet,journalist,team,
+             summary3_ko,body_ko,body_source,image_url,images_json,outlet,journalist,team,
              transfer_stage,
              published_at,fetched_at,revision)
           VALUES (:content_hash,:url,:source_id,:author,:tier,:confidence_score,
              :title_original,:title_ko,:summary_ko,:body_excerpt,
-             :summary3_ko,:body_ko,:body_source,:image_url,:outlet,:journalist,:team,
+             :summary3_ko,:body_ko,:body_source,:image_url,:images_json,:outlet,:journalist,:team,
              :transfer_stage,
              :published_at,:fetched_at,:revision)
           ON DUPLICATE KEY UPDATE
@@ -43,6 +49,7 @@ class MartStore:
              body_excerpt=VALUES(body_excerpt),
              body_source=VALUES(body_source),
              image_url=VALUES(image_url),
+             images_json=VALUES(images_json),
              outlet=VALUES(outlet),
              journalist=VALUES(journalist),
              team=VALUES(team),
@@ -52,7 +59,7 @@ class MartStore:
              fetched_at=VALUES(fetched_at),
              revision=VALUES(revision),
              content_hash=VALUES(content_hash)""")
-        rows = [a.model_dump() for a in articles]
+        rows = [_article_row(a) for a in articles]
         with self.engine.begin() as c:
             c.execute(sql, rows)
         return len(rows)

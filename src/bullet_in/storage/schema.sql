@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS articles (
   tier FLOAT, confidence_score FLOAT,
   title_original TEXT, title_ko TEXT, summary_ko TEXT, body_excerpt TEXT,
   summary3_ko TEXT, body_ko TEXT, body_source TEXT,
-  image_url VARCHAR(1024), outlet VARCHAR(128), journalist VARCHAR(128),
+  image_url VARCHAR(1024), images_json TEXT, outlet VARCHAR(128), journalist VARCHAR(128),
   team VARCHAR(32) DEFAULT 'arsenal',
   transfer_stage VARCHAR(32),
   published_at DATETIME, fetched_at DATETIME,
@@ -24,6 +24,7 @@ ALTER TABLE articles ADD COLUMN IF NOT EXISTS outlet VARCHAR(128);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS journalist VARCHAR(128);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS team VARCHAR(32) DEFAULT 'arsenal';
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS transfer_stage VARCHAR(32);
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS images_json TEXT;
 CREATE TABLE IF NOT EXISTS pipeline_runs (
   run_id VARCHAR(64) PRIMARY KEY, dag_run_id VARCHAR(128),
   started_at DATETIME, finished_at DATETIME, duration_sec FLOAT,
