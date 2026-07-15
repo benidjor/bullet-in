@@ -202,3 +202,13 @@ def test_gossip_without_source_outlet_keeps_tier_4():
     assert resolve_tier(it, sources, registry, journalist="BBC Gossip") == 4.0
     # 등재 기자가 와도 소스 outlet 이 없으면 승격되지 않는다 (제거의 실제 효과)
     assert resolve_tier(it, sources, registry, journalist="Sami Mokbel") == 4.0
+
+
+def test_sources_yaml_gossip_has_no_outlet():
+    """bbc_gossip 에 outlet 을 되돌리면 가십 41건이 facet 에서 BBC (Tier 1) 로
+    합쳐진다 (spec §3.4). 위 유닛 테스트는 합성 dict 를 써서 이 드리프트를
+    못 잡으므로, 설정 파일 자체를 읽어 계약을 고정한다."""
+    from bullet_in.score import load_sources
+    s = load_sources(Path(__file__).parent.parent / "config" / "sources.yaml")
+    assert "outlet" not in s["bbc_gossip"]
+    assert s["bbc_sport"]["outlet"] == "BBC"

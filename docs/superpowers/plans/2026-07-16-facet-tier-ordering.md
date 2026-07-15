@@ -223,7 +223,7 @@ def outlet_display(row: dict, sources: dict) -> str:
 Run: `uv run pytest tests/test_serve_layout.py -q -k outlet_display`
 Expected: PASS
 
-- [ ] **Step 5: 보정 중립 회귀 테스트를 쓴다**
+- [ ] **Step 5: 회귀 고정 테스트를 두 개 쓴다**
 
 `sources.yaml` 의 `outlet` 은 죽은 설정이 아니다.
 `credibility.py:96` 의 소속 일치 보정이 `src.get("outlet")` 을 읽어 `min(j_tier, tier)` 승격을 건다.
@@ -233,6 +233,8 @@ Expected: PASS
 
 기존 `_item(source_id, payload)` 헬퍼 ( 26–28행 ) 를 그대로 쓴다.
 `Registry` 를 import 목록 ( 4행 ) 에 추가한다.
+
+**유닛 테스트 — resolve_tier 분기 고정:**
 
 ```python
 def test_gossip_without_source_outlet_keeps_tier_4():
@@ -252,10 +254,33 @@ def test_gossip_without_source_outlet_keeps_tier_4():
     assert resolve_tier(it, sources, registry, journalist="Sami Mokbel") == 4.0
 ```
 
-- [ ] **Step 6: 실패를 확인한다**
+**실파일 계약 테스트 — config/sources.yaml 드리프트 고정:**
 
-Run: `uv run pytest tests/test_credibility.py -q -k gossip`
-Expected: PASS ( 설정 변경 전이라 이미 통과할 수 있다 — 이 테스트는 회귀 방지용 고정이다 )
+```python
+def test_sources_yaml_gossip_has_no_outlet():
+    """bbc_gossip 에 outlet 을 되돌리면 가십 41건이 facet 에서 BBC (Tier 1) 로
+    합쳐진다 (spec §3.4). 위 유닛 테스트는 합성 dict 를 써서 이 드리프트를
+    못 잡으므로, 설정 파일 자체를 읽어 계약을 고정한다."""
+    from bullet_in.score import load_sources
+    s = load_sources(Path(__file__).parent.parent / "config" / "sources.yaml")
+    assert "outlet" not in s["bbc_gossip"]
+    assert s["bbc_sport"]["outlet"] == "BBC"
+```
+
+- [ ] **Step 6: 회귀 탐지를 실증한다**
+
+유닛 테스트는 합성 dict 를 써서 config/sources.yaml 을 안 읽으므로 설정 되돌림을 못 잡는다.
+실파일 계약 테스트로 드리프트를 탐지하는지 증명한다.
+
+Run: `uv run pytest tests/test_credibility.py -q -k sources_yaml`
+Expected: PASS ( config/sources.yaml 이 원상태 )
+
+설정을 일부러 되돌린다: config/sources.yaml 의 bbc_gossip 블록에 `outlet: BBC` 를 임시로 복원하고
+
+Run: `uv run pytest tests/test_credibility.py -q -k sources_yaml`
+Expected: FAIL ( 회귀 탐지 증명 )
+
+반드시 원상복구: `git checkout config/sources.yaml`
 
 - [ ] **Step 7: sources.yaml 을 고친다**
 
