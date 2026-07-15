@@ -114,6 +114,18 @@ def _walk_authors(node) -> list[str]:
             found += _walk_authors(v)
     return found
 
+def _normalize_authors(names: list[str]) -> list[str]:
+    """저자 목록을 정규화: 빈 문자열 · URL 형태 배제 · 중복 제거 · 순서 보존."""
+    out: list[str] = []
+    for n in names:
+        n = (n or "").strip()
+        # URL 형태 (article:author 의 SNS 링크 등) 는 저자명이 아니다
+        if not n or n.lower().startswith(("http://", "https://")):
+            continue
+        if n not in out:
+            out.append(n)
+    return out
+
 def extract_authors(html: str) -> list[str]:
     """기사 저자명을 JSON-LD → meta[name=author] 순으로 추출한다.
     라이브 실측 (2026-07-16) 상 html 5소스 모두 JSON-LD 로 저자를 노출한다.
@@ -127,18 +139,12 @@ def extract_authors(html: str) -> list[str]:
             except (json.JSONDecodeError, TypeError):
                 continue          # 깨진 LD 하나가 나머지를 막지 않는다
             names += _walk_authors(data)
-        if not names:
+        out = _normalize_authors(names)
+        # JSON-LD 에서 유효 저자를 찾지 못했다면 meta[name=author] 폴백
+        if not out:
             tag = soup.find("meta", attrs={"name": "author"})
             if tag and tag.get("content"):
-                names = [tag["content"]]
-        out: list[str] = []
-        for n in names:
-            n = (n or "").strip()
-            # URL 형태 (article:author 의 SNS 링크 등) 는 저자명이 아니다
-            if not n or n.lower().startswith(("http://", "https://")):
-                continue
-            if n not in out:
-                out.append(n)
+                out = _normalize_authors([tag["content"]])
         return out
     except Exception:
         return []

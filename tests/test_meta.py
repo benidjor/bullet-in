@@ -145,3 +145,11 @@ def test_authors_survives_broken_json_ld():
 
 def test_authors_empty_when_absent():
     assert extract_authors("<html><body><p>no author</p></body></html>") == []
+
+def test_authors_falls_back_when_json_ld_authors_all_invalid():
+    # JSON-LD author 가 있으나 유효 저자 0명 → meta 폴백이 걸려야 한다
+    html = ('<meta name="author" content="Real Fallback Author">'
+            '<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":[{"@type":"Person","name":""},'
+            '{"@type":"Person","name":"https://example.test/profile"}]}</script>')
+    assert extract_authors(html) == ["Real Fallback Author"]
