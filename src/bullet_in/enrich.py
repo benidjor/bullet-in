@@ -34,7 +34,15 @@ TRANSLATE_PROMPT = (
     "- summary_ko: 한 문장, 신문 평어체(종결어미 '~다'), 사실 중심.\n"
     "- summary3_ko: 핵심을 3문장으로, 각 문장 평어체. 문자열 3개 배열.\n"
     "- summary_ko·summary3_ko 존댓말 금지: '확정했습니다' ❌ → '확정했다' ⭕.\n"
-    "- body_ko: 본문 전체를 자연스러운 한국어로 번역. 단락 유지.\n"
+    "- body_ko: 본문 전체를 자연스러운 한국어로 번역. 2~4문장 단위 문단으로 나누고 "
+    "문단 사이는 줄바꿈 문자(\\n)로 구분한다.\n"
+    "- body_ko 지문도 신문 평어체(종결어미 '~다'): '관심을 갖고 있습니다' ❌ → "
+    "'관심을 갖고 있다' ⭕. 인용문(따옴표 안 발화)은 화자의 말투를 그대로 두되, "
+    "발화 인용은 반드시 큰따옴표로 감싼다.\n"
+    "- 구독·앱 설치·댓글 유도, SNS 팔로우 요청, 팟캐스트·뉴스레터 홍보 등 "
+    "기사 내용과 무관한 문구는 body_ko에서 제외.\n"
+    "- body_ko 경량 마크다운: 원문의 소제목은 '### ', 원문이 강조한 구절만 '**굵게**', "
+    "인용 블록은 '> '. 원문에 없는 장식은 새로 만들지 않는다.\n"
     "- 고유명사는 통용 한글 표기(Arsenal=아스날).\n"
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],"body_ko":"..."}}'
     "\n\nTitle: {title}\nBody: {body}")
@@ -46,9 +54,29 @@ PARAPHRASE_PROMPT = (
     "- summary_ko: 한 문장 요약, 평어체.\n"
     "- summary3_ko: 핵심 3문장 배열, 평어체.\n"
     "- summary_ko·summary3_ko 존댓말 금지: '확정했습니다' ❌ → '확정했다' ⭕.\n"
-    "- body_ko: 본문 전체를 문장 표현만 바꿔 다시 쓴다. 내용 추가·삭제 금지.\n"
+    "- body_ko: 본문 전체를 문장 표현만 바꿔 다시 쓴다. 내용 추가·삭제 금지. "
+    "2~4문장 단위 문단으로 나누고 문단 사이는 줄바꿈 문자(\\n)로 구분한다.\n"
+    "- body_ko 지문도 신문 평어체(종결어미 '~다'): '관심을 갖고 있습니다' ❌ → "
+    "'관심을 갖고 있다' ⭕. 인용문(따옴표 안 발화)은 화자의 말투를 그대로 두되, "
+    "발화 인용은 반드시 큰따옴표로 감싼다.\n"
+    "- 구독·앱 설치·댓글 유도, SNS 팔로우 요청, 팟캐스트·뉴스레터 홍보 등 "
+    "기사 내용과 무관한 문구는 body_ko에서 제외.\n"
+    "- body_ko 경량 마크다운: 원문의 소제목은 '### ', 원문이 강조한 구절만 '**굵게**', "
+    "인용 블록은 '> '. 원문에 없는 장식은 새로 만들지 않는다.\n"
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],"body_ko":"..."}}'
     "\n\nTitle: {title}\nBody: {body}")
+
+def apply_glossary(parsed: dict, mapping: dict[str, str]) -> dict:
+    """번역 결과의 한국어 필드에 통용 표기 사전 (오표기 → 통용) 을 치환 적용한다."""
+    if not mapping:
+        return parsed
+    out = dict(parsed)
+    for k, v in out.items():
+        if isinstance(v, str):
+            for wrong, right in mapping.items():
+                v = v.replace(wrong, right)
+            out[k] = v
+    return out
 
 def _extract_full(text: str) -> dict | None:
     m = re.search(r"\{.*\}", text, re.DOTALL)

@@ -10,10 +10,11 @@ from bullet_in.ingest import gather_all
 from bullet_in.canonical import content_hash, canonical_url
 from bullet_in.pipeline import to_articles
 from bullet_in.score import load_sources
-from bullet_in.credibility import load_registry
+from bullet_in.credibility import load_registry, journalist_display_names
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
-from bullet_in.enrich import enrich_rows, classify_stage_rows, resummarize_rows
+from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows,
+                              apply_glossary)
 from bullet_in.tone import select_tone_backfill
 from bullet_in.serve.render import write_site, write_ops
 from bullet_in.quality import success_rate, volume_anomalies, evaluate_freshness
@@ -61,7 +62,10 @@ async def main(concurrency: int):
     results: dict[str, dict] = {}
     results.update(enrich_rows(translate_rows, client, GEMINI_MODEL, mode="translate"))
     results.update(enrich_rows(paraphrase_rows, client, GEMINI_MODEL, mode="paraphrase"))
+    glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
+                or {}).get("replacements", {})
     for h, v in results.items():
+        v = apply_glossary(v, glossary)
         mart.set_translation(h, v["title_ko"], v["summary_ko"],
                              v["summary3_ko"], v["body_ko"])
 
@@ -76,6 +80,7 @@ async def main(concurrency: int):
     if tone_rows:
         fixed = resummarize_rows(tone_rows, client, GEMINI_MODEL)
         for h, v in fixed.items():
+            v = apply_glossary(v, glossary)
             orig = next(r for r in tone_rows if r["content_hash"] == h)
             mart.set_summary(h, v["summary_ko"],
                              v["summary3_ko"] if orig.get("summary3_ko") else None)
@@ -88,7 +93,8 @@ async def main(concurrency: int):
             "summary3_ko,body_ko,image_url,images_json,outlet,journalist,team,transfer_stage,tier,"
             "confidence_score,published_at "
             "FROM articles")).mappings().all()]
-    write_site(rows, sources, "site")
+    write_site(rows, sources, "site",
+               names=journalist_display_names("config/credibility.yaml"))
 
     # 수집량 이상탐지 (SLO-6): 지난 12회 source_counts 대비 소스별 드롭 · 스파이크 알림
     with engine.connect() as c:

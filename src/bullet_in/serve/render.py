@@ -6,6 +6,7 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup, escape
 
 from bullet_in import transfer_stage as _stage
 
@@ -214,6 +215,7 @@ def _env() -> Environment:
         autoescape=select_autoescape(default_for_string=True, default=True),
     )
     env.globals["stages"] = _stage.SIDEBAR_STAGES
+    env.filters["md_bold"] = _md_bold
     return env
 
 
@@ -222,19 +224,37 @@ def _norm_img(url: str) -> str:
     return url.split("?", 1)[0]
 
 
+_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+
+
+def _md_bold(text: str) -> Markup:
+    """이스케이프 후 **굵게**만 <strong>으로 — 경량 마크다운 인라인 변환."""
+    return Markup(_BOLD_RE.sub(r"<strong>\1</strong>", str(escape(text))))
+
+
+def _para_block(p: str) -> dict:
+    """경량 마크다운 블록 분류: '### '=소제목, '> '=인용, 그 외 문단."""
+    if p.startswith("### "):
+        return {"type": "h3", "text": p[4:].strip()}
+    if p.startswith("> "):
+        return {"type": "quote", "text": p[2:].strip()}
+    return {"type": "p", "text": p}
+
+
 def interleave_body(paras: list[str], images: list[str], every: int = 2) -> list[dict]:
     """번역 문단과 인라인 이미지의 교차 블록 시퀀스.
     every 문단마다 이미지 1장, 이미지 소진 후엔 문단만, 남는 이미지는 버린다."""
     blocks, qi = [], 0
     for i, p in enumerate(paras, 1):
-        blocks.append({"type": "p", "text": p})
+        blocks.append(_para_block(p))
         if qi < len(images) and i % every == 0:
             blocks.append({"type": "img", "url": images[qi]})
             qi += 1
     return blocks
 
 
-def _decorate(row: dict, sources: dict, now: datetime) -> dict:
+def _decorate(row: dict, sources: dict, now: datetime,
+              names: dict[str, str] | None = None) -> dict:
     a = dict(row)
     a["_title"] = row.get("title_ko") or row.get("title_original") or ""
     a["_outlet"] = outlet_display(row, sources)
@@ -265,6 +285,9 @@ def _decorate(row: dict, sources: dict, now: datetime) -> dict:
     a["_stage_badge"] = _stage.is_displayable(st)
     a["_stage_label"] = _stage.label_for(st)
     a["_stage_class"] = _stage.css_for(st)
+    j = row.get("journalist")
+    # 바이라인 영문 표기: 레지스트리 alias(한글 말머리·핸들) → 정식 영문명, 미등재는 저장값
+    a["_byline"] = (names or {}).get((j or "").lower(), j)
     return a
 
 
@@ -306,7 +329,8 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
 
 
 def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
-               now: datetime | None = None) -> None:
+               now: datetime | None = None,
+               names: dict[str, str] | None = None) -> None:
     """인덱스·상세 N개·정적 자산을 out_dir에 일괄 생성한다."""
     now = now or datetime.utcnow()
     out = Path(out_dir)
@@ -319,7 +343,7 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
     # 패싯은 전체 기사 기준으로 한 번만 계산해 모든 상세 페이지에 전달
     facets = facet_counts(articles, sources)
     for idx, row in enumerate(ordered):
-        a = _decorate(row, sources, now)
+        a = _decorate(row, sources, now, names=names)
         neighbors = build_neighbors(ordered, idx, sources, now)
         html = render_article(a, neighbors, row["content_hash"], sources, now, facets=facets)
         (out / "article" / f"{row['content_hash']}.html").write_text(

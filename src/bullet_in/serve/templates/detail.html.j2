@@ -17,6 +17,7 @@
       <span class="when">{{ a._date }}</span>
     </div>
     <h2 class="title">{{ a._title }}</h2>
+    {% if a._byline %}<p class="byline">{{ a._byline }}</p>{% endif %}
     {% if a.summary3_ko %}
     <section class="summary">
       <h3>3줄 요약</h3>
@@ -24,7 +25,9 @@
     </section>
     {% endif %}
     <div class="body">
-      {% for b in a._body_blocks %}{% if b.type == 'p' %}<p>{{ b.text }}</p>
+      {% for b in a._body_blocks %}{% if b.type == 'p' %}<p>{{ b.text|md_bold }}</p>
+      {% elif b.type == 'h3' %}<h3>{{ b.text|md_bold }}</h3>
+      {% elif b.type == 'quote' %}<blockquote>{{ b.text|md_bold }}</blockquote>
       {% else %}<figure><img src="{{ b.url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'"></figure>
       {% endif %}{% endfor %}
     </div>

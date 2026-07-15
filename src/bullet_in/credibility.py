@@ -27,6 +27,15 @@ def load_registry(path) -> Registry:
     _build(data.get("outlets", []), out)
     return Registry(jour, out)
 
+def journalist_display_names(path) -> dict[str, str]:
+    """alias(lower) -> 기자 정식 영문명. 바이라인 표기용 (fmkorea 한글 말머리 → 영문)."""
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    out: dict[str, str] = {}
+    for e in data.get("journalists", []) or []:
+        for alias in e["aliases"]:
+            out[alias.lower()] = e["name"]
+    return out
+
 def resolve_tier(item, sources: dict, registry: "Registry | None") -> float | None:
     """항목 1건의 tier 를 산출. None 이면 호출측에서 그 항목을 버린다."""
     src = sources.get(item.source_id, {})

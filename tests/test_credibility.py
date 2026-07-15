@@ -116,3 +116,10 @@ def test_tier_outlet_fallback_for_unregistered_journalist():
 def test_tier_fallback_when_neither():
     it = _Item({"text": "[ @UnknownGuy ] news"})
     assert resolve_tier(it, _SOURCES, _reg()) == 4.0
+
+def test_journalist_display_names_maps_alias_to_canonical():
+    # 바이라인 영문 표기: 한글 말머리·핸들 alias → 정식 영문명
+    from bullet_in.credibility import journalist_display_names
+    names = journalist_display_names("config/credibility.yaml")
+    assert names["온스테인"] == "David Ornstein"
+    assert names["@fabrizioromano"] == "Fabrizio Romano"
