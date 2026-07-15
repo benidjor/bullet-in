@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 import yaml
 import httpx
-from bullet_in.adapters.meta import extract_article_body, extract_og_title, extract_og_image
+from bullet_in.adapters.meta import extract_article_body, extract_og_title, extract_og_image, extract_body_images
 from bullet_in.models import RawItem
 
 log = logging.getLogger(__name__)
@@ -75,7 +75,8 @@ def is_paywalled(url: str) -> bool:
         return True
     return host.endswith("nytimes.com") and (path == "/athletic" or path.startswith("/athletic/"))
 
-def promote_cited_item(item: RawItem, article_url: str, outlet: str, title: str | None, body: str, image: str | None) -> RawItem:
+def promote_cited_item(item: RawItem, article_url: str, outlet: str, title: str | None, body: str, image: str | None,
+                       images: list[str] | None = None) -> RawItem:
     """인용 RawItem을 무료 기사로 제자리 승격. raw_payload를 fmkorea 무료 경로와 동형으로."""
     return RawItem(
         source_id=item.source_id, source_type="html", url=article_url,
@@ -86,17 +87,20 @@ def promote_cited_item(item: RawItem, article_url: str, outlet: str, title: str 
             "body": body, "lang": "en", "outlet": outlet,
             "journalist": item.raw_payload.get("journalist"),
             "image_url": image,
+            "images": images or [],
             "created_at": item.raw_payload.get("created_at"),
         })
 
-async def resolve_and_fetch(client: httpx.AsyncClient, url: str) -> tuple[str | None, str, str | None, str | None]:
-    """t.co (또는 실 URL) → 최종 URL · 본문 · 제목 · 이미지. 실패 시 (None, '', None, None)."""
+async def resolve_and_fetch(client: httpx.AsyncClient, url: str) -> tuple[str | None, str, str | None, str | None, list[str]]:
+    """t.co (또는 실 URL) → 최종 URL · 본문 · 제목 · 이미지 · 인라인 이미지 목록.
+    실패 시 (None, '', None, None, [])."""
     try:
         r = await client.get(url, follow_redirects=True)
         r.raise_for_status()
     except httpx.HTTPError:
-        return None, "", None, None
-    return str(r.url), extract_article_body(r.text), extract_og_title(r.text), extract_og_image(r.text)
+        return None, "", None, None, []
+    return (str(r.url), extract_article_body(r.text), extract_og_title(r.text),
+            extract_og_image(r.text), extract_body_images(r.text, base_url=str(r.url)))
 
 async def backtrack_promote(items, timelines, cfg):
     """인용 항목별 매칭 · 해석 · fetch · 승격. 실패는 2순위 유지 + 로깅."""
@@ -121,7 +125,7 @@ async def backtrack_promote(items, timelines, cfg):
                     else:
                         log.info("backtrack 매칭 실패 handle=%s", handle)
                     out.append(it); continue
-                final_url, body, title, image = await resolve_and_fetch(c, card)
+                final_url, body, title, image, images = await resolve_and_fetch(c, card)
                 if final_url is None or not body:
                     out.append(it); continue
                 if is_paywalled(final_url):
@@ -131,7 +135,7 @@ async def backtrack_promote(items, timelines, cfg):
                 if outlet is None:
                     log.info("backtrack 미등록 도메인 url=%s", final_url)
                     out.append(it); continue
-                out.append(promote_cited_item(it, final_url, outlet, title, body, image))
+                out.append(promote_cited_item(it, final_url, outlet, title, body, image, images))
             except Exception as e:
                 log.warning("backtrack 항목 처리 실패 (2순위 강등) err=%s", e)
                 out.append(it)

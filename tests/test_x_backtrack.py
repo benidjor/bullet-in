@@ -80,7 +80,7 @@ def test_resolve_and_fetch_follows_redirect():
         transport = httpx.MockTransport(handler)
         async with httpx.AsyncClient(transport=transport, follow_redirects=True) as c:
             return await resolve_and_fetch(c, "https://t.co/abc")
-    url, body, title, _img = asyncio.run(run())
+    url, body, title, _img, _images = asyncio.run(run())
     assert url == "https://www.bbc.co.uk/sport/article"
     assert "Body text" in body
     assert title == "Head"
@@ -92,7 +92,7 @@ def test_resolve_and_fetch_returns_empty_on_http_error():
         transport = httpx.MockTransport(handler)
         async with httpx.AsyncClient(transport=transport, follow_redirects=True) as c:
             return await resolve_and_fetch(c, "https://t.co/bad")
-    assert asyncio.run(run()) == (None, "", None, None)
+    assert asyncio.run(run()) == (None, "", None, None, [])
 
 def test_promote_builds_html_item():
     it = RawItem(source_id="x_afcstuff", source_type="x",
@@ -155,3 +155,33 @@ def test_promoted_item_resolves_journalist_tier():
     p = promote_cited_item(it, "https://thesun.co.uk/a", "The Sun", "T", "B", None)
     # 승격 후에도 기자 먼저: Collings(3) < The Sun 아웃렛(4)
     assert resolve_tier(p, sources, reg) == 3.0
+
+def test_resolve_and_fetch_extracts_inline_images():
+    def handler(request):
+        return httpx.Response(200, headers={"content-type": "text/html"},
+                              html=('<article><p>Body text here.</p>'
+                                    '<img src="https://cdn.test/a.jpg"></article>'))
+    async def run():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport, follow_redirects=True) as c:
+            return await resolve_and_fetch(c, "https://bbc.co.uk/x")
+    _url, _body, _title, _img, images = asyncio.run(run())
+    assert images == ["https://cdn.test/a.jpg"]
+
+def test_promote_carries_images():
+    it = RawItem(source_id="x_afcstuff", source_type="x",
+                 url="https://x.com/afcstuff/status/1",
+                 fetched_at=datetime(2026, 7, 3, tzinfo=timezone.utc),
+                 raw_payload={"text": "Arsenal sign X [ @gunnerblog ]",
+                              "journalist": "@gunnerblog",
+                              "created_at": "2026-07-02T20:00:00Z"})
+    p = promote_cited_item(it, "https://arseblog.com/a", "arseblog", "T", "B", None,
+                           images=["https://cdn.test/a.jpg"])
+    assert p.raw_payload["images"] == ["https://cdn.test/a.jpg"]
+
+def test_promote_images_default_empty():
+    it = RawItem(source_id="x_afcstuff", source_type="x", url="https://x.com/a/status/1",
+                 fetched_at=datetime(2026, 7, 3, tzinfo=timezone.utc),
+                 raw_payload={"text": "Tweet", "journalist": "@x"})
+    p = promote_cited_item(it, "https://bbc.co.uk/a", "BBC", None, "B", None)
+    assert p.raw_payload["images"] == []
