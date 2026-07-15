@@ -30,7 +30,7 @@ class GuardianAdapter:
         self.source_id = source_id
         # q= 전문검색은 타 구단 기사 혼입 → tag 스코프 (spec §5.1)
         self.params = {"tag": tag, "api-key": api_key,
-                       "show-fields": "trailText,bodyText,body,thumbnail",
+                       "show-fields": "trailText,bodyText,body,thumbnail,byline",
                        "show-elements": "image",
                        "order-by": "newest", "page-size": 20}
         if title_contains is None:
@@ -62,5 +62,7 @@ class GuardianAdapter:
                                             "image_url": f.get("thumbnail"),
                                             "images": _element_images(x.get("elements", []))
                                                 or extract_body_images(
-                                                    f.get("body", ""), base_url=x["webUrl"])}))
+                                                    f.get("body", ""), base_url=x["webUrl"]),
+                                            # byline 은 단일 문자열 — 대표 선정은 pipeline 책임
+                                            "authors": [f["byline"]] if f.get("byline") else []}))
         return out

@@ -30,7 +30,7 @@ def test_guardian_adapter_requests_tag_and_fields():
     asyncio.run(a.fetch())
     q = route.calls.last.request.url.params
     assert q["tag"] == "football/arsenal"
-    assert q["show-fields"] == "trailText,bodyText,body,thumbnail"
+    assert q["show-fields"] == "trailText,bodyText,body,thumbnail,byline"
     assert q["show-elements"] == "image"
     assert q["page-size"] == "20"
 
@@ -107,3 +107,23 @@ def test_guardian_adapter_prefers_element_images_max_width():
     items = asyncio.run(a.fetch())
     assert items[0].raw_payload["images"] == [
         "https://media.test/big.jpg", "https://media.test/second.jpg"]
+
+@respx.mock
+def test_guardian_adapter_carries_byline_as_authors():
+    respx.get("https://content.guardianapis.com/search").mock(return_value=_resp([
+        {"webTitle": "Arsenal agree deal for Rogers", "webUrl": "https://g.test/1",
+         "webPublicationDate": "2026-07-15T10:00:00Z",
+         "fields": {"trailText": "t", "bodyText": "b", "byline": "David Hytner"}}]))
+    a = GuardianAdapter("guardian", "key", title_contains=["deal"])
+    items = asyncio.run(a.fetch())
+    assert items[0].raw_payload["authors"] == ["David Hytner"]
+
+@respx.mock
+def test_guardian_adapter_authors_empty_without_byline():
+    respx.get("https://content.guardianapis.com/search").mock(return_value=_resp([
+        {"webTitle": "Arsenal agree deal for Rogers", "webUrl": "https://g.test/1",
+         "webPublicationDate": "2026-07-15T10:00:00Z",
+         "fields": {"trailText": "t", "bodyText": "b"}}]))
+    a = GuardianAdapter("guardian", "key", title_contains=["deal"])
+    items = asyncio.run(a.fetch())
+    assert items[0].raw_payload["authors"] == []
