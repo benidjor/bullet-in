@@ -66,6 +66,18 @@ PARAPHRASE_PROMPT = (
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],"body_ko":"..."}}'
     "\n\nTitle: {title}\nBody: {body}")
 
+def apply_glossary(parsed: dict, mapping: dict[str, str]) -> dict:
+    """번역 결과의 한국어 필드에 통용 표기 사전 (오표기 → 통용) 을 치환 적용한다."""
+    if not mapping:
+        return parsed
+    out = dict(parsed)
+    for k, v in out.items():
+        if isinstance(v, str):
+            for wrong, right in mapping.items():
+                v = v.replace(wrong, right)
+            out[k] = v
+    return out
+
 def _extract_full(text: str) -> dict | None:
     m = re.search(r"\{.*\}", text, re.DOTALL)
     if not m:

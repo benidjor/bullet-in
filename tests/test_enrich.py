@@ -343,3 +343,20 @@ def test_body_prompts_instruct_paragraph_breaks():
     from bullet_in.enrich import TRANSLATE_PROMPT, PARAPHRASE_PROMPT
     for p in (TRANSLATE_PROMPT, PARAPHRASE_PROMPT):
         assert "2~4문장" in p and "줄바꿈" in p
+
+def test_apply_glossary_replaces_all_ko_fields():
+    from bullet_in.enrich import apply_glossary
+    mapping = {"메슬리에": "멜리에", "스캇": "스콧"}
+    parsed = {"title_ko": "메슬리에 영입 임박", "summary_ko": "알렉스 스캇 관심.",
+              "summary3_ko": "메슬리에가 온다.\n스캇도 온다.", "body_ko": "메슬리에는 골키퍼다."}
+    out = apply_glossary(parsed, mapping)
+    assert out["title_ko"] == "멜리에 영입 임박"
+    assert out["summary_ko"] == "알렉스 스콧 관심."
+    assert out["summary3_ko"] == "멜리에가 온다.\n스콧도 온다."
+    assert out["body_ko"] == "멜리에는 골키퍼다."
+
+def test_apply_glossary_ignores_missing_fields_and_empty_mapping():
+    from bullet_in.enrich import apply_glossary
+    parsed = {"title_ko": "제목", "summary_ko": None}
+    assert apply_glossary(parsed, {}) == parsed
+    assert apply_glossary(parsed, {"스캇": "스콧"})["summary_ko"] is None
