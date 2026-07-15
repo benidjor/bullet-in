@@ -97,6 +97,16 @@ def test_facet_counts_unregistered_goes_last_by_name():
     assert last["label"] == "더보기 · Tier 4 · 미등재"
     assert [i["value"] for i in last["unregistered"]] == ["afcstuff (aggregator)"]
 
+def test_outlet_tier_falls_back_to_source_tier_when_unregistered():
+    """BBC Football Gossip · Goal.com 이 Tier 4 에 서는 실제 경로 (spec §3.4 · §5.1).
+    이 폴백이 없으면 둘 다 미등재로 떨어진다 — registry 에 그 문자열이 없다."""
+    arts = [{"source_id": "g", "outlet": None, "tier": 4, "team": "arsenal"}]
+    sources = {"g": {"display_name": "BBC Football Gossip", "tier": 4}}
+    f = facet_counts(arts, sources, registry=_Reg(outlets={"bbc": 1.0}))
+    last = f["outlets"]["stages"][-1]
+    assert [i["value"] for i in last["groups"][0]["items"]] == ["BBC Football Gossip"]
+    assert last["unregistered"] == []
+
 def test_facet_counts_skips_empty_tier_stages():
     # Tier 1 과 Tier 3 만 존재 → 첫 더보기는 Tier 2 를 건너뛰고 Tier 3 을 연다
     arts = [
