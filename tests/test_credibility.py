@@ -123,3 +123,33 @@ def test_journalist_display_names_maps_alias_to_canonical():
     names = journalist_display_names("config/credibility.yaml")
     assert names["온스테인"] == "David Ornstein"
     assert names["@fabrizioromano"] == "Fabrizio Romano"
+
+def test_load_registry_includes_canonical_name_key():
+    # html 추출 결과는 풀네임 — alias 키만으론 매치 불가 (spec §2)
+    r = load_registry(REG)
+    assert r.journalists["sami mokbel"] == 1.0
+    assert r.journalists["david ornstein"] == 1.0
+
+def test_registry_journalist_outlets_only_for_affiliated():
+    r = load_registry(REG)
+    assert r.journalist_outlets["sami mokbel"] == "BBC"
+    assert r.journalist_outlets["@skysports_sheth"] == "Sky Sports"
+    # 프리랜서 (여러 매체 기고) 는 소속 미지정 → 조회 부재
+    assert "charles watts" not in r.journalist_outlets
+    assert "fabrizio romano" not in r.journalist_outlets
+
+def test_registry_registers_french_outlets():
+    r = load_registry(REG)
+    assert r.outlets["l'équipe"] == 2.0
+    assert r.outlets["레키프"] == 2.0
+    assert r.outlets["rmc"] == 1.0
+    assert r.outlets["foot mercato"] == 4.0
+
+def test_journalist_directory_maps_alias_and_name():
+    from bullet_in.credibility import journalist_directory
+    d = journalist_directory("config/credibility.yaml")
+    assert d["온스테인"] == {"name": "David Ornstein", "outlet": "The Athletic"}
+    assert d["@fabrizioromano"]["name"] == "Fabrizio Romano"
+    assert d["fabrizio romano"]["outlet"] is None      # 프리랜서
+    assert d["sami mokbel"] == {"name": "Sami Mokbel", "outlet": "BBC"}
+    assert "kaya kaynak" not in d                       # 미등재

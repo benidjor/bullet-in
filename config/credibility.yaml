@@ -1,22 +1,22 @@
 journalists:
-  - {name: David Ornstein,    tier: 1,   aliases: ["@David_Ornstein", "온스테인", "Ornstein"]}
-  - {name: Sami Mokbel,       tier: 1,   aliases: ["@SamiMokbel1_DM", "@SamiMokbel_BBC", "목벨", "Mokbel"]}
+  - {name: David Ornstein,    tier: 1,   outlet: The Athletic,    aliases: ["@David_Ornstein", "온스테인", "Ornstein"]}
+  - {name: Sami Mokbel,       tier: 1,   outlet: BBC,             aliases: ["@SamiMokbel1_DM", "@SamiMokbel_BBC", "목벨", "Mokbel"]}
   - {name: Fabrizio Romano,   tier: 1.5, aliases: ["@FabrizioRomano", "로마노", "Romano"]}
-  - {name: James McNicholas,  tier: 1.5, aliases: ["@_JamesMcNicholas", "@gunnerblog", "맥니콜라스", "McNicholas"]}
+  - {name: James McNicholas,  tier: 1.5, outlet: The Athletic,    aliases: ["@_JamesMcNicholas", "@gunnerblog", "맥니콜라스", "McNicholas"]}
   - {name: handofarsnal,      tier: 1.5, aliases: ["@handofarsnal"]}
-  - {name: Dharmesh Sheth,    tier: 1.5, aliases: ["@skysports_sheth", "셰스", "Sheth"]}
+  - {name: Dharmesh Sheth,    tier: 1.5, outlet: Sky Sports,      aliases: ["@skysports_sheth", "셰스", "Sheth"]}
   - {name: Charles Watts,     tier: 3,   aliases: ["@charles_watts", "찰스 왓츠", "Watts"]}
-  - {name: Amy Lawrence,      tier: 2,   aliases: ["@amylawrence71", "에이미 로런스", "Lawrence"]}
+  - {name: Amy Lawrence,      tier: 2,   outlet: The Athletic,    aliases: ["@amylawrence71", "에이미 로런스", "Lawrence"]}
   - {name: Teamnewsandtix,    tier: 2,   aliases: ["@Teamnewsandtix", "팀뉴스앤틱스"]}
-  - {name: James Olley,       tier: 2,   aliases: ["@JamesOlley", "올리", "Olley"]}
-  - {name: Gary Jacob,        tier: 3,   aliases: ["@garyjacob", "게리 제이콥", "Jacob"]}
-  - {name: Simon Collings,    tier: 3,   aliases: ["@sr_collings", "사이먼 콜링스", "Collings"]}
-  - {name: Gianluca Di Marzio,tier: 3,   aliases: ["@DiMarzio", "디 마르지오", "Di Marzio"]}
-  - {name: Sam Dean,          tier: 2,   aliases: ["@SamJDean", "샘 딘", "Sam Dean"]}
-  - {name: Miguel Delaney,    tier: 3,   aliases: ["@MiguelDelaney", "미겔 델라니", "델라니", "Delaney"]}
-  - {name: Matt Law,          tier: 2,   aliases: ["@Matt_Law_DT"]}
+  - {name: James Olley,       tier: 2,   outlet: ESPN,            aliases: ["@JamesOlley", "올리", "Olley"]}
+  - {name: Gary Jacob,        tier: 3,   outlet: The Times,       aliases: ["@garyjacob", "게리 제이콥", "Jacob"]}
+  - {name: Simon Collings,    tier: 3,   outlet: Evening Standard, aliases: ["@sr_collings", "사이먼 콜링스", "Collings"]}
+  - {name: Gianluca Di Marzio,tier: 3,   outlet: Sky Italia,      aliases: ["@DiMarzio", "디 마르지오", "Di Marzio"]}
+  - {name: Sam Dean,          tier: 2,   outlet: The Telegraph,   aliases: ["@SamJDean", "샘 딘", "Sam Dean"]}
+  - {name: Miguel Delaney,    tier: 3,   outlet: The Independent, aliases: ["@MiguelDelaney", "미겔 델라니", "델라니", "Delaney"]}
+  - {name: Matt Law,          tier: 2,   outlet: The Telegraph,   aliases: ["@Matt_Law_DT"]}
   - {name: LatteFirm,         tier: 3,   aliases: ["@LatteFirm"]}
-  - {name: Art de Roché,     tier: 1.5, aliases: ["@ArtdeRoche", "드 로셰", "드로셰", "de roche"]}
+  - {name: Art de Roché,     tier: 1.5, outlet: The Athletic,    aliases: ["@ArtdeRoche", "드 로셰", "드로셰", "de roche"]}
 outlets:
   - {name: The Athletic,    tier: 1,   aliases: ["디 애슬레틱", "애슬레틱", "The Athletic"]}
   - {name: BBC,             tier: 1,   aliases: ["BBC"]}
@@ -38,3 +38,6 @@ outlets:
   - {name: 90min,           tier: 4,   aliases: ["90min"]}
   - {name: HITC,            tier: 4,   aliases: ["HITC"]}
   - {name: arseblog,        tier: 2,   aliases: ["arseblog"]}
+  - {name: L'Équipe,        tier: 2,   aliases: ["레키프", "L'Equipe", "L'Équipe", "lequipe"]}
+  - {name: RMC Sport,       tier: 1,   aliases: ["RMC", "RMC 스포르", "RMC Sport"]}
+  - {name: Foot Mercato,    tier: 4,   aliases: ["풋 메르카토", "Foot Mercato", "footmercato"]}
