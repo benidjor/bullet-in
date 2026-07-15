@@ -327,3 +327,13 @@ def test_resummarize_skips_empty_or_null_summary():
             {"content_hash": "null", "title_original": "B", "body_ko": "b"}]
     out = resummarize_rows(rows, C(), "gemini-2.5-flash-lite")
     assert out == {}
+
+def test_body_prompts_carry_plain_style_boilerplate_and_markdown_rules():
+    # body_ko 평어체 대비 예시 · 인용문 예외 · 무관 문구 제외 · 경량 마크다운 지시가
+    # 프롬프트에서 빠지면 회귀 — 번역 · 패러프레이즈 2종 모두 검사
+    from bullet_in.enrich import TRANSLATE_PROMPT, PARAPHRASE_PROMPT
+    for p in (TRANSLATE_PROMPT, PARAPHRASE_PROMPT):
+        assert "갖고 있습니다" in p and "갖고 있다" in p
+        assert "인용문" in p
+        assert "무관한 문구" in p
+        assert "###" in p and "**" in p and "> " in p
