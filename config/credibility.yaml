@@ -28,6 +28,7 @@ outlets:
   - {name: Evening Standard,tier: 3,   aliases: ["이브닝 스탠다드", "Evening Standard"]}
   - {name: The Telegraph,   tier: 2,   aliases: ["텔레그래프", "The Telegraph"]}
   - {name: The Independent, tier: 3,   aliases: ["인디펜던트", "디 인디펜던트", "The Independent", "Independent"]}
+  - {name: Arsenal.com,     tier: 0,   aliases: ["공홈", "아스날 공홈", "Arsenal.com"]}
   - {name: Daily Mail,      tier: 3,   aliases: ["데일리 메일", "Daily Mail"]}
   - {name: Sky Italia,      tier: 3,   aliases: ["스카이 이탈리아", "Sky Italia"]}
   - {name: The Sun,         tier: 4,   aliases: ["더 선", "The Sun"]}
