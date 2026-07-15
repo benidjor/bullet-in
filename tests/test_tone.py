@@ -44,3 +44,10 @@ def test_curly_quoted_polite_speech_is_ignored():
 def test_none_and_empty_are_false():
     assert not has_polite_ending(None)
     assert not has_polite_ending("")
+
+def test_plain_anida_ending_is_not_flagged():
+    # '아니다'는 평어체 — '~니다' 패턴 오탐 회귀 방지 (2026-07-15 본문 백필에서 실측)
+    assert not has_polite_ending("프리미어리그 우승 후, 이는 쉬운 과제가 아니다.")
+
+def test_polite_animnida_is_still_flagged():
+    assert has_polite_ending("이는 쉬운 과제가 아닙니다.")
