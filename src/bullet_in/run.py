@@ -94,7 +94,8 @@ async def main(concurrency: int):
             "confidence_score,published_at "
             "FROM articles")).mappings().all()]
     write_site(rows, sources, "site",
-               directory=journalist_directory("config/credibility.yaml"))
+               directory=journalist_directory("config/credibility.yaml"),
+               registry=registry)
 
     # 수집량 이상탐지 (SLO-6): 지난 12회 source_counts 대비 소스별 드롭 · 스파이크 알림
     with engine.connect() as c:
