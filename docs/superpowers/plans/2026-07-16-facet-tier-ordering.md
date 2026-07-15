@@ -138,8 +138,9 @@ Run: `grep -rn "tier ?\|tier {\|\"tier \|1군\|2군\|ITK · 루머" src/bullet_i
 - [ ] **Step 7: 전체 테스트를 돌린다**
 
 Run: `uv run pytest -q`
-Expected: `test_facet_counts` 등 facet 관련은 아직 실패해도 된다 ( Task 3 에서 고친다 ).
-`test_tier_label` · `test_serve_render.py::test_index_card_has_tier_chip` 계열은 PASS 여야 한다.
+Expected: **전부 PASS** ( 통합 테스트 skip 은 정상 ).
+이 태스크는 `facet_counts` 를 건드리지 않으므로 facet 테스트도 green 이어야 한다.
+하나라도 실패하면 멈추고 보고한다 — 예상된 실패가 아니다.
 
 - [ ] **Step 8: 커밋**
 
@@ -273,7 +274,9 @@ Expected: PASS ( 설정 변경 전이라 이미 통과할 수 있다 — 이 테
 - [ ] **Step 8: 전체 테스트를 돌린다**
 
 Run: `uv run pytest -q`
-Expected: facet 관련 실패만 남는다 ( Task 3 에서 고친다 ).
+Expected: **전부 PASS** ( 통합 테스트 skip 은 정상 ).
+기존 `test_facet_counts` 픽스처의 `sources` 에는 `outlet` 키가 없어 새 폴백 단계를 타지 않는다 — 그래서 green 이어야 한다.
+하나라도 실패하면 멈추고 보고한다 — 예상된 실패가 아니다.
 
 - [ ] **Step 9: 커밋**
 
@@ -575,8 +578,21 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
 - [ ] **Step 7: 전체 테스트를 돌린다**
 
 Run: `uv run pytest -q`
-Expected: 템플릿이 아직 옛 키를 읽어 `test_serve_render.py` 가 실패한다 ( Task 4 에서 고친다 ).
-`test_serve_layout.py` 는 전부 PASS 여야 한다.
+
+**이 태스크는 suite 를 의도적으로 red 로 남긴다.** `facet_counts` 의 반환 계약을 바꾸는데 소비자인 템플릿은 Task 4 에서 고치기 때문이다.
+아래 표와 **정확히** 일치해야 한다.
+
+| 파일 | 기대 | 사유 |
+|---|---|---|
+| `tests/test_serve_layout.py` | **전부 PASS** | 이 태스크의 산출물 — 뷰모델 단위 테스트 |
+| `tests/test_credibility.py` | **전부 PASS** | 무관 |
+| `tests/test_serve_render.py` | **FAIL 허용** | 템플릿이 아직 `facets.outlets` 를 리스트로 순회 · `facets.tiers[t]` 를 dict 로 조회 |
+| 그 외 전부 | **PASS** | 무관 |
+
+`test_serve_render.py` 의 예상 오류는 `jinja2.exceptions.UndefinedError` 또는 `TypeError` ( 리스트 · dict 접근 불일치 ) 다.
+
+**중단 조건** — 위 표와 다른 게 하나라도 있으면 커밋하지 말고 멈춰서 보고한다.
+`test_serve_layout.py` 가 하나라도 실패하거나, `test_serve_render.py` 밖에서 실패가 나거나, `test_serve_render.py` 의 오류가 위 두 종류가 아니면 **예상된 실패가 아니다** — 새로 만든 버그다.
 
 - [ ] **Step 8: 커밋**
 
