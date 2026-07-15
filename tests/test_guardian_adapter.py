@@ -30,7 +30,7 @@ def test_guardian_adapter_requests_tag_and_fields():
     asyncio.run(a.fetch())
     q = route.calls.last.request.url.params
     assert q["tag"] == "football/arsenal"
-    assert q["show-fields"] == "trailText,bodyText,thumbnail"
+    assert q["show-fields"] == "trailText,bodyText,body,thumbnail"
     assert q["page-size"] == "20"
 
 @respx.mock
@@ -69,3 +69,17 @@ def test_guardian_adapter_strips_markup_from_summary():
     a = GuardianAdapter(source_id="guardian", api_key="k")
     p = asyncio.run(a.fetch())[0].raw_payload
     assert p["summary"] == "In today's Football Daily: a big deal"
+
+@respx.mock
+def test_guardian_adapter_extracts_body_images():
+    respx.get("https://content.guardianapis.com/search").mock(return_value=_resp([
+        {"webTitle": "Arsenal sign X", "webUrl": "https://guard.test/a",
+         "webPublicationDate": "2026-07-15T10:00:00Z",
+         "fields": {"trailText": "t", "bodyText": "plain body",
+                    "body": ('<p>One.</p><figure>'
+                             '<img src="https://media.test/1.jpg"></figure>'),
+                    "thumbnail": "https://media.test/t.jpg"}}]))
+    a = GuardianAdapter(source_id="guardian", api_key="k")
+    items = asyncio.run(a.fetch())
+    assert items[0].raw_payload["images"] == ["https://media.test/1.jpg"]
+    assert items[0].raw_payload["body"] == "plain body"  # bodyText 경로 무변경

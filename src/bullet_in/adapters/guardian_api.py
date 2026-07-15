@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import httpx
 from bs4 import BeautifulSoup
 from bullet_in.models import RawItem
+from bullet_in.adapters.meta import extract_body_images
 
 class GuardianAdapter:
     source_type = "api"
@@ -12,7 +13,7 @@ class GuardianAdapter:
         self.source_id = source_id
         # q= 전문검색은 타 구단 기사 혼입 → tag 스코프 (spec §5.1)
         self.params = {"tag": tag, "api-key": api_key,
-                       "show-fields": "trailText,bodyText,thumbnail",
+                       "show-fields": "trailText,bodyText,body,thumbnail",
                        "order-by": "newest", "page-size": 20}
         if title_contains is None:
             self.title_keywords: list[str] | None = None
@@ -40,5 +41,7 @@ class GuardianAdapter:
                                             # trailText 는 인라인 HTML 포함 가능 — 태그 제거 (autoescape 리터럴 노출 방지)
                                             "summary": BeautifulSoup(f.get("trailText", ""), "html.parser").get_text(" ", strip=True),
                                             "body": f.get("bodyText", ""),
-                                            "image_url": f.get("thumbnail")}))
+                                            "image_url": f.get("thumbnail"),
+                                            "images": extract_body_images(
+                                                f.get("body", ""), base_url=x["webUrl"])}))
         return out
