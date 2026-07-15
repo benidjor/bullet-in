@@ -126,12 +126,14 @@
 - 상세 페이지: no-op 분기 제거 — "필터 적용" 클릭 시 체크 상태를 쿼리로 직렬화해 `{root}index.html?…`로 이동.
 - 더보기 토글: 클래스 토글 몇 줄로 처리 (라이브러리 없음).
 
-### 4. 백필 — 1회성 스크립트 (`scripts/backfill_journalist.py` 신설)
+### 4. 백필 — 1회성 CLI (`src/bullet_in/backfill_journalist.py` 신설)
 
-`scripts/` 디렉터리를 신설한다 (1회성 운영 스크립트의 첫 사례 — 기존 백필은 run 사이클 통합형 tone뿐).
+`python -m bullet_in.backfill_journalist` 로 실행하는 패키지 내 CLI 로 둔다 (기존 `bullet_in.benchmark` · `bullet_in.run` 과 같은 형태).
+저장소 밖 `scripts/` 는 설치 패키지에 포함되지 않아 테스트에서 import 가 불가능하다 (계획 수립 중 확정 — 2026-07-16).
 
 - 대상 1 (재fetch 불필요): arsenal_official · bbc_gossip 전건 → 통칭 일괄 UPDATE.
-- 대상 2 (재fetch): bbc_sport · goal · football_london · skysports의 `journalist IS NULL` 약 233건.
+- 대상 2 (재fetch): html 어댑터 · `body_selector` 보유 · 통칭 없는 소스 (bbc_sport · goal · football_london · skysports) 의 `journalist IS NULL` 약 233건.
+  fmkorea 는 `body_selector` 를 갖지만 html 어댑터가 아니라 대상에서 빠진다 (2h 접근 규칙 · 말머리 파싱 경로 유지).
   기사 URL 재fetch → `extract_authors` → 대표 선정 → `journalist` UPDATE.
   §2 조건 충족 시 `tier` · `confidence_score` 재산출.
 - 소스별 순차 실행 · 요청 간격 1–2초.
