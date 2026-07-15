@@ -60,7 +60,7 @@ def test_index_sorts_latest_first():
 
 def test_index_renders_active_stage_filter():
     html = render_index([_row(), _row(content_hash="h2")], SOURCES, NOW)
-    assert "tier 2" in html
+    assert "Tier 2" in html
     # 영입 단계 필터가 활성 (2-b): 체크박스 + data-group="stage"
     assert "영입 단계" in html
     assert 'data-group="stage"' in html

@@ -1,7 +1,7 @@
 from datetime import datetime
 from bullet_in.serve.render import (
-    humanize_when, fmt_date, outlet_display, tier_label,
-    neighbor_window, facet_counts,
+    humanize_when, fmt_date, outlet_display, tier_label, tier_key,
+    neighbor_window, facet_counts, TIER_ORDER, TIER_HEADINGS,
 )
 
 NOW = datetime(2026, 6, 29, 12, 0, 0)
@@ -23,10 +23,29 @@ def test_outlet_display_prefers_outlet_then_displayname_then_id():
     assert outlet_display({"outlet": None, "source_id": "bbc_sport"}, sources) == "BBC Sport"
     assert outlet_display({"outlet": None, "source_id": "unknown"}, sources) == "unknown"
 
-def test_tier_label():
-    assert tier_label(2) == "tier 2"
-    assert tier_label(2.0) == "tier 2"
-    assert tier_label(None) == "tier ?"
+def test_tier_key_is_shortest_exact_form():
+    # data-tier 와 facet data-value 가 문자열로 비교되므로 표기가 한 가지여야 한다
+    assert tier_key(0) == "0"
+    assert tier_key(1.0) == "1"
+    assert tier_key(1.5) == "1.5"
+    assert tier_key(4.0) == "4"
+    assert tier_key(None) == ""
+
+def test_tier_label_uses_capital_tier():
+    assert tier_label(2) == "Tier 2"
+    assert tier_label(2.0) == "Tier 2"
+    assert tier_label(1.5) == "Tier 1.5"
+    assert tier_label(None) == "Tier ?"
+
+def test_tier_headings_are_credibility_scale():
+    assert [TIER_HEADINGS[t] for t in TIER_ORDER] == [
+        "Tier 0 · 공식",
+        "Tier 1 · 공신력 최상",
+        "Tier 1.5 · 공신력 상",
+        "Tier 2 · 공신력 중",
+        "Tier 3 · 공신력 하",
+        "Tier 4 · 공신력 최하",
+    ]
 
 def test_neighbor_window_centers_and_clamps():
     assert neighbor_window(10, 5) == (3, 8)   # 중앙: i-2..i+2

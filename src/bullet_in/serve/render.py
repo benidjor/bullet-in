@@ -41,10 +41,30 @@ def outlet_display(row: dict, sources: dict) -> str:
             or row.get("source_id") or "")
 
 
+TIER_ORDER: list[float] = [0.0, 1.0, 1.5, 2.0, 3.0, 4.0]
+INITIAL_MAX_TIER = 1.5                      # 초기 노출 상한 (spec §3.2)
+TIER_HEADINGS: dict[float, str] = {
+    0.0: "Tier 0 · 공식",
+    1.0: "Tier 1 · 공신력 최상",
+    1.5: "Tier 1.5 · 공신력 상",
+    2.0: "Tier 2 · 공신력 중",
+    3.0: "Tier 3 · 공신력 하",
+    4.0: "Tier 4 · 공신력 최하",
+}
+
+
+def tier_key(tier) -> str:
+    """data-tier · facet data-value · URL ?tier= 가 공유하는 표기.
+    app.js 가 문자열 동등 비교를 하므로 포매터는 여기 하나만 둔다."""
+    if tier is None:
+        return ""
+    return f"{float(tier):g}"               # 1.0 -> "1" · 1.5 -> "1.5"
+
+
 def tier_label(tier) -> str:
     if tier is None:
-        return "tier ?"
-    return f"tier {int(tier)}"
+        return "Tier ?"
+    return f"Tier {tier_key(tier)}"
 
 
 def neighbor_window(n: int, idx: int, size: int = 5) -> tuple[int, int]:
@@ -120,9 +140,9 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
 # ---- 운영 뷰 (ops.html) 뷰모델 ----
 # 지표 정의 · 데이터 계약: docs/superpowers/specs/2026-07-14-ops-monitoring-view-design.md §5 · §6
 
-TIER_BUCKETS = [(1.0, "Tier 1 — 공식 · 1군 언론"),
-                (2.0, "Tier 2 — 2군 · 애그리게이터"),
-                (3.0, "Tier 3 — ITK · 루머")]
+TIER_BUCKETS = [(1.0, "Tier 1 — 공식 · 공신력 최상"),
+                (2.0, "Tier 2 — 공신력 중"),
+                (3.0, "Tier 3 — 공신력 하")]
 ETC_TIER_LABEL = "기타 (0 · 1.5 · 4)"
 
 
