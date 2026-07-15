@@ -15,7 +15,8 @@ def test_static_assets_exist_and_nonempty():
     assert "journalist" in js                          # 기자 필터 계약
     assert "URLSearchParams" in js                     # 필터 상태 URL 직렬화
     assert "replaceState" in js                        # 인덱스 URL 동기화
-    assert "jmoreBtn" in js                            # 더보기 토글
+    assert "morestage" in js and "facetgroup" in js    # tier 단계 전개 계약
+    assert "jmore" not in js                           # 옛 이분법 토글 제거
 
 
 from datetime import datetime
