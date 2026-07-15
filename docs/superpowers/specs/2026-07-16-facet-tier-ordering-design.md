@@ -102,6 +102,11 @@
 - **tier 중립** — `credibility.py:96` 의 보정은 `min(j_tier, tier)` 인데 그의 소속 tier 와 소스 tier 가 둘 다 4라 `min(4, 4) = 4` 로 변화가 없다.
 - **라벨 무변화** — `journalist_entry()` 가 이미 `Tom Canton (football.london)` 을 만든다.
 - **효과** — 기자 facet 에서 미등재 → Tier 4 구간으로 이동. 미등재 56명 → 55명.
+- **tier 외 파급 · 대표 기자 선정** — `pipeline.py:37-40` 의 `select_journalist()` 는 추출 저자 중 **등재 기자를 첫 저자보다 우선**한다.
+  따라서 Tom Canton 이 공저자로 끼되 첫 저자가 아닌 football.london 기사는 앞으로 대표 기자가 첫 저자에서 그로 바뀐다.
+  이미 적재된 행의 `journalist` 값은 그대로이고 신규 수집 · 백필에만 적용된다.
+  기존 테스트 `test_select_journalist_falls_back_to_first_author` 가 Tom Canton 을 미등재 예시로 쓰고 있어 픽스처를 교체한다.
+  이 변화는 받아들인다 — 알려진 기자에게 귀속하는 편이 facet 의 목적에 맞는다.
 - **선례** — PR #51 `chore(credibility): Independent 3티어 등재` 와 같은 성격의 config 변경이다.
 
 ### 3.7. 신뢰도 facet = Tier 1.5 추가
