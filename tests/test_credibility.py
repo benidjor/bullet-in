@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 from datetime import datetime, timezone
-from bullet_in.credibility import load_registry, resolve_tier, Registry
+from bullet_in.credibility import load_registry, resolve_tier, Registry, journalist_directory
 from bullet_in.models import RawItem
 
 REG = Path(__file__).parent.parent / "config" / "credibility.yaml"
@@ -212,3 +212,17 @@ def test_sources_yaml_gossip_has_no_outlet():
     s = load_sources(Path(__file__).parent.parent / "config" / "sources.yaml")
     assert "outlet" not in s["bbc_gossip"]
     assert s["bbc_sport"]["outlet"] == "BBC"
+
+def test_tom_canton_registered_tier_4_is_neutral():
+    """등재해도 기사 tier 는 안 바뀐다 — min(4, 4) = 4 (spec §3.6)."""
+    registry = load_registry(REG)
+    assert registry.journalists["tom canton"] == 4.0
+    assert registry.journalist_outlets["tom canton"] == "football.london"
+
+    sources = {"football_london": {"tier": 4, "outlet": "football.london"}}
+    it = _item("football_london", {})
+    assert resolve_tier(it, sources, registry, journalist="Tom Canton") == 4.0
+
+    # 기자 facet 에서 미등재 구간을 벗어난다
+    d = journalist_directory(REG)
+    assert d["tom canton"]["name"] == "Tom Canton"

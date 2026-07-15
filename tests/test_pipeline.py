@@ -146,7 +146,7 @@ def test_select_journalist_prefers_registered_author():
     assert select_journalist(it, {"tier": 1}, REG) == "Sami Mokbel"
 
 def test_select_journalist_falls_back_to_first_author():
-    it = _html_item("football_london", {"title": "x", "authors": ["Raff Tindale", "Tom Canton"]})
+    it = _html_item("football_london", {"title": "x", "authors": ["Raff Tindale", "Unregistered Writer"]})
     assert select_journalist(it, {"tier": 4}, REG) == "Raff Tindale"
 
 def test_select_journalist_uses_source_label_when_configured():
