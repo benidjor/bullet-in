@@ -8,9 +8,14 @@ def test_static_assets_exist_and_nonempty():
     assert "data-theme" in css and "--bg" in css      # 테마 변수
     assert ".card" in css and ".side" in css
     assert "s-interest" in css and "s-personal" in css  # 신규 단계 점 색
+    assert ".morebtn" in css                           # 기자 더보기 버튼
     assert "data-outlet" in js and "data-tier" in js   # 카드 필터 계약
     assert "data-stage" in js                          # 단계 필터 계약
     assert "localStorage" in js                        # 테마 영속
+    assert "journalist" in js                          # 기자 필터 계약
+    assert "URLSearchParams" in js                     # 필터 상태 URL 직렬화
+    assert "replaceState" in js                        # 인덱스 URL 동기화
+    assert "jmoreBtn" in js                            # 더보기 토글
 
 
 from datetime import datetime
