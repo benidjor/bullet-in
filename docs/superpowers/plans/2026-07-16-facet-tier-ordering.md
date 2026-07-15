@@ -669,7 +669,7 @@ EOF
 def test_sidebar_renders_tier_heading_and_initial_only():
     rows = [_row(content_hash="h1", journalist="온스테인", outlet="The Athletic", tier=1),
             _row(content_hash="h2", journalist="Kaya Kaynak", outlet="The Sun", tier=4),
-            _row(content_hash="h3", journalist=None, outlet="afcstuff", tier=4)]
+            _row(content_hash="h3", journalist="Kaya Kaynak", outlet="afcstuff", tier=4)]
     directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
 
     class _Reg:
@@ -785,7 +785,11 @@ Expected: FAIL — 템플릿이 옛 키를 읽어 `UndefinedError` 또는 assert
 .facetgroup>.tierhead:first-child{margin-top:2px}
 .unreghead{display:flex;align-items:center;gap:7px;margin:10px 0 3px;padding:0 9px;font-size:10px;letter-spacing:.06em;color:var(--muted)}
 .unreghead::before,.unreghead::after{content:"";flex:1;height:1px;background:var(--line)}
+.morebtn[hidden]{display:none}
 ```
+
+`.morebtn[hidden]` 이 필요한 이유 — 위 `.morebtn` 규칙의 `display:block` 처럼 요소에 `display` 를 지정하면 브라우저 기본 `[hidden]{display:none}` 규칙을 항상 이겨, JS 가 `hidden` 을 설정해도 버튼이 안 숨는다.
+자세한 내용 · 실증은 `docs/troubleshooting/2026-07-16-hidden-attr-defeated-by-author-css.md` 를 참고한다.
 
 - [ ] **Step 7: 통과를 확인한다**
 

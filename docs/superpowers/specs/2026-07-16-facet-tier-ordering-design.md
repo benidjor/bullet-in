@@ -186,17 +186,23 @@ DB 의 `tier` 는 `FLOAT` 이고 실제 값은 `0.0` · `1.0` · `1.5` · `2.0` 
 | `src/bullet_in/serve/templates/_layout.html.j2` | Tier 헤더 · 구분선 · 더보기 버튼 · 신뢰도 facet tier 목록 |
 | `src/bullet_in/serve/templates/index.html.j2` | `data-tier` 를 `tier_key()` 로 |
 | `src/bullet_in/serve/static/app.js` | 더보기 단계 전개 |
-| `src/bullet_in/serve/static/style.css` | Tier 헤더 · 구분선 |
+| `src/bullet_in/serve/static/style.css` | Tier 헤더 · 구분선 · `.morebtn[hidden]` 짝 규칙 |
 | `config/sources.yaml` | `bbc_gossip` 의 `outlet: BBC` 제거 |
 | `config/credibility.yaml` | Tom Canton 등재 |
+| `src/bullet_in/run.py` | `write_site` 호출에 `registry=registry` 추가 — registry 배선 |
+| `src/bullet_in/serve/templates/ops.html.j2` | `④ Tier 분포` 제목 대문자화 |
 
 ## 7. 검증
 
 - **정렬** — Tier 1 안에서 `BBC` 가 `The Athletic` 보다 먼저, 기자 Tier 1 안에서 `David Ornstein` 이 `Sami Mokbel` 보다 먼저 나오는 테스트.
   건수는 각각 7 < 12 · 3 < 6 이므로 건수순 회귀를 동시에 잡는다.
 - **빈 tier 건너뜀** — 기자 facet 의 첫 더보기가 `Tier 3` 을 여는 테스트.
-- **BBC 분리** — `BBC` 가 Tier 1 · `BBC Football Gossip` 이 Tier 4 로 갈리고 두 항목의 건수 합이 48인 테스트.
 - **보정 중립** — `bbc_gossip` 의 `outlet` 제거 후 41건의 tier 가 전부 4로 유지되는 회귀 테스트.
 - **Tom Canton 중립** — 등재 전후로 그의 58건 tier 가 4로 유지되는 테스트.
-- **tier 문자열 계약** — `tier_key(1.0) == "1"` · `tier_key(1.5) == "1.5"` 와, 렌더된 `data-tier` 값 집합이 신뢰도 facet 의 `data-value` 집합에 포함되는 테스트.
+- **tier 문자열 계약 (단위)** — `tier_key(1.0) == "1"` · `tier_key(1.5) == "1.5"`.
+- **BBC 분리 (라이브 대조)** — 단위 테스트가 아니라 실데이터 308건으로 대조한 항목이다.
+  `BBC` 가 Tier 1 · `BBC Football Gossip` 이 Tier 4 로 갈리고 두 항목의 건수 합이 48 (`7 + 41`) 임을 확인했다.
+- **tier 문자열 계약 · 렌더 대조 (라이브 대조)** — 단위 테스트가 아니라 실데이터 308건으로 대조한 항목이다.
+  렌더된 `data-tier` 값 집합이 신뢰도 facet 의 `data-value` 집합에 포함됨을 확인했다.
+  실측값은 양쪽 다 `{0, 1, 1.5, 2, 3, 4}` 로 일치했고 고아 (facet 에 없는 `data-tier` 값) 는 0건이다.
 - **육안** — `uv run python -m bullet_in.run` 후 `site/index.html` 사이드바가 §5 투영과 일치하는지 확인.
