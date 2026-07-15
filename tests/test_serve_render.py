@@ -304,3 +304,12 @@ def test_detail_no_byline_when_journalist_missing():
     row = _row(body_ko="본문")
     a = _dec(row, SOURCES, NOW)
     assert "byline" not in _ra(a, [], "h1", SOURCES, NOW)
+
+def test_decorate_resolves_byline_to_canonical_english():
+    row = _row(journalist="온스테인", body_ko="본문")
+    a = _dec(row, SOURCES, NOW, names={"온스테인": "David Ornstein"})
+    assert a["_byline"] == "David Ornstein"
+
+def test_decorate_byline_passthrough_when_unregistered():
+    a = _dec(_row(journalist="Hugo Guillemet", body_ko="본문"), SOURCES, NOW)
+    assert a["_byline"] == "Hugo Guillemet"

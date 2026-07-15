@@ -253,7 +253,8 @@ def interleave_body(paras: list[str], images: list[str], every: int = 2) -> list
     return blocks
 
 
-def _decorate(row: dict, sources: dict, now: datetime) -> dict:
+def _decorate(row: dict, sources: dict, now: datetime,
+              names: dict[str, str] | None = None) -> dict:
     a = dict(row)
     a["_title"] = row.get("title_ko") or row.get("title_original") or ""
     a["_outlet"] = outlet_display(row, sources)
@@ -284,6 +285,9 @@ def _decorate(row: dict, sources: dict, now: datetime) -> dict:
     a["_stage_badge"] = _stage.is_displayable(st)
     a["_stage_label"] = _stage.label_for(st)
     a["_stage_class"] = _stage.css_for(st)
+    j = row.get("journalist")
+    # 바이라인 영문 표기: 레지스트리 alias(한글 말머리·핸들) → 정식 영문명, 미등재는 저장값
+    a["_byline"] = (names or {}).get((j or "").lower(), j)
     return a
 
 
@@ -325,7 +329,8 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
 
 
 def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
-               now: datetime | None = None) -> None:
+               now: datetime | None = None,
+               names: dict[str, str] | None = None) -> None:
     """인덱스·상세 N개·정적 자산을 out_dir에 일괄 생성한다."""
     now = now or datetime.utcnow()
     out = Path(out_dir)
@@ -338,7 +343,7 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
     # 패싯은 전체 기사 기준으로 한 번만 계산해 모든 상세 페이지에 전달
     facets = facet_counts(articles, sources)
     for idx, row in enumerate(ordered):
-        a = _decorate(row, sources, now)
+        a = _decorate(row, sources, now, names=names)
         neighbors = build_neighbors(ordered, idx, sources, now)
         html = render_article(a, neighbors, row["content_hash"], sources, now, facets=facets)
         (out / "article" / f"{row['content_hash']}.html").write_text(
