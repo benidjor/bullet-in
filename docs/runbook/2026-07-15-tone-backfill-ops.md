@@ -65,6 +65,29 @@ EOF
 - `git revert` (PR #48 squash 커밋) + `tone_backfill_limit` 키 제거 (잔존해도 무해).
 - 백필이 만든 데이터 변경은 요약 2필드뿐이고 원문 (`body_ko` · raw)이 보존되므로 가역 — 필요 시 재생성으로 복원.
 
+## 8. 본문 (body_ko) 백필 — 요약 백필과 다른 점 (2026-07-15 추가)
+
+본문 재작성은 스케줄에 편승하는 요약 백필과 달리 **수동 반복 패스**로 수렴시킨다
+(run.py의 tone 백필은 요약 2필드만 대상 — 본문은 자동 재선별 경로가 없다).
+
+- **리셋 방식**: 대상 행의 `title_ko`를 NULL로 되돌려 기존 재번역 트리거
+  (`rows_missing_translation`) 를 재사용한다.
+  제목 · 요약도 함께 재생성되지만 `transfer_stage`는 보존된다 (upsert 미경유).
+- **fetch 없음**: 어댑터를 돌지 않는 enrich 전용 스크립트라 fmkorea 2h 규칙과 무관.
+  회당 60여 건 기준 수 분, 유료 티어라 429 여유.
+- **청크 저장**: 10건 단위로 `set_translation` 적용 — 중단돼도 처리분은 유실되지 않는다.
+- **반복 수렴**: 검출 → 리셋 → 재번역 → 재검출을 잔존 0까지 반복.
+  잔존이 정체되면 패스를 더 돌리지 말고 표본을 열어 원인을 분리할 것
+  → `docs/troubleshooting/2026-07-15-body-backfill-convergence-traps.md` (오탐 · 인용 형태 · 홍보 문구 3종 사례).
+- **503 (서버 과부하)**: 429와 달리 행 단위 스킵으로 흘러가므로, 다음 패스가 자연 재시도한다.
+- 리셋 대상 선별 예 (존댓말 + 한 덩어리 장문):
+
+```python
+polite = {h for h, b in rows if has_polite_ending(b)}
+mono = {h for h, b in rows
+        if len(b) > 700 and len([p for p in b.split("\n") if p.strip()]) == 1}
+```
+
 ## 참조
 
 - spec · plan: `docs/superpowers/{specs,plans}/2026-07-15-summary-tone-cleanup*.md` (PR #47)
