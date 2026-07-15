@@ -120,3 +120,19 @@ def test_html_adapter_skips_item_when_title_selector_not_found():
                     base_url="https://bbc.test",
                     title_selector="span[class*='LinkPostHeadline']")
     assert asyncio.run(a.fetch()) == []
+
+@respx.mock
+def test_html_adapter_collects_body_images():
+    list_html = '<a class="card" href="/a">Arsenal sign Gyokeres</a>'
+    detail = ('<html><body><div class="article-body"><p>One.</p>'
+              '<img src="https://img.test/1.jpg"><p>Two.</p>'
+              '<img src="https://img.test/2.jpg"></div>'
+              '<img src="https://img.test/outside.jpg"></body></html>')
+    respx.get("https://a.test/news").mock(return_value=httpx.Response(200, text=list_html))
+    respx.get("https://a.test/a").mock(return_value=httpx.Response(200, text=detail))
+    a = HtmlAdapter(source_id="bbc_sport", list_url="https://a.test/news",
+                    item_selector="a.card", base_url="https://a.test",
+                    body_selector=".article-body")
+    items = asyncio.run(a.fetch())
+    assert items[0].raw_payload["images"] == [
+        "https://img.test/1.jpg", "https://img.test/2.jpg"]
