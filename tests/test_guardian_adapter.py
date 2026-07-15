@@ -31,6 +31,7 @@ def test_guardian_adapter_requests_tag_and_fields():
     q = route.calls.last.request.url.params
     assert q["tag"] == "football/arsenal"
     assert q["show-fields"] == "trailText,bodyText,body,thumbnail"
+    assert q["show-elements"] == "image"
     assert q["page-size"] == "20"
 
 @respx.mock
@@ -83,3 +84,26 @@ def test_guardian_adapter_extracts_body_images():
     items = asyncio.run(a.fetch())
     assert items[0].raw_payload["images"] == ["https://media.test/1.jpg"]
     assert items[0].raw_payload["body"] == "plain body"  # bodyText 경로 무변경
+
+@respx.mock
+def test_guardian_adapter_prefers_element_images_max_width():
+    # 라이브 실측: API body HTML에는 <img>가 없음 — 인라인 이미지는 elements(type=image)로만 옴.
+    # element당 최대 폭 asset을 고른다 (마지막 asset이 140px 썸네일인 사례 실측).
+    respx.get("https://content.guardianapis.com/search").mock(return_value=_resp([
+        {"webTitle": "Arsenal sign X", "webUrl": "https://guard.test/a",
+         "webPublicationDate": "2026-07-15T10:00:00Z",
+         "fields": {"trailText": "t", "bodyText": "plain body",
+                    "body": "<p>no imgs in api body</p>",
+                    "thumbnail": "https://media.test/t.jpg"},
+         "elements": [
+             {"type": "image", "assets": [
+                 {"file": "https://media.test/big.jpg", "typeData": {"width": 1000}},
+                 {"file": "https://media.test/small.jpg", "typeData": {"width": 140}}]},
+             {"type": "image", "assets": [
+                 {"file": "https://media.test/second.jpg", "typeData": {"width": 500}}]},
+             {"type": "interactive", "assets": []},
+         ]}]))
+    a = GuardianAdapter(source_id="guardian", api_key="k")
+    items = asyncio.run(a.fetch())
+    assert items[0].raw_payload["images"] == [
+        "https://media.test/big.jpg", "https://media.test/second.jpg"]
