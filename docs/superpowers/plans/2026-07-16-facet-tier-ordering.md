@@ -267,20 +267,13 @@ def test_sources_yaml_gossip_has_no_outlet():
     assert s["bbc_sport"]["outlet"] == "BBC"
 ```
 
-- [ ] **Step 6: 회귀 탐지를 실증한다**
+- [ ] **Step 6: 실파일 계약 테스트의 실패를 확인한다**
 
-유닛 테스트는 합성 dict 를 써서 config/sources.yaml 을 안 읽으므로 설정 되돌림을 못 잡는다.
-실파일 계약 테스트로 드리프트를 탐지하는지 증명한다.
-
-Run: `uv run pytest tests/test_credibility.py -q -k sources_yaml`
-Expected: PASS ( config/sources.yaml 이 원상태 )
-
-설정을 일부러 되돌린다: config/sources.yaml 의 bbc_gossip 블록에 `outlet: BBC` 를 임시로 복원하고
+실파일 계약 테스트는 `sources.yaml` 을 실제로 읽으므로 설정을 아직 안 고친 지금은 **실패해야 한다**.
+이게 이 테스트가 합성 dict 유닛 테스트와 다른 점이다.
 
 Run: `uv run pytest tests/test_credibility.py -q -k sources_yaml`
-Expected: FAIL ( 회귀 탐지 증명 )
-
-반드시 원상복구: `git checkout config/sources.yaml`
+Expected: FAIL — `AssertionError` ( `bbc_gossip` 에 아직 `outlet` 키가 있다 )
 
 - [ ] **Step 7: sources.yaml 을 고친다**
 
@@ -295,6 +288,9 @@ Expected: FAIL ( 회귀 탐지 증명 )
     # outlet 미지정 — 지정하면 facet 에서 BBC(Tier 1)로 합쳐져 가십 41건이 승격된다
     journalist_label: BBC Gossip
 ```
+
+Run: `uv run pytest tests/test_credibility.py -q -k sources_yaml`
+Expected: PASS — 설정이 계약과 맞아떨어졌다.
 
 - [ ] **Step 8: 전체 테스트를 돌린다**
 
