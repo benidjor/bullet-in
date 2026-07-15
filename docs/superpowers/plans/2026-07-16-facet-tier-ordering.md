@@ -654,17 +654,22 @@ EOF
 
 **Interfaces:**
 - Consumes: Task 3 의 facets 뷰모델 · Task 1 의 `tier_key`.
-- Produces: DOM 계약 — `.facetgroup` 스코프 · `.morestage` ( 접힌 단계 ) · `.morebtn[data-stage-btn]` ( 단계 버튼 ). Task 5 의 `app.js` 가 이 클래스들을 잡는다.
+- Produces: DOM 계약 — `.facetgroup` 스코프 · `.morestage` ( 접힌 단계 ) · `.morebtn` ( 단계 버튼 ). Task 5 의 `app.js` 가 이 클래스들을 잡는다.
+  단계 · 버튼은 문서 순서로 짝지어진다 ( n 번째 `.morestage` ↔ n 번째 `.morebtn` ) — 인덱스 속성을 두지 않는다.
 
 - [ ] **Step 1: 실패하는 테스트를 쓴다**
 
 `tests/test_serve_render.py` 끝에 추가한다.
 기존 `test_sidebar_shows_registered_journalists_and_more_toggle` ( 345행 근처 ) 는 `#jmore` 구조를 검사하므로 **삭제**한다.
 
+세 번째 row 의 미등재 outlet ( `afcstuff` ) 이 있어야 `더보기 · Tier 4 · 미등재` 결합 라벨이 생성된다.
+미등재 outlet 이 없으면 라벨은 `더보기 · Tier 4` 로만 나온다.
+
 ```python
 def test_sidebar_renders_tier_heading_and_initial_only():
     rows = [_row(content_hash="h1", journalist="온스테인", outlet="The Athletic", tier=1),
-            _row(content_hash="h2", journalist="Kaya Kaynak", outlet="The Sun", tier=4)]
+            _row(content_hash="h2", journalist="Kaya Kaynak", outlet="The Sun", tier=4),
+            _row(content_hash="h3", journalist=None, outlet="afcstuff", tier=4)]
     directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
 
     class _Reg:
