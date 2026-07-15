@@ -15,14 +15,25 @@ def _is_rate_limit(exc: Exception) -> bool:
 
 SUMMARY_PROMPT = ("다음 한국어 축구 뉴스를 한 문장으로 요약한다. "
                   "신문 평어체(종결어미 '~다'), 사실 중심, 추측·과장 금지. "
+                  "존댓말 금지: '영입을 확정했습니다' ❌ → '영입을 확정했다' ⭕. "
                   "고유명사는 통용 한글 표기(Arsenal=아스날). "
                   'JSON만 반환: {{"summary_ko": "..."}}\n\n제목: {title}\n본문: {body}')
+
+RESUMMARY_PROMPT = (
+    "다음 한국어 축구 기사의 요약을 다시 쓴다. 규칙:\n"
+    "- summary_ko: 한 문장, 신문 평어체(종결어미 '~다'), 사실 중심.\n"
+    "- summary3_ko: 핵심을 3문장으로, 각 문장 평어체. 문자열 3개 배열.\n"
+    "- 존댓말 금지: '영입을 확정했습니다' ❌ → '영입을 확정했다' ⭕.\n"
+    "- 고유명사는 통용 한글 표기(Arsenal=아스날).\n"
+    'ONLY JSON: {{"summary_ko":"...","summary3_ko":["...","...","..."]}}'
+    "\n\n제목: {title}\n본문: {body}")
 
 TRANSLATE_PROMPT = (
     "아스날 FC 축구 뉴스를 한국어로 번역·요약한다. 규칙:\n"
     "- title_ko: 한국 스포츠 기사 제목체로 간결하게 (명사형 위주).\n"
     "- summary_ko: 한 문장, 신문 평어체(종결어미 '~다'), 사실 중심.\n"
     "- summary3_ko: 핵심을 3문장으로, 각 문장 평어체. 문자열 3개 배열.\n"
+    "- summary_ko·summary3_ko 존댓말 금지: '확정했습니다' ❌ → '확정했다' ⭕.\n"
     "- body_ko: 본문 전체를 자연스러운 한국어로 번역. 단락 유지.\n"
     "- 고유명사는 통용 한글 표기(Arsenal=아스날).\n"
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],"body_ko":"..."}}'
@@ -34,6 +45,7 @@ PARAPHRASE_PROMPT = (
     "- title_ko: 제목을 간결한 기사 제목체로 다시 쓴다(말머리 대괄호 제거).\n"
     "- summary_ko: 한 문장 요약, 평어체.\n"
     "- summary3_ko: 핵심 3문장 배열, 평어체.\n"
+    "- summary_ko·summary3_ko 존댓말 금지: '확정했습니다' ❌ → '확정했다' ⭕.\n"
     "- body_ko: 본문 전체를 문장 표현만 바꿔 다시 쓴다. 내용 추가·삭제 금지.\n"
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],"body_ko":"..."}}'
     "\n\nTitle: {title}\nBody: {body}")
@@ -125,6 +137,49 @@ def summarize_ko_rows(rows: list[dict], client, model: str) -> dict[str, str]:
             log.warning("Gemini 응답 파싱 실패, 요약 스킵 content_hash=%s", h)
             continue
         result[h] = s
+    return result
+
+def _extract_resummary(text: str) -> dict | None:
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if not m:
+        return None
+    try:
+        d = json.loads(m.group(0))
+        s = d["summary_ko"]
+        if not isinstance(s, str) or not s.strip():
+            return None  # 빈/비문자열 요약이 기존 값을 덮어쓰지 않게 스킵
+        s3 = d["summary3_ko"]
+        s3 = "\n".join(s3) if isinstance(s3, list) else str(s3)
+        return {"summary_ko": s, "summary3_ko": s3}
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return None
+
+def resummarize_rows(rows: list[dict], client, model: str) -> dict[str, dict]:
+    """말투 백필: 저장된 한국어 본문에서 요약만 재생성한다.
+    content_hash -> {summary_ko, summary3_ko}. 429는 그 회차 즉시 중단,
+    파싱 실패는 행 단위 스킵 (다음 사이클에 검출 기반으로 재선별)."""
+    result: dict[str, dict] = {}
+    for r in rows:
+        h = r["content_hash"]
+        try:
+            msg = client.models.generate_content(
+                model=model,
+                contents=RESUMMARY_PROMPT.format(
+                    title=r.get("title_ko") or r["title_original"],
+                    body=r.get("body_ko") or r.get("body_excerpt") or ""),
+                config={"max_output_tokens": 1024,
+                        "response_mime_type": "application/json"})
+        except Exception as e:
+            if _is_rate_limit(e):
+                log.warning("Gemini rate limit(429), 말투 백필 중단 — 남은 행 다음 사이클")
+                break
+            log.warning("Gemini 호출 실패, 말투 백필 스킵 content_hash=%s: %s", h, e)
+            continue
+        parsed = _extract_resummary(msg.text)
+        if parsed is None:
+            log.warning("Gemini 응답 파싱 실패, 말투 백필 스킵 content_hash=%s", h)
+            continue
+        result[h] = parsed
     return result
 
 # 주의: 아래 단계 목록(rumour·interest·negotiating·personal_terms·medical·official·other)은

@@ -88,6 +88,28 @@ class MartStore:
             c.execute(text("UPDATE articles SET transfer_stage=:s WHERE content_hash=:h"),
                       {"s": stage, "h": content_hash})
 
+    def rows_enriched_summaries(self) -> list[dict]:
+        """요약이 이미 생성된 행 — 말투 백필 후보 풀."""
+        with self.engine.connect() as c:
+            rows = c.execute(text(
+                "SELECT content_hash,title_original,title_ko,body_excerpt,"
+                "body_ko,summary_ko,summary3_ko "
+                "FROM articles WHERE summary_ko IS NOT NULL")).mappings().all()
+        return [dict(r) for r in rows]
+
+    def set_summary(self, content_hash: str, summary_ko: str,
+                    summary3_ko: str | None = None) -> None:
+        """요약 필드만 갱신 — summary3_ko 가 None 이면 기존 값을 보존한다."""
+        with self.engine.begin() as c:
+            if summary3_ko is None:
+                c.execute(text("UPDATE articles SET summary_ko=:s "
+                               "WHERE content_hash=:h"),
+                          {"s": summary_ko, "h": content_hash})
+            else:
+                c.execute(text("UPDATE articles SET summary_ko=:s, "
+                               "summary3_ko=:s3 WHERE content_hash=:h"),
+                          {"s": summary_ko, "s3": summary3_ko, "h": content_hash})
+
     def source_watermarks(self) -> dict[str, datetime]:
         """소스별 MAX(fetched_at) 워터마크. 기사 0건 소스는 키가 없다."""
         with self.engine.connect() as c:
