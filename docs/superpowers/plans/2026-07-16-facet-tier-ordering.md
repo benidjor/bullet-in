@@ -610,7 +610,8 @@ Run: `uv run pytest -q`
 | `tests/test_serve_render.py` | **FAIL 허용** | 템플릿이 아직 `facets.outlets` 를 리스트로 순회 · `facets.tiers[t]` 를 dict 로 조회 |
 | 그 외 전부 | **PASS** | 무관 |
 
-`test_serve_render.py` 의 예상 오류는 `jinja2.exceptions.UndefinedError` 또는 `TypeError` ( 리스트 · dict 접근 불일치 ) 다.
+`test_serve_render.py` 의 예상 오류는 `_layout.html.j2:40` 한 지점에서 나는 `ValueError: too many values to unpack (expected 2)` 다.
+옛 템플릿이 `{% for name, count in facets.outlets %}` 로 2-tuple 을 풀려 하는데 새 `outlets` 는 dict 라 키 문자열이 나오기 때문이다.
 
 **중단 조건** — 위 표와 다른 게 하나라도 있으면 커밋하지 말고 멈춰서 보고한다.
 `test_serve_layout.py` 가 하나라도 실패하거나, `test_serve_render.py` 밖에서 실패가 나거나, `test_serve_render.py` 의 오류가 위 두 종류가 아니면 **예상된 실패가 아니다** — 새로 만든 버그다.
