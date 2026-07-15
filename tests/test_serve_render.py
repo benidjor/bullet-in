@@ -342,10 +342,46 @@ def test_index_card_journalist_attr_empty_when_missing():
     assert 'data-journalist=""' in html
 
 
+def _journalist_facet_section(html: str) -> str:
+    """사이드바 '기자' 견출부터 다음 <h4> 전까지 — 기자 facet 만 스코프.
+    언론사 facet 도 같은 .morestage/.morebtn 마크업을 쓰므로 전체 html 로 보면 오검출된다."""
+    start = html.index("<h4>기자</h4>")
+    end = html.index("<h4>", start + 1)
+    return html[start:end]
+
+
 def test_sidebar_omits_more_toggle_when_all_registered():
     directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
-    html = render_index([_row(journalist="온스테인")], SOURCES, NOW, directory=directory)
-    assert 'id="jmoreBtn"' not in html
+
+    class _Reg:
+        outlets = {}
+        journalists = {"온스테인": 1.0, "david ornstein": 1.0}
+
+    # 등재 기자만 있고 tier 가 초기 노출 상한(1.5) 이내 → 미등재/더보기 단계가 없어야 함
+    html = render_index([_row(journalist="온스테인")], SOURCES, NOW,
+                        directory=directory, registry=_Reg())
+    section = _journalist_facet_section(html)
+    assert "morestage" not in section
+    assert "morebtn" not in section
+
+
+def test_journalist_facet_data_value_matches_card_data_journalist():
+    """app.js:75 의 journalists.includes(card.dataset.journalist) 는 문자열 동등 비교다.
+    facet 체크박스의 data-value 가 표시 라벨(괄호 소속 포함)이 아니라 카드의
+    data-journalist 와 같은 정규화 이름이어야 필터가 실제로 걸린다."""
+    rows = [_row(content_hash="h1", journalist="온스테인"),
+            _row(content_hash="h2", journalist="Hugo Guillemet")]
+    directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
+    html = render_index(rows, SOURCES, NOW, directory=directory)
+
+    card_values = set(_re.findall(r'data-journalist="([^"]*)"', html))
+    card_values.discard("")  # 기자 미상 카드는 빈 문자열
+
+    section = _journalist_facet_section(html)
+    facet_values = set(_re.findall(r'data-group="journalist" data-value="([^"]*)"', section))
+
+    assert card_values == {"David Ornstein", "Hugo Guillemet"}  # 픽스처가 실제로 기자 카드를 만들었는지 확인
+    assert card_values == facet_values
 
 
 def test_sidebar_renders_tier_heading_and_initial_only():
