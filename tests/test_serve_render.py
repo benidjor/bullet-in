@@ -8,9 +8,14 @@ def test_static_assets_exist_and_nonempty():
     assert "data-theme" in css and "--bg" in css      # 테마 변수
     assert ".card" in css and ".side" in css
     assert "s-interest" in css and "s-personal" in css  # 신규 단계 점 색
+    assert ".morebtn" in css                           # 기자 더보기 버튼
     assert "data-outlet" in js and "data-tier" in js   # 카드 필터 계약
     assert "data-stage" in js                          # 단계 필터 계약
     assert "localStorage" in js                        # 테마 영속
+    assert "journalist" in js                          # 기자 필터 계약
+    assert "URLSearchParams" in js                     # 필터 상태 URL 직렬화
+    assert "replaceState" in js                        # 인덱스 URL 동기화
+    assert "jmoreBtn" in js                            # 더보기 토글
 
 
 from datetime import datetime
@@ -120,6 +125,16 @@ def test_detail_small_corpus_shows_all():
     arts = [_row(content_hash=f"h{i}", title_ko=f"기사{i}") for i in range(3)]
     nb = build_neighbors(arts, 1, SOURCES, NOW)
     assert len(nb) == 3
+
+
+def test_build_neighbors_resolves_journalist_via_directory():
+    # _decorate 가 호출 경로 (render_index/write_site vs build_neighbors) 와
+    # 무관하게 동일한 정규화 결과를 내야 한다 — 이웃 목록도 카드 · 상세와 같은 정식명을 가져야 함.
+    arts = [_row(content_hash=f"h{i}", title_ko=f"기사{i}", journalist="온스테인")
+            for i in range(3)]
+    nb = build_neighbors(arts, 1, SOURCES, NOW,
+                         directory={"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}})
+    assert all(n["_journalist"] == "David Ornstein" for n in nb)
 
 
 from bullet_in.serve.render import write_site
@@ -307,9 +322,43 @@ def test_detail_no_byline_when_journalist_missing():
 
 def test_decorate_resolves_byline_to_canonical_english():
     row = _row(journalist="온스테인", body_ko="본문")
-    a = _dec(row, SOURCES, NOW, names={"온스테인": "David Ornstein"})
-    assert a["_byline"] == "David Ornstein"
+    a = _dec(row, SOURCES, NOW,
+             directory={"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}})
+    assert a["_byline"] == "David Ornstein (The Athletic)"
+    assert a["_journalist"] == "David Ornstein"
 
 def test_decorate_byline_passthrough_when_unregistered():
     a = _dec(_row(journalist="Hugo Guillemet", body_ko="본문"), SOURCES, NOW)
     assert a["_byline"] == "Hugo Guillemet"
+    assert a["_journalist"] == "Hugo Guillemet"
+
+def test_index_card_has_journalist_data_attr():
+    html = render_index([_row(journalist="온스테인")], SOURCES, NOW,
+                        directory={"온스테인": {"name": "David Ornstein", "outlet": None}})
+    assert 'data-journalist="David Ornstein"' in html   # 체크박스 값과 같은 정규화 키
+
+def test_index_card_journalist_attr_empty_when_missing():
+    html = render_index([_row()], SOURCES, NOW)
+    assert 'data-journalist=""' in html
+
+
+def test_sidebar_shows_registered_journalists_and_more_toggle():
+    rows = [_row(content_hash="h1", journalist="온스테인"),
+            _row(content_hash="h2", journalist="Kaya Kaynak"),
+            _row(content_hash="h3", journalist="Kaya Kaynak")]
+    directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
+    html = render_index(rows, SOURCES, NOW, directory=directory)
+    assert "기자" in html
+    # 등재 기자는 바로 노출
+    assert 'data-group="journalist" data-value="David Ornstein"' in html
+    assert "David Ornstein (The Athletic)" in html
+    # 미등재는 더보기 토글 뒤
+    assert 'id="jmore"' in html and 'id="jmoreBtn"' in html
+    assert "더보기 1명" in html
+    assert html.index('id="jmore"') < html.index('data-value="Kaya Kaynak"')
+
+
+def test_sidebar_omits_more_toggle_when_all_registered():
+    directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
+    html = render_index([_row(journalist="온스테인")], SOURCES, NOW, directory=directory)
+    assert 'id="jmoreBtn"' not in html

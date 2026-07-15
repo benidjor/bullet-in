@@ -90,3 +90,93 @@ def test_images_caps_at_limit():
 def test_images_empty_on_missing_container_or_blank():
     assert extract_body_images("<p>no container</p>", ".story") == []
     assert extract_body_images("") == []
+
+from bullet_in.adapters.meta import extract_authors
+
+def test_authors_from_json_ld_multiple_in_order():
+    # BBC 실측 형태: NewsArticle.author 배열에 Person 2명
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":[{"@type":"Person","name":"Alastair Telfer"},'
+            '{"@type":"Person","name":"Sami Mokbel"}]}</script>')
+    assert extract_authors(html) == ["Alastair Telfer", "Sami Mokbel"]
+
+def test_authors_from_nested_json_ld_graph():
+    # @graph 중첩 안의 author 도 재귀 탐색으로 찾는다
+    html = ('<script type="application/ld+json">'
+            '{"@graph":[{"@type":"WebPage"},'
+            '{"@type":"NewsArticle","author":{"@type":"Person","name":"Raff Tindale"}}]}'
+            '</script>')
+    assert extract_authors(html) == ["Raff Tindale"]
+
+def test_authors_accepts_string_author():
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":"Moataz Elgammal"}</script>')
+    assert extract_authors(html) == ["Moataz Elgammal"]
+
+def test_authors_dedupes_preserving_order():
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":[{"@type":"Person","name":"Sami Mokbel"},'
+            '{"@type":"Person","name":"Sami Mokbel"}]}</script>')
+    assert extract_authors(html) == ["Sami Mokbel"]
+
+def test_authors_falls_back_to_meta_author():
+    html = '<meta name="author" content="Raff Tindale">'
+    assert extract_authors(html) == ["Raff Tindale"]
+
+def test_authors_json_ld_wins_over_meta():
+    html = ('<meta name="author" content="Desk">'
+            '<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":{"@type":"Person","name":"Real Person"}}</script>')
+    assert extract_authors(html) == ["Real Person"]
+
+def test_authors_excludes_url_and_empty_values():
+    # BBC 실측: article:author 는 Facebook URL — 저자명이 아니다
+    html = ('<meta property="article:author" content="https://www.facebook.com/BBCSport/">'
+            '<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":[{"@type":"Person","name":""},'
+            '{"@type":"Person","name":"https://example.test/profile"},'
+            '{"@type":"Person","name":"Dharmesh Sheth"}]}</script>')
+    assert extract_authors(html) == ["Dharmesh Sheth"]
+
+def test_authors_survives_broken_json_ld():
+    html = ('<script type="application/ld+json">{ not json ]</script>'
+            '<meta name="author" content="Kaya Kaynak">')
+    assert extract_authors(html) == ["Kaya Kaynak"]
+
+def test_authors_empty_when_absent():
+    assert extract_authors("<html><body><p>no author</p></body></html>") == []
+
+def test_authors_falls_back_when_json_ld_authors_all_invalid():
+    # JSON-LD author 가 있으나 유효 저자 0명 → meta 폴백이 걸려야 한다
+    html = ('<meta name="author" content="Real Fallback Author">'
+            '<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":[{"@type":"Person","name":""},'
+            '{"@type":"Person","name":"https://example.test/profile"}]}</script>')
+    assert extract_authors(html) == ["Real Fallback Author"]
+
+def test_authors_recovers_json_ld_with_control_characters():
+    # Sky Sports 실측 (2026-07-16): NewsArticle LD 문자열에 raw 제어 문자 → strict 파싱 거부
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle","headline":"Line\x1fbreak",'
+            '"author":{"@type":"Person","name":"Keith Downie"}}</script>')
+    assert extract_authors(html) == ["Keith Downie"]
+
+def test_authors_unescapes_html_entities():
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":{"@type":"Person","name":"Sam O&#39;Brien"}}</script>')
+    assert extract_authors(html) == ["Sam O'Brien"]
+
+def test_authors_splits_combined_names_on_comma_and_ampersand():
+    # Sky Sports 실측 (2026-07-16): 공저를 한 Person.name 에 영어 나열 관례 'A, B & C' 로 결합
+    # → 분리하지 않으면 등재 기자 (Dharmesh Sheth) 매칭이 깨져 tier 보정이 조용히 누락된다
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle",'
+            '"author":{"@type":"Person","name":"Keith Downie, Dharmesh Sheth &amp; Kaveh Solhekol"}}'
+            '</script>')
+    assert extract_authors(html) == ["Keith Downie", "Dharmesh Sheth", "Kaveh Solhekol"]
+
+def test_authors_splits_pair_on_ampersand():
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle",'
+            '"author":{"@type":"Person","name":"Keith Downie &amp; Dharmesh Sheth"}}</script>')
+    assert extract_authors(html) == ["Keith Downie", "Dharmesh Sheth"]

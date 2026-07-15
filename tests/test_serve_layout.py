@@ -75,3 +75,57 @@ def test_facet_counts_other_bucket_counts_offmission():
     f = facet_counts(arts, {})
     assert f["other"] == 2            # other + None (= 비-displayable)
     assert "other" not in f["stage"]  # 기존 계약: stage에는 미포함
+
+
+from bullet_in.serve.render import journalist_entry
+
+DIR = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"},
+       "david ornstein": {"name": "David Ornstein", "outlet": "The Athletic"},
+       "charles watts": {"name": "Charles Watts", "outlet": None}}
+JSOURCES = {"bbc_sport": {"display_name": "BBC Sport", "outlet": "BBC"},
+            "goal": {"display_name": "Goal.com", "outlet": "Goal.com"},
+            "arsenal_official": {"display_name": "Arsenal.com", "outlet": "Arsenal.com",
+                                 "journalist_label": "Arsenal Official"}}
+
+def test_journalist_entry_normalizes_alias_and_labels_outlet():
+    e = journalist_entry({"journalist": "온스테인", "source_id": "bbc_sport"}, JSOURCES, DIR)
+    assert e == {"name": "David Ornstein", "label": "David Ornstein (The Athletic)",
+                 "registered": True}
+
+def test_journalist_entry_registered_without_outlet_shows_name_only():
+    e = journalist_entry({"journalist": "Charles Watts", "source_id": "goal"}, JSOURCES, DIR)
+    assert e["label"] == "Charles Watts" and e["registered"] is True
+
+def test_journalist_entry_unregistered_uses_source_outlet():
+    e = journalist_entry({"journalist": "Kaya Kaynak", "source_id": "goal"}, JSOURCES, DIR)
+    assert e == {"name": "Kaya Kaynak", "label": "Kaya Kaynak (Goal.com)", "registered": False}
+
+def test_journalist_entry_label_omits_parens_for_source_label():
+    e = journalist_entry({"journalist": "Arsenal Official", "source_id": "arsenal_official"},
+                         JSOURCES, DIR)
+    assert e == {"name": "Arsenal Official", "label": "Arsenal Official", "registered": False}
+
+def test_journalist_entry_none_when_missing():
+    assert journalist_entry({"journalist": None, "source_id": "goal"}, JSOURCES, DIR) is None
+    assert journalist_entry({"journalist": "  ", "source_id": "goal"}, JSOURCES, DIR) is None
+
+def test_facet_counts_splits_registered_and_more():
+    arts = [
+        {"journalist": "온스테인", "source_id": "bbc_sport"},          # alias → 정규화
+        {"journalist": "David Ornstein", "source_id": "bbc_sport"},   # 같은 기자 — 합산돼야
+        {"journalist": "Kaya Kaynak", "source_id": "goal"},
+        {"journalist": "Kaya Kaynak", "source_id": "goal"},
+        {"journalist": "Kaya Kaynak", "source_id": "goal"},
+        {"journalist": "Arsenal Official", "source_id": "arsenal_official"},
+        {"journalist": None, "source_id": "goal"},                    # 집계 제외
+    ]
+    f = facet_counts(arts, JSOURCES, directory=DIR)
+    assert f["journalists"]["registered"] == [
+        ("David Ornstein", "David Ornstein (The Athletic)", 2)]
+    assert f["journalists"]["more"] == [
+        ("Kaya Kaynak", "Kaya Kaynak (Goal.com)", 3),
+        ("Arsenal Official", "Arsenal Official", 1)]
+
+def test_facet_counts_journalists_empty_without_directory():
+    f = facet_counts([{"journalist": None, "source_id": "goal"}], JSOURCES)
+    assert f["journalists"] == {"registered": [], "more": []}

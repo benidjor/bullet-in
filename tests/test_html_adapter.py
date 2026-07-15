@@ -136,3 +136,29 @@ def test_html_adapter_collects_body_images():
     items = asyncio.run(a.fetch())
     assert items[0].raw_payload["images"] == [
         "https://img.test/1.jpg", "https://img.test/2.jpg"]
+
+@respx.mock
+def test_html_adapter_collects_authors_from_detail():
+    list_html = '<a class="card" href="/a">Arsenal sign Gyokeres</a>'
+    detail = ('<html><head><script type="application/ld+json">'
+              '{"@type":"NewsArticle","author":[{"@type":"Person","name":"Alastair Telfer"},'
+              '{"@type":"Person","name":"Sami Mokbel"}]}</script></head>'
+              '<body><div class="article-body"><p>Deal done.</p></div></body></html>')
+    respx.get("https://a.test/news").mock(return_value=httpx.Response(200, text=list_html))
+    respx.get("https://a.test/a").mock(return_value=httpx.Response(200, text=detail))
+    a = HtmlAdapter(source_id="bbc_sport", list_url="https://a.test/news",
+                    item_selector="a.card", base_url="https://a.test",
+                    body_selector=".article-body")
+    items = asyncio.run(a.fetch())
+    assert items[0].raw_payload["authors"] == ["Alastair Telfer", "Sami Mokbel"]
+
+@respx.mock
+def test_html_adapter_authors_absent_when_detail_fetch_fails():
+    list_html = '<a class="card" href="/a">Arsenal sign Gyokeres</a>'
+    respx.get("https://a.test/news").mock(return_value=httpx.Response(200, text=list_html))
+    respx.get("https://a.test/a").mock(return_value=httpx.Response(500))
+    a = HtmlAdapter(source_id="bbc_sport", list_url="https://a.test/news",
+                    item_selector="a.card", base_url="https://a.test",
+                    body_selector=".article-body")
+    items = asyncio.run(a.fetch())
+    assert items[0].raw_payload.get("authors", []) == []

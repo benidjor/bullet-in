@@ -41,6 +41,19 @@
     <label class="opt"><input type="checkbox" data-group="outlet" data-value="{{ name }}"> {{ name }} <span class="ct">{{ count }}</span></label>
     {% endfor %}
 
+    <h4>기자</h4>
+    {% for name, label, count in facets.journalists.registered %}
+    <label class="opt"><input type="checkbox" data-group="journalist" data-value="{{ name }}"> {{ label }} <span class="ct">{{ count }}</span></label>
+    {% endfor %}
+    {% if facets.journalists.more %}
+    <div id="jmore" hidden>
+      {% for name, label, count in facets.journalists.more %}
+      <label class="opt"><input type="checkbox" data-group="journalist" data-value="{{ name }}"> {{ label }} <span class="ct">{{ count }}</span></label>
+      {% endfor %}
+    </div>
+    <button class="morebtn" id="jmoreBtn" type="button">더보기 {{ facets.journalists.more | length }}명</button>
+    {% endif %}
+
     <h4>신뢰도 (Tier)</h4>
     {% for t in range(5) %}
     <label class="opt"><input type="checkbox" data-group="tier" data-value="{{ t }}"> tier {{ t }} <span class="ct">{{ facets.tiers[t] }}</span></label>

@@ -10,6 +10,7 @@
      data-published="{{ a._published_iso }}"
      data-confidence="{{ a.confidence_score or 0 }}"
      data-stage="{{ a._stage }}"
+     data-journalist="{{ a._journalist }}"
      data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">
     {% if a.image_url %}
     <div class="thumb" style="background-image:url('{{ a.image_url }}');background-size:cover;background-position:center"></div>

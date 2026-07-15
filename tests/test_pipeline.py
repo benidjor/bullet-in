@@ -132,3 +132,53 @@ def test_to_articles_keeps_mens_article_with_late_women_mention():
     sources = {"football_london": {"source_id": "football_london", "tier": 4}}
     arts, _ = to_articles(raw, sources, seen={})
     assert len(arts) == 1
+
+from bullet_in.pipeline import select_journalist
+
+def _html_item(source_id, payload):
+    return RawItem(source_id=source_id, source_type="html",
+                   url="https://x.test/a", fetched_at=datetime.now(timezone.utc),
+                   raw_payload={"published": "2026-07-15T10:00:00Z", **payload})
+
+def test_select_journalist_prefers_registered_author():
+    # BBC 실측: Telfer(미등재) + Mokbel(등재) → 등재자 대표
+    it = _html_item("bbc_sport", {"title": "x", "authors": ["Alastair Telfer", "Sami Mokbel"]})
+    assert select_journalist(it, {"tier": 1}, REG) == "Sami Mokbel"
+
+def test_select_journalist_falls_back_to_first_author():
+    it = _html_item("football_london", {"title": "x", "authors": ["Raff Tindale", "Tom Canton"]})
+    assert select_journalist(it, {"tier": 4}, REG) == "Raff Tindale"
+
+def test_select_journalist_uses_source_label_when_configured():
+    it = _html_item("arsenal_official", {"title": "x", "authors": ["Arsenal Media"]})
+    src = {"tier": 0, "journalist_label": "Arsenal Official"}
+    assert select_journalist(it, src, REG) == "Arsenal Official"
+
+def test_select_journalist_label_applies_without_authors():
+    # bbc_gossip: 상세 미방문 → authors 없음, 통칭만으로 채워진다
+    it = _html_item("bbc_gossip", {"title": "x"})
+    assert select_journalist(it, {"tier": 4, "journalist_label": "BBC Gossip"}, REG) == "BBC Gossip"
+
+def test_select_journalist_keeps_existing_payload_value():
+    # 동적 소스 (x · fmkorea) 는 이미 journalist 를 실어 보낸다 — 그대로 존중
+    it = _html_item("fmkorea", {"title": "x", "journalist": "온스테인",
+                                "authors": ["Someone Else"]})
+    assert select_journalist(it, {"credibility": "fmkorea"}, REG) == "온스테인"
+
+def test_select_journalist_none_when_no_authors():
+    assert select_journalist(_html_item("goal", {"title": "x"}), {"tier": 4}, REG) is None
+
+def test_to_articles_promotes_tier_for_affiliated_journalist():
+    raw = [_html_item("skysports", {"title": "Alvarez latest", "authors": ["Dharmesh Sheth"]})]
+    sources = {"skysports": {"source_id": "skysports", "tier": 4, "outlet": "Sky Sports"}}
+    arts, _ = to_articles(raw, sources, seen={}, registry=REG)
+    assert arts[0].journalist == "Dharmesh Sheth"
+    assert arts[0].tier == 1.5                       # min(1.5, 4) → 승격
+    assert arts[0].confidence_score == 0.625
+
+def test_to_articles_keeps_source_tier_for_unregistered_journalist():
+    raw = [_html_item("football_london", {"title": "Alvarez latest", "authors": ["Raff Tindale"]})]
+    sources = {"football_london": {"source_id": "football_london", "tier": 4,
+                                   "outlet": "football.london"}}
+    arts, _ = to_articles(raw, sources, seen={}, registry=REG)
+    assert arts[0].journalist == "Raff Tindale" and arts[0].tier == 4.0
