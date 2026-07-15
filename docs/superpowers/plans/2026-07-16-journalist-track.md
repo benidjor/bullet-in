@@ -1438,7 +1438,10 @@ EOF
 `tests/test_backfill_journalist.py` 생성:
 
 ```python
+import asyncio
 from pathlib import Path
+import httpx, respx
+from bullet_in import backfill_journalist as bf
 from bullet_in.backfill_journalist import journalist_update
 from bullet_in.credibility import load_registry
 
@@ -1476,6 +1479,69 @@ def test_update_journalist_none_when_no_author():
     out = journalist_update("<html><body>no author</body></html>", "goal",
                             "https://x/5", SOURCES, REG)
     assert out["journalist"] is None and out["tier"] == 4.0
+
+# --- backfill() 재fetch 루프 — 실패 건도 요청 간격을 지키는지 (DB · 네트워크는 전부 모킹) ---
+
+class _FakeCursor:
+    def __init__(self, rows):
+        self._rows = rows
+    def mappings(self):
+        return self
+    def all(self):
+        return self._rows
+
+class _FakeConn:
+    def __init__(self, rows):
+        self._rows = rows
+    def execute(self, *a, **k):
+        return _FakeCursor(self._rows)
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+
+class _FakeEngine:
+    """engine.begin() 은 호출되면 실패 — 이 테스트는 실패 건만 다뤄 UPDATE 를 타면 안 된다."""
+    def __init__(self, rows):
+        self._rows = rows
+    def connect(self):
+        return _FakeConn(self._rows)
+    def begin(self):
+        raise AssertionError("실패 건만 있는 테스트에서 engine.begin() 이 호출됨")
+
+_FETCH_SOURCES = {
+    "testsrc": {"source_id": "testsrc", "tier": 4, "outlet": "Test Outlet",
+                "adapter": "html", "config": {"body_selector": "article"}},
+}
+_ROWS = [
+    {"content_hash": "h1", "url": "https://x.test/1", "source_id": "testsrc"},
+    {"content_hash": "h2", "url": "https://x.test/2", "source_id": "testsrc"},
+    {"content_hash": "h3", "url": "https://x.test/3", "source_id": "testsrc"},
+]
+
+@respx.mock
+def test_backfill_sleeps_after_failed_rows(monkeypatch):
+    """404 · 저자 부재로 continue 되는 건도 성공 건과 동일하게 간격을 지켜야 한다
+    (마지막 건은 기존 의도대로 sleep 생략)."""
+    respx.get("https://x.test/1").mock(return_value=httpx.Response(404))
+    respx.get("https://x.test/2").mock(return_value=httpx.Response(200, text="<html>no author</html>"))
+    respx.get("https://x.test/3").mock(return_value=httpx.Response(404))
+
+    monkeypatch.setenv("MARIADB_URL", "sqlite://dummy")
+    monkeypatch.setattr(bf, "load_sources", lambda path: _FETCH_SOURCES)
+    monkeypatch.setattr(bf, "load_registry", lambda path: REG)
+    monkeypatch.setattr(bf, "create_engine", lambda url: _FakeEngine(_ROWS))
+
+    sleep_calls = []
+    async def fake_sleep(sec):
+        sleep_calls.append(sec)
+    monkeypatch.setattr(bf.asyncio, "sleep", fake_sleep)
+
+    stats = asyncio.run(bf.backfill())
+
+    assert stats["testsrc"] == {"ok": 0, "fail": 3}
+    # i=0 (404) · i=1 (저자 부재) 는 마지막이 아니므로 각각 sleep, i=2 (404) 는 마지막이라 생략.
+    assert len(sleep_calls) == 2
 ```
 
 - [ ] **Step 2: 테스트 실패 확인**
@@ -1573,27 +1639,31 @@ async def backfill(limit: int | None = None, dry_run: bool = False) -> dict[str,
             sid = row["source_id"]
             st = stats.setdefault(sid, {"ok": 0, "fail": 0})
             try:
-                r = await client.get(row["url"])
-                r.raise_for_status()
-            except httpx.HTTPError as e:
-                st["fail"] += 1                      # 404 · 타임아웃 → NULL 유지 · 다음 건
-                log.warning("fetch 실패 %s: %r", row["url"], e)
-                continue
-            upd = journalist_update(r.text, sid, row["url"], sources, registry)
-            if upd["journalist"] is None:
-                st["fail"] += 1
-                log.warning("저자 부재 %s", row["url"])
-                continue
-            if dry_run:
-                log.info("[dry-run] %s → %r tier=%s", row["url"], upd["journalist"], upd["tier"])
-            else:
-                with engine.begin() as c:
-                    c.execute(_UPDATE_SQL, {"j": upd["journalist"], "t": upd["tier"],
-                                            "c": upd["confidence_score"],
-                                            "h": row["content_hash"]})
-            st["ok"] += 1
-            if i < len(rows) - 1:
-                await asyncio.sleep(REQUEST_GAP_SEC)
+                try:
+                    r = await client.get(row["url"])
+                    r.raise_for_status()
+                except httpx.HTTPError as e:
+                    st["fail"] += 1                  # 404 · 타임아웃 → NULL 유지 · 다음 건
+                    log.warning("fetch 실패 %s: %r", row["url"], e)
+                    continue
+                upd = journalist_update(r.text, sid, row["url"], sources, registry)
+                if upd["journalist"] is None:
+                    st["fail"] += 1
+                    log.warning("저자 부재 %s", row["url"])
+                    continue
+                if dry_run:
+                    log.info("[dry-run] %s → %r tier=%s", row["url"], upd["journalist"], upd["tier"])
+                else:
+                    with engine.begin() as c:
+                        c.execute(_UPDATE_SQL, {"j": upd["journalist"], "t": upd["tier"],
+                                                "c": upd["confidence_score"],
+                                                "h": row["content_hash"]})
+                st["ok"] += 1
+            finally:
+                # 실패 건 (continue) 도 finally 로 간격을 보장 — 성공 건만 간격이 걸리면
+                # 429 · 430 레이트리밋에서 연속 실패가 지연 없이 반복돼 차단이 악화된다.
+                if i < len(rows) - 1:
+                    await asyncio.sleep(REQUEST_GAP_SEC)
     return stats
 
 def main() -> None:
@@ -1613,25 +1683,30 @@ if __name__ == "__main__":
 - [ ] **Step 4: 테스트 통과 확인**
 
 Run: `uv run pytest tests/test_backfill_journalist.py -q`
-Expected: PASS (5 passed)
+Expected: PASS (6 passed)
 
 Run: `uv run pytest -q`
 Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
+scope 는 `backfill` 이 아니라 컨벤션 §1.2 승인 세트의 `credibility` 를 쓴다 — 이 모듈의
+주제가 기자 · tier 산출이고, 선례 `c174b15 chore(credibility): 기자 핸들 백필 · Sam Dean 등재`
+가 같은 성격에 이 scope 를 썼다.
+
 ```bash
 git add src/bullet_in/backfill_journalist.py tests/test_backfill_journalist.py
 git commit -m "$(cat <<'EOF'
-feat(backfill): 기존 기사 journalist 백필 CLI
+feat(credibility): 기존 기사 journalist 백필 CLI
 
 raw 저장소에 원본 HTML 이 없어 재fetch 가 유일한 경로 — 수집 경로와 같은
 선정 · 보정 함수를 재사용해 규칙이 두 벌로 갈라지지 않게 한다.
 
 - journalist_update: extract_authors → select_journalist → resolve_tier 조합
 - 통칭 소스 (arsenal_official · bbc_gossip): 재fetch 없이 일괄 UPDATE
-- 재fetch 소스: 소스별 순차 · 1.5초 간격 · --limit 드라이런
+- 재fetch 소스: 소스별 순차 · 1.5초 간격 (실패 건 포함 finally 로 보장) · --limit 드라이런
 - 멱등 · 실패 격리: 404 · 저자 부재는 NULL 유지 · 소스별 성공 · 실패 집계 출력
+- 단위테스트: 실패 건에서도 요청 간격이 걸리는지 검증 (respx · 엔진 모킹)
 
 Refs: docs/superpowers/specs/2026-07-16-journalist-track-design.md
 EOF
