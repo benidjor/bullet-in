@@ -103,3 +103,32 @@ def test_to_articles_defaults_images_empty():
     sources = {"bbc_sport": {"source_id": "bbc_sport", "tier": 2}}
     arts, _ = to_articles(raw, sources, seen={})
     assert arts[0].images == []
+
+def test_to_articles_drops_womens_football():
+    now = datetime.now(timezone.utc)
+    raw = [
+        RawItem(source_id="football_london", source_type="html", url="https://y.test/w1",
+                fetched_at=now, raw_payload={"title": "Arsenal Women complete transfer"}),
+        RawItem(source_id="football_london", source_type="html", url="https://y.test/w2",
+                fetched_at=now,
+                raw_payload={"title": "Arsenal announce fifth summer transfer",
+                             "body": "Lisa Baum has been confirmed as Arsenal Women's fifth summer addition."}),
+        RawItem(source_id="football_london", source_type="html", url="https://y.test/m1",
+                fetched_at=now, raw_payload={"title": "Arsenal agree deal for Gyokeres",
+                                             "body": "Arsenal have agreed a deal."}),
+    ]
+    sources = {"football_london": {"source_id": "football_london", "tier": 4}}
+    arts, stats = to_articles(raw, sources, seen={})
+    assert [a.url for a in arts] == ["https://y.test/m1"]
+    assert stats["women_count"] == 2
+
+def test_to_articles_keeps_mens_article_with_late_women_mention():
+    # 본문 후반부의 women 언급 (도입 400자 밖) 은 필터하지 않는다
+    now = datetime.now(timezone.utc)
+    raw = [RawItem(source_id="football_london", source_type="html", url="https://y.test/m2",
+                   fetched_at=now,
+                   raw_payload={"title": "Arsenal transfer roundup",
+                                "body": ("Arsenal have agreed a deal. " * 20) + "Also Arsenal Women won."})]
+    sources = {"football_london": {"source_id": "football_london", "tier": 4}}
+    arts, _ = to_articles(raw, sources, seen={})
+    assert len(arts) == 1

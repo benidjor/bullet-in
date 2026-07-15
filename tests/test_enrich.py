@@ -337,3 +337,9 @@ def test_body_prompts_carry_plain_style_boilerplate_and_markdown_rules():
         assert "인용문" in p
         assert "무관한 문구" in p
         assert "###" in p and "**" in p and "> " in p
+
+def test_body_prompts_instruct_paragraph_breaks():
+    # 추출 평문화로 원문 문단이 소실되므로 번역이 2~4문장 문단으로 재구성해야 함
+    from bullet_in.enrich import TRANSLATE_PROMPT, PARAPHRASE_PROMPT
+    for p in (TRANSLATE_PROMPT, PARAPHRASE_PROMPT):
+        assert "2~4문장" in p and "줄바꿈" in p
