@@ -24,6 +24,22 @@ def _published(payload: dict) -> datetime:
     except (TypeError, ValueError):
         return datetime.now(timezone.utc)
 
+def select_journalist(item, src: dict, registry: "Registry | None") -> str | None:
+    """항목의 대표 기자 1명 — 기존 값 · 소스 통칭 · 추출 저자 (등재자 우선) 순.
+    journalist 컬럼은 단일 문자열 — 복수 저자는 대표 1명만 남긴다 (spec 확정 결정)."""
+    j = item.raw_payload.get("journalist")
+    if j:
+        return j                                   # 동적 소스 (x · fmkorea) 가 이미 실은 값
+    label = src.get("journalist_label")
+    if label:
+        return label                               # 조직 바이라인 통칭 (추출값보다 우선)
+    authors = item.raw_payload.get("authors") or []
+    if registry is not None:
+        for a in authors:
+            if a.lower() in registry.journalists:
+                return a
+    return authors[0] if authors else None
+
 def to_articles(raw: list[RawItem], sources: dict[str, dict],
                 seen: dict[str, tuple[str, int]],
                 registry: "Registry | None" = None) -> tuple[list[Article], dict]:
@@ -35,7 +51,9 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
     # fmkorea(발견 소스)는 같은 원문 URL 에서 EN/X 보다 후순위 → first-seen 이 EN/X 가 되게 정렬
     raw = sorted(raw, key=lambda it: 1 if it.source_id == "fmkorea" else 0)
     for item in raw:
-        tier = resolve_tier(item, sources, registry)
+        src = sources.get(item.source_id, {})
+        journalist = select_journalist(item, src, registry)
+        tier = resolve_tier(item, sources, registry, journalist=journalist)
         if tier is None:
             continue
         title = item.raw_payload.get("title") or item.raw_payload.get("text") or ""
@@ -58,7 +76,7 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
             image_url=item.raw_payload.get("image_url"),
             images=item.raw_payload.get("images") or [],
             outlet=item.raw_payload.get("outlet"),
-            journalist=item.raw_payload.get("journalist"),
+            journalist=journalist,
             team="arsenal",
             published_at=_published(item.raw_payload), fetched_at=item.fetched_at,
             revision=rev))
