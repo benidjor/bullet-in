@@ -335,3 +335,25 @@ def test_index_card_has_journalist_data_attr():
 def test_index_card_journalist_attr_empty_when_missing():
     html = render_index([_row()], SOURCES, NOW)
     assert 'data-journalist=""' in html
+
+
+def test_sidebar_shows_registered_journalists_and_more_toggle():
+    rows = [_row(content_hash="h1", journalist="온스테인"),
+            _row(content_hash="h2", journalist="Kaya Kaynak"),
+            _row(content_hash="h3", journalist="Kaya Kaynak")]
+    directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
+    html = render_index(rows, SOURCES, NOW, directory=directory)
+    assert "기자" in html
+    # 등재 기자는 바로 노출
+    assert 'data-group="journalist" data-value="David Ornstein"' in html
+    assert "David Ornstein (The Athletic)" in html
+    # 미등재는 더보기 토글 뒤
+    assert 'id="jmore"' in html and 'id="jmoreBtn"' in html
+    assert "더보기 1명" in html
+    assert html.index('id="jmore"') < html.index('data-value="Kaya Kaynak"')
+
+
+def test_sidebar_omits_more_toggle_when_all_registered():
+    directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
+    html = render_index([_row(journalist="온스테인")], SOURCES, NOW, directory=directory)
+    assert 'id="jmoreBtn"' not in html
