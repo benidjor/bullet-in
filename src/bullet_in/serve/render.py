@@ -382,6 +382,7 @@ def _decorate(row: dict, sources: dict, now: datetime,
     a["_title"] = row.get("title_ko") or row.get("title_original") or ""
     a["_outlet"] = outlet_display(row, sources)
     a["_tier_label"] = tier_label(row.get("tier"))
+    a["_tier_key"] = tier_key(row.get("tier"))
     pub = row.get("published_at")
     a["_when"] = humanize_when(pub, now) if pub else ""
     a["_published_iso"] = pub.isoformat() if pub else ""

@@ -1,3 +1,29 @@
+{% macro facet_opts(group, items) %}
+  {% for it in items %}
+  <label class="opt"><input type="checkbox" data-group="{{ group }}" data-value="{{ it.value }}"> {{ it.label }} <span class="ct">{{ it.count }}</span></label>
+  {% endfor %}
+{% endmacro -%}
+{% macro facet_block(group, data) %}
+<div class="facetgroup">
+  {% for g in data.initial %}
+  <div class="tierhead">{{ g.heading }}</div>
+  {{ facet_opts(group, g["items"]) }}
+  {% endfor %}
+  {% for st in data.stages %}
+  <div class="morestage" hidden>
+    {% for g in st.groups %}
+    <div class="tierhead">{{ g.heading }}</div>
+    {{ facet_opts(group, g["items"]) }}
+    {% endfor %}
+    {% if st.unregistered %}
+    <div class="unreghead"><span>미등재</span></div>
+    {{ facet_opts(group, st.unregistered) }}
+    {% endif %}
+  </div>
+  <button class="morebtn" type="button" hidden>{{ st.label }}</button>
+  {% endfor %}
+</div>
+{% endmacro -%}
 <!doctype html>
 <html lang="ko" data-theme="light">
 <head>
@@ -37,26 +63,14 @@
     <label class="opt"><input type="checkbox" data-group="bucket" data-value="other"> 기타 <span class="ct">{{ facets.other or 0 }}</span></label>
 
     <h4>소스 (언론사)</h4>
-    {% for name, count in facets.outlets %}
-    <label class="opt"><input type="checkbox" data-group="outlet" data-value="{{ name }}"> {{ name }} <span class="ct">{{ count }}</span></label>
-    {% endfor %}
+    {{ facet_block('outlet', facets.outlets) }}
 
     <h4>기자</h4>
-    {% for name, label, count in facets.journalists.registered %}
-    <label class="opt"><input type="checkbox" data-group="journalist" data-value="{{ name }}"> {{ label }} <span class="ct">{{ count }}</span></label>
-    {% endfor %}
-    {% if facets.journalists.more %}
-    <div id="jmore" hidden>
-      {% for name, label, count in facets.journalists.more %}
-      <label class="opt"><input type="checkbox" data-group="journalist" data-value="{{ name }}"> {{ label }} <span class="ct">{{ count }}</span></label>
-      {% endfor %}
-    </div>
-    <button class="morebtn" id="jmoreBtn" type="button">더보기 {{ facets.journalists.more | length }}명</button>
-    {% endif %}
+    {{ facet_block('journalist', facets.journalists) }}
 
     <h4>신뢰도 (Tier)</h4>
-    {% for t in range(5) %}
-    <label class="opt"><input type="checkbox" data-group="tier" data-value="{{ t }}"> tier {{ t }} <span class="ct">{{ facets.tiers[t] }}</span></label>
+    {% for t in facets.tiers %}
+    <label class="opt"><input type="checkbox" data-group="tier" data-value="{{ t.key }}"> {{ t.label }} <span class="ct">{{ t.count }}</span></label>
     {% endfor %}
 
     <h4>정렬</h4>

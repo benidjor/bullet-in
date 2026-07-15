@@ -342,23 +342,40 @@ def test_index_card_journalist_attr_empty_when_missing():
     assert 'data-journalist=""' in html
 
 
-def test_sidebar_shows_registered_journalists_and_more_toggle():
-    rows = [_row(content_hash="h1", journalist="온스테인"),
-            _row(content_hash="h2", journalist="Kaya Kaynak"),
-            _row(content_hash="h3", journalist="Kaya Kaynak")]
-    directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
-    html = render_index(rows, SOURCES, NOW, directory=directory)
-    assert "기자" in html
-    # 등재 기자는 바로 노출
-    assert 'data-group="journalist" data-value="David Ornstein"' in html
-    assert "David Ornstein (The Athletic)" in html
-    # 미등재는 더보기 토글 뒤
-    assert 'id="jmore"' in html and 'id="jmoreBtn"' in html
-    assert "더보기 1명" in html
-    assert html.index('id="jmore"') < html.index('data-value="Kaya Kaynak"')
-
-
 def test_sidebar_omits_more_toggle_when_all_registered():
     directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
     html = render_index([_row(journalist="온스테인")], SOURCES, NOW, directory=directory)
     assert 'id="jmoreBtn"' not in html
+
+
+def test_sidebar_renders_tier_heading_and_initial_only():
+    rows = [_row(content_hash="h1", journalist="온스테인", outlet="The Athletic", tier=1),
+            _row(content_hash="h2", journalist="Kaya Kaynak", outlet="The Sun", tier=4),
+            _row(content_hash="h3", journalist="Kaya Kaynak", outlet="afcstuff", tier=4)]
+    directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
+
+    class _Reg:
+        outlets = {"the athletic": 1.0, "the sun": 4.0}
+        journalists = {"온스테인": 1.0, "david ornstein": 1.0}
+
+    html = render_index(rows, SOURCES, NOW, directory=directory, registry=_Reg())
+    assert "Tier 1 · 공신력 최상" in html
+    assert 'data-group="outlet" data-value="The Athletic"' in html
+    # Tier 4 는 접힌 단계 안에 있고 버튼이 그것을 예고한다
+    assert "더보기 · Tier 4 · 미등재" in html
+    assert 'class="morestage"' in html
+
+def test_index_card_data_tier_keeps_one_point_five():
+    html = render_index([_row(tier=1.5)], SOURCES, NOW)
+    assert 'data-tier="1.5"' in html
+
+def test_sidebar_tier_facet_lists_one_point_five():
+    html = render_index([_row(tier=1.5)], SOURCES, NOW)
+    assert 'data-group="tier" data-value="1.5"' in html
+    assert "Tier 1.5" in html
+
+def test_layout_emits_no_whitespace_before_doctype():
+    """매크로 정의를 {% endmacro %} 로 닫으면 개행이 새어나와 doctype 앞에 붙는다.
+    눈에 안 띄는 회귀라 고정한다 — {% endmacro -%} 를 쓸 것."""
+    html = render_index([_row()], SOURCES, NOW)
+    assert html.startswith("<!doctype html>")
