@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 import re
 from urllib.parse import urljoin, urlparse
 
@@ -88,6 +89,56 @@ def extract_body_images(html: str, container_selector: str | None = None,
                 out.append(url)
             if len(out) >= limit:
                 break
+        return out
+    except Exception:
+        return []
+
+
+def _walk_authors(node) -> list[str]:
+    """JSON-LD 트리를 재귀 탐색해 author 값을 등장 순서로 수집한다."""
+    found: list[str] = []
+    if isinstance(node, dict):
+        if "author" in node:
+            a = node["author"]
+            for it in (a if isinstance(a, list) else [a]):
+                if isinstance(it, dict):
+                    name = it.get("name")
+                    if isinstance(name, str):
+                        found.append(name)
+                elif isinstance(it, str):
+                    found.append(it)
+        for v in node.values():
+            found += _walk_authors(v)
+    elif isinstance(node, list):
+        for v in node:
+            found += _walk_authors(v)
+    return found
+
+def extract_authors(html: str) -> list[str]:
+    """기사 저자명을 JSON-LD → meta[name=author] 순으로 추출한다.
+    라이브 실측 (2026-07-16) 상 html 5소스 모두 JSON-LD 로 저자를 노출한다.
+    기자는 부가 정보 — 어떤 실패도 빈 목록으로 폴백해 수집을 막지 않는다."""
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        names: list[str] = []
+        for s in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(s.string or "")
+            except (json.JSONDecodeError, TypeError):
+                continue          # 깨진 LD 하나가 나머지를 막지 않는다
+            names += _walk_authors(data)
+        if not names:
+            tag = soup.find("meta", attrs={"name": "author"})
+            if tag and tag.get("content"):
+                names = [tag["content"]]
+        out: list[str] = []
+        for n in names:
+            n = (n or "").strip()
+            # URL 형태 (article:author 의 SNS 링크 등) 는 저자명이 아니다
+            if not n or n.lower().startswith(("http://", "https://")):
+                continue
+            if n not in out:
+                out.append(n)
         return out
     except Exception:
         return []

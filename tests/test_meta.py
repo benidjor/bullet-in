@@ -90,3 +90,58 @@ def test_images_caps_at_limit():
 def test_images_empty_on_missing_container_or_blank():
     assert extract_body_images("<p>no container</p>", ".story") == []
     assert extract_body_images("") == []
+
+from bullet_in.adapters.meta import extract_authors
+
+def test_authors_from_json_ld_multiple_in_order():
+    # BBC 실측 형태: NewsArticle.author 배열에 Person 2명
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":[{"@type":"Person","name":"Alastair Telfer"},'
+            '{"@type":"Person","name":"Sami Mokbel"}]}</script>')
+    assert extract_authors(html) == ["Alastair Telfer", "Sami Mokbel"]
+
+def test_authors_from_nested_json_ld_graph():
+    # @graph 중첩 안의 author 도 재귀 탐색으로 찾는다
+    html = ('<script type="application/ld+json">'
+            '{"@graph":[{"@type":"WebPage"},'
+            '{"@type":"NewsArticle","author":{"@type":"Person","name":"Raff Tindale"}}]}'
+            '</script>')
+    assert extract_authors(html) == ["Raff Tindale"]
+
+def test_authors_accepts_string_author():
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":"Moataz Elgammal"}</script>')
+    assert extract_authors(html) == ["Moataz Elgammal"]
+
+def test_authors_dedupes_preserving_order():
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":[{"@type":"Person","name":"Sami Mokbel"},'
+            '{"@type":"Person","name":"Sami Mokbel"}]}</script>')
+    assert extract_authors(html) == ["Sami Mokbel"]
+
+def test_authors_falls_back_to_meta_author():
+    html = '<meta name="author" content="Raff Tindale">'
+    assert extract_authors(html) == ["Raff Tindale"]
+
+def test_authors_json_ld_wins_over_meta():
+    html = ('<meta name="author" content="Desk">'
+            '<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":{"@type":"Person","name":"Real Person"}}</script>')
+    assert extract_authors(html) == ["Real Person"]
+
+def test_authors_excludes_url_and_empty_values():
+    # BBC 실측: article:author 는 Facebook URL — 저자명이 아니다
+    html = ('<meta property="article:author" content="https://www.facebook.com/BBCSport/">'
+            '<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":[{"@type":"Person","name":""},'
+            '{"@type":"Person","name":"https://example.test/profile"},'
+            '{"@type":"Person","name":"Dharmesh Sheth"}]}</script>')
+    assert extract_authors(html) == ["Dharmesh Sheth"]
+
+def test_authors_survives_broken_json_ld():
+    html = ('<script type="application/ld+json">{ not json ]</script>'
+            '<meta name="author" content="Kaya Kaynak">')
+    assert extract_authors(html) == ["Kaya Kaynak"]
+
+def test_authors_empty_when_absent():
+    assert extract_authors("<html><body><p>no author</p></body></html>") == []
