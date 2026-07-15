@@ -133,7 +133,7 @@ class FmkoreaAdapter:
     async def _process(self, c: httpx.AsyncClient,
                        matched: list[tuple[str, str]]) -> list[RawItem]:
         """글별 fetch → 말머리 파싱 → 페이월/무료 라우팅 → RawItem."""
-        from bullet_in.adapters.meta import extract_og_image, extract_article_body
+        from bullet_in.adapters.meta import extract_og_image, extract_article_body, extract_body_images
         now, out = datetime.now(timezone.utc), []
         for title, url in matched:
             try:
@@ -150,6 +150,8 @@ class FmkoreaAdapter:
             if outlet in PAYWALLED_OUTLETS:
                 body = _body_text(html, self.body_selector)
                 image = await _fetch_og_image(c, orig)
+                # 게시글 이미지 ≈ 원문 기사 이미지 재게재 (spec 확정 결정)
+                images = extract_body_images(html, self.body_selector, base_url=url)
                 lang = "ko"
             else:
                 try:
@@ -157,15 +159,16 @@ class FmkoreaAdapter:
                     ro.raise_for_status()
                     body = extract_article_body(ro.text)
                     image = extract_og_image(ro.text)
+                    images = extract_body_images(ro.text, base_url=orig)
                 except httpx.HTTPError:
-                    body, image = "", None
+                    body, image, images = "", None, []
                 lang = "en"
             out.append(RawItem(
                 source_id=self.source_id, source_type="html", url=orig,
                 fetched_at=now,
                 raw_payload={"title": title, "body": body, "lang": lang,
                              "outlet": outlet, "journalist": journalist,
-                             "image_url": image}))
+                             "image_url": image, "images": images}))
         return out
 
     async def fetch(self) -> list[RawItem]:
