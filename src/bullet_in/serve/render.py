@@ -36,8 +36,13 @@ def fmt_date(dt: datetime) -> str:
 
 
 def outlet_display(row: dict, sources: dict) -> str:
+    """facet 키 · 카드 칩이 공유하는 언론사 표시명.
+    소스 outlet 폴백이 없으면 display_name (BBC Sport) 이 키가 되는데
+    이 문자열은 credibility.yaml 에 없어 tier 조회가 실패한다 (spec §3.4)."""
+    src = sources.get(row.get("source_id"), {})
     return (row.get("outlet")
-            or sources.get(row.get("source_id"), {}).get("display_name")
+            or src.get("outlet")
+            or src.get("display_name")
             or row.get("source_id") or "")
 
 

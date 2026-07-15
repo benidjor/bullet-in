@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 from datetime import datetime, timezone
-from bullet_in.credibility import load_registry, resolve_tier
+from bullet_in.credibility import load_registry, resolve_tier, Registry
 from bullet_in.models import RawItem
 
 REG = Path(__file__).parent.parent / "config" / "credibility.yaml"
@@ -188,3 +188,17 @@ def test_fixed_source_without_journalist_keeps_legacy_behavior():
     r = load_registry(REG)
     sources = {"bbc_sport": {"tier": 1, "outlet": "BBC"}}
     assert resolve_tier(_item("bbc_sport", {"title": "x"}), sources, r) == 1.0
+
+def test_gossip_without_source_outlet_keeps_tier_4():
+    """bbc_gossip 의 outlet 제거로 소속 일치 보정 경로가 막힌다 (spec §3.4).
+    통칭 라벨만 오는 현재 데이터에서는 결과가 중립임을 고정한다."""
+    registry = Registry(journalists={"sami mokbel": 1.0},
+                        outlets={"bbc": 1.0},
+                        journalist_outlets={"sami mokbel": "BBC"})
+    sources = {"bbc_gossip": {"tier": 4}}          # outlet 키 없음
+    it = _item("bbc_gossip", {})
+
+    # 통칭 라벨 — 등재 기자가 아니므로 보정이 걸리지 않는다
+    assert resolve_tier(it, sources, registry, journalist="BBC Gossip") == 4.0
+    # 등재 기자가 와도 소스 outlet 이 없으면 승격되지 않는다 (제거의 실제 효과)
+    assert resolve_tier(it, sources, registry, journalist="Sami Mokbel") == 4.0

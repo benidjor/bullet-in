@@ -17,10 +17,15 @@ def test_humanize_when_buckets():
 def test_fmt_date():
     assert fmt_date(datetime(2026, 6, 29, 9, 5)) == "2026-06-29"
 
-def test_outlet_display_prefers_outlet_then_displayname_then_id():
-    sources = {"bbc_sport": {"display_name": "BBC Sport"}}
+def test_outlet_display_prefers_outlet_then_source_outlet_then_displayname_then_id():
+    sources = {"bbc_sport": {"display_name": "BBC Sport", "outlet": "BBC"},
+               "bbc_gossip": {"display_name": "BBC Football Gossip"}}
+    # 기사에 실린 귀속 outlet 이 최우선
     assert outlet_display({"outlet": "The Athletic", "source_id": "x"}, sources) == "The Athletic"
-    assert outlet_display({"outlet": None, "source_id": "bbc_sport"}, sources) == "BBC Sport"
+    # 설정의 소스 outlet 으로 폴백 — BBC Sport 를 레지스트리 정식명 BBC 로 모은다
+    assert outlet_display({"outlet": None, "source_id": "bbc_sport"}, sources) == "BBC"
+    # 소스 outlet 이 없으면 display_name — 가십은 BBC 와 합치지 않는다
+    assert outlet_display({"outlet": None, "source_id": "bbc_gossip"}, sources) == "BBC Football Gossip"
     assert outlet_display({"outlet": None, "source_id": "unknown"}, sources) == "unknown"
 
 def test_tier_key_is_shortest_exact_form():
