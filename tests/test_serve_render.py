@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 STATIC = Path("src/bullet_in/serve/static")
@@ -9,6 +10,17 @@ def test_static_assets_exist_and_nonempty():
     assert ".card" in css and ".side" in css
     assert "s-interest" in css and "s-personal" in css  # 신규 단계 점 색
     assert ".morebtn" in css                           # 기자 더보기 버튼
+    # .morebtn 은 display:block 을 선언해 브라우저 기본 [hidden]{display:none} 을
+    # 덮어쓴다 (작성자 스타일 > UA 스타일, 특정도 무관). JS 가 hidden 속성을
+    # 정확히 설정해도 화면에서 숨지 않는 결함 — 작성자 스타일 안에서 다시
+    # [hidden]{display:none} 을 명시해야 한다.
+    # 한계: pytest 는 브라우저를 띄우지 않으므로 이 규칙이 "존재"하는지만
+    # 검사할 수 있다 — 계산된 display 값 · 실제 화면 표시 여부는 검증하지
+    # 못하며, 그건 실브라우저(Playwright)로만 확인 가능하다.
+    assert re.search(r"\.morebtn\[hidden\]\s*\{[^}]*display\s*:\s*none", css), (
+        ".morebtn[hidden]{display:none} 규칙이 없음 — 더보기 버튼이 hidden "
+        "속성으로 숨지 않는 결함"
+    )
     assert "data-outlet" in js and "data-tier" in js   # 카드 필터 계약
     assert "data-stage" in js                          # 단계 필터 계약
     assert "localStorage" in js                        # 테마 영속
