@@ -153,3 +153,22 @@ def test_authors_falls_back_when_json_ld_authors_all_invalid():
             '{"@type":"NewsArticle","author":[{"@type":"Person","name":""},'
             '{"@type":"Person","name":"https://example.test/profile"}]}</script>')
     assert extract_authors(html) == ["Real Fallback Author"]
+
+def test_authors_recovers_json_ld_with_control_characters():
+    # Sky Sports 실측 (2026-07-16): NewsArticle LD 문자열에 raw 제어 문자 → strict 파싱 거부
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle","headline":"Line\x1fbreak",'
+            '"author":{"@type":"Person","name":"Keith Downie"}}</script>')
+    assert extract_authors(html) == ["Keith Downie"]
+
+def test_authors_unescapes_html_entities():
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":{"@type":"Person","name":"Sam O&#39;Brien"}}</script>')
+    assert extract_authors(html) == ["Sam O'Brien"]
+
+def test_authors_splits_combined_names_on_ampersand():
+    # Sky Sports 실측: 공저를 한 Person.name 에 ' & ' 로 결합 → 등재 기자 매칭이 깨짐
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle",'
+            '"author":{"@type":"Person","name":"Keith Downie &amp; Dharmesh Sheth"}}</script>')
+    assert extract_authors(html) == ["Keith Downie", "Dharmesh Sheth"]

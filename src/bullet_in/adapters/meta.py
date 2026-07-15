@@ -1,4 +1,5 @@
 from __future__ import annotations
+import html as _html
 import json
 import re
 from urllib.parse import urljoin, urlparse
@@ -115,15 +116,21 @@ def _walk_authors(node) -> list[str]:
     return found
 
 def _normalize_authors(names: list[str]) -> list[str]:
-    """저자 목록을 정규화: 빈 문자열 · URL 형태 배제 · 중복 제거 · 순서 보존."""
+    """저자 목록을 정규화: 빈 문자열 · URL 형태 배제 · 중복 제거 · 순서 보존.
+    HTML 엔티티를 풀고, 결합 저자 (` & ` 구분) 를 개별 저자로 분리한다."""
     out: list[str] = []
     for n in names:
         n = (n or "").strip()
-        # URL 형태 (article:author 의 SNS 링크 등) 는 저자명이 아니다
-        if not n or n.lower().startswith(("http://", "https://")):
-            continue
-        if n not in out:
-            out.append(n)
+        # HTML 엔티티 (&amp; · &#39; 등) 을 풀기
+        n = _html.unescape(n)
+        # Sky Sports: 공저를 ' & ' 로 연결 (결합 저자 분리)
+        for part in n.split(" & "):
+            part = part.strip()
+            # URL 형태 (article:author 의 SNS 링크 등) 는 저자명이 아니다
+            if not part or part.lower().startswith(("http://", "https://")):
+                continue
+            if part not in out:
+                out.append(part)
     return out
 
 def extract_authors(html: str) -> list[str]:
@@ -136,7 +143,14 @@ def extract_authors(html: str) -> list[str]:
         for s in soup.find_all("script", type="application/ld+json"):
             try:
                 data = json.loads(s.string or "")
-            except (json.JSONDecodeError, TypeError):
+            except json.JSONDecodeError:
+                # Sky Sports 실측: JSON-LD 문자열 안에 raw 제어 문자 → strict 모드 거부
+                # strict=False 로 재시도 (제어 문자 허용)
+                try:
+                    data = json.loads(s.string or "", strict=False)
+                except (json.JSONDecodeError, TypeError):
+                    continue      # 그것마저 실패하면 이 블록을 버린다
+            except TypeError:
                 continue          # 깨진 LD 하나가 나머지를 막지 않는다
             names += _walk_authors(data)
         out = _normalize_authors(names)

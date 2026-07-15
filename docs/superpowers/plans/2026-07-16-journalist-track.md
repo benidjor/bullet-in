@@ -49,71 +49,27 @@
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
-`tests/test_meta.py` 끝에 추가:
+`tests/test_meta.py` 끝에 추가. 기존 10건 (from_json_ld_multiple_in_order · nested_json_ld_graph 등)은 그대로 두고, 라이브 검증 3건 회귀를 추가:
 
 ```python
-from bullet_in.adapters.meta import extract_authors
-
-def test_authors_from_json_ld_multiple_in_order():
-    # BBC 실측 형태: NewsArticle.author 배열에 Person 2명
+def test_authors_recovers_json_ld_with_control_characters():
+    # Sky Sports 실측 (2026-07-16): NewsArticle LD 문자열에 raw 제어 문자 → strict 파싱 거부
     html = ('<script type="application/ld+json">'
-            '{"@type":"NewsArticle","author":[{"@type":"Person","name":"Alastair Telfer"},'
-            '{"@type":"Person","name":"Sami Mokbel"}]}</script>')
-    assert extract_authors(html) == ["Alastair Telfer", "Sami Mokbel"]
+            '{"@type":"NewsArticle","headline":"Line\x1fbreak",'
+            '"author":{"@type":"Person","name":"Keith Downie"}}</script>')
+    assert extract_authors(html) == ["Keith Downie"]
 
-def test_authors_from_nested_json_ld_graph():
-    # @graph 중첩 안의 author 도 재귀 탐색으로 찾는다
+def test_authors_unescapes_html_entities():
     html = ('<script type="application/ld+json">'
-            '{"@graph":[{"@type":"WebPage"},'
-            '{"@type":"NewsArticle","author":{"@type":"Person","name":"Raff Tindale"}}]}'
-            '</script>')
-    assert extract_authors(html) == ["Raff Tindale"]
+            '{"@type":"NewsArticle","author":{"@type":"Person","name":"Sam O&#39;Brien"}}</script>')
+    assert extract_authors(html) == ["Sam O'Brien"]
 
-def test_authors_accepts_string_author():
+def test_authors_splits_combined_names_on_ampersand():
+    # Sky Sports 실측: 공저를 한 Person.name 에 ' & ' 로 결합 → 등재 기자 매칭이 깨짐
     html = ('<script type="application/ld+json">'
-            '{"@type":"NewsArticle","author":"Moataz Elgammal"}</script>')
-    assert extract_authors(html) == ["Moataz Elgammal"]
-
-def test_authors_dedupes_preserving_order():
-    html = ('<script type="application/ld+json">'
-            '{"@type":"NewsArticle","author":[{"@type":"Person","name":"Sami Mokbel"},'
-            '{"@type":"Person","name":"Sami Mokbel"}]}</script>')
-    assert extract_authors(html) == ["Sami Mokbel"]
-
-def test_authors_falls_back_to_meta_author():
-    html = '<meta name="author" content="Raff Tindale">'
-    assert extract_authors(html) == ["Raff Tindale"]
-
-def test_authors_json_ld_wins_over_meta():
-    html = ('<meta name="author" content="Desk">'
-            '<script type="application/ld+json">'
-            '{"@type":"NewsArticle","author":{"@type":"Person","name":"Real Person"}}</script>')
-    assert extract_authors(html) == ["Real Person"]
-
-def test_authors_excludes_url_and_empty_values():
-    # BBC 실측: article:author 는 Facebook URL — 저자명이 아니다
-    html = ('<meta property="article:author" content="https://www.facebook.com/BBCSport/">'
-            '<script type="application/ld+json">'
-            '{"@type":"NewsArticle","author":[{"@type":"Person","name":""},'
-            '{"@type":"Person","name":"https://example.test/profile"},'
-            '{"@type":"Person","name":"Dharmesh Sheth"}]}</script>')
-    assert extract_authors(html) == ["Dharmesh Sheth"]
-
-def test_authors_survives_broken_json_ld():
-    html = ('<script type="application/ld+json">{ not json ]</script>'
-            '<meta name="author" content="Kaya Kaynak">')
-    assert extract_authors(html) == ["Kaya Kaynak"]
-
-def test_authors_empty_when_absent():
-    assert extract_authors("<html><body><p>no author</p></body></html>") == []
-
-def test_authors_falls_back_when_json_ld_authors_all_invalid():
-    # JSON-LD author 가 있으나 유효 저자 0명 → meta 폴백이 걸려야 한다
-    html = ('<meta name="author" content="Real Fallback Author">'
-            '<script type="application/ld+json">'
-            '{"@type":"NewsArticle","author":[{"@type":"Person","name":""},'
-            '{"@type":"Person","name":"https://example.test/profile"}]}</script>')
-    assert extract_authors(html) == ["Real Fallback Author"]
+            '{"@type":"NewsArticle",'
+            '"author":{"@type":"Person","name":"Keith Downie &amp; Dharmesh Sheth"}}</script>')
+    assert extract_authors(html) == ["Keith Downie", "Dharmesh Sheth"]
 ```
 
 - [ ] **Step 2: 테스트 실패 확인**
@@ -147,15 +103,21 @@ def _walk_authors(node) -> list[str]:
     return found
 
 def _normalize_authors(names: list[str]) -> list[str]:
-    """저자 목록을 정규화: 빈 문자열 · URL 형태 배제 · 중복 제거 · 순서 보존."""
+    """저자 목록을 정규화: 빈 문자열 · URL 형태 배제 · 중복 제거 · 순서 보존.
+    HTML 엔티티를 풀고, 결합 저자 (` & ` 구분) 를 개별 저자로 분리한다."""
     out: list[str] = []
     for n in names:
         n = (n or "").strip()
-        # URL 형태 (article:author 의 SNS 링크 등) 는 저자명이 아니다
-        if not n or n.lower().startswith(("http://", "https://")):
-            continue
-        if n not in out:
-            out.append(n)
+        # HTML 엔티티 (&amp; · &#39; 등) 을 풀기
+        n = _html.unescape(n)
+        # Sky Sports: 공저를 ' & ' 로 연결 (결합 저자 분리)
+        for part in n.split(" & "):
+            part = part.strip()
+            # URL 형태 (article:author 의 SNS 링크 등) 는 저자명이 아니다
+            if not part or part.lower().startswith(("http://", "https://")):
+                continue
+            if part not in out:
+                out.append(part)
     return out
 
 def extract_authors(html: str) -> list[str]:
@@ -168,7 +130,14 @@ def extract_authors(html: str) -> list[str]:
         for s in soup.find_all("script", type="application/ld+json"):
             try:
                 data = json.loads(s.string or "")
-            except (json.JSONDecodeError, TypeError):
+            except json.JSONDecodeError:
+                # Sky Sports 실측: JSON-LD 문자열 안에 raw 제어 문자 → strict 모드 거부
+                # strict=False 로 재시도 (제어 문자 허용)
+                try:
+                    data = json.loads(s.string or "", strict=False)
+                except (json.JSONDecodeError, TypeError):
+                    continue      # 그것마저 실패하면 이 블록을 버린다
+            except TypeError:
                 continue          # 깨진 LD 하나가 나머지를 막지 않는다
             names += _walk_authors(data)
         out = _normalize_authors(names)
