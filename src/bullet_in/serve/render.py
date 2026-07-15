@@ -343,11 +343,11 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
 
 
 def build_neighbors(ordered: list[dict], idx: int, sources: dict,
-                    now: datetime) -> list[dict]:
+                    now: datetime, directory: dict | None = None) -> list[dict]:
     start, end = neighbor_window(len(ordered), idx)
     out = []
     for j in range(start, end):
-        d = _decorate(ordered[j], sources, now)
+        d = _decorate(ordered[j], sources, now, directory=directory)
         d["_is_current"] = (j == idx)
         out.append(d)
     return out
@@ -383,7 +383,7 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
     facets = facet_counts(articles, sources, directory=directory)
     for idx, row in enumerate(ordered):
         a = _decorate(row, sources, now, directory=directory)
-        neighbors = build_neighbors(ordered, idx, sources, now)
+        neighbors = build_neighbors(ordered, idx, sources, now, directory=directory)
         html = render_article(a, neighbors, row["content_hash"], sources, now, facets=facets)
         (out / "article" / f"{row['content_hash']}.html").write_text(
             html, encoding="utf-8")

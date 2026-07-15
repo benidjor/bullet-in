@@ -122,6 +122,16 @@ def test_detail_small_corpus_shows_all():
     assert len(nb) == 3
 
 
+def test_build_neighbors_resolves_journalist_via_directory():
+    # _decorate 가 호출 경로 (render_index/write_site vs build_neighbors) 와
+    # 무관하게 동일한 정규화 결과를 내야 한다 — 이웃 목록도 카드 · 상세와 같은 정식명을 가져야 함.
+    arts = [_row(content_hash=f"h{i}", title_ko=f"기사{i}", journalist="온스테인")
+            for i in range(3)]
+    nb = build_neighbors(arts, 1, SOURCES, NOW,
+                         directory={"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}})
+    assert all(n["_journalist"] == "David Ornstein" for n in nb)
+
+
 from bullet_in.serve.render import write_site
 
 
