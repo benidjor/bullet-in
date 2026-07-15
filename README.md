@@ -76,8 +76,8 @@
 |---|---|
 | 1 | David Ornstein (The Athletic) · Sami Mokbel (BBC) |
 | 1.5 | Fabrizio Romano (독립) · James McNicholas (The Athletic) · Art de Roché (The Athletic) · Dharmesh Sheth (Sky Sports) · handofarsnal (ITK) |
-| 2 | Amy Lawrence (The Athletic) · James Olley (ESPN) · Matt Law (The Telegraph) · Teamnewsandtix (ITK) |
-| 3 | Charles Watts (독립) · Simon Collings (Evening Standard) · Gary Jacob (The Times) · Sam Dean (The Telegraph) · Gianluca Di Marzio (Sky Italia) · LatteFirm (ITK) |
+| 2 | Amy Lawrence (The Athletic) · James Olley (ESPN) · Matt Law (The Telegraph) · Sam Dean (The Telegraph) · Teamnewsandtix (ITK) |
+| 3 | Charles Watts (독립) · Simon Collings (Evening Standard) · Gary Jacob (The Times) · Miguel Delaney (The Independent) · Gianluca Di Marzio (Sky Italia) · LatteFirm (ITK) |
 
 ## 4. 정량 지표 (SLO)
 

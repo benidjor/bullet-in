@@ -12,7 +12,8 @@ journalists:
   - {name: Gary Jacob,        tier: 3,   aliases: ["@garyjacob", "게리 제이콥", "Jacob"]}
   - {name: Simon Collings,    tier: 3,   aliases: ["@sr_collings", "사이먼 콜링스", "Collings"]}
   - {name: Gianluca Di Marzio,tier: 3,   aliases: ["@DiMarzio", "디 마르지오", "Di Marzio"]}
-  - {name: Sam Dean,          tier: 3,   aliases: ["@SamJDean", "샘 딘", "Sam Dean"]}
+  - {name: Sam Dean,          tier: 2,   aliases: ["@SamJDean", "샘 딘", "Sam Dean"]}
+  - {name: Miguel Delaney,    tier: 3,   aliases: ["@MiguelDelaney", "미겔 델라니", "델라니", "Delaney"]}
   - {name: Matt Law,          tier: 2,   aliases: ["@Matt_Law_DT"]}
   - {name: LatteFirm,         tier: 3,   aliases: ["@LatteFirm"]}
   - {name: Art de Roché,     tier: 1.5, aliases: ["@ArtdeRoche", "드 로셰", "드로셰", "de roche"]}
@@ -25,7 +26,8 @@ outlets:
   - {name: ESPN,            tier: 2,   aliases: ["ESPN"]}
   - {name: The Times,       tier: 3,   aliases: ["더 타임스", "타임스", "The Times"]}
   - {name: Evening Standard,tier: 3,   aliases: ["이브닝 스탠다드", "Evening Standard"]}
-  - {name: The Telegraph,   tier: 3,   aliases: ["텔레그래프", "The Telegraph"]}
+  - {name: The Telegraph,   tier: 2,   aliases: ["텔레그래프", "The Telegraph"]}
+  - {name: The Independent, tier: 3,   aliases: ["인디펜던트", "디 인디펜던트", "The Independent", "Independent"]}
   - {name: Daily Mail,      tier: 3,   aliases: ["데일리 메일", "Daily Mail"]}
   - {name: Sky Italia,      tier: 3,   aliases: ["스카이 이탈리아", "Sky Italia"]}
   - {name: The Sun,         tier: 4,   aliases: ["더 선", "The Sun"]}
