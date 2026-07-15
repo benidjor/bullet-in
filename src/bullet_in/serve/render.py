@@ -60,7 +60,27 @@ def neighbor_window(n: int, idx: int, size: int = 5) -> tuple[int, int]:
     return (start, end)
 
 
-def facet_counts(articles: list[dict], sources: dict) -> dict:
+def journalist_entry(row: dict, sources: dict, directory: dict | None) -> dict | None:
+    """기사 1건의 기자 뷰 — 정규화 이름 (필터 · 집계 키) · 표시 라벨 · 등재 여부.
+    저장값은 소스마다 형태가 다르다 (fmkorea 한글 말머리 · x 핸들 · html 풀네임)
+    → 레지스트리 정식명으로 정규화하지 않으면 같은 기자가 facet 에서 갈라진다."""
+    j = (row.get("journalist") or "").strip()
+    if not j:
+        return None
+    src = sources.get(row.get("source_id")) or {}
+    entry = (directory or {}).get(j.lower())
+    if entry:
+        name, outlet, registered = entry["name"], entry["outlet"], True
+    else:
+        name, outlet, registered = j, src.get("outlet"), False
+    if j == src.get("journalist_label") or not outlet:
+        label = name                       # 통칭 · 소속 미상 → 괄호 생략
+    else:
+        label = f"{name} ({outlet})"
+    return {"name": name, "label": label, "registered": registered}
+
+
+def facet_counts(articles: list[dict], sources: dict, directory: dict | None = None) -> dict:
     teams = Counter(a.get("team") or "arsenal" for a in articles)
     outlet_ctr = Counter(outlet_display(a, sources) for a in articles)
     outlets = sorted(outlet_ctr.items(), key=lambda kv: (-kv[1], kv[0]))
@@ -77,9 +97,25 @@ def facet_counts(articles: list[dict], sources: dict) -> dict:
             stage_counts[s] += 1
         else:
             other_count += 1
+
+    reg_ctr: Counter = Counter()
+    more_ctr: Counter = Counter()
+    labels: dict[str, str] = {}
+    for a in articles:
+        e = journalist_entry(a, sources, directory)
+        if e is None:
+            continue
+        (reg_ctr if e["registered"] else more_ctr)[e["name"]] += 1
+        labels[e["name"]] = e["label"]
+
+    def _ranked(ctr: Counter) -> list[tuple[str, str, int]]:
+        return [(n, labels[n], c)
+                for n, c in sorted(ctr.items(), key=lambda kv: (-kv[1], kv[0]))]
+
     return {"total": len(articles), "team": dict(teams),
             "outlets": outlets, "tiers": tiers, "stage": stage_counts,
-            "other": other_count}
+            "other": other_count,
+            "journalists": {"registered": _ranked(reg_ctr), "more": _ranked(more_ctr)}}
 
 # ---- 운영 뷰 (ops.html) 뷰모델 ----
 # 지표 정의 · 데이터 계약: docs/superpowers/specs/2026-07-14-ops-monitoring-view-design.md §5 · §6
@@ -254,7 +290,7 @@ def interleave_body(paras: list[str], images: list[str], every: int = 2) -> list
 
 
 def _decorate(row: dict, sources: dict, now: datetime,
-              names: dict[str, str] | None = None) -> dict:
+              directory: dict | None = None) -> dict:
     a = dict(row)
     a["_title"] = row.get("title_ko") or row.get("title_original") or ""
     a["_outlet"] = outlet_display(row, sources)
@@ -285,9 +321,9 @@ def _decorate(row: dict, sources: dict, now: datetime,
     a["_stage_badge"] = _stage.is_displayable(st)
     a["_stage_label"] = _stage.label_for(st)
     a["_stage_class"] = _stage.css_for(st)
-    j = row.get("journalist")
-    # 바이라인 영문 표기: 레지스트리 alias(한글 말머리·핸들) → 정식 영문명, 미등재는 저장값
-    a["_byline"] = (names or {}).get((j or "").lower(), j)
+    e = journalist_entry(row, sources, directory)
+    a["_journalist"] = e["name"] if e else ""   # 카드 data 속성 · 필터 키
+    a["_byline"] = e["label"] if e else None    # 표시 라벨 — 기자 (언론사)
     return a
 
 
@@ -297,9 +333,11 @@ def _sorted_latest(articles: list[dict]) -> list[dict]:
                   reverse=True)
 
 
-def render_index(articles: list[dict], sources: dict, now: datetime) -> str:
-    ordered = [_decorate(a, sources, now) for a in _sorted_latest(articles)]
-    facets = facet_counts(articles, sources)
+def render_index(articles: list[dict], sources: dict, now: datetime,
+                 directory: dict | None = None) -> str:
+    ordered = [_decorate(a, sources, now, directory=directory)
+               for a in _sorted_latest(articles)]
+    facets = facet_counts(articles, sources, directory=directory)
     return _env().get_template("index.html.j2").render(
         articles=ordered, facets=facets, active="home", root="")
 
@@ -320,7 +358,8 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
     # facets=None이면 빈 구조로 폴백 (하위 호환 유지)
     if facets is None:
         facets = {"team": {}, "outlets": [], "tiers": {t: 0 for t in range(5)},
-                  "total": 0, "stage": {}, "other": 0}
+                  "total": 0, "stage": {}, "other": 0,
+                  "journalists": {"registered": [], "more": []}}
     article = dict(article)
     paras = [p for p in (article.get("body_ko") or "").split("\n") if p.strip()]
     article["_body_blocks"] = interleave_body(paras, article.get("_images") or [])
@@ -330,20 +369,20 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
 
 def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
                now: datetime | None = None,
-               names: dict[str, str] | None = None) -> None:
+               directory: dict | None = None) -> None:
     """인덱스·상세 N개·정적 자산을 out_dir에 일괄 생성한다."""
     now = now or datetime.utcnow()
     out = Path(out_dir)
     (out / "article").mkdir(parents=True, exist_ok=True)
 
-    (out / "index.html").write_text(render_index(articles, sources, now),
-                                    encoding="utf-8")
+    (out / "index.html").write_text(
+        render_index(articles, sources, now, directory=directory), encoding="utf-8")
 
     ordered = _sorted_latest(articles)
     # 패싯은 전체 기사 기준으로 한 번만 계산해 모든 상세 페이지에 전달
-    facets = facet_counts(articles, sources)
+    facets = facet_counts(articles, sources, directory=directory)
     for idx, row in enumerate(ordered):
-        a = _decorate(row, sources, now, names=names)
+        a = _decorate(row, sources, now, directory=directory)
         neighbors = build_neighbors(ordered, idx, sources, now)
         html = render_article(a, neighbors, row["content_hash"], sources, now, facets=facets)
         (out / "article" / f"{row['content_hash']}.html").write_text(

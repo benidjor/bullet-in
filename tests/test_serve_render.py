@@ -307,9 +307,21 @@ def test_detail_no_byline_when_journalist_missing():
 
 def test_decorate_resolves_byline_to_canonical_english():
     row = _row(journalist="온스테인", body_ko="본문")
-    a = _dec(row, SOURCES, NOW, names={"온스테인": "David Ornstein"})
-    assert a["_byline"] == "David Ornstein"
+    a = _dec(row, SOURCES, NOW,
+             directory={"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}})
+    assert a["_byline"] == "David Ornstein (The Athletic)"
+    assert a["_journalist"] == "David Ornstein"
 
 def test_decorate_byline_passthrough_when_unregistered():
     a = _dec(_row(journalist="Hugo Guillemet", body_ko="본문"), SOURCES, NOW)
     assert a["_byline"] == "Hugo Guillemet"
+    assert a["_journalist"] == "Hugo Guillemet"
+
+def test_index_card_has_journalist_data_attr():
+    html = render_index([_row(journalist="온스테인")], SOURCES, NOW,
+                        directory={"온스테인": {"name": "David Ornstein", "outlet": None}})
+    assert 'data-journalist="David Ornstein"' in html   # 체크박스 값과 같은 정규화 키
+
+def test_index_card_journalist_attr_empty_when_missing():
+    html = render_index([_row()], SOURCES, NOW)
+    assert 'data-journalist=""' in html

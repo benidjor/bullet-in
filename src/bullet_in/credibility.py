@@ -37,15 +37,6 @@ def load_registry(path) -> Registry:
                 j_outlets[key.lower()] = e["outlet"]
     return Registry(jour, out, j_outlets)
 
-def journalist_display_names(path) -> dict[str, str]:
-    """alias(lower) -> 기자 정식 영문명. 바이라인 표기용 (fmkorea 한글 말머리 → 영문)."""
-    data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    out: dict[str, str] = {}
-    for e in data.get("journalists", []) or []:
-        for alias in e["aliases"]:
-            out[alias.lower()] = e["name"]
-    return out
-
 def journalist_directory(path) -> dict[str, dict]:
     """alias · 정식명(lower) -> {"name": 정식 영문명, "outlet": 소속 | None}.
     바이라인 표기 · facet 정규화 · 등재 판정을 한 번에 해결하는 서빙용 조회 맵."""
