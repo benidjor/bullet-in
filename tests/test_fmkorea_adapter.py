@@ -155,7 +155,8 @@ def test_parse_bracket_exclusive_flag():
     assert parse_bracket("[디 애슬레틱-독점] 디오망데 PSG 선택") == ("The Athletic", None, True)
 
 def test_parse_bracket_outlet_only():
-    assert parse_bracket("[공홈] 요케레스 영입 완료") == ("공홈", None, False)
+    # 공홈 말머리는 canonical 영문 표기로 매핑 (0티어 등재와 함께, 2026-07-15)
+    assert parse_bracket("[공홈] 요케레스 영입 완료") == ("Arsenal.com", None, False)
 
 def test_parse_bracket_no_bracket():
     assert parse_bracket("Arsenal target identified") == (None, None, False)
