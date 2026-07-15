@@ -166,8 +166,16 @@ def test_authors_unescapes_html_entities():
             '{"@type":"NewsArticle","author":{"@type":"Person","name":"Sam O&#39;Brien"}}</script>')
     assert extract_authors(html) == ["Sam O'Brien"]
 
-def test_authors_splits_combined_names_on_ampersand():
-    # Sky Sports 실측: 공저를 한 Person.name 에 ' & ' 로 결합 → 등재 기자 매칭이 깨짐
+def test_authors_splits_combined_names_on_comma_and_ampersand():
+    # Sky Sports 실측 (2026-07-16): 공저를 한 Person.name 에 영어 나열 관례 'A, B & C' 로 결합
+    # → 분리하지 않으면 등재 기자 (Dharmesh Sheth) 매칭이 깨져 tier 보정이 조용히 누락된다
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle",'
+            '"author":{"@type":"Person","name":"Keith Downie, Dharmesh Sheth &amp; Kaveh Solhekol"}}'
+            '</script>')
+    assert extract_authors(html) == ["Keith Downie", "Dharmesh Sheth", "Kaveh Solhekol"]
+
+def test_authors_splits_pair_on_ampersand():
     html = ('<script type="application/ld+json">'
             '{"@type":"NewsArticle",'
             '"author":{"@type":"Person","name":"Keith Downie &amp; Dharmesh Sheth"}}</script>')

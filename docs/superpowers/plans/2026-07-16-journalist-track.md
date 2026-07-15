@@ -64,8 +64,16 @@ def test_authors_unescapes_html_entities():
             '{"@type":"NewsArticle","author":{"@type":"Person","name":"Sam O&#39;Brien"}}</script>')
     assert extract_authors(html) == ["Sam O'Brien"]
 
-def test_authors_splits_combined_names_on_ampersand():
-    # Sky Sports 실측: 공저를 한 Person.name 에 ' & ' 로 결합 → 등재 기자 매칭이 깨짐
+def test_authors_splits_combined_names_on_comma_and_ampersand():
+    # Sky Sports 실측 (2026-07-16): 공저를 한 Person.name 에 영어 나열 관례 'A, B & C' 로 결합
+    # → 분리하지 않으면 등재 기자 (Dharmesh Sheth) 매칭이 깨져 tier 보정이 조용히 누락된다
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle",'
+            '"author":{"@type":"Person","name":"Keith Downie, Dharmesh Sheth &amp; Kaveh Solhekol"}}'
+            '</script>')
+    assert extract_authors(html) == ["Keith Downie", "Dharmesh Sheth", "Kaveh Solhekol"]
+
+def test_authors_splits_pair_on_ampersand():
     html = ('<script type="application/ld+json">'
             '{"@type":"NewsArticle",'
             '"author":{"@type":"Person","name":"Keith Downie &amp; Dharmesh Sheth"}}</script>')
@@ -104,14 +112,14 @@ def _walk_authors(node) -> list[str]:
 
 def _normalize_authors(names: list[str]) -> list[str]:
     """저자 목록을 정규화: 빈 문자열 · URL 형태 배제 · 중복 제거 · 순서 보존.
-    HTML 엔티티를 풀고, 결합 저자 (` & ` 구분) 를 개별 저자로 분리한다."""
+    HTML 엔티티를 풀고, 결합 저자 (쉼표 · & 구분) 를 개별 저자로 분리한다."""
     out: list[str] = []
     for n in names:
         n = (n or "").strip()
         # HTML 엔티티 (&amp; · &#39; 등) 을 풀기
         n = _html.unescape(n)
-        # Sky Sports: 공저를 ' & ' 로 연결 (결합 저자 분리)
-        for part in n.split(" & "):
+        # Sky Sports: 영어 나열 관례 'A, B & C' 로 공저 결합 (쉼표 · & 모두 구분자)
+        for part in re.split(r"\s*[,&]\s*", n):
             part = part.strip()
             # URL 형태 (article:author 의 SNS 링크 등) 는 저자명이 아니다
             if not part or part.lower().startswith(("http://", "https://")):
