@@ -6,6 +6,7 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup, escape
 
 from bullet_in import transfer_stage as _stage
 
@@ -214,6 +215,7 @@ def _env() -> Environment:
         autoescape=select_autoescape(default_for_string=True, default=True),
     )
     env.globals["stages"] = _stage.SIDEBAR_STAGES
+    env.filters["md_bold"] = _md_bold
     return env
 
 
@@ -222,12 +224,29 @@ def _norm_img(url: str) -> str:
     return url.split("?", 1)[0]
 
 
+_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+
+
+def _md_bold(text: str) -> Markup:
+    """이스케이프 후 **굵게**만 <strong>으로 — 경량 마크다운 인라인 변환."""
+    return Markup(_BOLD_RE.sub(r"<strong>\1</strong>", str(escape(text))))
+
+
+def _para_block(p: str) -> dict:
+    """경량 마크다운 블록 분류: '### '=소제목, '> '=인용, 그 외 문단."""
+    if p.startswith("### "):
+        return {"type": "h3", "text": p[4:].strip()}
+    if p.startswith("> "):
+        return {"type": "quote", "text": p[2:].strip()}
+    return {"type": "p", "text": p}
+
+
 def interleave_body(paras: list[str], images: list[str], every: int = 2) -> list[dict]:
     """번역 문단과 인라인 이미지의 교차 블록 시퀀스.
     every 문단마다 이미지 1장, 이미지 소진 후엔 문단만, 남는 이미지는 버린다."""
     blocks, qi = [], 0
     for i, p in enumerate(paras, 1):
-        blocks.append({"type": "p", "text": p})
+        blocks.append(_para_block(p))
         if qi < len(images) and i % every == 0:
             blocks.append({"type": "img", "url": images[qi]})
             qi += 1

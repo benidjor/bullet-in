@@ -271,3 +271,36 @@ def test_detail_interleaves_inline_images_with_defenses():
 def test_css_has_inline_image_style():
     css = (STATIC / "style.css").read_text(encoding="utf-8")
     assert ".body figure img" in css
+
+def test_interleave_classifies_heading_and_quote_blocks():
+    blocks = interleave_body(["### 소제목", "> 인용문", "본문"], [])
+    assert [b["type"] for b in blocks] == ["h3", "quote", "p"]
+    assert blocks[0]["text"] == "소제목"
+    assert blocks[1]["text"] == "인용문"
+
+def test_md_bold_escapes_html_before_markup():
+    from bullet_in.serve.render import _md_bold
+    out = str(_md_bold("**bold** <script>x</script>"))
+    assert "<strong>bold</strong>" in out
+    assert "<script>" not in out and "&lt;script&gt;" in out
+
+def test_detail_renders_markdown_lite_blocks_and_bold():
+    row = _row(body_ko="### 전술 변화\n> 우리는 준비돼 있다\n**알바레스**가 왔다\n둘째 문단",
+               image_url="https://img/hero.jpg")
+    a = _dec(row, SOURCES, NOW)
+    html = _ra(a, [], "h1", SOURCES, NOW)
+    assert "<h3>전술 변화</h3>" in html
+    assert "<blockquote>우리는 준비돼 있다</blockquote>" in html
+    assert "<strong>알바레스</strong>가 왔다" in html
+
+def test_detail_shows_byline_under_title():
+    row = _row(journalist="Miguel Delaney", body_ko="본문")
+    a = _dec(row, SOURCES, NOW)
+    html = _ra(a, [], "h1", SOURCES, NOW)
+    assert '<p class="byline">Miguel Delaney</p>' in html
+    assert html.index('class="title"') < html.index('class="byline"')
+
+def test_detail_no_byline_when_journalist_missing():
+    row = _row(body_ko="본문")
+    a = _dec(row, SOURCES, NOW)
+    assert "byline" not in _ra(a, [], "h1", SOURCES, NOW)
