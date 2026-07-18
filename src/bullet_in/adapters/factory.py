@@ -31,7 +31,8 @@ def build_adapters(cfg: dict) -> list:
             out.append(HtmlAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url"),
                                    title_contains=c.get("title_contains"),
                                    body_selector=c.get("body_selector"),
-                                   title_selector=c.get("title_selector")))
+                                   title_selector=c.get("title_selector"),
+                                   thumbnail_only=c.get("thumbnail_only", False)))
         elif kind == "playwright":
             out.append(PlaywrightAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url")))
         elif kind == "x_playwright":

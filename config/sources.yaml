@@ -43,6 +43,7 @@ sources:
     config:
       list_url: "https://www.bbc.com/sport/football/gossip"
       item_selector: "a[href*='/sport/football/articles/']"
+      thumbnail_only: true   # og:image 만 경량 상세 방문 (spec §3.3)
     enabled: true
   - source_id: goal
     display_name: Goal.com
