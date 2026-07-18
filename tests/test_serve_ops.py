@@ -20,7 +20,7 @@ def test_render_ops_contains_tiles_sections_and_labels():
     html = render_ops(build_ops_view(_snapshot(), SOURCES, 0, NOW))
     assert "수집 끊긴 소스" in html and "번역 · 분류 대기" in html
     for title in ("회차별 수집량", "소스별 신선도", "소스별 수집량",
-                  "tier 분포", "SLO 롤업"):
+                  "Tier 분포", "SLO 롤업"):
         assert title in html
     assert "2026-07-14 09:12 UTC" in html
     assert "<script" not in html                     # JS 금지 계약

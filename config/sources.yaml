@@ -36,7 +36,7 @@ sources:
   - source_id: bbc_gossip
     display_name: BBC Football Gossip
     tier: 4
-    outlet: BBC
+    # outlet 미지정 — 지정하면 facet 에서 BBC(Tier 1)로 합쳐져 가십 41건이 승격된다
     journalist_label: BBC Gossip
     medium: newspaper
     adapter: html

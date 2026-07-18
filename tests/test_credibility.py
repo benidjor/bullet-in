@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 from datetime import datetime, timezone
-from bullet_in.credibility import load_registry, resolve_tier
+from bullet_in.credibility import load_registry, resolve_tier, Registry, journalist_directory
 from bullet_in.models import RawItem
 
 REG = Path(__file__).parent.parent / "config" / "credibility.yaml"
@@ -188,3 +188,41 @@ def test_fixed_source_without_journalist_keeps_legacy_behavior():
     r = load_registry(REG)
     sources = {"bbc_sport": {"tier": 1, "outlet": "BBC"}}
     assert resolve_tier(_item("bbc_sport", {"title": "x"}), sources, r) == 1.0
+
+def test_gossip_without_source_outlet_keeps_tier_4():
+    """bbc_gossip 의 outlet 제거로 소속 일치 보정 경로가 막힌다 (spec §3.4).
+    통칭 라벨만 오는 현재 데이터에서는 결과가 중립임을 고정한다."""
+    registry = Registry(journalists={"sami mokbel": 1.0},
+                        outlets={"bbc": 1.0},
+                        journalist_outlets={"sami mokbel": "BBC"})
+    sources = {"bbc_gossip": {"tier": 4}}          # outlet 키 없음
+    it = _item("bbc_gossip", {})
+
+    # 통칭 라벨 — 등재 기자가 아니므로 보정이 걸리지 않는다
+    assert resolve_tier(it, sources, registry, journalist="BBC Gossip") == 4.0
+    # 등재 기자가 와도 소스 outlet 이 없으면 승격되지 않는다 (제거의 실제 효과)
+    assert resolve_tier(it, sources, registry, journalist="Sami Mokbel") == 4.0
+
+
+def test_sources_yaml_gossip_has_no_outlet():
+    """bbc_gossip 에 outlet 을 되돌리면 가십 41건이 facet 에서 BBC (Tier 1) 로
+    합쳐진다 (spec §3.4). 위 유닛 테스트는 합성 dict 를 써서 이 드리프트를
+    못 잡으므로, 설정 파일 자체를 읽어 계약을 고정한다."""
+    from bullet_in.score import load_sources
+    s = load_sources(Path(__file__).parent.parent / "config" / "sources.yaml")
+    assert "outlet" not in s["bbc_gossip"]
+    assert s["bbc_sport"]["outlet"] == "BBC"
+
+def test_tom_canton_registered_tier_4_is_neutral():
+    """등재해도 기사 tier 는 안 바뀐다 — min(4, 4) = 4 (spec §3.6)."""
+    registry = load_registry(REG)
+    assert registry.journalists["tom canton"] == 4.0
+    assert registry.journalist_outlets["tom canton"] == "football.london"
+
+    sources = {"football_london": {"tier": 4, "outlet": "football.london"}}
+    it = _item("football_london", {})
+    assert resolve_tier(it, sources, registry, journalist="Tom Canton") == 4.0
+
+    # 기자 facet 에서 미등재 구간을 벗어난다
+    d = journalist_directory(REG)
+    assert d["tom canton"]["name"] == "Tom Canton"

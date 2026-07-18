@@ -36,15 +36,40 @@ def fmt_date(dt: datetime) -> str:
 
 
 def outlet_display(row: dict, sources: dict) -> str:
+    """facet 키 · 카드 칩이 공유하는 언론사 표시명.
+    소스 outlet 폴백이 없으면 display_name (BBC Sport) 이 키가 되는데
+    이 문자열은 credibility.yaml 에 없어 tier 조회가 실패한다 (spec §3.4)."""
+    src = sources.get(row.get("source_id"), {})
     return (row.get("outlet")
-            or sources.get(row.get("source_id"), {}).get("display_name")
+            or src.get("outlet")
+            or src.get("display_name")
             or row.get("source_id") or "")
+
+
+TIER_ORDER: list[float] = [0.0, 1.0, 1.5, 2.0, 3.0, 4.0]
+INITIAL_MAX_TIER = 1.5                      # 초기 노출 상한 (spec §3.2)
+TIER_HEADINGS: dict[float, str] = {
+    0.0: "Tier 0 · 공식",
+    1.0: "Tier 1 · 공신력 최상",
+    1.5: "Tier 1.5 · 공신력 상",
+    2.0: "Tier 2 · 공신력 중",
+    3.0: "Tier 3 · 공신력 하",
+    4.0: "Tier 4 · 공신력 최하",
+}
+
+
+def tier_key(tier) -> str:
+    """data-tier · facet data-value · URL ?tier= 가 공유하는 표기.
+    app.js 가 문자열 동등 비교를 하므로 포매터는 여기 하나만 둔다."""
+    if tier is None:
+        return ""
+    return f"{float(tier):g}"               # 1.0 -> "1" · 1.5 -> "1.5"
 
 
 def tier_label(tier) -> str:
     if tier is None:
-        return "tier ?"
-    return f"tier {int(tier)}"
+        return "Tier ?"
+    return f"Tier {tier_key(tier)}"
 
 
 def neighbor_window(n: int, idx: int, size: int = 5) -> tuple[int, int]:
@@ -80,15 +105,91 @@ def journalist_entry(row: dict, sources: dict, directory: dict | None) -> dict |
     return {"name": name, "label": label, "registered": registered}
 
 
-def facet_counts(articles: list[dict], sources: dict, directory: dict | None = None) -> dict:
+def _outlet_tier(key: str, row: dict, sources: dict, registry) -> float | None:
+    """등재 tier 우선, 없으면 소스 설정 tier (spec §3.4)."""
+    if registry is not None:
+        t = registry.outlets.get(key.lower())
+        if t is not None:
+            return float(t)
+    t = sources.get(row.get("source_id"), {}).get("tier")
+    return float(t) if t is not None else None
+
+
+def _journalist_tier(row: dict, entry: dict, registry) -> float | None:
+    if not entry["registered"] or registry is None:
+        return None
+    j = (row.get("journalist") or "").strip().lower()
+    t = registry.journalists.get(j)
+    if t is None:
+        t = registry.journalists.get(entry["name"].lower())
+    return float(t) if t is not None else None
+
+
+def _facet_rows(counts: Counter, labels: dict, tiers: dict) -> dict:
+    """tier 그룹 · 더보기 단계로 나눈 facet 뷰모델 (spec §3.1 · §3.2).
+    TIER_ORDER 에 없는 tier (설정 오류) 는 미등재로 흘려보낸다."""
+    def _item(n, c):
+        return {"value": n, "label": labels.get(n, n), "count": c}
+
+    def _sorted(pairs):
+        return [_item(n, c) for n, c in sorted(pairs, key=lambda kv: kv[0].lower())]
+
+    reg = [(n, c) for n, c in counts.items() if tiers.get(n) in TIER_ORDER]
+    unreg = _sorted([(n, c) for n, c in counts.items() if tiers.get(n) not in TIER_ORDER])
+
+    groups = {t: {"key": tier_key(t), "heading": TIER_HEADINGS[t],
+                  "items": _sorted([x for x in reg if tiers[x[0]] == t])}
+              for t in TIER_ORDER}
+
+    initial = [groups[t] for t in TIER_ORDER
+               if t <= INITIAL_MAX_TIER and groups[t]["items"]]
+
+    rest = [t for t in TIER_ORDER if t > INITIAL_MAX_TIER]
+    stages = []
+    for t in rest:
+        g = groups[t]
+        is_last = (t == rest[-1])
+        tail = unreg if is_last else []
+        if not g["items"] and not tail:
+            continue                        # 빈 tier 는 단계에서 건너뛴다
+        if g["items"] and tail:
+            label = f"더보기 · Tier {tier_key(t)} · 미등재"
+        elif g["items"]:
+            label = f"더보기 · Tier {tier_key(t)}"
+        else:
+            label = "더보기 · 미등재"
+        stages.append({"label": label,
+                       "groups": [g] if g["items"] else [],
+                       "unregistered": tail})
+    return {"initial": initial, "stages": stages}
+
+
+def facet_counts(articles: list[dict], sources: dict, directory: dict | None = None,
+                 registry=None) -> dict:
     teams = Counter(a.get("team") or "arsenal" for a in articles)
-    outlet_ctr = Counter(outlet_display(a, sources) for a in articles)
-    outlets = sorted(outlet_ctr.items(), key=lambda kv: (-kv[1], kv[0]))
-    tiers = {t: 0 for t in range(5)}
+
+    o_ctr: Counter = Counter()
+    o_tier: dict = {}
     for a in articles:
-        t = a.get("tier")
-        if t is not None and 0 <= int(t) <= 4:
-            tiers[int(t)] += 1
+        key = outlet_display(a, sources)
+        o_ctr[key] += 1
+        o_tier[key] = _outlet_tier(key, a, sources, registry)
+
+    j_ctr: Counter = Counter()
+    j_labels: dict = {}
+    j_tier: dict = {}
+    for a in articles:
+        e = journalist_entry(a, sources, directory)
+        if e is None:
+            continue
+        j_ctr[e["name"]] += 1
+        j_labels[e["name"]] = e["label"]
+        j_tier[e["name"]] = _journalist_tier(a, e, registry)
+
+    seen = Counter(tier_key(a.get("tier")) for a in articles if a.get("tier") is not None)
+    tiers = [{"key": tier_key(t), "label": tier_label(t), "count": seen.get(tier_key(t), 0)}
+             for t in TIER_ORDER]
+
     stage_counts = {e: 0 for e, _, _ in _stage.SIDEBAR_STAGES}
     other_count = 0
     for a in articles:
@@ -98,31 +199,17 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
         else:
             other_count += 1
 
-    reg_ctr: Counter = Counter()
-    more_ctr: Counter = Counter()
-    labels: dict[str, str] = {}
-    for a in articles:
-        e = journalist_entry(a, sources, directory)
-        if e is None:
-            continue
-        (reg_ctr if e["registered"] else more_ctr)[e["name"]] += 1
-        labels[e["name"]] = e["label"]
-
-    def _ranked(ctr: Counter) -> list[tuple[str, str, int]]:
-        return [(n, labels[n], c)
-                for n, c in sorted(ctr.items(), key=lambda kv: (-kv[1], kv[0]))]
-
     return {"total": len(articles), "team": dict(teams),
-            "outlets": outlets, "tiers": tiers, "stage": stage_counts,
-            "other": other_count,
-            "journalists": {"registered": _ranked(reg_ctr), "more": _ranked(more_ctr)}}
+            "tiers": tiers, "stage": stage_counts, "other": other_count,
+            "outlets": _facet_rows(o_ctr, {}, o_tier),
+            "journalists": _facet_rows(j_ctr, j_labels, j_tier)}
 
 # ---- 운영 뷰 (ops.html) 뷰모델 ----
 # 지표 정의 · 데이터 계약: docs/superpowers/specs/2026-07-14-ops-monitoring-view-design.md §5 · §6
 
-TIER_BUCKETS = [(1.0, "Tier 1 — 공식 · 1군 언론"),
-                (2.0, "Tier 2 — 2군 · 애그리게이터"),
-                (3.0, "Tier 3 — ITK · 루머")]
+TIER_BUCKETS = [(1.0, "Tier 1 — 공식 · 공신력 최상"),
+                (2.0, "Tier 2 — 공신력 중"),
+                (3.0, "Tier 3 — 공신력 하")]
 ETC_TIER_LABEL = "기타 (0 · 1.5 · 4)"
 
 
@@ -295,6 +382,7 @@ def _decorate(row: dict, sources: dict, now: datetime,
     a["_title"] = row.get("title_ko") or row.get("title_original") or ""
     a["_outlet"] = outlet_display(row, sources)
     a["_tier_label"] = tier_label(row.get("tier"))
+    a["_tier_key"] = tier_key(row.get("tier"))
     pub = row.get("published_at")
     a["_when"] = humanize_when(pub, now) if pub else ""
     a["_published_iso"] = pub.isoformat() if pub else ""
@@ -334,10 +422,10 @@ def _sorted_latest(articles: list[dict]) -> list[dict]:
 
 
 def render_index(articles: list[dict], sources: dict, now: datetime,
-                 directory: dict | None = None) -> str:
+                 directory: dict | None = None, registry=None) -> str:
     ordered = [_decorate(a, sources, now, directory=directory)
                for a in _sorted_latest(articles)]
-    facets = facet_counts(articles, sources, directory=directory)
+    facets = facet_counts(articles, sources, directory=directory, registry=registry)
     return _env().get_template("index.html.j2").render(
         articles=ordered, facets=facets, active="home", root="")
 
@@ -357,9 +445,9 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
                    sources: dict, now: datetime, facets: dict | None = None) -> str:
     # facets=None이면 빈 구조로 폴백 (하위 호환 유지)
     if facets is None:
-        facets = {"team": {}, "outlets": [], "tiers": {t: 0 for t in range(5)},
-                  "total": 0, "stage": {}, "other": 0,
-                  "journalists": {"registered": [], "more": []}}
+        facets = {"team": {}, "tiers": [], "total": 0, "stage": {}, "other": 0,
+                  "outlets": {"initial": [], "stages": []},
+                  "journalists": {"initial": [], "stages": []}}
     article = dict(article)
     paras = [p for p in (article.get("body_ko") or "").split("\n") if p.strip()]
     article["_body_blocks"] = interleave_body(paras, article.get("_images") or [])
@@ -369,18 +457,19 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
 
 def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
                now: datetime | None = None,
-               directory: dict | None = None) -> None:
+               directory: dict | None = None, registry=None) -> None:
     """인덱스·상세 N개·정적 자산을 out_dir에 일괄 생성한다."""
     now = now or datetime.utcnow()
     out = Path(out_dir)
     (out / "article").mkdir(parents=True, exist_ok=True)
 
     (out / "index.html").write_text(
-        render_index(articles, sources, now, directory=directory), encoding="utf-8")
+        render_index(articles, sources, now, directory=directory, registry=registry),
+        encoding="utf-8")
 
     ordered = _sorted_latest(articles)
     # 패싯은 전체 기사 기준으로 한 번만 계산해 모든 상세 페이지에 전달
-    facets = facet_counts(articles, sources, directory=directory)
+    facets = facet_counts(articles, sources, directory=directory, registry=registry)
     for idx, row in enumerate(ordered):
         a = _decorate(row, sources, now, directory=directory)
         neighbors = build_neighbors(ordered, idx, sources, now, directory=directory)

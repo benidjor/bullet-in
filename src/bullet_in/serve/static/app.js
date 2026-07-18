@@ -27,10 +27,22 @@ const enabledBoxes = () => [...side.querySelectorAll('input[type=checkbox]:not([
 const checkedValues = (group) =>
   enabledBoxes().filter(c => c.dataset.group === group && c.checked).map(c => c.dataset.value);
 
-// 기자 더보기 토글 — 미등재 기자는 접힌 채 시작
-const jmore = document.getElementById('jmore'), jmoreBtn = document.getElementById('jmoreBtn');
-const expandMore = () => { if (jmore) jmore.hidden = false; if (jmoreBtn) jmoreBtn.hidden = true; };
-if (jmoreBtn) jmoreBtn.onclick = expandMore;
+// tier 단계 더보기 — 초기 Tier 1.5 까지, 클릭마다 다음 단계 (spec §3.2)
+function setupMore(scope) {
+  const stages = [...scope.querySelectorAll('.morestage')];
+  const btns = [...scope.querySelectorAll('.morebtn')];
+  let open = 0;                                  // 열린 단계 수
+  const sync = () => {
+    stages.forEach((s, i) => { s.hidden = i >= open; });
+    btns.forEach((b, i) => { b.hidden = i !== open; });
+  };
+  btns.forEach((b, i) => { b.onclick = () => { open = i + 1; sync(); }; });
+  // 접힌 단계에 체크된 필터가 있으면 거기까지 펼친다 (보이지 않는 필터 방지)
+  stages.forEach((s, i) => { if (s.querySelector('input:checked')) open = Math.max(open, i + 1); });
+  sync();
+}
+const setupAllMore = () =>
+  document.querySelectorAll('.facetgroup').forEach(setupMore);
 
 function filterParams() {
   const p = new URLSearchParams();
@@ -55,8 +67,6 @@ function restoreFromQuery() {
   const sortBox = side.querySelector(`input[name=sort][data-value=${sort}]`);
   if (sortBox) sortBox.checked = true;
   if (searchInput) searchInput.value = p.get('q') || '';
-  // 접힌 더보기 안의 기자가 선택돼 있으면 펼친다 (보이지 않는 필터 방지)
-  if (jmore && jmore.querySelector('input:checked')) expandMore();
   return true;
 }
 
@@ -116,12 +126,13 @@ if (grid) {
     applyFilters();
   };
   if (searchInput) searchInput.addEventListener('input', applyFilters);
-  if (restoreFromQuery()) applyFilters();  // 상세에서 넘어온 필터 상태 복원 · 적용
-  else sortCards();                        // 초기 정렬(최신순)
+  if (restoreFromQuery()) { setupAllMore(); applyFilters(); }  // 상세에서 넘어온 필터 상태 복원 · 적용
+  else { setupAllMore(); sortCards(); }                        // 초기 정렬(최신순)
 } else {
   // 상세 페이지: 카드가 없다 → 필터 적용은 필터된 인덱스로 이동 (spec ③).
   // 인덱스 경로는 로고 링크에서 얻는다 (Jinja root 를 JS 로 넘기지 않기 위함).
   const indexHref = document.querySelector('.logo')?.getAttribute('href') || 'index.html';
+  setupAllMore();
   if (side) side.addEventListener('change', () => applyBtn && applyBtn.classList.add('dirty'));
   if (applyBtn) applyBtn.onclick = () => {
     const qs = filterParams().toString();

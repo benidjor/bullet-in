@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 STATIC = Path("src/bullet_in/serve/static")
@@ -9,13 +10,25 @@ def test_static_assets_exist_and_nonempty():
     assert ".card" in css and ".side" in css
     assert "s-interest" in css and "s-personal" in css  # 신규 단계 점 색
     assert ".morebtn" in css                           # 기자 더보기 버튼
+    # .morebtn 은 display:block 을 선언해 브라우저 기본 [hidden]{display:none} 을
+    # 덮어쓴다 (작성자 스타일 > UA 스타일, 특정도 무관). JS 가 hidden 속성을
+    # 정확히 설정해도 화면에서 숨지 않는 결함 — 작성자 스타일 안에서 다시
+    # [hidden]{display:none} 을 명시해야 한다.
+    # 한계: pytest 는 브라우저를 띄우지 않으므로 이 규칙이 "존재"하는지만
+    # 검사할 수 있다 — 계산된 display 값 · 실제 화면 표시 여부는 검증하지
+    # 못하며, 그건 실브라우저(Playwright)로만 확인 가능하다.
+    assert re.search(r"\.morebtn\[hidden\]\s*\{[^}]*display\s*:\s*none", css), (
+        ".morebtn[hidden]{display:none} 규칙이 없음 — 더보기 버튼이 hidden "
+        "속성으로 숨지 않는 결함"
+    )
     assert "data-outlet" in js and "data-tier" in js   # 카드 필터 계약
     assert "data-stage" in js                          # 단계 필터 계약
     assert "localStorage" in js                        # 테마 영속
     assert "journalist" in js                          # 기자 필터 계약
     assert "URLSearchParams" in js                     # 필터 상태 URL 직렬화
     assert "replaceState" in js                        # 인덱스 URL 동기화
-    assert "jmoreBtn" in js                            # 더보기 토글
+    assert "morestage" in js and "facetgroup" in js    # tier 단계 전개 계약
+    assert "jmore" not in js                           # 옛 이분법 토글 제거
 
 
 from datetime import datetime
@@ -60,7 +73,7 @@ def test_index_sorts_latest_first():
 
 def test_index_renders_active_stage_filter():
     html = render_index([_row(), _row(content_hash="h2")], SOURCES, NOW)
-    assert "tier 2" in html
+    assert "Tier 2" in html
     # 영입 단계 필터가 활성 (2-b): 체크박스 + data-group="stage"
     assert "영입 단계" in html
     assert 'data-group="stage"' in html
@@ -342,23 +355,76 @@ def test_index_card_journalist_attr_empty_when_missing():
     assert 'data-journalist=""' in html
 
 
-def test_sidebar_shows_registered_journalists_and_more_toggle():
-    rows = [_row(content_hash="h1", journalist="온스테인"),
-            _row(content_hash="h2", journalist="Kaya Kaynak"),
-            _row(content_hash="h3", journalist="Kaya Kaynak")]
-    directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
-    html = render_index(rows, SOURCES, NOW, directory=directory)
-    assert "기자" in html
-    # 등재 기자는 바로 노출
-    assert 'data-group="journalist" data-value="David Ornstein"' in html
-    assert "David Ornstein (The Athletic)" in html
-    # 미등재는 더보기 토글 뒤
-    assert 'id="jmore"' in html and 'id="jmoreBtn"' in html
-    assert "더보기 1명" in html
-    assert html.index('id="jmore"') < html.index('data-value="Kaya Kaynak"')
+def _journalist_facet_section(html: str) -> str:
+    """사이드바 '기자' 견출부터 다음 <h4> 전까지 — 기자 facet 만 스코프.
+    언론사 facet 도 같은 .morestage/.morebtn 마크업을 쓰므로 전체 html 로 보면 오검출된다."""
+    start = html.index("<h4>기자</h4>")
+    end = html.index("<h4>", start + 1)
+    return html[start:end]
 
 
 def test_sidebar_omits_more_toggle_when_all_registered():
     directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
-    html = render_index([_row(journalist="온스테인")], SOURCES, NOW, directory=directory)
-    assert 'id="jmoreBtn"' not in html
+
+    class _Reg:
+        outlets = {}
+        journalists = {"온스테인": 1.0, "david ornstein": 1.0}
+
+    # 등재 기자만 있고 tier 가 초기 노출 상한(1.5) 이내 → 미등재/더보기 단계가 없어야 함
+    html = render_index([_row(journalist="온스테인")], SOURCES, NOW,
+                        directory=directory, registry=_Reg())
+    section = _journalist_facet_section(html)
+    assert "morestage" not in section
+    assert "morebtn" not in section
+
+
+def test_journalist_facet_data_value_matches_card_data_journalist():
+    """app.js:75 의 journalists.includes(card.dataset.journalist) 는 문자열 동등 비교다.
+    facet 체크박스의 data-value 가 표시 라벨(괄호 소속 포함)이 아니라 카드의
+    data-journalist 와 같은 정규화 이름이어야 필터가 실제로 걸린다."""
+    rows = [_row(content_hash="h1", journalist="온스테인"),
+            _row(content_hash="h2", journalist="Hugo Guillemet")]
+    directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
+    html = render_index(rows, SOURCES, NOW, directory=directory)
+
+    card_values = set(_re.findall(r'data-journalist="([^"]*)"', html))
+    card_values.discard("")  # 기자 미상 카드는 빈 문자열
+
+    section = _journalist_facet_section(html)
+    facet_values = set(_re.findall(r'data-group="journalist" data-value="([^"]*)"', section))
+
+    assert card_values == {"David Ornstein", "Hugo Guillemet"}  # 픽스처가 실제로 기자 카드를 만들었는지 확인
+    assert card_values == facet_values
+
+
+def test_sidebar_renders_tier_heading_and_initial_only():
+    rows = [_row(content_hash="h1", journalist="온스테인", outlet="The Athletic", tier=1),
+            _row(content_hash="h2", journalist="Kaya Kaynak", outlet="The Sun", tier=4),
+            _row(content_hash="h3", journalist="Kaya Kaynak", outlet="afcstuff", tier=4)]
+    directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
+
+    class _Reg:
+        outlets = {"the athletic": 1.0, "the sun": 4.0}
+        journalists = {"온스테인": 1.0, "david ornstein": 1.0}
+
+    html = render_index(rows, SOURCES, NOW, directory=directory, registry=_Reg())
+    assert "Tier 1 · 공신력 최상" in html
+    assert 'data-group="outlet" data-value="The Athletic"' in html
+    # Tier 4 는 접힌 단계 안에 있고 버튼이 그것을 예고한다
+    assert "더보기 · Tier 4 · 미등재" in html
+    assert 'class="morestage"' in html
+
+def test_index_card_data_tier_keeps_one_point_five():
+    html = render_index([_row(tier=1.5)], SOURCES, NOW)
+    assert 'data-tier="1.5"' in html
+
+def test_sidebar_tier_facet_lists_one_point_five():
+    html = render_index([_row(tier=1.5)], SOURCES, NOW)
+    assert 'data-group="tier" data-value="1.5"' in html
+    assert "Tier 1.5" in html
+
+def test_layout_emits_no_whitespace_before_doctype():
+    """매크로 정의를 {% endmacro %} 로 닫으면 개행이 새어나와 doctype 앞에 붙는다.
+    눈에 안 띄는 회귀라 고정한다 — {% endmacro -%} 를 쓸 것."""
+    html = render_index([_row()], SOURCES, NOW)
+    assert html.startswith("<!doctype html>")
