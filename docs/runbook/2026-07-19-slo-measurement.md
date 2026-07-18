@@ -92,7 +92,60 @@ mart 전체        : 358건
 ## 5. 재측정 절차
 
 1. 종단 회차 1회 실행 (fmkorea 2h 규칙 확인 후).
-2. 미번역 잔존 확인 — 잔존이 있으면 enrich 전용 패스로 수렴시킨 뒤 측정 (§3 선례).
+2. 미번역 잔존 확인 — 잔존이 있으면 enrich 전용 패스로 수렴시킨 뒤 측정 (`2026-07-19-enrich-only-pass.md`).
 3. §2 명령 실행 → README §4 실측 컬럼 갱신 (값 + 날짜 + 방법).
 4. 목표 미달 값은 그대로 기입하고 각주로 사유를 단다
 — 목표 재조정은 사용자 확인 후에만 (SLO-1 의 ≥ 55% 재조정 선례).
+
+## 6. README 캡처 재촬영
+
+README 상단 캡처 2장 (인덱스 · 상세) 의 재촬영 절차.
+실측과 같은 회차 상태에서 촬영한다 (§1) — bbc_gossip 썸네일 등 서빙 개선 트랙 머지 후 갱신할 때 이 절차를 쓴다.
+
+**규격 (2026-07-19 기준)**
+
+- 인덱스: 뷰포트 1440 × 1200 — 높이 900 이면 기자 facet (트랙 ① 산출물) 이 짤려 1200 으로 확정.
+- 상세: 뷰포트 1440 × 900 — 히어로 · 배지 · 기자 바이라인 · 3줄 요약이 잡히는 상단.
+- 공통: Playwright 헤드리스 chromium · `color_scheme="light"` · http 로컬 서빙 (file:// 금지 — 브라우저 검증 런북 §2.3 계약).
+
+**상세 대상 기사 선별** — 기자 바이라인 · 인라인 이미지 · 3줄 요약이 모두 있는 최신 기사.
+
+```sql
+SELECT content_hash, title_ko, journalist FROM articles
+WHERE journalist IS NOT NULL AND images_json IS NOT NULL
+  AND summary3_ko IS NOT NULL AND body_ko IS NOT NULL
+ORDER BY published_at DESC LIMIT 5;
+```
+
+**촬영 스크립트**
+
+```bash
+uv run python - <<'EOF'
+import functools, http.server, socketserver, threading
+from playwright.sync_api import sync_playwright
+
+TARGET = "<위 쿼리에서 고른 content_hash>"
+socketserver.TCPServer.allow_reuse_address = True
+srv = socketserver.TCPServer(
+    ("127.0.0.1", 8731),
+    functools.partial(http.server.SimpleHTTPRequestHandler, directory="site"))
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+with sync_playwright() as p:
+    pg = p.chromium.launch().new_page(
+        viewport={"width": 1440, "height": 1200}, color_scheme="light")
+    pg.goto("http://127.0.0.1:8731/index.html")
+    pg.wait_for_load_state("networkidle")
+    pg.screenshot(path="docs/assets/serving-page-live.png")
+    pg.set_viewport_size({"width": 1440, "height": 900})
+    pg.goto(f"http://127.0.0.1:8731/article/{TARGET}.html")
+    pg.wait_for_load_state("networkidle")
+    pg.screenshot(path="docs/assets/article-detail-live.png")
+srv.shutdown()
+EOF
+```
+
+**눈검수 체크** — 커밋 전 두 PNG 를 열어 확인한다.
+
+- 인덱스: 언론사 facet tier 그룹 헤더 (TIER 0~1.5 + 더보기) · 기자 facet 항목 · 카드 그리드가 보이는가.
+- 상세: 히어로 이미지 로드 (핫링크 실패 시 다른 후보로 교체) · 배지 · 바이라인 · 3줄 요약이 보이는가.
+- 촬영 전 사이트가 최신 데이터로 재생성됐는가 (`write_site` — enrich 전용 패스 런북 §4).
