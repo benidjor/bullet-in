@@ -53,6 +53,9 @@ async def main(concurrency: int):
     mart = MartStore(engine)
     mart.ensure_schema()
     arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
+    logging.getLogger(__name__).info(
+        "drop 집계 — 중복 %d · 여자팀 %d · 기자 allowlist %d",
+        stats["dup_count"], stats["women_count"], stats["author_drop_count"])
     mart.upsert(arts)
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
