@@ -4,11 +4,13 @@
 
 *Bullet-in = bulletin (단신) + bullet (병기고 Arsenal)의 언어유희.*
 
-![Bullet-in 서빙 페이지 — 샘플 데이터(v1 뷰)](docs/assets/serving-page-sample.png)
+![Bullet-in 인덱스 — 실데이터](docs/assets/serving-page-live.png)
 
-> 샘플 데이터로 렌더한 v1 뷰 (스타일 미적용). 신뢰도 (tier) 순 정렬 + 한국어 번역 · 요약.
-<!-- 라이브 e2e 후 실데이터 화면 캡처 → docs/assets/serving-page-live.png 저장 후 아래 주석 해제 -->
-<!-- ![Bullet-in 서빙 페이지 — 실데이터](docs/assets/serving-page-live.png) -->
+> 실데이터 인덱스. 신뢰도 (tier) 순 정렬 · 언론사 · 기자 facet 필터 · 한국어 번역 · 요약.
+
+![Bullet-in 기사 상세 — 실데이터](docs/assets/article-detail-live.png)
+
+> 기사 상세. 3줄 요약 · 본문 전문 번역 · 인라인 이미지 · 기자 바이라인.
 
 ---
 
