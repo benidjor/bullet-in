@@ -182,3 +182,50 @@ def test_to_articles_keeps_source_tier_for_unregistered_journalist():
                                    "outlet": "football.london"}}
     arts, _ = to_articles(raw, sources, seen={}, registry=REG)
     assert arts[0].journalist == "Raff Tindale" and arts[0].tier == 4.0
+
+def test_to_articles_allowlist_drops_other_journalists():
+    now = datetime.now(timezone.utc)
+    raw = [
+        RawItem(source_id="football_london", source_type="html", url="https://y.test/c1",
+                fetched_at=now, raw_payload={"title": "Arsenal transfer latest",
+                                             "authors": ["Tom Canton"]}),
+        RawItem(source_id="football_london", source_type="html", url="https://y.test/c2",
+                fetched_at=now, raw_payload={"title": "Arsenal deal news",
+                                             "authors": ["Jake Stokes"]}),
+    ]
+    sources = {"football_london": {"source_id": "football_london", "tier": 4,
+                                   "journalist_allowlist": ["Tom Canton"]}}
+    arts, stats = to_articles(raw, sources, seen={}, registry=REG)
+    assert [a.url for a in arts] == ["https://y.test/c1"]
+    assert stats["author_drop_count"] == 1
+
+def test_to_articles_allowlist_coauthor_with_canton_survives():
+    # select_journalist 가 등재 기자(Canton, credibility.yaml)를 우선 선정 → 공저 생존
+    now = datetime.now(timezone.utc)
+    raw = [RawItem(source_id="football_london", source_type="html", url="https://y.test/c3",
+                   fetched_at=now, raw_payload={"title": "Arsenal news",
+                                                "authors": ["Jake Stokes", "Tom Canton"]})]
+    sources = {"football_london": {"source_id": "football_london", "tier": 4,
+                                   "journalist_allowlist": ["Tom Canton"]}}
+    arts, _ = to_articles(raw, sources, seen={}, registry=REG)
+    assert len(arts) == 1 and arts[0].journalist == "Tom Canton"
+
+def test_to_articles_allowlist_drops_journalist_none():
+    # 상세 fetch 실패 · 저자 부재 → Canton 확인 불가 → drop (seen 미기록 → 다음 회차 재시도)
+    raw = [RawItem(source_id="football_london", source_type="html", url="https://y.test/c4",
+                   fetched_at=datetime.now(timezone.utc),
+                   raw_payload={"title": "Arsenal transfer latest"})]
+    sources = {"football_london": {"source_id": "football_london", "tier": 4,
+                                   "journalist_allowlist": ["Tom Canton"]}}
+    arts, stats = to_articles(raw, sources, seen={}, registry=REG)
+    assert arts == [] and stats["author_drop_count"] == 1
+
+def test_to_articles_no_allowlist_source_unaffected():
+    raw = [RawItem(source_id="bbc_sport", source_type="html", url="https://x.test/b1",
+                   fetched_at=datetime.now(timezone.utc),
+                   raw_payload={"title": "Arsenal sign Rice",
+                                "authors": ["Alastair Telfer"]})]
+    sources = {"bbc_sport": {"source_id": "bbc_sport", "tier": 1}}
+    arts, stats = to_articles(raw, sources, seen={}, registry=REG)
+    assert len(arts) == 1
+    assert stats["author_drop_count"] == 0

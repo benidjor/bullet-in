@@ -47,12 +47,17 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
     local_seen = dict(seen)
     dup_count = 0
     women_count = 0
+    author_drop_count = 0
     source_counts: dict[str, int] = {}
     # fmkorea(발견 소스)는 같은 원문 URL 에서 EN/X 보다 후순위 → first-seen 이 EN/X 가 되게 정렬
     raw = sorted(raw, key=lambda it: 1 if it.source_id == "fmkorea" else 0)
     for item in raw:
         src = sources.get(item.source_id, {})
         journalist = select_journalist(item, src, registry)
+        allowlist = src.get("journalist_allowlist")
+        if allowlist and journalist not in allowlist:
+            author_drop_count += 1     # 전담 외 기자 · 저자 미상 drop (spec §3.1)
+            continue
         tier = resolve_tier(item, sources, registry, journalist=journalist)
         if tier is None:
             continue
@@ -82,4 +87,4 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
             revision=rev))
         source_counts[item.source_id] = source_counts.get(item.source_id, 0) + 1
     return out, {"dup_count": dup_count, "source_counts": source_counts,
-                 "women_count": women_count}
+                 "women_count": women_count, "author_drop_count": author_drop_count}

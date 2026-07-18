@@ -64,6 +64,7 @@ sources:
     outlet: football.london
     medium: newspaper
     adapter: html
+    journalist_allowlist: ["Tom Canton"]   # 아스날 전담 외 기자 drop (spec §3.1)
     config:
       list_url: "https://www.football.london/arsenal-fc/"
       item_selector: "a.headline"
