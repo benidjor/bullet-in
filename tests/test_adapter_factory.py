@@ -61,3 +61,11 @@ def test_factory_passes_title_selector_to_html():
                        "title_selector": "span[class*='LinkPostHeadline']"}}]}
     a = build_adapters(cfg)[0]
     assert isinstance(a, HtmlAdapter) and a.title_selector == "span[class*='LinkPostHeadline']"
+
+def test_factory_passes_thumbnail_only_to_html():
+    from bullet_in.adapters.html import HtmlAdapter
+    cfg = {"sources": [{"source_id": "bbc_gossip", "adapter": "html",
+                        "config": {"list_url": "https://x", "item_selector": "a",
+                                   "thumbnail_only": True}}]}
+    a = build_adapters(cfg)[0]
+    assert isinstance(a, HtmlAdapter) and a.thumbnail_only is True

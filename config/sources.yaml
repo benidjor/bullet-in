@@ -43,6 +43,7 @@ sources:
     config:
       list_url: "https://www.bbc.com/sport/football/gossip"
       item_selector: "a[href*='/sport/football/articles/']"
+      thumbnail_only: true   # og:image 만 경량 상세 방문 (spec §3.3)
     enabled: true
   - source_id: goal
     display_name: Goal.com
@@ -64,6 +65,7 @@ sources:
     outlet: football.london
     medium: newspaper
     adapter: html
+    journalist_allowlist: ["Tom Canton"]   # 아스날 전담 외 기자 drop (spec §3.1)
     config:
       list_url: "https://www.football.london/arsenal-fc/"
       item_selector: "a.headline"

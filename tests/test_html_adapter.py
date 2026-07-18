@@ -162,3 +162,52 @@ def test_html_adapter_authors_absent_when_detail_fetch_fails():
                     body_selector=".article-body")
     items = asyncio.run(a.fetch())
     assert items[0].raw_payload.get("authors", []) == []
+
+@respx.mock
+def test_html_adapter_thumbnail_only_fetches_og_image_only():
+    list_html = '<a class="card" href="/a">Gossip roundup</a>'
+    detail = ('<html><head><meta property="og:image" content="https://img.test/t.jpg">'
+              '</head><body><article><p>Body text.</p>'
+              '<script type="application/ld+json">{"@type":"NewsArticle",'
+              '"author":{"@type":"Person","name":"Some Writer"}}</script>'
+              '</article></body></html>')
+    respx.get("https://a.test/gossip").mock(return_value=httpx.Response(200, text=list_html))
+    respx.get("https://a.test/a").mock(return_value=httpx.Response(200, text=detail))
+    a = HtmlAdapter(source_id="bbc_gossip", list_url="https://a.test/gossip",
+                    item_selector="a.card", base_url="https://a.test",
+                    thumbnail_only=True)
+    items = asyncio.run(a.fetch())
+    assert len(items) == 1
+    assert items[0].raw_payload["image_url"] == "https://img.test/t.jpg"
+    # 본문 · 인라인 이미지 · 저자는 추출하지 않는다 (spec §3.3 — 번역 비용 무변경)
+    assert "body" not in items[0].raw_payload
+    assert "images" not in items[0].raw_payload
+    assert "authors" not in items[0].raw_payload
+
+@respx.mock
+def test_html_adapter_thumbnail_only_keeps_title_on_detail_failure():
+    list_html = '<a class="card" href="/a">Gossip roundup</a>'
+    respx.get("https://a.test/gossip").mock(return_value=httpx.Response(200, text=list_html))
+    respx.get("https://a.test/a").mock(return_value=httpx.Response(500))
+    a = HtmlAdapter(source_id="bbc_gossip", list_url="https://a.test/gossip",
+                    item_selector="a.card", base_url="https://a.test",
+                    thumbnail_only=True)
+    items = asyncio.run(a.fetch())
+    assert len(items) == 1
+    assert items[0].raw_payload["title"] == "Gossip roundup"
+    assert "image_url" not in items[0].raw_payload
+
+@respx.mock
+def test_html_adapter_body_selector_takes_precedence_over_thumbnail_only():
+    # body_selector 가 있으면 풀 수집 경로 그대로 — thumbnail_only 는 무시 (spec §3.3)
+    list_html = '<a class="card" href="/a">Arsenal sign Gyokeres</a>'
+    detail = ('<html><head><meta property="og:image" content="https://img.test/g.jpg">'
+              '</head><body><div class="article-body"><p>Deal done.</p></div></body></html>')
+    respx.get("https://a.test/news").mock(return_value=httpx.Response(200, text=list_html))
+    respx.get("https://a.test/a").mock(return_value=httpx.Response(200, text=detail))
+    a = HtmlAdapter(source_id="bbc_sport", list_url="https://a.test/news",
+                    item_selector="a.card", base_url="https://a.test",
+                    body_selector=".article-body", thumbnail_only=True)
+    items = asyncio.run(a.fetch())
+    assert items[0].raw_payload["body"] == "Deal done."
+    assert items[0].raw_payload["image_url"] == "https://img.test/g.jpg"
