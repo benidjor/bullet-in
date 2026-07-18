@@ -4,11 +4,13 @@
 
 *Bullet-in = bulletin (단신) + bullet (병기고 Arsenal)의 언어유희.*
 
-![Bullet-in 서빙 페이지 — 샘플 데이터(v1 뷰)](docs/assets/serving-page-sample.png)
+![Bullet-in 인덱스 — 실데이터](docs/assets/serving-page-live.png)
 
-> 샘플 데이터로 렌더한 v1 뷰 (스타일 미적용). 신뢰도 (tier) 순 정렬 + 한국어 번역 · 요약.
-<!-- 라이브 e2e 후 실데이터 화면 캡처 → docs/assets/serving-page-live.png 저장 후 아래 주석 해제 -->
-<!-- ![Bullet-in 서빙 페이지 — 실데이터](docs/assets/serving-page-live.png) -->
+> 실데이터 인덱스. 신뢰도 (tier) 순 정렬 · 언론사 · 기자 facet 필터 · 한국어 번역 · 요약.
+
+![Bullet-in 기사 상세 — 실데이터](docs/assets/article-detail-live.png)
+
+> 기사 상세. 3줄 요약 · 본문 전문 번역 · 인라인 이미지 · 기자 바이라인.
 
 ---
 
@@ -25,7 +27,7 @@
 ![아키텍처 — 수집 파이프라인](docs/assets/architecture.png)
 
 ```
-[Ingest]    소스별 어댑터 (RSS · Guardian API · httpx+파서 · Playwright · twikit)
+[Ingest]    소스별 어댑터 (RSS · Guardian API · httpx+파서 · Playwright (X 쿠키) · fmkorea 검색)
    │        단일 SourceAdapter 인터페이스 / asyncio 팬아웃 병렬
    ▼
 [Normalize] pydantic 정규화
@@ -38,23 +40,25 @@
    ▼
 [Load mart] MariaDB (정형 mart, UNIQUE dedup, 서빙)
    ▼
-[Enrich]    LLM 번역(한국어) + 요약 (신규 항목만, 멱등)
+[Enrich]    LLM 번역(한국어) + 요약 + 영입 단계 분류 (신규 항목만, 멱등)
    ▼
 [Quality]   dbt(DuckDB가 MariaDB attach) build + test = 품질 게이트
    ▼ (통과 시)
 [Serve]     신뢰도순 정적 HTML
 
-오케스트레이션: Airflow (2.9 구축 → 3.0 마이그레이션) 가 전 단계를 일간 조율
+오케스트레이션: Airflow (2.9 구축 → 3.0 마이그레이션) 가 전 단계를 하루 4회 조율
 ```
 
 ## 3. 핵심 기능
 
-- **이종 소스 통합** — RSS · REST API · 정적 HTML · JS 렌더링 · X (트위터)를 단일 어댑터 인터페이스 뒤로. 소스별 최적 도구 선택 (정적=httpx, API=Guardian, 동적=Playwright, X=twikit).
+- **이종 소스 통합** — RSS · REST API · 정적 HTML · JS 렌더링 · X (트위터)를 단일 어댑터 인터페이스 뒤로. 소스별 최적 도구 선택 (정적=httpx, API=Guardian, X=쿠키 주입 Playwright).
 - **병렬 수집** — asyncio 팬아웃 + 소스별 실패 격리 (한 소스 실패가 전체를 멈추지 않음).
 - **공신력 스코어링** — Tier 0 (Arsenal.com 공식)~4 (타블로이드)를 YAML로 외부화, confidence로 정렬.
 - **중복제거 · 증분 · 변경 감지** — content_hash + URL 정규화, DB UNIQUE 제약으로 앱 · DB 이중 방어.
-- **LLM 번역 · 요약** — Gemini 2.5 Flash-Lite로 한국어 번역 · 한 줄 요약. 신규 항목만 처리해 멱등 · 저비용.
-- **데이터 품질 게이트** — dbt test (unique · not_null · accepted_values · freshness)로 "이상 점검"을 선언적으로.
+- **기자 단위 공신력 · 필터** — JSON-LD · meta 저자 추출, 소속 일치 시 기자 tier 우선 (min 가드), 언론사 · 기자 facet 필터 (tier 순 정렬).
+- **LLM 번역 · 요약** — Gemini 2.5 Flash-Lite로 제목 · 본문 전문 번역, 한 줄 · 3줄 요약, 영입 단계 분류. 신규 항목만 처리해 멱등 · 저비용.
+- **데이터 품질 게이트** — dbt test (unique · not_null · accepted_values)로 "이상 점검"을 선언적으로. 신선도는 자체 워터마크 감시 (SLO-5).
+- **관측성 · 알림** — 수집 현황 ops 뷰 (`site/ops.html`), 수집량 이상 · 신선도 · 파이프라인 실패 Discord 알림.
 
 **수집 소스** — 고정 tier 7종 + 항목별 동적 tier 2종 (X · 커뮤니티는 언급된 기자 · 매체의 공신력으로 산출). 언론 5종은 공통 이적 키워드 필터를 공유한다 (`config/sources.yaml`).
 
@@ -78,18 +82,19 @@
 | 1.5 | Fabrizio Romano (독립) · James McNicholas (The Athletic) · Art de Roché (The Athletic) · Dharmesh Sheth (Sky Sports) · handofarsnal (ITK) |
 | 2 | Amy Lawrence (The Athletic) · James Olley (ESPN) · Matt Law (The Telegraph) · Sam Dean (The Telegraph) · Teamnewsandtix (ITK) |
 | 3 | Charles Watts (독립) · Simon Collings (Evening Standard) · Gary Jacob (The Times) · Miguel Delaney (The Independent) · Gianluca Di Marzio (Sky Italia) · LatteFirm (ITK) |
+| 4 | Tom Canton (football.london) |
 
 ## 4. 정량 지표 (SLO)
 
-> 목표치와 측정 방법. 병렬화 실측 절차 · 로그는 [SLO-1 벤치마크 런북](docs/runbook/2026-07-14-slo1-benchmark.md).
+> 목표치와 측정 방법. 병렬화 실측 절차 · 로그는 [SLO-1 벤치마크 런북](docs/runbook/2026-07-14-slo1-benchmark.md), 나머지 4지표는 [SLO 측정 런북](docs/runbook/2026-07-19-slo-measurement.md).
 
 | 지표 | 목표 | 측정 방법 | 실측 |
 |---|---|---|---|
 | 병렬화 수집 시간 단축 | 순차 대비 ≥ 55%↓ (실측 기반 재조정¹) | `metrics.benchmark()` (concurrency=1 vs N 벤치마크) | 56.5%↓ (2026-07-15, 3회 중앙값) |
-| 중복 적재율 | 0% | content_hash UNIQUE + dbt `unique` 테스트 | — |
-| 일일 수집 성공률 | ≥ 99% | `pipeline_runs.success_rate` (재시도 · 소스 격리 포함) | — |
-| 필수 필드 완전성 | ≥ 99% | dbt `not_null` 테스트 통과율 | — |
-| 수집량 이상 감지 | 전일 대비 ±2σ 알림 | `quality.volume_anomaly` | — |
+| 중복 적재율 | 0% | content_hash UNIQUE + dbt `unique` 테스트 | 0% (2026-07-19, mart 358건 dbt PASS + SQL 교차) |
+| 일일 수집 성공률 | ≥ 99% | `pipeline_runs.success_rate` (재시도 · 소스 격리 포함) | 99.3% (2026-07-19, 17회 평균) |
+| 필수 필드 완전성 | ≥ 99% | dbt `not_null` 테스트 통과율 | 100% (2026-07-19, mart 358건) |
+| 수집량 이상 감지 | 전일 대비 ±2σ 알림 | `quality.volume_anomaly` | 가동 (실발송 검증 2026-07-13) |
 
 ¹ 초기 목표 ~70%는 최장 소스 (x_afcstuff, Playwright ~42s)가 병렬 시간의 하한을 결정하는 구조로 도달 불가 실측 — 사유 · 산식은 런북 §5.
 
@@ -100,8 +105,8 @@
 | 서빙 mart | **MariaDB** | 일 수십~수백 건 서빙 (포인트 조회 · 필터 · UNIQUE dedup)에 OLTP가 최적 |
 | 원본 랜딩 | **MongoDB** | 이종 원문을 손실 없이 schema-on-read로 보존 → 재처리 가능 |
 | 품질/분석 | **dbt + DuckDB** | dbt test가 "이상 점검"과 정면 일치, DuckDB가 MariaDB attach해 zero-infra 분석 |
-| 스크래핑 | **Playwright/httpx/twikit** | 소스 난이도 (정적~인증 · 안티봇)에 맞는 도구 선택 |
-| 오케스트레이션 | **Airflow 3.0** | 일간 DAG. 2.9→3.0 마이그레이션 직접 수행 ([docs/MIGRATION.md](docs/MIGRATION.md)) |
+| 스크래핑 | **Playwright/httpx** | 소스 난이도 (정적~쿠키 인증 · 안티봇)에 맞는 도구 선택. X는 쿠키 주입 Playwright |
+| 오케스트레이션 | **Airflow 3.0** | 하루 4회 DAG. 2.9→3.0 마이그레이션 직접 수행 ([docs/MIGRATION.md](docs/MIGRATION.md)) |
 | LLM 번역 · 요약 | **Gemini 2.5 Flash-Lite** | 일 수백 건 저용량 · 단순 번역에 최적. [무료 티어](https://ai.google.dev/gemini-api/docs/pricing)로 비용 0, 유료도 1M 토큰당 입력 $0.10 · 출력 $0.40. `response_mime_type`으로 JSON 출력 유도 |
 
 **왜 CDC를 안 썼나** — CDC (Debezium/binlog)는 상류 트랜잭션 DB의 변경을 캡처하는 기술인데, 본 파이프라인의 소스는 웹/API/X라 읽을 binlog가 없다. 일 수백 건 배치에 Kafka+Debezium은 과설계이므로, **앱 레벨 변경 감지 (content_hash 비교 + revision)**로 뉴스 수정 · 삭제에 대응했다.
@@ -111,6 +116,7 @@
 - **MongoDB `raw_items`** (Bronze): 원문 불변 보존.
 - **MariaDB `articles`** (Silver/Gold): 정규화 메타 + tier + confidence + 번역/요약. `content_hash` · `url` UNIQUE로 dedup.
 - **MariaDB `pipeline_runs`**: 런별 SLO 근거 (성공률 · 소요시간 · 신규/에러 건수).
+- **MariaDB `source_freshness`**: 소스별 신선도 워터마크 이력 (SLO-5, 회차 × 소스).
 - **dbt 마트**: `daily_source_quality` 등 분석/품질 롤업.
 
 ## 7. 실행 방법
@@ -124,7 +130,8 @@ uv run playwright install chromium
 # 1. 데이터 스토어
 docker compose up -d          # mongo, mariadb
 
-# 2. 파이프라인 실행
+# 2. 파이프라인 실행 (dotenv 미사용 → 셸 export 필요)
+set -a; source .env; set +a
 uv run python -m bullet_in.run --concurrency 8
 
 # 3. 품질 게이트
@@ -140,7 +147,7 @@ open site/index.html
 
 ## 8. 한계 & 향후
 
-- 현재는 얇은 정적 뷰. 향후: 모니터링 대시보드, 사용자 구독/필터, AWS 배포.
+- 현재는 얇은 정적 뷰 (수집 현황은 ops 뷰로 제공). 향후: 사용자 구독, AWS 배포.
 - 소스 확장 (The Athletic 등 하드 페이월, 추가 ITK)은 어댑터 추가로 대응.
 - 교차 corroboration 스코어링 (다수 소스 보도 시 신뢰도↑), 번역 정확도 스팟체크는 stretch.
 

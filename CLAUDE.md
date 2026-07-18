@@ -4,7 +4,7 @@
 MongoDB (raw) → MariaDB (mart, content_hash · URL UNIQUE dedup) → Gemini 번역/요약 →
 dbt 품질 게이트 (DuckDB) → 정적 HTML 서빙. 스케줄은 Airflow.
 
-스택: Python 3.11, uv, pydantic v2, httpx+BeautifulSoup, Playwright, twikit, google-genai, SQLAlchemy.
+스택: Python 3.11, uv, pydantic v2, httpx+BeautifulSoup, Playwright, google-genai, SQLAlchemy.
 
 ---
 
