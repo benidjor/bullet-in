@@ -155,8 +155,12 @@ def test_parse_bracket_exclusive_flag():
     assert parse_bracket("[디 애슬레틱-독점] 디오망데 PSG 선택") == ("The Athletic", None, True)
 
 def test_parse_bracket_outlet_only():
-    # 공홈 말머리는 canonical 영문 표기로 매핑 (0티어 등재와 함께, 2026-07-15)
-    assert parse_bracket("[공홈] 요케레스 영입 완료") == ("Arsenal.com", None, False)
+    assert parse_bracket("[텔레그래프] 요케레스 영입 완료") == ("The Telegraph", None, False)
+
+def test_parse_bracket_official_prefix_not_mapped():
+    # 공홈 말머리 매핑 제거 (2026-07-19) — 아스날 공홈은 직수집(arsenal_api)이 커버,
+    # 타 구단 공홈 오귀속(tier 0) 차단. drop 은 _process 몫 (아래 어댑터 테스트).
+    assert parse_bracket("[공홈] 요케레스 영입 완료") == ("공홈", None, False)
 
 def test_parse_bracket_no_bracket():
     assert parse_bracket("Arsenal target identified") == (None, None, False)
@@ -268,3 +272,19 @@ def test_fmkorea_paywalled_path_collects_post_images():
                        base_url="https://www.fmkorea.com")
     items = asyncio.run(a.fetch())
     assert items[0].raw_payload["images"] == ["https://fmimg.test/p.jpg"]
+
+@respx.mock
+def test_fmkorea_drops_official_prefix_posts():
+    # [공홈]·[아스날 공홈]·[맨유 공홈] 전부 drop — 아스날 공홈은 직수집 경로가 커버, 타 구단은 범위 밖
+    html = ('<a class="hx" href="/index.php?document_srl=1">[공홈] 아스날, 멜리에 영입</a>'
+            '<a class="hx" href="/index.php?document_srl=2">[맨유 공홈] 산투스 영입</a>'
+            '<a class="hx" href="/index.php?document_srl=3">[BBC] 아스날 이적 소식</a>')
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(200, text=html))
+    for n in (1, 2, 3):
+        respx.get(f"https://www.fmkorea.com/{n}").mock(return_value=httpx.Response(200, text=FREE_BODY))
+    respx.get("https://ex.test/a").mock(return_value=httpx.Response(200, text=FREE_ART))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    items = asyncio.run(a.fetch())
+    assert [i.raw_payload["outlet"] for i in items] == ["BBC"]

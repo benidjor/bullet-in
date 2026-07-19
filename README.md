@@ -64,7 +64,7 @@
 
 | 소스 | tier | 어댑터 | 비고 |
 |---|---|---|---|
-| Arsenal.com | 0 | html | 공식 — 영입 확정 (sign) 제목 전용 고정밀 필터 |
+| Arsenal.com | 0 | arsenal_api | 공식 — 공홈 GraphQL API, taxonomy 필터 (이적 · 1군 재계약) |
 | BBC Sport | 1.5 | html | 비전담 기준선 — 전담 (Mokbel) 은 min 가드로 tier 1 승격 |
 | Sky Sports | 2 | html | 비전담 기준선 — 전담 (Sheth) 은 min 가드로 tier 1.5 승격 |
 | The Guardian | 3 | guardian_api | Open Platform API (`GUARDIAN_API_KEY` 필요) |
