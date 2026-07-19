@@ -153,7 +153,7 @@ def test_facet_counts_includes_stage_excluding_other():
     assert f["stage"]["rumour"] == 2
     assert f["stage"]["official"] == 1
     assert "other" not in f["stage"]      # other는 집계 제외
-    assert set(f["stage"]) == {"official", "medical", "personal_terms",
+    assert set(f["stage"]) == {"official", "agreed", "medical", "personal_terms",
                                "negotiating", "interest", "rumour"}
 
 def test_facet_counts_other_bucket_counts_offmission():
