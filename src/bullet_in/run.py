@@ -14,7 +14,8 @@ from bullet_in.credibility import load_registry, journalist_directory, outlet_di
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows,
-                              apply_glossary, paragraphize)
+                              apply_glossary, paragraphize,
+                              detect_title_hallucination)
 from bullet_in.tone import select_tone_backfill
 from bullet_in import transfer_stage
 from bullet_in.serve.render import write_site, write_ops
@@ -68,9 +69,28 @@ async def main(concurrency: int):
     results.update(enrich_rows(paraphrase_rows, client, GEMINI_MODEL, mode="paraphrase"))
     glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
                 or {}).get("replacements", {})
+    name_map = (yaml.safe_load(Path("config/name_map.yaml").read_text())
+                or {}).get("names", {})
+    by_hash = {r["content_hash"]: r for r in missing}
     for h, v in results.items():
         v = apply_glossary(v, glossary)
-        mart.set_translation(h, v["title_ko"], v["summary_ko"],
+        # 제목 환각 검출 (설계 ②-A): 1차 검출 = 재번역 큐 (title NULL 저장 → 다음
+        # 사이클 재선별), 재검출 (summary_ko 기저장 = 재시도 행) = 원문 제목 폴백.
+        r0 = by_hash.get(h, {})
+        src_text = " ".join(filter(None, [r0.get("title_original"),
+                                          r0.get("body_source"),
+                                          r0.get("body_excerpt")]))
+        suspects = detect_title_hallucination(v["title_ko"], src_text, name_map)
+        title_ko = v["title_ko"]
+        if suspects and r0.get("summary_ko"):
+            logging.getLogger(__name__).warning(
+                "제목 환각 재발 — 원문 제목 폴백 content_hash=%s 의심=%s", h, suspects)
+            title_ko = r0.get("title_original")
+        elif suspects:
+            logging.getLogger(__name__).warning(
+                "제목 환각 의심 — 재번역 큐 content_hash=%s 의심=%s", h, suspects)
+            title_ko = None
+        mart.set_translation(h, title_ko, v["summary_ko"],
                              v["summary3_ko"], paragraphize(v["body_ko"]))
 
     # 분류 패스: 공홈은 소스 규칙으로 직접 태깅 (official 은 규칙 경로 전용), 나머지만 LLM 분류

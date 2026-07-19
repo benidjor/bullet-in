@@ -401,3 +401,32 @@ def test_paragraphize_passthrough_none_empty_and_unsplittable():
     assert paragraphize("") == ""
     one_sentence = "가" * 500 + "."  # 문장 경계 없는 500자
     assert paragraphize(one_sentence) == one_sentence
+
+def test_detect_title_hallucination_flags_name_absent_from_source():
+    from bullet_in.enrich import detect_title_hallucination
+    name_map = {"펠레그리니": "Pellegrini", "촐리스": "Tzolis"}
+    # 실사례 (id 365): 원문에 없는 펠레그리니가 제목에 생성
+    title_ko = "아스날, 펠레그리니 영입 위해 펠레그리니 포함 제안 검토"
+    src = "Arsenal weigh player-plus-cash offer for Christos Tzolis. Arsenal are ..."
+    assert detect_title_hallucination(title_ko, src, name_map) == ["펠레그리니"]
+
+def test_detect_title_hallucination_passes_when_source_has_name():
+    from bullet_in.enrich import detect_title_hallucination
+    name_map = {"요케레스": "Gyokeres", "트로사르": "Trossard"}
+    # 원문 diacritics (Gyökeres) 도 정규화 후 매치돼야 함
+    title_ko = "요케레스, 아스날 이적 임박"
+    src = "Viktor Gyökeres is close to joining Arsenal."
+    assert detect_title_hallucination(title_ko, src, name_map) == []
+
+def test_detect_title_hallucination_passes_korean_source():
+    from bullet_in.enrich import detect_title_hallucination
+    name_map = {"펠레그리니": "Pellegrini"}
+    # 한국어 원문 (fmkorea paraphrase 경로): 한글 표기가 원문에 있으면 통과
+    title_ko = "펠레그리니, 아스날행 루머"
+    src = "[오피셜] 펠레그리니 아스날 이적 협상 중이라고 함"
+    assert detect_title_hallucination(title_ko, src, name_map) == []
+
+def test_detect_title_hallucination_empty_inputs():
+    from bullet_in.enrich import detect_title_hallucination
+    assert detect_title_hallucination(None, "src", {"a": "b"}) == []
+    assert detect_title_hallucination("제목", "src", {}) == []

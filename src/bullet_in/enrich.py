@@ -80,6 +80,28 @@ def apply_glossary(parsed: dict, mapping: dict[str, str]) -> dict:
             out[k] = v
     return out
 
+def _fold_latin(text: str) -> str:
+    """casefold + 결합 분음부호 제거 (Gyökeres → gyokeres). NFD 미분해 문자만 수동 치환."""
+    import unicodedata
+    folded = unicodedata.normalize("NFD", text.casefold())
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    return folded.replace("ø", "o").replace("æ", "ae").replace("ß", "ss")
+
+def detect_title_hallucination(title_ko: str | None, source_text: str,
+                               name_map: dict[str, str]) -> list[str]:
+    """번역 제목의 인명이 원문 (제목 + 본문) 에 근거 없으면 의심 목록 반환.
+    사전 (한글 표기 → 영문 성) 기반 결정적 대조 — 사전 밖 인명은 미검출 (점진 확장).
+    한국어 원문 (paraphrase 경로) 은 한글 표기 포함 여부로 같은 함수가 판정한다."""
+    if not title_ko or not name_map:
+        return []
+    folded_src = _fold_latin(source_text or "")
+    suspects = []
+    for ko, en in name_map.items():
+        if ko in title_ko and ko not in (source_text or "") \
+                and _fold_latin(en) not in folded_src:
+            suspects.append(ko)
+    return suspects
+
 # 문장 종결 (마침표류 + 닫는 따옴표) 뒤가 공백 · 블록 끝일 때만 경계 — 소수점 (2.5) 오분할 방지
 _SENT_END_RE = re.compile(r'[.!?…]["”\'』」]?(?=\s|$)')
 

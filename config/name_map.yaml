@@ -1,0 +1,43 @@
+# 제목 환각 검출용 인명 사전 — 한글 통용 표기 → 영문 성 (enrich.detect_title_hallucination).
+# 번역 제목의 인명이 원문 (제목 + 본문) 에 근거 없으면 재번역 큐 → 재발 시 원문 제목 폴백.
+# 항목 추가 시: ① 한글 키가 일반 단어에 부분 포함되지 않는지 (짧은 표기 주의)
+# ② 값은 성 (last name) 단독 — 원문 표기 변형 (풀네임 · 성 단독) 을 모두 포함 매치.
+# 사전 밖 인명은 미검출 — 실사례 관찰 시 점진 확장.
+names:
+  # 아스날 스쿼드 · 감독
+  아르테타: Arteta
+  사카: Saka
+  살리바: Saliba
+  라이스: Rice
+  외데고르: Odegaard
+  하베르츠: Havertz
+  마두에케: Madueke
+  은완네리: Nwaneri
+  메리노: Merino
+  팀버: Timber
+  라야: Raya
+  칼라피오리: Calafiori
+  진첸코: Zinchenko
+  제수스: Jesus
+  은케티아: Nketiah
+  멜리에: Meslier
+  힌카피에: Hincapie
+  # 이적 관련 실명 (mart 실측)
+  트로사르: Trossard
+  키비오르: Kiwior
+  촐리스: Tzolis
+  요케레스: Gyokeres
+  기마랑이스: Guimaraes
+  콘사: Konsa
+  로저스: Rogers
+  알바레스: Alvarez
+  펠레그리니: Pellegrini
+  래시포드: Rashford
+  라시포드: Rashford
+  에제: Eze
+  앤더슨: Anderson
+  고든: Gordon
+  토날리: Tonali
+  아우바메양: Aubameyang
+  므바페: Mbappe
+  벨링엄: Bellingham
