@@ -3,6 +3,7 @@ import os
 import logging
 from bullet_in.adapters.rss import RssAdapter
 from bullet_in.adapters.guardian_api import GuardianAdapter
+from bullet_in.adapters.arsenal_api import ArsenalApiAdapter
 from bullet_in.adapters.html import HtmlAdapter
 from bullet_in.adapters.playwright_news import PlaywrightAdapter
 from bullet_in.adapters.x_playwright import XPlaywrightAdapter
@@ -27,6 +28,8 @@ def build_adapters(cfg: dict) -> list:
             out.append(GuardianAdapter(sid, key,
                                        tag=c.get("tag", "football/arsenal"),
                                        title_contains=c.get("title_contains")))
+        elif kind == "arsenal_api":
+            out.append(ArsenalApiAdapter(sid, pages=c.get("pages", 1)))
         elif kind == "html":
             out.append(HtmlAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url"),
                                    title_contains=c.get("title_contains"),

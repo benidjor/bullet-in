@@ -139,7 +139,7 @@ PY
 ## 알려진 한계
 
 - **비-기사 링크가 `rumour` 등으로 오분류될 수 있다.** 라이브에서 "Want more transfer stories? Read Thursday's full gossip column" 같은 football.london 네비게이션 · teaser 링크가 `rumour` 로 태깅됐다. 근본 원인은 분류기가 아니라 **수집 단계의 이적 키워드 필터 미착수 (로드맵 Tier 1-3)** 로 비-기사 링크까지 적재되는 것이다. Tier 1-3 + 기존 데이터 정리가 들어오면 이 잡음이 줄어든다. 메모리 `tier1-cleanup-track` 참조.
-- **재계약 기사도 공홈 official 배지를 받을 수 있다.** 공홈 sign 필터가 신규 영입과 재계약 (연장) 기사를 구분하지 않아, 재계약도 규칙 경로에서 official 로 태깅된다. 현재 공홈 적재가 0건이라 실측은 없다 — 적재가 시작되면 재검토한다 (spec §4.4).
+- **재계약 기사도 공홈 official 배지를 받는다 — 의도된 동작 (2026-07-19 재검토 종결).** 공홈 수집이 taxonomy 판별 (Transfer news · Contract news + Men) 로 전환되며 1군 재계약 포함이 사용자 결정으로 확정됐다. 단계 enum 에 재계약이 없어 LLM 경로로 보내면 `other` (서빙 숨김) 로 떨어지므로, 규칙 경로의 official 태깅이 재계약을 노출하는 유일한 경로이기도 하다. 배경: `docs/superpowers/specs/2026-07-19-arsenal-official-api-recovery-design.md` §4.3.
 
 ## 참조
 

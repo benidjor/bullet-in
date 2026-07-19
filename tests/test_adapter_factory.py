@@ -69,3 +69,10 @@ def test_factory_passes_thumbnail_only_to_html():
                                    "thumbnail_only": True}}]}
     a = build_adapters(cfg)[0]
     assert isinstance(a, HtmlAdapter) and a.thumbnail_only is True
+
+def test_factory_builds_arsenal_api_with_pages():
+    from bullet_in.adapters.arsenal_api import ArsenalApiAdapter
+    cfg = {"sources": [{"source_id": "arsenal_official", "adapter": "arsenal_api",
+                        "enabled": True, "config": {"pages": 2}}]}
+    a = build_adapters(cfg)[0]
+    assert isinstance(a, ArsenalApiAdapter) and a.pages == 2
