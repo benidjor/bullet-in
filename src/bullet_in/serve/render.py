@@ -449,7 +449,8 @@ def _decorate(row: dict, sources: dict, now: datetime,
 
 def _sorted_latest(articles: list[dict]) -> list[dict]:
     return sorted(articles,
-                  key=lambda a: a.get("published_at") or datetime.min,
+                  key=lambda a: (a.get("published_at") or datetime.min,
+                                 a.get("fetched_at") or datetime.min),
                   reverse=True)
 
 
