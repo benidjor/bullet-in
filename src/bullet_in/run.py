@@ -10,7 +10,7 @@ from bullet_in.ingest import gather_all
 from bullet_in.canonical import content_hash, canonical_url
 from bullet_in.pipeline import to_articles
 from bullet_in.score import load_sources
-from bullet_in.credibility import load_registry, journalist_directory
+from bullet_in.credibility import load_registry, journalist_directory, outlet_directory
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows,
@@ -125,7 +125,8 @@ async def main(concurrency: int):
             "FROM articles")).mappings().all()]
     write_site(rows, sources, "site",
                directory=journalist_directory("config/credibility.yaml"),
-               registry=registry)
+               registry=registry,
+               outlet_dir=outlet_directory("config/credibility.yaml"))
 
     # 수집량 이상탐지 (SLO-6): 지난 12회 source_counts 대비 소스별 드롭 · 스파이크 알림
     with engine.connect() as c:

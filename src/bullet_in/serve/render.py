@@ -35,13 +35,25 @@ def fmt_date(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%d")
 
 
-def outlet_display(row: dict, sources: dict) -> str:
+def outlet_display(row: dict, sources: dict, directory: dict | None = None,
+                   outlet_dir: dict | None = None) -> str:
     """facet 키 · 카드 칩이 공유하는 언론사 표시명.
     소스 outlet 폴백이 없으면 display_name (BBC Sport) 이 키가 되는데
-    이 문자열은 credibility.yaml 에 없어 tier 조회가 실패한다 (spec §3.4)."""
+    이 문자열은 credibility.yaml 에 없어 tier 조회가 실패한다 (spec §3.4).
+    X 2순위 항목은 인용 기자 소속 (등재) · 조직 계정 정식명으로 표기하고
+    미등재 핸들만 aggregator 폴백을 유지한다 (트랙 ③ 설계 ①-A)."""
     src = sources.get(row.get("source_id"), {})
-    return (row.get("outlet")
-            or src.get("outlet")
+    if row.get("outlet"):
+        return row["outlet"]
+    if src.get("credibility") == "x_mentions":
+        j = (row.get("journalist") or "").strip()
+        entry = (directory or {}).get(j.lower())
+        if entry and entry.get("outlet"):
+            return entry["outlet"]
+        fold = (outlet_dir or {}).get(j.lstrip("@").lower())
+        if fold:
+            return fold
+    return (src.get("outlet")
             or src.get("display_name")
             or row.get("source_id") or "")
 
@@ -173,13 +185,13 @@ def _facet_rows(counts: Counter, labels: dict, tiers: dict) -> dict:
 
 
 def facet_counts(articles: list[dict], sources: dict, directory: dict | None = None,
-                 registry=None) -> dict:
+                 registry=None, outlet_dir: dict | None = None) -> dict:
     teams = Counter(a.get("team") or "arsenal" for a in articles)
 
     o_ctr: Counter = Counter()
     o_tier: dict = {}
     for a in articles:
-        key = outlet_display(a, sources)
+        key = outlet_display(a, sources, directory=directory, outlet_dir=outlet_dir)
         o_ctr[key] += 1
         o_tier[key] = _outlet_tier(key, a, sources, registry)
 
@@ -385,10 +397,10 @@ def interleave_body(paras: list[str], images: list[str], every: int = 2) -> list
 
 
 def _decorate(row: dict, sources: dict, now: datetime,
-              directory: dict | None = None) -> dict:
+              directory: dict | None = None, outlet_dir: dict | None = None) -> dict:
     a = dict(row)
     a["_title"] = row.get("title_ko") or row.get("title_original") or ""
-    a["_outlet"] = outlet_display(row, sources)
+    a["_outlet"] = outlet_display(row, sources, directory=directory, outlet_dir=outlet_dir)
     a["_tier_label"] = tier_label(row.get("tier"))
     a["_tier_key"] = tier_key(row.get("tier"))
     pub = row.get("published_at")
@@ -430,20 +442,23 @@ def _sorted_latest(articles: list[dict]) -> list[dict]:
 
 
 def render_index(articles: list[dict], sources: dict, now: datetime,
-                 directory: dict | None = None, registry=None) -> str:
-    ordered = [_decorate(a, sources, now, directory=directory)
+                 directory: dict | None = None, registry=None,
+                 outlet_dir: dict | None = None) -> str:
+    ordered = [_decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
                for a in _sorted_latest(articles)]
-    facets = facet_counts(articles, sources, directory=directory, registry=registry)
+    facets = facet_counts(articles, sources, directory=directory, registry=registry,
+                          outlet_dir=outlet_dir)
     return _env().get_template("index.html.j2").render(
         articles=ordered, facets=facets, active="home", root="")
 
 
 def build_neighbors(ordered: list[dict], idx: int, sources: dict,
-                    now: datetime, directory: dict | None = None) -> list[dict]:
+                    now: datetime, directory: dict | None = None,
+                    outlet_dir: dict | None = None) -> list[dict]:
     start, end = neighbor_window(len(ordered), idx)
     out = []
     for j in range(start, end):
-        d = _decorate(ordered[j], sources, now, directory=directory)
+        d = _decorate(ordered[j], sources, now, directory=directory, outlet_dir=outlet_dir)
         d["_is_current"] = (j == idx)
         out.append(d)
     return out
@@ -465,22 +480,26 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
 
 def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
                now: datetime | None = None,
-               directory: dict | None = None, registry=None) -> None:
+               directory: dict | None = None, registry=None,
+               outlet_dir: dict | None = None) -> None:
     """인덱스·상세 N개·정적 자산을 out_dir에 일괄 생성한다."""
     now = now or datetime.utcnow()
     out = Path(out_dir)
     (out / "article").mkdir(parents=True, exist_ok=True)
 
     (out / "index.html").write_text(
-        render_index(articles, sources, now, directory=directory, registry=registry),
+        render_index(articles, sources, now, directory=directory, registry=registry,
+                     outlet_dir=outlet_dir),
         encoding="utf-8")
 
     ordered = _sorted_latest(articles)
     # 패싯은 전체 기사 기준으로 한 번만 계산해 모든 상세 페이지에 전달
-    facets = facet_counts(articles, sources, directory=directory, registry=registry)
+    facets = facet_counts(articles, sources, directory=directory, registry=registry,
+                          outlet_dir=outlet_dir)
     for idx, row in enumerate(ordered):
-        a = _decorate(row, sources, now, directory=directory)
-        neighbors = build_neighbors(ordered, idx, sources, now, directory=directory)
+        a = _decorate(row, sources, now, directory=directory, outlet_dir=outlet_dir)
+        neighbors = build_neighbors(ordered, idx, sources, now, directory=directory,
+                                    outlet_dir=outlet_dir)
         html = render_article(a, neighbors, row["content_hash"], sources, now, facets=facets)
         (out / "article" / f"{row['content_hash']}.html").write_text(
             html, encoding="utf-8")
