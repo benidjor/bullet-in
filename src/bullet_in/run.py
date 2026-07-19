@@ -16,7 +16,7 @@ from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows,
                               apply_glossary, paragraphize,
                               detect_title_hallucination, detect_roundup_omission,
-                              detect_title_mistranslation)
+                              detect_title_mistranslation, detect_club_injection)
 from bullet_in.tone import select_tone_backfill
 from bullet_in import transfer_stage
 from bullet_in.serve.render import write_site, write_ops
@@ -72,6 +72,8 @@ async def main(concurrency: int):
                 or {}).get("replacements", {})
     name_map = (yaml.safe_load(Path("config/name_map.yaml").read_text())
                 or {}).get("names", {})
+    club_map = (yaml.safe_load(Path("config/club_map.yaml").read_text())
+                or {}).get("clubs", {})
     by_hash = {r["content_hash"]: r for r in missing}
     for h, v in results.items():
         v = apply_glossary(v, glossary)
@@ -88,19 +90,26 @@ async def main(concurrency: int):
                 v["title_ko"], r0.get("title_original"), name_map)
         # 라운드업 단신 누락 게이트: 원문 괄호 출처 vs 번역 병기 대조 (환각 큐와 같은 재시도 1회)
         omissions = detect_roundup_omission(r0.get("body_source"), v["body_ko"])
+        # 무근거 구단명 게이트 (4축): 번역 4필드 × 원문 이중 대조 — 인명 suspects 와 분리
+        # (합치면 body 만 오염된 케이스에 불필요한 원문 제목 폴백이 걸린다)
+        club_suspects = detect_club_injection(v, src_text, club_map)
         title_ko = v["title_ko"]
         retry = bool(r0.get("summary_ko"))
         if suspects and retry:
             logging.getLogger(__name__).warning(
                 "제목 환각 재발 — 원문 제목 폴백 content_hash=%s 의심=%s", h, suspects)
             title_ko = r0.get("title_original")
-        elif (suspects or omissions) and not retry:
+        elif (suspects or omissions or club_suspects) and not retry:
             logging.getLogger(__name__).warning(
-                "재번역 큐 content_hash=%s 환각의심=%s 단신누락=%s", h, suspects, omissions)
+                "재번역 큐 content_hash=%s 환각의심=%s 단신누락=%s 구단주입=%s",
+                h, suspects, omissions, club_suspects)
             title_ko = None
         if omissions and retry:
             logging.getLogger(__name__).warning(
                 "라운드업 단신 누락 잔존 — 수동 확인 content_hash=%s 누락=%s", h, omissions)
+        if club_suspects and retry:
+            logging.getLogger(__name__).warning(
+                "무근거 구단명 잔존 — 수동 확인 content_hash=%s 구단=%s", h, club_suspects)
         mart.set_translation(h, title_ko, v["summary_ko"],
                              v["summary3_ko"], paragraphize(v["body_ko"]))
 

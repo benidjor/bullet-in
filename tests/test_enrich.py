@@ -518,3 +518,73 @@ def test_detect_title_mistranslation_passes_partial_name_condensation():
         "아스날, 로저스 영입 경쟁서 첼시에 밀려",
         "talkSPORT understands that Mikel Arteta met Morgan Rogers for talks",
         name_map) == []
+
+def test_detect_club_injection_flags_unfounded_club():
+    from bullet_in.enrich import detect_club_injection
+    club_map = {"미들즈브러": ["Middlesbrough", "Boro"],
+                "아스톤 빌라": ["Aston Villa", "Villa"]}
+    # 실사례 (9956234a): 원문은 Aston Villa 소속 명시, 번역이 학습 지식 (전 소속) 주입
+    parsed = {"title_ko": "아스날, 3000만 파운드 미들즈브러 FW 영입 임박",
+              "summary_ko": None,
+              "summary3_ko": "미들즈브러의 모건 로저스가 링크됐다.",
+              "body_ko": "아스톤 빌라가 로저스의 몸값을 책정했다."}
+    src = "Aston Villa, who reportedly value Rogers at £130m. Arsenal are keen."
+    assert detect_club_injection(parsed, src, club_map) == ["미들즈브러"]
+
+def test_detect_club_injection_passes_on_english_alias():
+    from bullet_in.enrich import detect_club_injection
+    club_map = {"미들즈브러": ["Middlesbrough", "Boro"]}
+    # 원문이 통칭 (Boro) 으로만 표기해도 근거로 인정 — 별칭 누락 = 오탐 방지
+    parsed = {"title_ko": "미들즈브러, 유망주 영입 완료", "summary_ko": None,
+              "summary3_ko": None, "body_ko": None}
+    src = "Boro have completed the signing of the youngster."
+    assert detect_club_injection(parsed, src, club_map) == []
+
+def test_detect_club_injection_passes_folded_diacritics_alias():
+    from bullet_in.enrich import detect_club_injection
+    club_map = {"베식타스": ["Besiktas"]}
+    # 원문 분음부호 표기 (Beşiktaş) 도 fold 후 매치 (기존 Gyökeres 테스트와 동일 계열)
+    parsed = {"title_ko": "트로사르, 베식타스 이적", "summary_ko": None,
+              "summary3_ko": None, "body_ko": None}
+    src = "Trossard joins Beşiktaş for £15.3m."
+    assert detect_club_injection(parsed, src, club_map) == []
+
+def test_detect_club_injection_passes_korean_source():
+    from bullet_in.enrich import detect_club_injection
+    club_map = {"미들즈브러": ["Middlesbrough", "Boro"]}
+    # ko 경로 (fmkorea): 원문 자체가 한국어 — 한글 표기 근거로 통과 (오탐 실측 cc2c7b58 재현 회귀)
+    parsed = {"title_ko": None, "summary_ko": None, "summary3_ko": None,
+              "body_ko": "미들즈브러 시절부터 주목받던 로저스가 빌라에서 성장했다."}
+    src = "[해외축구] 미들즈브러 출신 로저스, 아스톤 빌라에서 폼 절정이라고 함"
+    assert detect_club_injection(parsed, src, club_map) == []
+
+def test_detect_club_injection_leading_hangul_guard():
+    from bullet_in.enrich import detect_club_injection
+    club_map = {"리즈": ["Leeds"]}
+    # 선행 문자 한글이면 불인정: '시리즈' 는 '리즈' 매치 아님 (등장 · 근거 양쪽)
+    parsed = {"title_ko": None, "summary_ko": None, "summary3_ko": None,
+              "body_ko": "이번 시리즈 경기에서 아스날이 승리했다."}
+    assert detect_club_injection(parsed, "Arsenal win again.", club_map) == []
+    # 조사 결합 (직후 한글) 은 정상 검출 유지: '리즈가' → 원문에 Leeds 없음 → 검출
+    parsed2 = {"title_ko": None, "summary_ko": None, "summary3_ko": None,
+               "body_ko": "리즈가 영입 경쟁에 뛰어들었다."}
+    assert detect_club_injection(parsed2, "Arsenal win again.", club_map) == ["리즈"]
+    # 근거 대조에도 같은 가드: 원문의 '시리즈' 는 '리즈' 의 근거가 아님
+    assert detect_club_injection(parsed2, "월드컵 시리즈 특집 기사", club_map) == ["리즈"]
+
+def test_detect_club_injection_empty_inputs():
+    from bullet_in.enrich import detect_club_injection
+    club_map = {"미들즈브러": ["Middlesbrough"]}
+    assert detect_club_injection({}, "src", club_map) == []
+    assert detect_club_injection({"title_ko": None, "body_ko": None}, "src", club_map) == []
+    assert detect_club_injection({"title_ko": "미들즈브러 소식"}, "src", {}) == []
+
+def test_detect_club_injection_passes_korean_synonym_key():
+    from bullet_in.enrich import detect_club_injection
+    club_map = {"맨유": ["Manchester United", "Man United", "Man Utd"],
+                "맨체스터 유나이티드": ["Manchester United", "Man United", "Man Utd"]}
+    # ko 원문의 동의 표기 (맨체스터 유나이티드) 가 축약 표기 (맨유) 의 근거로 인정돼야 함
+    parsed = {"title_ko": None, "summary_ko": None, "summary3_ko": None,
+              "body_ko": "맨유가 영입 경쟁에 뛰어들었다고 함."}
+    src = "[오피셜] 맨체스터 유나이티드가 윙어 영입에 근접했다고 함"
+    assert detect_club_injection(parsed, src, club_map) == []

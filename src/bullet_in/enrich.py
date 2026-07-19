@@ -153,6 +153,48 @@ def detect_title_hallucination(title_ko: str | None, source_text: str,
             suspects.append(ko)
     return suspects
 
+def _ko_present(text: str, name: str) -> bool:
+    """한글 표기 존재 판정 — 직전 문자가 한글 음절이면 불인정 ("리즈" ⊄ "시리즈").
+    직후 문자는 조사 결합 ("리즈가") 이 정상이라 판정에 쓰지 않는다."""
+    start = text.find(name)
+    while start != -1:
+        if start == 0 or not ("가" <= text[start - 1] <= "힣"):
+            return True
+        start = text.find(name, start + 1)
+    return False
+
+_CLUB_FIELDS = ("title_ko", "summary_ko", "summary3_ko", "body_ko")
+
+def detect_club_injection(parsed: dict, source_text: str,
+                          club_map: dict[str, list[str]]) -> list[str]:
+    """번역 산출물 4필드에 등장한 구단명이 원문에 근거 없으면 의심 목록 반환 (게이트 4축).
+    이중 대조 — 원문의 한글 표기 (ko 경로 · fmkorea) or 영문 별칭 단어 경계 (en 경로) 중
+    하나라도 있으면 근거 인정. 사전 밖 구단은 미검출 (name_map 과 같은 점진 확장).
+    실사례: 로저스의 전 소속 (미들즈브러) 학습 지식 주입 — 원문은 Aston Villa 명시."""
+    if not club_map:
+        return []
+    joined = " ".join(filter(None, (parsed.get(k) for k in _CLUB_FIELDS)))
+    if not joined:
+        return []
+    src = source_text or ""
+    folded_src = _fold_latin(src)
+    # 동일 별칭 목록 = 같은 구단의 복수 한글 표기 (맨유 · 맨체스터 유나이티드) — 근거를 상호 인정
+    # (ko 경로 패러프레이즈의 동의어 축약 오탐 방지, 최종 리뷰 반영)
+    synonyms: dict[frozenset, list[str]] = {}
+    for k, al in club_map.items():
+        synonyms.setdefault(frozenset(al), []).append(k)
+    suspects = []
+    for ko, aliases in club_map.items():
+        if not _ko_present(joined, ko):
+            continue
+        if any(_ko_present(src, k2) for k2 in synonyms[frozenset(aliases)]):
+            continue
+        if any(re.search(rf"\b{re.escape(_fold_latin(a))}\b", folded_src)
+               for a in aliases):
+            continue
+        suspects.append(ko)
+    return suspects
+
 # 문장 종결 (마침표류 + 닫는 따옴표) 뒤가 공백 · 블록 끝일 때만 경계 — 소수점 (2.5) 오분할 방지
 _SENT_END_RE = re.compile(r'[.!?…]["”\'』」]?(?=\s|$)')
 

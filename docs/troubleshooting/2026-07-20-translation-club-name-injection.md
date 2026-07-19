@@ -58,6 +58,9 @@ WHERE (title_ko LIKE '%미들즈브러%' OR body_ko LIKE '%미들즈브러%' OR 
 - "무근거 구단명 검출기 보강" 을 백로그 SoT (`docs/superpowers/2026-07-19-post-v1-followup-tracks.md` §5) 에 등재 (PR #89).
 - 설계 요점 (본 문서 실측 반영): 번역 3필드에 등장하는 구단명 중 원문에 없는 것을 플래그,
   §4 의 언어별 대조 규칙 필수, 구단명 사전은 glossary (표기 교정) 와 분리한 한↔영 매핑.
+- **구현 완료 (2026-07-20)**: `detect_club_injection` (게이트 4축) + `config/club_map.yaml` 시드
+→ 설계 `docs/superpowers/specs/2026-07-20-club-injection-detector-design.md` ·
+  운영 `docs/runbook/2026-07-19-translation-quality-gates-ops.md` §4.3.
 
 ## 7. 참고
 

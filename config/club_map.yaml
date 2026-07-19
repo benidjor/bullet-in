@@ -1,0 +1,64 @@
+# 무근거 구단명 검출 사전 — 한글 통용 표기 → 영문 별칭 목록 (enrich.detect_club_injection).
+# glossary (표기 교정 치환) · name_map (인명 검출) 과 목적이 달라 분리 — 치환하지 않는 검출 전용.
+# 등재 규칙:
+# ① 별칭 누락 = 오탐 — 원문이 통칭 (Boro · Spurs) 으로만 표기해도 근거로 인정되게 통칭까지 등재.
+# ② 짧은 한글 표기 주의 — 선행 결합 오매치 (시리즈 ⊃ 리즈) 는 코드 가드가 막지만,
+#    후행 결합 오매치 (인터뷰 ⊃ 인터 · 로마노 ⊃ 로마 · 포르투갈 ⊃ 포르투) 는 못 막으므로 셋 중 하나로:
+#    구별 가능한 긴 표기 등재 (인터 밀란 · AS 로마) / 혼동 상위어의 영문 표기를 별칭에 넣어 접지
+#    (포르투 ← Portugal) / 영문 앵커가 없으면 미등재 (릴 — 릴레이 · 릴리스는 일반어).
+# ③ 아스날 미등재 — 전 기사가 아스날 문맥이라 검출 신호 없음.
+# ④ 같은 구단의 복수 한글 표기 (맨시티 · 맨체스터 시티) 는 각각 등재 (name_map 과 동일).
+#    이때 별칭 목록은 완전히 동일하게 — 동일 별칭 목록 = 동의 키 그룹으로 원문 근거를 상호 인정.
+clubs:
+  # EPL (2025-26 시즌 기준 · 아스날 제외)
+  아스톤 빌라: [Aston Villa, Villa]
+  본머스: [Bournemouth]
+  브렌트퍼드: [Brentford]
+  브라이턴: [Brighton]
+  번리: [Burnley]
+  첼시: [Chelsea]
+  크리스탈 팰리스: [Crystal Palace, Palace]
+  에버턴: [Everton, Toffees]
+  풀럼: [Fulham]
+  리즈: [Leeds]
+  리버풀: [Liverpool]
+  맨시티: [Manchester City, Man City]
+  맨체스터 시티: [Manchester City, Man City]
+  맨유: [Manchester United, Man United, Man Utd]
+  맨체스터 유나이티드: [Manchester United, Man United, Man Utd]
+  뉴캐슬: [Newcastle]
+  노팅엄: [Nottingham Forest, Forest]
+  선덜랜드: [Sunderland]
+  토트넘: [Tottenham, Spurs]
+  웨스트햄: [West Ham, Hammers]
+  울버햄튼: [Wolverhampton, Wolves]
+  울브스: [Wolverhampton, Wolves]
+  # 챔피언십 — 실사례 구단
+  미들즈브러: [Middlesbrough, Boro]
+  # 유럽 빈출 (아스날 이적설 · 코퍼스 등장 구단)
+  레알 마드리드: [Real Madrid]
+  바르셀로나: [Barcelona, Barca]
+  아틀레티코: [Atletico Madrid, Atletico]
+  바이에른: [Bayern]
+  도르트문트: [Dortmund, Borussia Dortmund]
+  레버쿠젠: [Leverkusen, Bayer Leverkusen]
+  라이프치히: [Leipzig, RB Leipzig]
+  파리 생제르맹: [Paris Saint-Germain, PSG]
+  PSG: [Paris Saint-Germain, PSG]
+  유벤투스: [Juventus, Juve]
+  # 밀란은 "인터 밀란" 안에도 매치되므로 Inter 로도 접지 (원문이 Inter 단독 표기여도 통과)
+  # 좁은 코너: ko 원문 "인테르" + 번역 "인터 밀란" 이면 밀란 키가 부분 매치로 플래그 (잔존 WARNING 수용 — 최종 리뷰 관찰)
+  밀란: [AC Milan, Milan, Inter]
+  인터 밀란: [Inter Milan, Inter]
+  인테르: [Inter Milan, Inter]
+  나폴리: [Napoli]
+  # 번역문의 "포르투갈" 이 키에 걸리는 후행 결합 — Portugal 별칭으로 접지 (규칙 ②)
+  포르투: [Porto, FC Porto, Portugal]
+  AS 로마: [Roma]
+  아약스: [Ajax]
+  스포르팅: [Sporting]
+  벤피카: [Benfica]
+  클럽 브뤼헤: [Club Brugge, Brugge]
+  베식타스: [Besiktas]
+  갈라타사라이: [Galatasaray]
+  페네르바체: [Fenerbahce]
