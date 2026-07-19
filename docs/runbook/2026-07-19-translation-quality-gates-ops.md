@@ -61,6 +61,8 @@
    영문 앵커가 없으면 미등재 (릴).
 3. 선행 결합 (시리즈 ⊃ 리즈) 은 `_ko_present` 가드가 방어 — 별도 고려 불필요.
 4. 아스날은 미등재 (전 기사가 아스날 문맥이라 신호 없음) · 복수 한글 표기는 각각 등재.
+5. 복수 한글 표기 등재 시 별칭 목록을 완전히 동일하게 맞출 것
+— 동일 별칭 목록 = 동의 키 그룹으로 원문 근거를 상호 인정한다 (맨유 ↔ 맨체스터 유나이티드).
 
 ## 5. 코퍼스 스윕 · 수동 정정
 
@@ -79,14 +81,15 @@ e = create_engine(os.environ["MARIADB_URL"])
 with e.connect() as c:
     rows = [dict(r) for r in c.execute(text(
         "SELECT id, source_id, title_original, title_ko, body_source, body_ko, "
-        "summary_ko, summary3_ko FROM articles WHERE title_ko IS NOT NULL")).mappings().all()]
+        "summary_ko, summary3_ko, body_excerpt FROM articles WHERE title_ko IS NOT NULL")).mappings().all()]
 for r in rows:
     if r["source_id"] != "bbc_gossip":   # 라운드업 제목 재초점은 정상 (run.py 와 동일 제외)
         m = detect_title_mistranslation(r["title_ko"], r["title_original"], name_map)
         if m: print("제목:", r["id"], r["source_id"], m)
     o = detect_roundup_omission(r["body_source"], r["body_ko"])
     if o: print("단신:", r["id"], o)
-    c2 = detect_club_injection(r, r["body_source"] or "", club_map)
+    src = " ".join(filter(None, [r["title_original"], r["body_source"], r["body_excerpt"]]))
+    c2 = detect_club_injection(r, src, club_map)
     if c2: print("구단:", r["id"], c2)
 PY
 ```
@@ -104,6 +107,8 @@ PY
   재번역 경로 (title_ko NULL 트리거) 를 타지 않는 기존 행이라 무해 — 오탐으로 오인하지 말 것.
 - **백필 · 스윕은 통합 상태에서** — 브랜치 갈린 상태의 데이터 작업 사고는
   `docs/troubleshooting/2026-07-19-parallel-pr-session-integrity-traps.md` 부록 참조.
+- **일반어 별칭의 미검출 방향 열림** — `Forest` · `Palace` · `Villa` 류 통칭 별칭은 casefold 매치라
+  원문의 일반 명사 용례도 근거로 인정된다. 오탐 안전 우선 설계상 의도된 방향 (미검출로만 열림) — 결함 아님.
 
 ## 7. 롤백
 
