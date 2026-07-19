@@ -466,3 +466,55 @@ def test_detect_roundup_omission_normalizes_attribution_variants():
            "C. (Football Insider) , external")
     ko = "A. (L'Equipe)\nB. (Corriere dello Sport)\nC. (Football Insider)"
     assert detect_roundup_omission(src, ko) == []
+
+def test_detect_title_mistranslation_flags_missing_registered_name():
+    from bullet_in.enrich import detect_title_mistranslation
+    name_map = {"촐리스": "Tzolis"}
+    # 실사례 (id 385): 원문 제목의 Tzolis 가 번역 제목에서 '조르제' 로 창작
+    out = detect_title_mistranslation(
+        "아스날, 클럽 브뤼허 공격수 조르제 영입 근접",
+        "Arsenal close in on £34m deal for Club Brugge forward Christos Tzolis",
+        name_map)
+    assert out == ["인명 누락:Tzolis"]
+
+def test_detect_title_mistranslation_word_boundary_avoids_price_rice():
+    from bullet_in.enrich import detect_title_mistranslation
+    name_map = {"라이스": "Rice"}
+    # 'price' 안의 'rice' 는 단어 경계 밖 — 오탐 금지
+    assert detect_title_mistranslation(
+        "아스날, 이적료 책정", "Arsenal told asking price for star", name_map) == []
+
+def test_detect_title_mistranslation_flags_unfounded_loan():
+    from bullet_in.enrich import detect_title_mistranslation
+    # 실사례 (id 392): permanent deal → '임대 이적 확정'
+    out = detect_title_mistranslation(
+        "트로사르, 베식타스 임대 이적 확정",
+        "Trossard leaves Arsenal for Besiktas in permanent deal", {})
+    assert out == ["임대 무근거"]
+    # 원문에 loan 있으면 통과
+    assert detect_title_mistranslation(
+        "선수, 임대 이적", "Player joins on loan", {}) == []
+    # 한국어 원문 (fmkorea) 에 '임대' 있으면 통과
+    assert detect_title_mistranslation(
+        "선수, 임대 이적", "[오피셜] 선수 임대 이적 확정", {}) == []
+
+def test_detect_title_mistranslation_passes_variant_spelling_same_person():
+    from bullet_in.enrich import detect_title_mistranslation
+    name_map = {"래시포드": "Rashford", "라시포드": "Rashford"}
+    # 같은 인물의 다른 등재 표기가 제목에 있으면 통과
+    assert detect_title_mistranslation(
+        "라시포드, 아스날행?", "Rashford to Arsenal?", name_map) == []
+
+def test_detect_title_mistranslation_empty_inputs():
+    from bullet_in.enrich import detect_title_mistranslation
+    assert detect_title_mistranslation(None, "t", {"a": "B"}) == []
+    assert detect_title_mistranslation("제목", None, {"a": "B"}) == []
+
+def test_detect_title_mistranslation_passes_partial_name_condensation():
+    from bullet_in.enrich import detect_title_mistranslation
+    name_map = {"아르테타": "Arteta", "로저스": "Rogers"}
+    # 다절 제목 (트윗 · 리스트클) 의 축약 — 매핑 인명 일부라도 유지되면 통과
+    assert detect_title_mistranslation(
+        "아스날, 로저스 영입 경쟁서 첼시에 밀려",
+        "talkSPORT understands that Mikel Arteta met Morgan Rogers for talks",
+        name_map) == []
