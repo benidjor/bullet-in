@@ -46,6 +46,13 @@
     <input id="q" placeholder="선수·구단·이적 키워드 검색 (예: 요케레스, 재계약)">
   </label>
   <span class="spacer"></span>
+  {% if active == 'home' %}
+  <select class="sortsel" id="sortSel" title="정렬 — 조회순은 이 기기에서 연 기사 기록 기준 (정적 서빙 · 전역 집계 없음)">
+    <option value="latest" selected>최신순</option>
+    <option value="confidence">신뢰도순</option>
+    <option value="views">조회순</option>
+  </select>
+  {% endif %}
   <button class="iconbtn" id="themeBtn" title="라이트/다크 전환">🌙</button>
 </div></div>
 
@@ -73,9 +80,6 @@
     <label class="opt"><input type="checkbox" data-group="tier" data-value="{{ t.key }}"> {{ t.label }} <span class="ct">{{ t.count }}</span></label>
     {% endfor %}
 
-    <h4>정렬</h4>
-    <label class="opt sortrow"><input type="radio" name="sort" data-value="latest" checked> 최신순</label>
-    <label class="opt sortrow"><input type="radio" name="sort" data-value="confidence"> 신뢰도순</label>
 
     <div class="fstatus" id="fstatus">미적용 · 전체 표시</div>
     <div class="actions">

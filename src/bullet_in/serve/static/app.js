@@ -1,5 +1,19 @@
-// DOM contract: a.card[data-outlet][data-tier][data-stage][data-published][data-confidence][data-text][data-journalist]
-// URL contract: ?outlet=..&tier=..&stage=..&bucket=other&journalist=..&sort=confidence&q=..  (다중 선택은 키 반복)
+// DOM contract: a.card[data-outlet][data-tier][data-stage][data-published][data-confidence][data-hash][data-text][data-journalist]
+// URL contract: ?outlet=..&tier=..&stage=..&bucket=other&journalist=..&sort=confidence|views&q=..  (다중 선택은 키 반복)
+
+// 조회 기록 (조회순 정렬용): 상세 페이지 열람 시 content_hash 별 카운트.
+// 정적 서빙이라 전역 집계가 없다 — localStorage = 이 기기의 기록.
+const VIEWS_KEY = 'bulletin_views';
+function readViews() {
+  try { return JSON.parse(localStorage.getItem(VIEWS_KEY)) || {}; } catch { return {}; }
+}
+(function trackView() {
+  const m = location.pathname.match(/article\/([0-9a-f]{64})\.html$/);
+  if (!m) return;
+  const v = readViews();
+  v[m[1]] = (v[m[1]] || 0) + 1;
+  try { localStorage.setItem(VIEWS_KEY, JSON.stringify(v)); } catch {}
+})();
 
 // 테마 토글 (목업 이식: localStorage 영속, 페이지 간 유지)
 const root = document.documentElement, themeBtn = document.getElementById('themeBtn');
@@ -17,6 +31,7 @@ const fstatus = document.getElementById('fstatus');
 const applyBtn = document.getElementById('applyBtn');
 const resetBtn = document.getElementById('resetBtn');
 const searchInput = document.getElementById('q');
+const sortSel = document.getElementById('sortSel');   // 헤더 정렬 (인덱스에만 렌더)
 const grid = document.querySelector('.grid');
 const cards = grid ? [...grid.querySelectorAll('.card')] : [];
 
@@ -47,7 +62,7 @@ const setupAllMore = () =>
 function filterParams() {
   const p = new URLSearchParams();
   for (const g of URL_GROUPS) for (const v of checkedValues(g)) p.append(g, v);
-  const sort = side.querySelector('input[name=sort]:checked')?.dataset.value;
+  const sort = sortSel?.value;
   if (sort && sort !== 'latest') p.set('sort', sort);
   const q = (searchInput?.value || '').trim();
   if (q) p.set('q', q);
@@ -63,9 +78,8 @@ function restoreFromQuery() {
     const g = c.dataset.group;
     if (URL_GROUPS.includes(g)) c.checked = want[g].includes(c.dataset.value);
   });
-  const sort = p.get('sort') === 'confidence' ? 'confidence' : 'latest';
-  const sortBox = side.querySelector(`input[name=sort][data-value=${sort}]`);
-  if (sortBox) sortBox.checked = true;
+  const sort = ['confidence', 'views'].includes(p.get('sort')) ? p.get('sort') : 'latest';
+  if (sortSel) sortSel.value = sort;
   if (searchInput) searchInput.value = p.get('q') || '';
   return true;
 }
@@ -106,10 +120,15 @@ function applyFilters() {
 
 function sortCards() {
   if (!grid) return;
-  const key = side.querySelector('input[name=sort]:checked').dataset.value;
+  const key = sortSel ? sortSel.value : 'latest';
+  const views = key === 'views' ? readViews() : null;
   const ordered = [...cards].sort((a, b) => {
     if (key === 'confidence') {
       return parseFloat(b.dataset.confidence || 0) - parseFloat(a.dataset.confidence || 0);
+    }
+    if (key === 'views') {
+      const d = (views[b.dataset.hash] || 0) - (views[a.dataset.hash] || 0);
+      if (d) return d;                     // 동률 (미조회 다수) 은 최신순 폴백
     }
     return (b.dataset.published || '').localeCompare(a.dataset.published || ''); // 최신순
   });
@@ -121,9 +140,18 @@ if (grid) {
   applyBtn.onclick = applyFilters;
   resetBtn.onclick = () => {
     enabledBoxes().forEach(c => { c.checked = (c.dataset.value === 'arsenal'); });
-    side.querySelector('input[name=sort][data-value=latest]').checked = true;
+    if (sortSel) sortSel.value = 'latest';
     if (searchInput) searchInput.value = '';
     applyFilters();
+  };
+  // 헤더 정렬은 필터와 독립 — 적용 버튼 없이 즉시 정렬 + URL 의 sort 만 갱신
+  if (sortSel) sortSel.onchange = () => {
+    sortCards();
+    const p = new URLSearchParams(location.search);
+    if (sortSel.value !== 'latest') p.set('sort', sortSel.value);
+    else p.delete('sort');
+    const qs = p.toString();
+    history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
   };
   if (searchInput) searchInput.addEventListener('input', applyFilters);
   if (restoreFromQuery()) { setupAllMore(); applyFilters(); }  // 상세에서 넘어온 필터 상태 복원 · 적용
@@ -140,7 +168,6 @@ if (grid) {
   };
   if (resetBtn) resetBtn.onclick = () => {
     enabledBoxes().forEach(c => { c.checked = (c.dataset.value === 'arsenal'); });
-    side.querySelector('input[name=sort][data-value=latest]').checked = true;
     if (searchInput) searchInput.value = '';
     applyBtn && applyBtn.classList.remove('dirty');
   };
