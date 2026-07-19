@@ -56,8 +56,9 @@ PY
 
 전체 파이프라인을 돌리면 번역 패스 뒤에 분류 패스가 자동 실행된다.
 이미 적재된 행만 분류하려면 (수집 없이) 분류 패스만 돌린다.
-`rule_stage` (공홈 → official 직결) 대상은 LLM 을 거치지 않으므로, 아래 스니펫은 나머지 (LLM 대상) 행만 돌리는 2절 원본을 단순화한 것이다.
-공홈 규칙 분리 상세는 "오피셜 규칙 분리 (2026-07-19)" 절을 참고한다.
+`run.py` 분류 패스와 동일하게, 공홈 (`arsenal_official`) 행은 `rule_stage` 로 LLM 없이 직접 태깅하고 나머지만 `classify_stage_rows` 에 넘긴다.
+미태깅 행 전체를 그대로 LLM 에 넘기면 공홈 행이 official 을 받지 못하고 agreed 등으로 오분류되며, `transfer_stage IS NULL` 트리거 특성상 재분류 전까지 그 값이 고착된다 — 아래 스니펫은 이 분기를 반드시 포함한다.
+상세는 "오피셜 규칙 분리 (2026-07-19)" 절을 참고한다.
 
 ```bash
 set -a; source .env; set +a
@@ -67,6 +68,7 @@ from sqlalchemy import create_engine
 from google import genai
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import classify_stage_rows
+from bullet_in import transfer_stage
 
 engine = create_engine(os.environ["MARIADB_URL"])
 mart = MartStore(engine)
@@ -75,8 +77,17 @@ client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
 rows = mart.rows_missing_stage()
 print(f"미태깅: {len(rows)}")
-out = classify_stage_rows(rows, client, "gemini-2.5-flash-lite")
-print(f"이번 회차 분류: {len(out)}")
+
+llm_rows = []
+for r in rows:
+    ruled = transfer_stage.rule_stage(r["source_id"])
+    if ruled:
+        mart.set_stage(r["content_hash"], ruled)
+    else:
+        llm_rows.append(r)
+
+out = classify_stage_rows(llm_rows, client, "gemini-2.5-flash-lite")
+print(f"이번 회차 LLM 분류: {len(out)}")
 for h, stage in out.items():
     mart.set_stage(h, stage)
 PY
