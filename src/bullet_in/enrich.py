@@ -212,9 +212,9 @@ def resummarize_rows(rows: list[dict], client, model: str) -> dict[str, dict]:
         result[h] = parsed
     return result
 
-# 주의: 아래 단계 목록(rumour·interest·negotiating·personal_terms·medical·official·other)은
+# 주의: 아래 단계 목록(rumour·interest·negotiating·personal_terms·medical·agreed·other)은
 # transfer_stage.VALID_STAGES와 동기화되어야 한다. 새 단계를 추가하면 이 프롬프트도
-# 업데이트해야 하며, tests/test_enrich.py::test_stage_prompt_lists_every_valid_stage()에서
+# 업데이트해야 하며, tests/test_enrich.py::test_stage_prompt_lists_llm_stages_and_excludes_official()에서
 # 불일치를 검출한다.
 STAGE_PROMPT = (
     "다음은 아스날 FC 관련 기사 목록이다. 각 기사를 이적 진행 단계로 분류한다.\n"
@@ -224,7 +224,7 @@ STAGE_PROMPT = (
     "- negotiating: 구단 간 · 에이전트와 이적료/조건 협상 중\n"
     "- personal_terms: 선수와 개인 조건 (연봉 등) 합의\n"
     "- medical: 메디컬 테스트 진행 · 통과\n"
-    "- official: 구단 공식 발표\n"
+    "- agreed: 구단 간 이적 합의 · 딜 확정/임박 보도 (타 매체의 공식 발표 보도 포함)\n"
     "- other: 이적과 무관하거나 단계를 판단할 수 없음\n"
     "각 기사의 content_hash는 그대로 두고 stage만 채운다.\n"
     'ONLY JSON 배열: [{{"content_hash":"...","stage":"rumour"}}]\n\n'
@@ -279,5 +279,10 @@ def classify_stage_rows(rows: list[dict], client, model: str,
             log.warning("Gemini 응답 파싱 실패, 단계 분류 배치 스킵")
             continue
         for h, stage in parsed.items():
-            result[h] = _stage.normalize(stage)
+            stage = _stage.normalize(stage)
+            if stage == "official":
+                # 규칙 경로 전용 불변량 (spec §4.3) — 프롬프트 밖 응답 방어
+                log.warning("LLM이 official 반환 — agreed로 강등 content_hash=%s", h)
+                stage = "agreed"
+            result[h] = stage
     return result

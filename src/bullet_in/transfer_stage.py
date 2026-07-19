@@ -8,6 +8,7 @@ from __future__ import annotations
 # (enum, 한국어 라벨, css 클래스) — 사이드바 표시 순서 (위 → 아래, 진행 단계 높은 순)
 SIDEBAR_STAGES: list[tuple[str, str, str]] = [
     ("official", "오피셜", "s-off"),
+    ("agreed", "이적 합의", "s-agree"),
     ("medical", "메디컬", "s-med"),
     ("personal_terms", "개인 합의", "s-personal"),
     ("negotiating", "협상 중", "s-talk"),
@@ -39,3 +40,9 @@ def css_for(stage: str | None) -> str:
 def is_displayable(stage: str | None) -> bool:
     """배지 표시 대상인지 (other · None · 미지정은 배지 생략)."""
     return (stage or "") in _LABEL
+
+
+def rule_stage(source_id: str | None) -> str | None:
+    """소스 조건 규칙 단계 (spec §4.1) — 공홈만 official, 그 외는 None(LLM 분류 몫).
+    official 은 이 규칙 경로에서만 생성된다 (LLM enum 에서 제외 · 반환 시 강등)."""
+    return "official" if source_id == "arsenal_official" else None
