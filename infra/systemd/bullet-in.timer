@@ -1,0 +1,10 @@
+[Unit]
+Description=bullet-in 4x daily (same cadence as DAG: 0 */6 UTC)
+
+[Timer]
+OnCalendar=*-*-* 00/6:00:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

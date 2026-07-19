@@ -1,0 +1,15 @@
+[Unit]
+Description=bullet-in pipeline cycle (collect -> enrich -> gate -> site)
+Wants=docker.service network-online.target
+After=docker.service network-online.target
+OnFailure=bullet-in-fail-notify.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/bullet-in
+EnvironmentFile=/home/ubuntu/bullet-in/.env
+ExecStartPre=/usr/bin/docker compose up -d --wait
+ExecStartPre=/bin/sleep 10
+ExecStart=/home/ubuntu/.local/bin/uv run python -m bullet_in.run --concurrency 8
+TimeoutStartSec=1800
