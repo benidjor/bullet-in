@@ -35,7 +35,23 @@ grep -rn "classify_stage_rows\|rows_missing_stage" docs/runbook/
 - 런북 스니펫에는 "run.py 의 어느 블록을 미러하는지" 를 명시한다 — 미러 대상이 적혀 있어야 로직 변경 시 갱신 대상임이 드러난다.
 - whole-branch 최종 리뷰 디스패치에 **계층 간 대조를 명시 항목으로 넣는다** — 이번 발견은 그 지시가 실제로 작동한 사례다.
 
-## 5. 관련
+## 5. 재발 사례 (누적 기록)
+
+- **2026-07-20 ① 게이트 스윕 스니펫의 원문 결합 범위 불일치** (#91 최종 리뷰 블로킹 → 머지 전 정정):
+  번역 게이트 런북 §5 스윕이 구단명 축을 `body_source` 단독으로 대조했는데,
+  run.py 는 `title_original + body_source + body_excerpt` 결합으로 대조한다.
+  좁은 원문으로 대조하면 페이월 헤드라인-온리 · fmkorea 행 (근거가 제목에만 있음) 이 전량 오탐
+  → 운영자가 스윕 결과대로 재번역 큐에 넣으면 불필요한 재번역이 돈다.
+  변형 교훈: 스니펫은 호출 함수만이 아니라 **대조 원문의 결합 범위까지** 1:1 이어야 한다.
+- **2026-07-20 ② 사이트 재생성 예시의 서빙 계약 미반영** (#93 에서 정정):
+  번역 보완 런북 §4 예시가 #87 · #88 이후 추가된 SELECT 컬럼 (published_precision · fetched_at) 과
+  `outlet_dir` 인자를 반영하지 못한 상태로 남아 있었다.
+  그대로 실행하면 날짜 정렬 보간 · 아웃렛 표시가 깨진 화면이 만들어진다.
+  표기 백필 검증 중 발견 — 실행 전에 run.py 서빙 SELECT 와 대조해 회피했다.
+
+## 6. 관련
 
 - 같은 결함 클래스: `docs/troubleshooting/2026-07-19-doc-observability-directive-without-sink.md` (#38 · #63 기록)
 - 수정된 런북: `docs/runbook/2026-06-30-transfer-stage-classification-ops.md` §2 (rule_stage 분기 포함 스니펫)
+  · `docs/runbook/2026-07-19-translation-quality-gates-ops.md` §5 (원문 결합 스윕)
+  · `docs/runbook/2026-07-19-enrich-only-pass.md` §4 (서빙 계약 1:1 예시 + 주의 문구)
