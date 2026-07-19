@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
 import re
 import logging
@@ -82,6 +82,20 @@ def _is_repost_blocked(html: str) -> bool:
                for s in rb.select("strong")
                if s.find_parent(class_="xe_content") is None)
 
+_KST = timezone(timedelta(hours=9))
+_POST_DATE_RE = re.compile(r"(\d{4})\.(\d{2})\.(\d{2})\s+(\d{2}):(\d{2})")
+
+def _post_published(html: str) -> datetime | None:
+    """fmkorea 게시 시각 — 실측 (2026-07-20) `.rd_hd .date` 'YYYY.MM.DD HH:MM' KST → UTC.
+    목록 위젯의 .date 다중 매칭 (실측 7개) 이 있어 반드시 .rd_hd 스코프."""
+    soup = BeautifulSoup(html, "html.parser")
+    el = soup.select_one(".rd_hd .date")
+    m = _POST_DATE_RE.search(el.get_text(strip=True)) if el else None
+    if not m:
+        return None
+    y, mo, d, h, mi = map(int, m.groups())
+    return datetime(y, mo, d, h, mi, tzinfo=_KST).astimezone(timezone.utc)
+
 def _extract_original_url(html: str, body_selector: str) -> str | None:
     soup = BeautifulSoup(html, "html.parser")
     el = soup.select_one(body_selector)
@@ -154,9 +168,11 @@ class FmkoreaAdapter:
     async def _process(self, c: httpx.AsyncClient,
                        matched: list[tuple[str, str]]) -> list[RawItem]:
         """글별 fetch → 말머리 파싱 → 페이월/무료 라우팅 → RawItem."""
-        from bullet_in.adapters.meta import extract_og_image, extract_article_body, extract_body_images
+        from bullet_in.adapters.meta import (extract_og_image, extract_article_body,
+                                             extract_body_images, extract_published_at)
         now, out = datetime.now(timezone.utc), []
         for title, url in matched:
+            pub: tuple | None = None
             try:
                 rb = await c.get(url)
                 rb.raise_for_status()
@@ -189,15 +205,21 @@ class FmkoreaAdapter:
                     body = extract_article_body(ro.text)
                     image = extract_og_image(ro.text)
                     images = extract_body_images(ro.text, base_url=orig)
+                    pub = extract_published_at(ro.text)
                 except httpx.HTTPError:
                     body, image, images = "", None, []
                 lang = "en"
+            if pub is None:
+                post_dt = _post_published(html)
+                pub = (post_dt, "time") if post_dt else None
+            extra = ({"published": pub[0].isoformat(), "published_precision": pub[1]}
+                     if pub else {})
             out.append(RawItem(
                 source_id=self.source_id, source_type="html", url=orig,
                 fetched_at=now,
                 raw_payload={"title": title, "body": body, "lang": lang,
                              "outlet": outlet, "journalist": journalist,
-                             "image_url": image, "images": images}))
+                             "image_url": image, "images": images, **extra}))
         return out
 
     async def fetch(self) -> list[RawItem]:
