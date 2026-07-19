@@ -578,3 +578,13 @@ def test_detect_club_injection_empty_inputs():
     assert detect_club_injection({}, "src", club_map) == []
     assert detect_club_injection({"title_ko": None, "body_ko": None}, "src", club_map) == []
     assert detect_club_injection({"title_ko": "미들즈브러 소식"}, "src", {}) == []
+
+def test_detect_club_injection_passes_korean_synonym_key():
+    from bullet_in.enrich import detect_club_injection
+    club_map = {"맨유": ["Manchester United", "Man United", "Man Utd"],
+                "맨체스터 유나이티드": ["Manchester United", "Man United", "Man Utd"]}
+    # ko 원문의 동의 표기 (맨체스터 유나이티드) 가 축약 표기 (맨유) 의 근거로 인정돼야 함
+    parsed = {"title_ko": None, "summary_ko": None, "summary3_ko": None,
+              "body_ko": "맨유가 영입 경쟁에 뛰어들었다고 함."}
+    src = "[오피셜] 맨체스터 유나이티드가 윙어 영입에 근접했다고 함"
+    assert detect_club_injection(parsed, src, club_map) == []

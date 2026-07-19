@@ -178,11 +178,16 @@ def detect_club_injection(parsed: dict, source_text: str,
         return []
     src = source_text or ""
     folded_src = _fold_latin(src)
+    # 동일 별칭 목록 = 같은 구단의 복수 한글 표기 (맨유 · 맨체스터 유나이티드) — 근거를 상호 인정
+    # (ko 경로 패러프레이즈의 동의어 축약 오탐 방지, 최종 리뷰 반영)
+    synonyms: dict[frozenset, list[str]] = {}
+    for k, al in club_map.items():
+        synonyms.setdefault(frozenset(al), []).append(k)
     suspects = []
     for ko, aliases in club_map.items():
         if not _ko_present(joined, ko):
             continue
-        if _ko_present(src, ko):
+        if any(_ko_present(src, k2) for k2 in synonyms[frozenset(aliases)]):
             continue
         if any(re.search(rf"\b{re.escape(_fold_latin(a))}\b", folded_src)
                for a in aliases):
