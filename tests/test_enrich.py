@@ -430,3 +430,39 @@ def test_detect_title_hallucination_empty_inputs():
     from bullet_in.enrich import detect_title_hallucination
     assert detect_title_hallucination(None, "src", {"a": "b"}) == []
     assert detect_title_hallucination("제목", "src", {}) == []
+
+def test_detect_roundup_omission_flags_missing_attribution_item():
+    from bullet_in.enrich import detect_roundup_omission
+    src = ("A move. (Teamtalk) , external B move. (Sky Sports) , external "
+           "C move. (Guardian) , external")
+    ko = "A 이적. (Teamtalk)\nC 이적. (Guardian)"
+    assert detect_roundup_omission(src, ko) == ["Sky Sports"]
+
+def test_detect_roundup_omission_passes_when_all_kept_and_non_roundup():
+    from bullet_in.enrich import detect_roundup_omission
+    src = "A move. (Teamtalk) , external B move. (Sky Sports) , external"
+    ko = "A 이적. (Teamtalk)\nB 이적. (Sky Sports)"
+    assert detect_roundup_omission(src, ko) == []
+    # 비 라운드업 (', external' 표지 없음) — 일반 괄호 (£50.9m) 는 무시
+    assert detect_roundup_omission("fee of 60m euros (£50.9m).", "번역문") == []
+    assert detect_roundup_omission(None, None) == []
+
+def test_detect_roundup_omission_strips_attribution_suffix():
+    from bullet_in.enrich import detect_roundup_omission
+    src = "A move. (Corriere dello Sport - in Italian) , external"
+    ko = "A 이적. (Corriere dello Sport)"
+    assert detect_roundup_omission(src, ko) == []
+
+def test_detect_roundup_omission_counts_duplicate_outlets():
+    from bullet_in.enrich import detect_roundup_omission
+    src = "A. (Sky Sports) , external B. (Sky Sports) , external"
+    ko = "A. (Sky Sports)"   # 같은 출처 단신 2건 중 1건 누락
+    assert detect_roundup_omission(src, ko) == ["Sky Sports"]
+
+def test_detect_roundup_omission_normalizes_attribution_variants():
+    from bullet_in.enrich import detect_roundup_omission
+    src = ("A. (L'Equipe, in French) , external "
+           "B. (Corriere dello Sport via Football Italia) , external "
+           "C. (Football Insider) , external")
+    ko = "A. (L'Equipe)\nB. (Corriere dello Sport)\nC. (Football Insider)"
+    assert detect_roundup_omission(src, ko) == []
