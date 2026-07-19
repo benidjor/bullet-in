@@ -46,3 +46,4 @@ outlets:
   - {name: L'Équipe,        tier: 3,   aliases: ["레키프", "L'Equipe", "L'Équipe", "lequipe"]}
   - {name: RMC Sport,       tier: 1,   aliases: ["RMC", "RMC 스포르", "RMC Sport"]}
   - {name: Foot Mercato,    tier: 4,   aliases: ["풋 메르카토", "Foot Mercato", "footmercato"]}
+  - {name: talkSPORT,       tier: 4,   aliases: ["talkSPORT"]}   # 백트래킹 domains 승격용 (@JacobsBen 인용 원문 — 기자 미등재라 아웃렛 폴백 경로)
