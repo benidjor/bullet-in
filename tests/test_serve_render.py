@@ -602,3 +602,33 @@ def test_detail_excerpt_mode_drops_inline_images():
                images_json='["https://img/a.jpg", "https://img/b.jpg"]')
     html = _ra(_dec(row, src, NOW), [], "h1", src, NOW)
     assert "img/a.jpg" not in html and "img/b.jpg" not in html
+
+
+# ---- SP-B 잔여 페이지 자동 정리 (spec §2.6) ----
+from bullet_in.serve.render import write_site, sweep_orphan_pages
+
+def test_write_site_removes_orphan_pages(tmp_path):
+    art = tmp_path / "article"
+    art.mkdir(parents=True)
+    (art / "orphan.html").write_text("stale", encoding="utf-8")
+    rows = [_row(content_hash="keep1"), _row(content_hash="keep2", url="https://x/2")]
+    write_site(rows, SOURCES, tmp_path, NOW)
+    assert not (art / "orphan.html").exists()
+    assert (art / "keep1.html").exists() and (art / "keep2.html").exists()
+
+def test_write_site_skips_sweep_when_no_articles(tmp_path):
+    art = tmp_path / "article"
+    art.mkdir(parents=True)
+    (art / "orphan.html").write_text("stale", encoding="utf-8")
+    write_site([], SOURCES, tmp_path, NOW)
+    assert (art / "orphan.html").exists()   # 렌더 대상 0건 → 오삭제 방어로 건너뜀
+
+def test_sweep_orphan_pages_returns_removed_names(tmp_path):
+    art = tmp_path / "article"
+    art.mkdir(parents=True)
+    (art / "keep1.html").write_text("x", encoding="utf-8")
+    (art / "old1.html").write_text("x", encoding="utf-8")
+    (art / "old2.html").write_text("x", encoding="utf-8")
+    removed = sweep_orphan_pages([{"content_hash": "keep1"}], tmp_path)
+    assert removed == ["old1.html", "old2.html"]
+    assert (art / "keep1.html").exists()
