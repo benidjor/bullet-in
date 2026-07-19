@@ -90,6 +90,28 @@ def _fold_latin(text: str) -> str:
     folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
     return folded.replace("ø", "o").replace("æ", "ae").replace("ß", "ss")
 
+_LOAN_RE = re.compile(r"\bloan", re.IGNORECASE)
+
+def detect_title_mistranslation(title_ko: str | None, title_original: str | None,
+                                name_map: dict[str, str]) -> list[str]:
+    """원문 제목 대비 번역 제목의 결정적 불일치 사유 목록 (환각 검출기의 역방향 축).
+    ①원문 제목의 등재 인명 (단어 경계) 이 번역 제목에 어느 등재 표기로도 없음
+    — '조르제' (Tzolis) 창작 · 무관 제목 전면 환각 실사례를 잡는다.
+    ②'임대' 가 원문 근거 (loan · 한국어 원문의 임대) 없이 생성 — permanent 반전 실사례.
+    라운드업 (제목 재초점이 정상) 은 호출측에서 제외한다."""
+    if not title_ko or not title_original:
+        return []
+    reasons = []
+    folded = _fold_latin(title_original)
+    for en in dict.fromkeys(name_map.values()):
+        if re.search(rf"\b{re.escape(_fold_latin(en))}\b", folded):
+            if not any(ko in title_ko for ko, v in name_map.items() if v == en):
+                reasons.append(f"인명 누락:{en}")
+    if "임대" in title_ko and "임대" not in title_original \
+            and not _LOAN_RE.search(title_original):
+        reasons.append("임대 무근거")
+    return reasons
+
 # BBC 가십 라운드업의 단신별 출처 링크 표지 — "(출처) , external". 일반 괄호 (£50.9m) 와 구분
 _ATTRIB_RE = re.compile(r"\(([^()]{2,60})\)\s*,\s*external")
 
