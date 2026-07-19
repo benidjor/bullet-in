@@ -509,3 +509,12 @@ def test_detect_title_mistranslation_empty_inputs():
     from bullet_in.enrich import detect_title_mistranslation
     assert detect_title_mistranslation(None, "t", {"a": "B"}) == []
     assert detect_title_mistranslation("제목", None, {"a": "B"}) == []
+
+def test_detect_title_mistranslation_passes_partial_name_condensation():
+    from bullet_in.enrich import detect_title_mistranslation
+    name_map = {"아르테타": "Arteta", "로저스": "Rogers"}
+    # 다절 제목 (트윗 · 리스트클) 의 축약 — 매핑 인명 일부라도 유지되면 통과
+    assert detect_title_mistranslation(
+        "아스날, 로저스 영입 경쟁서 첼시에 밀려",
+        "talkSPORT understands that Mikel Arteta met Morgan Rogers for talks",
+        name_map) == []
