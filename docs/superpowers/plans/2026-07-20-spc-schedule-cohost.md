@@ -131,6 +131,14 @@ systemctl list-timers bullet-in.timer --no-pager
 - [ ] X 접촉 주의: 이 실행이 DC IP 에서의 첫 접촉 — 실패해도 소스 격리로 타 소스 무영향 (spec §2.4 의 수용된 리스크). 결과를 기록.
 - [ ] seoulnow 무영향 확인: `free -h` 재실측 + seoulnow 컨테이너 상태 변화 없음.
 
+### Task 4.5: 데이터 이관 — 로컬 → VM (실행 중 발견한 계획 갭, 소급 추가)
+
+- 배경: VM 의 DB 는 빈 상태로 시작하므로, 이관 없이는 사이트가 신규 수집분만 남고 기존 205건 (발행 시각 백필 · 인명 · 환각 정정 포함) 을 잃는다 — "현 구성 그대로 이전" 취지상 필수.
+- [ ] 로컬 덤프: `mariadb-dump --databases bulletin` + `mongodump --archive --gzip` → scp 전송.
+- [ ] VM 복원: `mariadb < mart.sql` (테이블 대체) + `mongorestore --drop`.
+- [ ] 검증: articles 205 · pipeline_runs · mongo raw 카운트 일치, 사이트 재생성 (렌더 전용) 으로 205 페이지 정합.
+- 주의: 복원 전 VM 회차의 신규 건은 대체로 사라지나, 소스 페이지에 남아 있는 한 다음 회차가 재수집 (자기 치유).
+
 ### Task 5: 유닛 등재 + 타이머 활성
 
 - [ ] VM 저장소를 main 최신으로 (`git pull --ff-only`) 한 뒤 `bash infra/systemd/install-units.sh`.
