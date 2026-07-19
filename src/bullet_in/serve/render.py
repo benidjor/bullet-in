@@ -106,6 +106,15 @@ def journalist_entry(row: dict, sources: dict, directory: dict | None) -> dict |
         return None
     src = sources.get(row.get("source_id")) or {}
     entry = (directory or {}).get(j.lower())
+    if entry is None and directory:
+        # 공동 바이라인 ("A and B") — 등재 기자가 포함돼 있으면 그 기자를 대표로.
+        # 정식명 단어 경계 매치만 인정, 복수 등재 시 바이라인 등장 순서 앞선 기자.
+        jl = j.lower()
+        best_pos = None
+        for cand in {e["name"]: e for e in directory.values()}.values():
+            m = re.search(rf"\b{re.escape(cand['name'].lower())}\b", jl)
+            if m and (best_pos is None or m.start() < best_pos):
+                entry, best_pos = cand, m.start()
     if entry:
         name, outlet, registered = entry["name"], entry["outlet"], True
     else:
