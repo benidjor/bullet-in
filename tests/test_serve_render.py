@@ -35,7 +35,7 @@ from datetime import datetime
 from bullet_in.serve.render import render_index
 
 NOW = datetime(2026, 6, 29, 12, 0, 0)
-SOURCES = {"bbc_sport": {"display_name": "BBC Sport"}}
+SOURCES = {"bbc_sport": {"display_name": "BBC Sport", "serving": "full"}}
 
 def _row(**kw):
     base = dict(content_hash="h1", url="https://x/1", source_id="bbc_sport",
@@ -579,3 +579,26 @@ def test_excerpt_paras_stops_when_first_paragraph_reaches_limit():
 
 def test_excerpt_paras_empty_input():
     assert excerpt_paras([]) == []
+
+
+def test_detail_excerpt_mode_cuts_body_and_shows_notice():
+    src = {"bbc_sport": {"display_name": "BBC Sport", "serving": "excerpt"}}
+    row = _row(body_ko="첫 문단." + "가" * 300 + "\n둘째 문단.\n셋째 문단.")
+    html = _ra(_dec(row, src, NOW), [], "h1", src, NOW)
+    assert "셋째 문단" not in html                    # 발췌 범위 밖 본문 제외
+    assert 'class="excerpt-note"' in html
+    assert "원문 전체 보기" in html
+
+def test_detail_full_mode_keeps_whole_body_without_notice():
+    row = _row(body_ko="첫 문단.\n둘째 문단.\n셋째 문단.")
+    html = _ra(_dec(row, SOURCES, NOW), [], "h1", SOURCES, NOW)
+    assert "셋째 문단" in html
+    assert "excerpt-note" not in html
+
+def test_detail_excerpt_mode_drops_inline_images():
+    src = {"bbc_sport": {"serving": "excerpt"}}
+    row = _row(body_ko="문단1\n문단2\n문단3\n문단4",
+               image_url="https://img/hero.jpg",
+               images_json='["https://img/a.jpg", "https://img/b.jpg"]')
+    html = _ra(_dec(row, src, NOW), [], "h1", src, NOW)
+    assert "img/a.jpg" not in html and "img/b.jpg" not in html

@@ -31,6 +31,9 @@
       {% else %}<figure><img src="{{ b.url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'"></figure>
       {% endif %}{% endfor %}
     </div>
+    {% if a._excerpt %}
+    <p class="excerpt-note">이 기사는 요약과 앞부분 발췌만 제공합니다 — <a href="{{ a.url }}" target="_blank" rel="noopener">원문 전체 보기 ↗</a></p>
+    {% endif %}
     <p class="origin">출처: {{ a._outlet }}{% if a.journalist %} · {{ a.journalist }}{% endif %} · <a href="{{ a.url }}" target="_blank" rel="noopener">원문 기사 보기 ↗</a></p>
   </div>
 </article>

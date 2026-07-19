@@ -521,7 +521,11 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
                   "journalists": {"initial": [], "stages": []}}
     article = dict(article)
     paras = [p for p in (article.get("body_ko") or "").split("\n") if p.strip()]
-    article["_body_blocks"] = interleave_body(paras, article.get("_images") or [])
+    article["_excerpt"] = serving_mode(article.get("source_id"), sources) == "excerpt"
+    images = article.get("_images") or []
+    if article["_excerpt"]:
+        paras, images = excerpt_paras(paras), []
+    article["_body_blocks"] = interleave_body(paras, images)
     return _env().get_template("detail.html.j2").render(
         a=article, neighbors=neighbors, active=None, root="../", facets=facets)
 
