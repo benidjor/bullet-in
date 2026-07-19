@@ -55,3 +55,14 @@ WHERE source_id='football_london' GROUP BY journalist;
   allowlist 필터가 그 시점에 drop 하므로 부활하지 않는다 — 이것이 §2 의 순서 (필터 선배포) 가 필수인 이유다.
 - **enrich 산출물 동반 소실**: 삭제 행의 번역 · 요약 · 분류도 함께 사라진다.
   의도된 결과 — Canton 외 기사는 제품에서 제외가 방침이라 재생성 비용이 없다.
+
+## 7. 실행 기록 (2026-07-19, PR #60 머지 직후)
+
+- 순서 준수: 필터 머지 (squash `59d098f`) 확인 후 실행.
+- 백필 선행: bbc_gossip image_url 45건 중 성공 45 · 실패 0.
+- 사전 확인: 삭제 대상 157 · Canton 잔존 63 · NULL 0
+→ §3 기대값과 전건 일치, 삭제 실행.
+- 사후 검증: football_london 잔존 = Tom Canton 63건만, mart 전체 358 → 201건.
+- 재유입 검증: 직후 전체 사이클 1회 (fmkorea 2h 창 준수, 마지막 접촉 +2h 경과 후 실행)
+→ 신규 적재 0 · 에러 0 · football_london 63건 유지 = allowlist drop 실동작 확인.
+- 캡처 재촬영: 측정 런북 §6 절차로 인덱스 · 상세 갱신 (gossip 썸네일 반영 · 플레이스홀더 해소).
