@@ -199,11 +199,11 @@ class _StageClient:
 
 def test_classify_returns_hash_to_stage():
     payload = ('[{"content_hash":"a","stage":"negotiating"},'
-               '{"content_hash":"b","stage":"official"}]')
+               '{"content_hash":"b","stage":"agreed"}]')
     rows = [{"content_hash": "a", "title_original": "Arsenal in talks", "summary_ko": "협상"},
             {"content_hash": "b", "title_original": "Arsenal confirm", "summary_ko": "발표"}]
     out = classify_stage_rows(rows, _StageClient(payload), "m")
-    assert out == {"a": "negotiating", "b": "official"}
+    assert out == {"a": "negotiating", "b": "agreed"}
 
 
 def test_classify_demotes_invalid_stage_to_other():
@@ -211,6 +211,14 @@ def test_classify_demotes_invalid_stage_to_other():
     out = classify_stage_rows([{"content_hash": "a", "title_original": "T", "summary_ko": ""}],
                               _StageClient(payload), "m")
     assert out == {"a": "other"}
+
+
+def test_classify_demotes_official_to_agreed():
+    """프롬프트에 없어도 모델이 official을 뱉으면 agreed로 강등 (spec §4.3 불변량)."""
+    payload = '[{"content_hash":"h1","stage":"official"}]'
+    rows = [{"content_hash": "h1", "title_original": "t", "summary_ko": "s"}]
+    out = classify_stage_rows(rows, _StageClient(payload), "m")
+    assert out == {"h1": "agreed"}
 
 
 def test_classify_omits_missing_hashes():
@@ -245,13 +253,14 @@ def test_classify_stops_on_rate_limit():
     assert client.models.n == 1   # 첫 배치에서 중단
 
 
-def test_stage_prompt_lists_every_valid_stage():
-    """STAGE_PROMPT가 transfer_stage.VALID_STAGES의 모든 enum을 포함하는지 검증.
-    새 단계를 추가하면 프롬프트도 업데이트해야 하며, 이 테스트가 실패해서 알린다."""
+def test_stage_prompt_lists_llm_stages_and_excludes_official():
+    """STAGE_PROMPT는 LLM 분류 대상 enum 전부를 포함하되 official은 제외한다.
+    official은 공홈 소스 규칙 전용 (spec §4.1) — 프롬프트에 등장하면 규칙 분리가 깨진 것."""
     from bullet_in import transfer_stage as ts
     from bullet_in.enrich import STAGE_PROMPT
-    for enum in ts.VALID_STAGES:
+    for enum in sorted(ts.VALID_STAGES - {"official"}):
         assert enum in STAGE_PROMPT, f"STAGE_PROMPT가 {enum} 단계를 누락 — transfer_stage와 동기화 필요"
+    assert "official" not in STAGE_PROMPT
 
 from bullet_in.enrich import resummarize_rows
 
