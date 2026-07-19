@@ -7,6 +7,7 @@ transfer_keywords: &transfer_kw ["transfer", "sign", "signed", "signing", "deal"
 sources:
   - source_id: arsenal_official
     display_name: Arsenal.com
+    serving: full      # 상세 페이지 서빙 범위 (spec §2.3) — 구단 공식 발표문은 전문
     tier: 0
     outlet: Arsenal.com
     journalist_label: Arsenal Official
@@ -19,6 +20,7 @@ sources:
     enabled: true
   - source_id: bbc_sport
     display_name: BBC Sport
+    serving: excerpt   # 상세 페이지 서빙 범위 (spec §2.3) — 언론사 기사는 요약 + 발췌 + 원문 링크
     tier: 1.5   # 비전담 기준선 — 전담 (Mokbel) 은 min 가드로 기자 tier 1 승격
     outlet: BBC
     medium: newspaper
@@ -32,6 +34,7 @@ sources:
     enabled: true
   - source_id: bbc_gossip
     display_name: BBC Football Gossip
+    serving: excerpt   # 상세 페이지 서빙 범위 (spec §2.3) — 언론사 기사는 요약 + 발췌 + 원문 링크
     tier: 4
     # outlet 미지정 — 지정하면 facet 에서 BBC(Tier 1)로 합쳐져 가십 41건이 승격된다
     journalist_label: BBC Gossip
@@ -45,6 +48,7 @@ sources:
     enabled: true
   - source_id: goal
     display_name: Goal.com
+    serving: excerpt   # 상세 페이지 서빙 범위 (spec §2.3) — 언론사 기사는 요약 + 발췌 + 원문 링크
     tier: 4
     outlet: Goal.com
     medium: newspaper
@@ -59,6 +63,7 @@ sources:
     enabled: true
   - source_id: football_london
     display_name: football.london
+    serving: excerpt   # 상세 페이지 서빙 범위 (spec §2.3) — 언론사 기사는 요약 + 발췌 + 원문 링크
     tier: 4
     outlet: football.london
     medium: newspaper
@@ -72,6 +77,7 @@ sources:
     enabled: true
   - source_id: guardian
     display_name: The Guardian
+    serving: excerpt   # 상세 페이지 서빙 범위 (spec §2.3) — 언론사 기사는 요약 + 발췌 + 원문 링크
     tier: 3
     outlet: The Guardian
     medium: newspaper
@@ -82,6 +88,7 @@ sources:
     enabled: true
   - source_id: skysports
     display_name: Sky Sports
+    serving: excerpt   # 상세 페이지 서빙 범위 (spec §2.3) — 언론사 기사는 요약 + 발췌 + 원문 링크
     tier: 2   # 비전담 기준선 — 전담 (Sheth) 은 min 가드로 기자 tier 1.5 승격
     outlet: Sky Sports
     medium: newspaper
@@ -96,6 +103,7 @@ sources:
     enabled: true
   - source_id: x_afcstuff
     display_name: afcstuff (aggregator)
+    serving: full      # 상세 페이지 서빙 범위 (spec §2.3) — 트윗 원문은 수십 단어 = 인용 수준
     medium: x
     adapter: x_playwright
     credibility: x_mentions
@@ -105,6 +113,7 @@ sources:
     enabled: true
   - source_id: fmkorea
     display_name: fmkorea 축구 소식통
+    serving: full      # 상세 페이지 서빙 범위 (spec §2.3) — 퍼가기 금지 정책 (#85) 이 별도 처리
     medium: community
     adapter: fmkorea
     credibility: fmkorea

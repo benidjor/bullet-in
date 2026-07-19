@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import logging
 import re
 import shutil
 from collections import Counter
@@ -9,6 +10,8 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup, escape
 
 from bullet_in import transfer_stage as _stage
+
+log = logging.getLogger(__name__)
 
 _TPL_DIR = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -423,6 +426,41 @@ def interleave_body(paras: list[str], images: list[str], every: int = 2) -> list
     return blocks
 
 
+def serving_mode(source_id: str | None, sources: dict) -> str:
+    """소스별 상세 페이지 서빙 범위 (spec §2.3). config 미지정 · 미상 값은 안전한 기본값 excerpt."""
+    mode = (sources.get(source_id) or {}).get("serving")
+    return mode if mode in ("full", "excerpt") else "excerpt"
+
+
+def excerpt_paras(paras: list[str], limit: int = 300, max_paras: int = 2) -> list[str]:
+    """발췌 모드 본문 — 첫 1~2문단, 누적 limit 자 도달 시 중단 (문단 중간은 자르지 않음)."""
+    out, total = [], 0
+    for p in paras[:max_paras]:
+        out.append(p)
+        total += len(p)
+        if total >= limit:
+            break
+    return out
+
+
+def sweep_orphan_pages(articles: list[dict], out_dir: str | Path) -> list[str]:
+    """DB 에서 빠진 기사의 잔여 페이지 파일을 삭제한다 (spec §2.6). 삭제한 파일명 목록 반환.
+
+    렌더 대상 0건은 DB 조회 실패와 구분할 수 없으므로 삭제를 건너뛴다 (오삭제 방어).
+    """
+    art_dir = Path(out_dir) / "article"
+    if not articles:
+        log.warning("잔여 페이지 정리 건너뜀 — 렌더 대상 0건 (DB 조회 실패 가능성)")
+        return []
+    valid = {a["content_hash"] for a in articles}
+    removed = sorted(f.name for f in art_dir.glob("*.html") if f.stem not in valid)
+    for name in removed:
+        (art_dir / name).unlink()
+    if removed:
+        log.info("잔여 페이지 %d건 삭제 (DB 에서 빠진 기사)", len(removed))
+    return removed
+
+
 def _decorate(row: dict, sources: dict, now: datetime,
               directory: dict | None = None, outlet_dir: dict | None = None) -> dict:
     a = dict(row)
@@ -504,7 +542,11 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
                   "journalists": {"initial": [], "stages": []}}
     article = dict(article)
     paras = [p for p in (article.get("body_ko") or "").split("\n") if p.strip()]
-    article["_body_blocks"] = interleave_body(paras, article.get("_images") or [])
+    article["_excerpt"] = serving_mode(article.get("source_id"), sources) == "excerpt"
+    images = article.get("_images") or []
+    if article["_excerpt"]:
+        paras, images = excerpt_paras(paras), []
+    article["_body_blocks"] = interleave_body(paras, images)
     return _env().get_template("detail.html.j2").render(
         a=article, neighbors=neighbors, active=None, root="../", facets=facets)
 
@@ -534,6 +576,8 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
         html = render_article(a, neighbors, row["content_hash"], sources, now, facets=facets)
         (out / "article" / f"{row['content_hash']}.html").write_text(
             html, encoding="utf-8")
+
+    sweep_orphan_pages(articles, out)
 
     for asset in ("style.css", "app.js"):
         shutil.copyfile(_STATIC_DIR / asset, out / asset)

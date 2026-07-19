@@ -24,8 +24,8 @@ uv run python - <<'PY'
 from datetime import datetime, timedelta
 from bullet_in.serve.render import write_site
 now = datetime(2026, 6, 29, 12, 0, 0)
-sources = {"bbc_sport": {"display_name": "BBC Sport"},
-           "arsenal_official": {"display_name": "Arsenal.com"}}
+sources = {"bbc_sport": {"display_name": "BBC Sport", "serving": "full"},
+           "arsenal_official": {"display_name": "Arsenal.com", "serving": "full"}}
 rows = []
 for i in range(10):
     rows.append(dict(
@@ -135,3 +135,13 @@ with sync_playwright() as p:
 - 계획 · spec: `docs/superpowers/plans/2026-06-29-tier2a-serving-ui.md`, `docs/superpowers/specs/2026-06-29-tier2a-detail-page-design.md` (§7)
 - 인라인 CSS 인젝션 함정: `docs/troubleshooting/2026-06-29-jinja-autoescape-css-context-injection.md`
 - 라이브 검증 철학 (모킹이 못 잡는 드리프트): `docs/troubleshooting/2026-06-12-live-source-selector-drift.md`
+
+## 차등 서빙 · 잔여 페이지 정리 검증 (SP-B, 2026-07-20)
+
+라이브 재렌더 (main 통합 상태) 후 아래를 확인한다.
+
+- 파일 수 = DB 행 수: `ls site/article/*.html | wc -l` 결과가 MariaDB articles 행 수와 일치해야 함 (잔여 페이지 0).
+- 언론사 상세 페이지 = 발췌 + 안내문: `grep -l "excerpt-note" site/article/*.html | head -3` 이 파일 목록을 내야 함.
+- 전문 3종 (x_afcstuff · fmkorea · arsenal_official) 상세 페이지 = 안내문 없음:
+  해당 소스 기사의 content_hash 를 DB 에서 뽑아 그 파일에 excerpt-note 가 없는지 grep 으로 확인.
+- 오삭제 방어: 강제로 빈 목록을 넘긴 재생성에서 "잔여 페이지 정리 건너뜀" WARNING 이 남아야 한다.

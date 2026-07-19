@@ -35,7 +35,7 @@ from datetime import datetime
 from bullet_in.serve.render import render_index
 
 NOW = datetime(2026, 6, 29, 12, 0, 0)
-SOURCES = {"bbc_sport": {"display_name": "BBC Sport"}}
+SOURCES = {"bbc_sport": {"display_name": "BBC Sport", "serving": "full"}}
 
 def _row(**kw):
     base = dict(content_hash="h1", url="https://x/1", source_id="bbc_sport",
@@ -554,3 +554,81 @@ def test_decorate_day_precision_shows_date_not_relative():
     d = _decorate(row, {}, now)
     assert d["_when"] == "7월 19일"                       # "N시간 전" 아님
     assert d["_published_iso"] == "2026-07-19T11:02:00"   # 유효 시각 (보간) — data-published 계약
+
+
+# ---- SP-B 차등 서빙: serving_mode · excerpt_paras (spec §2.3) ----
+from bullet_in.serve.render import serving_mode, excerpt_paras
+
+def test_serving_mode_reads_config_and_defaults_to_excerpt():
+    sources = {"bbc_sport": {"serving": "excerpt"}, "x_afcstuff": {"serving": "full"}}
+    assert serving_mode("x_afcstuff", sources) == "full"
+    assert serving_mode("bbc_sport", sources) == "excerpt"
+    assert serving_mode("new_source", sources) == "excerpt"   # 미지정 소스 → 안전 기본값
+    assert serving_mode(None, sources) == "excerpt"
+
+def test_serving_mode_invalid_value_falls_back_to_excerpt():
+    assert serving_mode("s", {"s": {"serving": "banana"}}) == "excerpt"
+
+def test_excerpt_paras_takes_at_most_two_paragraphs():
+    paras = ["짧은 첫 문단.", "둘째 문단.", "셋째 문단."]
+    assert excerpt_paras(paras) == ["짧은 첫 문단.", "둘째 문단."]
+
+def test_excerpt_paras_stops_when_first_paragraph_reaches_limit():
+    long_first = "가" * 300
+    assert excerpt_paras([long_first, "둘째"]) == [long_first]
+
+def test_excerpt_paras_empty_input():
+    assert excerpt_paras([]) == []
+
+
+def test_detail_excerpt_mode_cuts_body_and_shows_notice():
+    src = {"bbc_sport": {"display_name": "BBC Sport", "serving": "excerpt"}}
+    row = _row(body_ko="첫 문단." + "가" * 300 + "\n둘째 문단.\n셋째 문단.")
+    html = _ra(_dec(row, src, NOW), [], "h1", src, NOW)
+    assert "셋째 문단" not in html                    # 발췌 범위 밖 본문 제외
+    assert 'class="excerpt-note"' in html
+    assert "원문 전체 보기" in html
+
+def test_detail_full_mode_keeps_whole_body_without_notice():
+    row = _row(body_ko="첫 문단.\n둘째 문단.\n셋째 문단.")
+    html = _ra(_dec(row, SOURCES, NOW), [], "h1", SOURCES, NOW)
+    assert "셋째 문단" in html
+    assert "excerpt-note" not in html
+
+def test_detail_excerpt_mode_drops_inline_images():
+    src = {"bbc_sport": {"serving": "excerpt"}}
+    row = _row(body_ko="문단1\n문단2\n문단3\n문단4",
+               image_url="https://img/hero.jpg",
+               images_json='["https://img/a.jpg", "https://img/b.jpg"]')
+    html = _ra(_dec(row, src, NOW), [], "h1", src, NOW)
+    assert "img/a.jpg" not in html and "img/b.jpg" not in html
+
+
+# ---- SP-B 잔여 페이지 자동 정리 (spec §2.6) ----
+from bullet_in.serve.render import write_site, sweep_orphan_pages
+
+def test_write_site_removes_orphan_pages(tmp_path):
+    art = tmp_path / "article"
+    art.mkdir(parents=True)
+    (art / "orphan.html").write_text("stale", encoding="utf-8")
+    rows = [_row(content_hash="keep1"), _row(content_hash="keep2", url="https://x/2")]
+    write_site(rows, SOURCES, tmp_path, NOW)
+    assert not (art / "orphan.html").exists()
+    assert (art / "keep1.html").exists() and (art / "keep2.html").exists()
+
+def test_write_site_skips_sweep_when_no_articles(tmp_path):
+    art = tmp_path / "article"
+    art.mkdir(parents=True)
+    (art / "orphan.html").write_text("stale", encoding="utf-8")
+    write_site([], SOURCES, tmp_path, NOW)
+    assert (art / "orphan.html").exists()   # 렌더 대상 0건 → 오삭제 방어로 건너뜀
+
+def test_sweep_orphan_pages_returns_removed_names(tmp_path):
+    art = tmp_path / "article"
+    art.mkdir(parents=True)
+    (art / "keep1.html").write_text("x", encoding="utf-8")
+    (art / "old1.html").write_text("x", encoding="utf-8")
+    (art / "old2.html").write_text("x", encoding="utf-8")
+    removed = sweep_orphan_pages([{"content_hash": "keep1"}], tmp_path)
+    assert removed == ["old1.html", "old2.html"]
+    assert (art / "keep1.html").exists()
