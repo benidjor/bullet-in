@@ -76,13 +76,17 @@ EOF
 ## 4. 사이트 재생성 (수렴분 반영)
 
 번역은 DB 에만 반영되므로, 서빙 화면에 실리려면 `write_site` 를 다시 돌린다.
+아래 예시 코드의 SELECT · 인자는 run.py 서빙 경로와 1:1 로 유지한다.
+서빙 코드에 컬럼 · 인자가 추가되면 이 예시도 함께 갱신할 것
+— 구버전 예시로 사이트를 다시 만들면 정렬 보간 · 아웃렛 표시가 깨진다
+(예시 코드 불일치 함정: `docs/troubleshooting/2026-07-19-runbook-snippet-logic-drift.md`).
 
 ```bash
 uv run python - <<'EOF'
 import os
 from sqlalchemy import create_engine, text
 from bullet_in.score import load_sources
-from bullet_in.credibility import load_registry, journalist_directory
+from bullet_in.credibility import load_registry, journalist_directory, outlet_directory
 from bullet_in.serve.render import write_site
 
 engine = create_engine(os.environ["MARIADB_URL"])
@@ -90,10 +94,12 @@ with engine.connect() as c:
     rows = [dict(r) for r in c.execute(text(
         "SELECT content_hash,url,source_id,title_original,title_ko,summary_ko,"
         "summary3_ko,body_ko,image_url,images_json,outlet,journalist,team,transfer_stage,tier,"
-        "confidence_score,published_at FROM articles")).mappings().all()]
+        "confidence_score,published_at,published_precision,fetched_at "
+        "FROM articles")).mappings().all()]
 write_site(rows, load_sources("config/sources.yaml"), "site",
            directory=journalist_directory("config/credibility.yaml"),
-           registry=load_registry("config/credibility.yaml"))
+           registry=load_registry("config/credibility.yaml"),
+           outlet_dir=outlet_directory("config/credibility.yaml"))
 print("site 재생성:", len(rows), "행")
 EOF
 ```
