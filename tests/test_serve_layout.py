@@ -261,3 +261,39 @@ def test_journalist_entry_no_false_partial_name_match():
     row = {"journalist": "Sam Deanston and Kim Lee", "source_id": "skysports"}
     e = journalist_entry(row, sources, directory)
     assert e["registered"] is False
+def test_outlet_display_promotes_registered_journalist_affiliation():
+    sources = {"x_afcstuff": {"credibility": "x_mentions",
+                              "display_name": "afcstuff (aggregator)"}}
+    directory = {"@samimokbel_bbc": {"name": "Sami Mokbel", "outlet": "BBC"}}
+    row = {"outlet": None, "source_id": "x_afcstuff", "journalist": "@SamiMokbel_BBC"}
+    assert outlet_display(row, sources, directory=directory) == "BBC"
+
+def test_outlet_display_folds_org_account_to_official_name():
+    sources = {"x_afcstuff": {"credibility": "x_mentions",
+                              "display_name": "afcstuff (aggregator)"}}
+    outlet_dir = {"talksport": "talkSPORT"}
+    row = {"outlet": None, "source_id": "x_afcstuff", "journalist": "@talkSPORT"}
+    assert outlet_display(row, sources, outlet_dir=outlet_dir) == "talkSPORT"
+
+def test_outlet_display_unregistered_or_no_affiliation_falls_back():
+    sources = {"x_afcstuff": {"credibility": "x_mentions",
+                              "display_name": "afcstuff (aggregator)"}}
+    # 미등재 핸들
+    row = {"outlet": None, "source_id": "x_afcstuff", "journalist": "@tabuteauS"}
+    assert outlet_display(row, sources, directory={}, outlet_dir={}) == "afcstuff (aggregator)"
+    # 등재됐지만 소속 없음 (독립 ITK)
+    directory = {"@fabrizioromano": {"name": "Fabrizio Romano", "outlet": None}}
+    row = {"outlet": None, "source_id": "x_afcstuff", "journalist": "@FabrizioRomano"}
+    assert outlet_display(row, sources, directory=directory) == "afcstuff (aggregator)"
+
+def test_outlet_display_promoted_and_non_x_rows_unchanged():
+    sources = {"x_afcstuff": {"credibility": "x_mentions",
+                              "display_name": "afcstuff (aggregator)"},
+               "bbc_sport": {"outlet": "BBC", "display_name": "BBC Sport"}}
+    directory = {"@samimokbel_bbc": {"name": "Sami Mokbel", "outlet": "BBC"}}
+    # 승격 항목 (outlet 저장값) 은 그대로
+    row = {"outlet": "talkSPORT", "source_id": "x_afcstuff", "journalist": "@JacobsBen"}
+    assert outlet_display(row, sources, directory=directory) == "talkSPORT"
+    # 비 X 소스는 기존 폴백 유지
+    row = {"outlet": None, "source_id": "bbc_sport", "journalist": "Sami Mokbel"}
+    assert outlet_display(row, sources, directory=directory) == "BBC"

@@ -80,6 +80,47 @@ def apply_glossary(parsed: dict, mapping: dict[str, str]) -> dict:
             out[k] = v
     return out
 
+# 문장 종결 (마침표류 + 닫는 따옴표) 뒤가 공백 · 블록 끝일 때만 경계 — 소수점 (2.5) 오분할 방지
+_SENT_END_RE = re.compile(r'[.!?…]["”\'』」]?(?=\s|$)')
+
+def _split_sentences(block: str) -> list[str]:
+    out, start = [], 0
+    for m in _SENT_END_RE.finditer(block):
+        out.append(block[start:m.end()].strip())
+        start = m.end()
+    tail = block[start:].strip()
+    if tail:
+        out.append(tail)
+    return [s for s in out if s]
+
+def paragraphize(text: str | None, max_len: int = 400) -> str | None:
+    """max_len 초과 무분할 블록을 문장 경계에서 재분할한다.
+    프롬프트의 문단화 지시 (2~4문장 단위) 를 LLM 이 간헐 미준수하는 것의 결정적 보정.
+    마크다운 블록 ('### ' · '> ') 과 문장 경계 없는 블록은 건드리지 않는다."""
+    if not text:
+        return text
+    blocks_out: list[str] = []
+    for block in text.split("\n"):
+        if len(block) <= max_len or block.lstrip().startswith(("### ", "> ")):
+            blocks_out.append(block)
+            continue
+        sents = _split_sentences(block)
+        if len(sents) <= 1:
+            blocks_out.append(block)
+            continue
+        chunk, chunks = "", []
+        for s in sents:
+            cand = f"{chunk} {s}" if chunk else s
+            if chunk and len(cand) > max_len:
+                chunks.append(chunk)
+                chunk = s
+            else:
+                chunk = cand
+        if chunk:
+            chunks.append(chunk)
+        blocks_out.extend(chunks)
+    return "\n".join(blocks_out)
+
 def _extract_full(text: str) -> dict | None:
     m = re.search(r"\{.*\}", text, re.DOTALL)
     if not m:
