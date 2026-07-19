@@ -31,6 +31,7 @@ const fstatus = document.getElementById('fstatus');
 const applyBtn = document.getElementById('applyBtn');
 const resetBtn = document.getElementById('resetBtn');
 const searchInput = document.getElementById('q');
+const sortSel = document.getElementById('sortSel');   // 헤더 정렬 (인덱스에만 렌더)
 const grid = document.querySelector('.grid');
 const cards = grid ? [...grid.querySelectorAll('.card')] : [];
 
@@ -61,7 +62,7 @@ const setupAllMore = () =>
 function filterParams() {
   const p = new URLSearchParams();
   for (const g of URL_GROUPS) for (const v of checkedValues(g)) p.append(g, v);
-  const sort = side.querySelector('input[name=sort]:checked')?.dataset.value;
+  const sort = sortSel?.value;
   if (sort && sort !== 'latest') p.set('sort', sort);
   const q = (searchInput?.value || '').trim();
   if (q) p.set('q', q);
@@ -78,8 +79,7 @@ function restoreFromQuery() {
     if (URL_GROUPS.includes(g)) c.checked = want[g].includes(c.dataset.value);
   });
   const sort = ['confidence', 'views'].includes(p.get('sort')) ? p.get('sort') : 'latest';
-  const sortBox = side.querySelector(`input[name=sort][data-value=${sort}]`);
-  if (sortBox) sortBox.checked = true;
+  if (sortSel) sortSel.value = sort;
   if (searchInput) searchInput.value = p.get('q') || '';
   return true;
 }
@@ -120,7 +120,7 @@ function applyFilters() {
 
 function sortCards() {
   if (!grid) return;
-  const key = side.querySelector('input[name=sort]:checked').dataset.value;
+  const key = sortSel ? sortSel.value : 'latest';
   const views = key === 'views' ? readViews() : null;
   const ordered = [...cards].sort((a, b) => {
     if (key === 'confidence') {
@@ -140,9 +140,18 @@ if (grid) {
   applyBtn.onclick = applyFilters;
   resetBtn.onclick = () => {
     enabledBoxes().forEach(c => { c.checked = (c.dataset.value === 'arsenal'); });
-    side.querySelector('input[name=sort][data-value=latest]').checked = true;
+    if (sortSel) sortSel.value = 'latest';
     if (searchInput) searchInput.value = '';
     applyFilters();
+  };
+  // 헤더 정렬은 필터와 독립 — 적용 버튼 없이 즉시 정렬 + URL 의 sort 만 갱신
+  if (sortSel) sortSel.onchange = () => {
+    sortCards();
+    const p = new URLSearchParams(location.search);
+    if (sortSel.value !== 'latest') p.set('sort', sortSel.value);
+    else p.delete('sort');
+    const qs = p.toString();
+    history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
   };
   if (searchInput) searchInput.addEventListener('input', applyFilters);
   if (restoreFromQuery()) { setupAllMore(); applyFilters(); }  // 상세에서 넘어온 필터 상태 복원 · 적용
@@ -159,7 +168,6 @@ if (grid) {
   };
   if (resetBtn) resetBtn.onclick = () => {
     enabledBoxes().forEach(c => { c.checked = (c.dataset.value === 'arsenal'); });
-    side.querySelector('input[name=sort][data-value=latest]').checked = true;
     if (searchInput) searchInput.value = '';
     applyBtn && applyBtn.classList.remove('dirty');
   };
