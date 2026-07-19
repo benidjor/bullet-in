@@ -19,6 +19,20 @@ Tier 2-b (PR #18) 로 도입된 영입 단계 분류 (`articles.transfer_stage`)
 - **타깃 분류 패스만 단독 실행하려면 `ensure_schema()` 선행.** 통합 테스트는 `bulletin_test` 에 스키마를 적용하지만, 실 `bulletin` DB 의 `transfer_stage` 컬럼은 `run.py` 의 `ensure_schema()` (또는 수동 호출) 로만 적용된다. 전체 파이프라인 없이 분류만 돌릴 때는 먼저 스키마를 보장해야 `transfer_stage IS NULL` 조회가 동작한다.
 - **이 프로젝트는 dotenv 미사용** → 모든 실행 전에 `set -a; source .env; set +a`.
 
+## 오피셜 규칙 분리 (2026-07-19)
+
+'이적 합의' (agreed) 신설과 함께 official 부여 방식이 LLM 판정에서 소스 규칙으로 바뀌었다.
+설계 배경은 `docs/superpowers/specs/2026-07-19-transfer-stage-overhaul-design.md` §2 · §4 참고.
+
+- **규칙 경로만 official 을 생성한다.** `transfer_stage.rule_stage(source_id)` 는 `source_id` 가 `arsenal_official` (공홈) 인 행만 `"official"` 을 반환하고, 그 외는 `None` (LLM 분류 몫) 이다. `run.py` 의 분류 패스가 미태깅 행을 규칙 대상 / LLM 대상으로 나눠, 규칙 대상은 LLM 호출 없이 바로 `set_stage` 한다.
+- **LLM enum 에서 official 이 제거됐다.** `STAGE_PROMPT` 는 더 이상 official 을 제시하지 않는다 — 공홈이 아닌 소스는 구조적으로 official 이 될 수 없다.
+- **모델이 그래도 official 을 반환하면 agreed 로 강등한다.** `enrich.classify_stage_rows` 가 `stage == "official"` 응답을 agreed 로 낮추고 `WARNING` 로그를 남긴다 — 정상 흐름에서는 뜨지 않아야 하는 신호다.
+- **진단: 비공홈 official 불변량.** 아래 SQL 은 항상 0 을 반환해야 한다. 0 이 아니면 규칙 분리가 깨졌거나 강등 방어를 우회한 경로가 있다는 뜻이다.
+
+```sql
+SELECT COUNT(*) FROM articles WHERE transfer_stage = 'official' AND source_id != 'arsenal_official';
+```
+
 ## 1. 스키마 마이그레이션 (멱등)
 
 전체 파이프라인 (`python -m bullet_in.run`) 은 시작 시 `ensure_schema()` 로 컬럼을 자동 적용하므로 별도 작업이 불필요하다.
@@ -42,6 +56,8 @@ PY
 
 전체 파이프라인을 돌리면 번역 패스 뒤에 분류 패스가 자동 실행된다.
 이미 적재된 행만 분류하려면 (수집 없이) 분류 패스만 돌린다.
+`rule_stage` (공홈 → official 직결) 대상은 LLM 을 거치지 않으므로, 아래 스니펫은 나머지 (LLM 대상) 행만 돌리는 2절 원본을 단순화한 것이다.
+공홈 규칙 분리 상세는 "오피셜 규칙 분리 (2026-07-19)" 절을 참고한다.
 
 ```bash
 set -a; source .env; set +a
@@ -85,7 +101,9 @@ print(f"NULL 복원: {n}건 → 이제 2절 backfill 재실행")
 PY
 ```
 
-특정 단계만 다시 보려면 `WHERE transfer_stage = 'other'` 등으로 범위를 좁힌다.
+특정 단계만 다시 보려면 `WHERE transfer_stage = 'other'` (또는 `'agreed'`) 등으로 범위를 좁힌다.
+
+**2026-07-19 실측**: 201건 NULL 복원 → LLM 분류 1패스로 수렴 (잔존 0). 규칙 경로는 0건 (공홈 적재 0건). 재분류 후 official 0건은 공홈 적재가 없는 동안 정상이다 ("오피셜 규칙 분리" 절 참고).
 
 ## 4. 분포 검증
 
@@ -110,6 +128,7 @@ PY
 ## 알려진 한계
 
 - **비-기사 링크가 `rumour` 등으로 오분류될 수 있다.** 라이브에서 "Want more transfer stories? Read Thursday's full gossip column" 같은 football.london 네비게이션 · teaser 링크가 `rumour` 로 태깅됐다. 근본 원인은 분류기가 아니라 **수집 단계의 이적 키워드 필터 미착수 (로드맵 Tier 1-3)** 로 비-기사 링크까지 적재되는 것이다. Tier 1-3 + 기존 데이터 정리가 들어오면 이 잡음이 줄어든다. 메모리 `tier1-cleanup-track` 참조.
+- **재계약 기사도 공홈 official 배지를 받을 수 있다.** 공홈 sign 필터가 신규 영입과 재계약 (연장) 기사를 구분하지 않아, 재계약도 규칙 경로에서 official 로 태깅된다. 현재 공홈 적재가 0건이라 실측은 없다 — 적재가 시작되면 재검토한다 (spec §4.4).
 
 ## 참조
 
