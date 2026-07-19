@@ -14,7 +14,7 @@ from bullet_in.credibility import load_registry, journalist_directory
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows,
-                              apply_glossary)
+                              apply_glossary, paragraphize)
 from bullet_in.tone import select_tone_backfill
 from bullet_in import transfer_stage
 from bullet_in.serve.render import write_site, write_ops
@@ -71,7 +71,7 @@ async def main(concurrency: int):
     for h, v in results.items():
         v = apply_glossary(v, glossary)
         mart.set_translation(h, v["title_ko"], v["summary_ko"],
-                             v["summary3_ko"], v["body_ko"])
+                             v["summary3_ko"], paragraphize(v["body_ko"]))
 
     # 분류 패스: 공홈은 소스 규칙으로 직접 태깅 (official 은 규칙 경로 전용), 나머지만 LLM 분류
     llm_rows = []

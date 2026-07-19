@@ -369,3 +369,35 @@ def test_apply_glossary_ignores_missing_fields_and_empty_mapping():
     parsed = {"title_ko": "제목", "summary_ko": None}
     assert apply_glossary(parsed, {}) == parsed
     assert apply_glossary(parsed, {"스캇": "스콧"})["summary_ko"] is None
+
+def test_paragraphize_splits_long_block_at_sentence_ends():
+    from bullet_in.enrich import paragraphize
+    sent = "아스날이 여름 이적 시장에서 미드필더 보강을 위해 여러 후보를 검토하고 있는 것으로 알려졌다."  # 약 50자
+    block = " ".join([sent] * 12)  # 600자 초과 단일 블록
+    out = paragraphize(block)
+    lines = out.split("\n")
+    assert len(lines) >= 2
+    assert all(len(l) <= 400 for l in lines)
+    # 내용 보존: 공백 정규화 후 동일
+    assert " ".join(out.split()) == " ".join(block.split())
+
+def test_paragraphize_keeps_short_blocks_and_markdown():
+    from bullet_in.enrich import paragraphize
+    long_quote = "> " + "인용문이다. " * 60  # 400자 초과 인용 블록
+    header = "### " + "소제목이다. " * 60   # 400자 초과 소제목 블록
+    text = "짧은 문단이다.\n" + long_quote + "\n" + header
+    assert paragraphize(text) == text
+
+def test_paragraphize_does_not_split_on_decimal_point():
+    from bullet_in.enrich import paragraphize
+    sent = "이적료는 총 2.5천만 파운드에 이르는 것으로 전해졌으며 협상은 막바지 단계다."
+    block = " ".join([sent] * 12)
+    out = paragraphize(block)
+    assert not any(l.rstrip().endswith("2.") for l in out.split("\n"))
+
+def test_paragraphize_passthrough_none_empty_and_unsplittable():
+    from bullet_in.enrich import paragraphize
+    assert paragraphize(None) is None
+    assert paragraphize("") == ""
+    one_sentence = "가" * 500 + "."  # 문장 경계 없는 500자
+    assert paragraphize(one_sentence) == one_sentence
