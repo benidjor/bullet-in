@@ -211,3 +211,39 @@ def test_html_adapter_body_selector_takes_precedence_over_thumbnail_only():
     items = asyncio.run(a.fetch())
     assert items[0].raw_payload["body"] == "Deal done."
     assert items[0].raw_payload["image_url"] == "https://img.test/g.jpg"
+
+ART_WITH_PUB = ('<html><head><script type="application/ld+json">'
+                '{"@type":"NewsArticle","datePublished":"2026-07-19T10:00:00Z"}'
+                '</script></head><body><article><p>Body text.</p></article></body></html>')
+
+@respx.mock
+def test_html_body_path_extracts_published():
+    respx.get("https://ex.test/list").mock(return_value=httpx.Response(
+        200, text='<a class="i" href="/a1">Arsenal sign</a>'))
+    respx.get("https://ex.test/a1").mock(return_value=httpx.Response(200, text=ART_WITH_PUB))
+    a = HtmlAdapter(source_id="s", list_url="https://ex.test/list",
+                    item_selector="a.i", body_selector="article")
+    items = asyncio.run(a.fetch())
+    assert items[0].raw_payload["published"] == "2026-07-19T10:00:00+00:00"
+    assert items[0].raw_payload["published_precision"] == "time"
+
+@respx.mock
+def test_html_thumbnail_only_path_extracts_published():
+    respx.get("https://ex.test/list").mock(return_value=httpx.Response(
+        200, text='<a class="i" href="/a1">Arsenal sign</a>'))
+    respx.get("https://ex.test/a1").mock(return_value=httpx.Response(200, text=ART_WITH_PUB))
+    a = HtmlAdapter(source_id="s", list_url="https://ex.test/list",
+                    item_selector="a.i", thumbnail_only=True)
+    items = asyncio.run(a.fetch())
+    assert items[0].raw_payload["published"] == "2026-07-19T10:00:00+00:00"
+
+@respx.mock
+def test_html_no_published_leaves_payload_clean():
+    respx.get("https://ex.test/list").mock(return_value=httpx.Response(
+        200, text='<a class="i" href="/a1">Arsenal sign</a>'))
+    respx.get("https://ex.test/a1").mock(return_value=httpx.Response(
+        200, text="<html><body><article><p>x</p></article></body></html>"))
+    a = HtmlAdapter(source_id="s", list_url="https://ex.test/list",
+                    item_selector="a.i", body_selector="article")
+    items = asyncio.run(a.fetch())
+    assert "published" not in items[0].raw_payload

@@ -26,7 +26,7 @@ class HtmlAdapter:
             self.title_keywords = [k.lower() for k in title_contains]
     async def fetch(self) -> list[RawItem]:
         from bullet_in.adapters.meta import (extract_og_image, extract_body_images,
-                                             extract_authors)
+                                             extract_authors, extract_published_at)
         async with httpx.AsyncClient(timeout=20, follow_redirects=True,
                                      headers={"User-Agent": "bullet-in/0.1"}) as c:
             r = await c.get(self.list_url)
@@ -65,6 +65,10 @@ class HtmlAdapter:
                         payload["images"] = extract_body_images(
                             rb.text, self.body_selector, base_url=url)
                         payload["authors"] = extract_authors(rb.text)
+                        pub = extract_published_at(rb.text)
+                        if pub:
+                            payload["published"] = pub[0].isoformat()
+                            payload["published_precision"] = pub[1]
                     except httpx.HTTPError:
                         payload["body"] = ""  # 본문 실패 — 제목만 유지, 다음 회차 재시도
                 elif self.thumbnail_only:
@@ -73,6 +77,10 @@ class HtmlAdapter:
                         rb = await c.get(url)
                         rb.raise_for_status()
                         payload["image_url"] = extract_og_image(rb.text)
+                        pub = extract_published_at(rb.text)
+                        if pub:
+                            payload["published"] = pub[0].isoformat()
+                            payload["published_precision"] = pub[1]
                     except httpx.HTTPError:
                         pass  # 상세 실패 — 제목만 적재, 놓친 이미지는 백필 몫
                 out.append(RawItem(source_id=self.source_id, source_type="html",
