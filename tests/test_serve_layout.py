@@ -223,3 +223,41 @@ def test_facet_counts_journalists_aggregate_by_name_without_registry():
 def test_facet_counts_journalists_empty_without_directory():
     f = facet_counts([{"journalist": None, "source_id": "goal"}], JSOURCES)
     assert f["journalists"] == {"initial": [], "stages": []}
+
+def test_journalist_entry_co_byline_resolves_to_registered_representative():
+    from bullet_in.serve.render import journalist_entry
+    sources = {"skysports": {"display_name": "Sky Sports", "outlet": "Sky Sports"}}
+    directory = {"dharmesh sheth": {"name": "Dharmesh Sheth", "outlet": "Sky Sports"},
+                 "@skysports_sheth": {"name": "Dharmesh Sheth", "outlet": "Sky Sports"}}
+    row = {"journalist": "Zinny Boswell and Dharmesh Sheth", "source_id": "skysports"}
+    e = journalist_entry(row, sources, directory)
+    assert e["name"] == "Dharmesh Sheth"
+    assert e["registered"] is True
+    assert e["label"] == "Dharmesh Sheth (Sky Sports)"
+
+def test_journalist_entry_co_byline_without_registered_stays_verbatim():
+    from bullet_in.serve.render import journalist_entry
+    sources = {"skysports": {"display_name": "Sky Sports", "outlet": "Sky Sports"}}
+    directory = {"dharmesh sheth": {"name": "Dharmesh Sheth", "outlet": "Sky Sports"}}
+    row = {"journalist": "Sam Blitz and Nick Wright", "source_id": "skysports"}
+    e = journalist_entry(row, sources, directory)
+    assert e["name"] == "Sam Blitz and Nick Wright"
+    assert e["registered"] is False
+
+def test_journalist_entry_co_byline_two_registered_picks_first_in_byline():
+    from bullet_in.serve.render import journalist_entry
+    sources = {"skysports": {"display_name": "Sky Sports", "outlet": "Sky Sports"}}
+    directory = {"sam dean": {"name": "Sam Dean", "outlet": "The Telegraph"},
+                 "dharmesh sheth": {"name": "Dharmesh Sheth", "outlet": "Sky Sports"}}
+    row = {"journalist": "Dharmesh Sheth and Sam Dean", "source_id": "skysports"}
+    e = journalist_entry(row, sources, directory)
+    assert e["name"] == "Dharmesh Sheth"
+
+def test_journalist_entry_no_false_partial_name_match():
+    from bullet_in.serve.render import journalist_entry
+    sources = {"skysports": {"display_name": "Sky Sports", "outlet": "Sky Sports"}}
+    directory = {"sam dean": {"name": "Sam Dean", "outlet": "The Telegraph"}}
+    # 'Sam Deanston' 은 Sam Dean 과 다른 인물 — 단어 경계 밖 부분 일치 금지
+    row = {"journalist": "Sam Deanston and Kim Lee", "source_id": "skysports"}
+    e = journalist_entry(row, sources, directory)
+    assert e["registered"] is False
