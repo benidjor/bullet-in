@@ -48,9 +48,12 @@ OUTLET_MAP = {
     "텔레그래프": "The Telegraph",
     "DM": "Daily Mail", "비사커": "BeSoccer",
     "타임스": "The Times", "타임즈": "The Times",
-
-    "공홈": "Arsenal.com", "아스날 공홈": "Arsenal.com",
 }
+
+# 클럽 공홈 말머리는 수집하지 않는다 (2026-07-19) — 이용자가 타 구단 공홈 발표에도
+# [공홈] 을 써서 Arsenal.com tier 0 오귀속이 발생했고, 아스날 공홈은 직수집
+# (arsenal_api) 이 구 URL 중복 없이 official 태깅까지 커버한다.
+_OFFICIAL_PREFIX = "공홈"
 _BRACKET_RE = re.compile(r"^\s*\[([^\]]+)\]")
 
 def parse_bracket(title: str) -> tuple[str | None, str | None, bool]:
@@ -149,6 +152,9 @@ class FmkoreaAdapter:
                 continue  # 글 fetch 실패 — 스킵, 배치 지속
             html = rb.text
             outlet, journalist, _excl = parse_bracket(title)
+            if outlet and _OFFICIAL_PREFIX in outlet:
+                log.info("fmkorea [공홈] 말머리 drop — 직수집 경로가 커버 url=%s", url)
+                continue
             orig = _extract_original_url(html, self.body_selector)
             if orig is None or outlet is None:
                 log.warning("fmkorea 원문/말머리 해소 실패 — 스킵 url=%s", url)
