@@ -89,7 +89,9 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
             outlet=item.raw_payload.get("outlet"),
             journalist=journalist,
             team="arsenal",
-            published_at=_published(item.raw_payload, item.fetched_at), fetched_at=item.fetched_at,
+            published_at=_published(item.raw_payload, item.fetched_at),
+            published_precision=item.raw_payload.get("published_precision"),
+            fetched_at=item.fetched_at,
             revision=rev))
         source_counts[item.source_id] = source_counts.get(item.source_id, 0) + 1
     return out, {"dup_count": dup_count, "source_counts": source_counts,

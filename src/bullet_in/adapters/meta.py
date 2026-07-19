@@ -180,7 +180,7 @@ def _walk_published(node) -> list[str]:
             found += _walk_published(val)
     return found
 
-_TIME_COMPONENT_RE = re.compile(r"[T ]\d{1,2}:")
+_TIME_COMPONENT_RE = re.compile(r"[T ]\d{1,2}:|T\d{4}")
 
 def _parse_published(raw: str) -> tuple[datetime, str] | None:
     """날짜 문자열 → (UTC datetime, precision). 시각 성분 없으면 'day' · naive 는 UTC 간주."""

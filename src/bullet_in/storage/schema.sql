@@ -25,6 +25,7 @@ ALTER TABLE articles ADD COLUMN IF NOT EXISTS journalist VARCHAR(128);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS team VARCHAR(32) DEFAULT 'arsenal';
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS transfer_stage VARCHAR(32);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS images_json TEXT;
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS published_precision VARCHAR(4);
 CREATE TABLE IF NOT EXISTS pipeline_runs (
   run_id VARCHAR(64) PRIMARY KEY, dag_run_id VARCHAR(128),
   started_at DATETIME, finished_at DATETIME, duration_sec FLOAT,
