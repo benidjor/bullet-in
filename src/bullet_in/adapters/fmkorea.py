@@ -46,6 +46,9 @@ OUTLET_MAP = {
     "골닷컴": "Goal", "르퀴프": "L'Équipe", "레퀴프": "L'Équipe",  # '레' 변종
     "인디펜던트": "The Independent", "디 인디펜던트": "The Independent",
     "텔레그래프": "The Telegraph",
+    "DM": "Daily Mail", "비사커": "BeSoccer",
+    "타임스": "The Times", "타임즈": "The Times",
+
     "공홈": "Arsenal.com", "아스날 공홈": "Arsenal.com",
 }
 _BRACKET_RE = re.compile(r"^\s*\[([^\]]+)\]")

@@ -137,8 +137,9 @@ def test_facet_counts_journalist_tier_from_registry():
     reg = _Reg(journalists={"온스테인": 1.0, "david ornstein": 1.0})
     f = facet_counts(arts, {"a": {}}, directory=directory, registry=reg)
     t1 = [g for g in f["journalists"]["initial"] if g["key"] == "1"][0]
-    assert [i["label"] for i in t1["items"]] == ["David Ornstein (The Athletic)"]
-    assert f["journalists"]["stages"][-1]["unregistered"][0]["value"] == "Kaya Kaynak"
+    # 등재 기자는 레지스트리 tier, 비전담 (미등재) 은 기사 tier 로 같은 그룹에 분류
+    assert [i["label"] for i in t1["items"]] == ["David Ornstein (The Athletic)", "Kaya Kaynak"]
+    assert f["journalists"]["stages"] == []   # 미등재 꼬리 없음
 
 def test_facet_counts_includes_stage_excluding_other():
     arts = [
