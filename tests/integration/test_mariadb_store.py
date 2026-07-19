@@ -88,6 +88,7 @@ def test_rows_missing_stage_and_set_stage(engine):
     assert "hs" in missing
     assert missing["hs"]["title_original"] == "Arsenal close on Gyokeres"
     assert missing["hs"]["summary_ko"] == "요케레스 임박"
+    assert missing["hs"]["source_id"] == "bbc_sport"   # 규칙·LLM 분리 판정 입력 (spec §4.1)
     store.set_stage("hs", "negotiating")
     assert "hs" not in {r["content_hash"] for r in store.rows_missing_stage()}
 

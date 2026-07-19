@@ -86,7 +86,7 @@ class MartStore:
     def rows_missing_stage(self) -> list[dict]:
         with self.engine.connect() as c:
             rows = c.execute(text(
-                "SELECT content_hash,title_original,summary_ko "
+                "SELECT content_hash,source_id,title_original,summary_ko "
                 "FROM articles WHERE transfer_stage IS NULL")).mappings().all()
         return [dict(r) for r in rows]
 

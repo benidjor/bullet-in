@@ -16,6 +16,7 @@ from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows,
                               apply_glossary)
 from bullet_in.tone import select_tone_backfill
+from bullet_in import transfer_stage
 from bullet_in.serve.render import write_site, write_ops
 from bullet_in.quality import success_rate, volume_anomalies, evaluate_freshness
 from bullet_in import notify
@@ -72,9 +73,15 @@ async def main(concurrency: int):
         mart.set_translation(h, v["title_ko"], v["summary_ko"],
                              v["summary3_ko"], v["body_ko"])
 
-    # 분류 패스: 미태깅 행 분류 및 저장
-    stage_rows = mart.rows_missing_stage()
-    for h, stage in classify_stage_rows(stage_rows, client, GEMINI_MODEL).items():
+    # 분류 패스: 공홈은 소스 규칙으로 직접 태깅 (official 은 규칙 경로 전용), 나머지만 LLM 분류
+    llm_rows = []
+    for r in mart.rows_missing_stage():
+        ruled = transfer_stage.rule_stage(r["source_id"])
+        if ruled:
+            mart.set_stage(r["content_hash"], ruled)
+        else:
+            llm_rows.append(r)
+    for h, stage in classify_stage_rows(llm_rows, client, GEMINI_MODEL).items():
         mart.set_stage(h, stage)
 
     # 말투 백필: 요약에 존댓말이 남은 행을 회차 상한 내에서 재생성 (멱등 — 검출 기반 재선별)
