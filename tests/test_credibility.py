@@ -226,3 +226,17 @@ def test_tom_canton_registered_tier_4_is_neutral():
     # 기자 facet 에서 미등재 구간을 벗어난다
     d = journalist_directory(REG)
     assert d["tom canton"]["name"] == "Tom Canton"
+
+def test_outlet_directory_maps_aliases_to_official_name(tmp_path):
+    from bullet_in.credibility import outlet_directory
+    p = tmp_path / "cred.yaml"
+    p.write_text(
+        'journalists: []\n'
+        'outlets:\n'
+        '  - {name: talkSPORT, tier: 4, aliases: ["talkSPORT"]}\n'
+        "  - {name: L'Équipe, tier: 3, aliases: [\"레키프\", \"lequipe\"]}\n",
+        encoding="utf-8")
+    d = outlet_directory(p)
+    assert d["talksport"] == "talkSPORT"
+    assert d["lequipe"] == "L'Équipe"
+    assert d["레키프"] == "L'Équipe"

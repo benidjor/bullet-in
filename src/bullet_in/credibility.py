@@ -48,6 +48,16 @@ def journalist_directory(path) -> dict[str, dict]:
             out.setdefault(key.lower(), entry)
     return out
 
+def outlet_directory(path) -> dict[str, str]:
+    """outlets alias · 정식명(lower) -> 정식명. 조직 계정 핸들 접기 등 표시 정규화용
+    (journalist_directory 의 outlets 판 — Registry 는 tier 만 있어 정식명 복원 불가)."""
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    out: dict[str, str] = {}
+    for e in data.get("outlets", []) or []:
+        for key in [e["name"], *e["aliases"]]:
+            out.setdefault(key.lower(), e["name"])
+    return out
+
 def resolve_tier(item, sources: dict, registry: "Registry | None",
                  journalist: str | None = None) -> float | None:
     """항목 1건의 tier 를 산출. None 이면 호출측에서 그 항목을 버린다."""
