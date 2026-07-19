@@ -133,8 +133,8 @@ def test_registry_journalist_outlets_only_for_affiliated():
 
 def test_registry_registers_french_outlets():
     r = load_registry(REG)
-    assert r.outlets["l'équipe"] == 2.0
-    assert r.outlets["레키프"] == 2.0
+    assert r.outlets["l'équipe"] == 3.0
+    assert r.outlets["레키프"] == 3.0
     assert r.outlets["rmc"] == 1.0
     assert r.outlets["foot mercato"] == 4.0
 

@@ -22,7 +22,7 @@ sources:
     enabled: true
   - source_id: bbc_sport
     display_name: BBC Sport
-    tier: 1
+    tier: 1.5   # 비전담 기준선 — 전담 (Mokbel) 은 min 가드로 기자 tier 1 승격
     outlet: BBC
     medium: newspaper
     adapter: html
@@ -84,7 +84,7 @@ sources:
     enabled: true
   - source_id: skysports
     display_name: Sky Sports
-    tier: 1.5
+    tier: 2   # 비전담 기준선 — 전담 (Sheth) 은 min 가드로 기자 tier 1.5 승격
     outlet: Sky Sports
     medium: newspaper
     adapter: html

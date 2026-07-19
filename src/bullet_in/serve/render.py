@@ -98,8 +98,13 @@ def journalist_entry(row: dict, sources: dict, directory: dict | None) -> dict |
         name, outlet, registered = entry["name"], entry["outlet"], True
     else:
         name, outlet, registered = j, src.get("outlet"), False
-    if j == src.get("journalist_label") or not outlet:
-        label = name                       # 통칭 · 소속 미상 → 괄호 생략
+        # 조직 바이라인 (BBC Sport 등) → outlet 정식명으로 접기 (통칭 라벨은 제외)
+        if (outlet and j != src.get("journalist_label")
+                and j.lower() in {(src.get("display_name") or "").lower(),
+                                  outlet.lower()}):
+            name = outlet
+    if j == src.get("journalist_label") or not outlet or name == outlet:
+        label = name                       # 통칭 · 소속 미상 · 조직 → 괄호 생략
     else:
         label = f"{name} ({outlet})"
     return {"name": name, "label": label, "registered": registered}
@@ -116,12 +121,15 @@ def _outlet_tier(key: str, row: dict, sources: dict, registry) -> float | None:
 
 
 def _journalist_tier(row: dict, entry: dict, registry) -> float | None:
-    if not entry["registered"] or registry is None:
-        return None
-    j = (row.get("journalist") or "").strip().lower()
-    t = registry.journalists.get(j)
-    if t is None:
-        t = registry.journalists.get(entry["name"].lower())
+    if entry["registered"] and registry is not None:
+        j = (row.get("journalist") or "").strip().lower()
+        t = registry.journalists.get(j)
+        if t is None:
+            t = registry.journalists.get(entry["name"].lower())
+        if t is not None:
+            return float(t)
+    # 비전담 · 조직 · 통칭 → 기사 저장 tier (비전담 기준선) 그룹으로 분류
+    t = row.get("tier")
     return float(t) if t is not None else None
 
 

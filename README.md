@@ -55,7 +55,7 @@
 - **병렬 수집** — asyncio 팬아웃 + 소스별 실패 격리 (한 소스 실패가 전체를 멈추지 않음).
 - **공신력 스코어링** — Tier 0 (Arsenal.com 공식)~4 (타블로이드)를 YAML로 외부화, confidence로 정렬.
 - **중복제거 · 증분 · 변경 감지** — content_hash + URL 정규화, DB UNIQUE 제약으로 앱 · DB 이중 방어.
-- **기자 단위 공신력 · 필터** — JSON-LD · meta 저자 추출, 소속 일치 시 기자 tier 우선 (min 가드), 언론사 · 기자 facet 필터 (tier 순 정렬).
+- **기자 단위 공신력 · 필터** — JSON-LD · meta 저자 추출, 소속 일치 시 기자 tier 우선 (min 가드), 언론사 · 기자 facet 필터 (tier 순 정렬). 전담 기자 보유 소스의 tier 는 비전담 기준선 — 전담 (등재) 기자 기사만 등재 tier 로 승격된다.
 - **LLM 번역 · 요약** — Gemini 2.5 Flash-Lite로 제목 · 본문 전문 번역, 한 줄 · 3줄 요약, 영입 단계 분류. 신규 항목만 처리해 멱등 · 저비용.
 - **데이터 품질 게이트** — dbt test (unique · not_null · accepted_values)로 "이상 점검"을 선언적으로. 신선도는 자체 워터마크 감시 (SLO-5).
 - **관측성 · 알림** — 수집 현황 ops 뷰 (`site/ops.html`), 수집량 이상 · 신선도 · 파이프라인 실패 Discord 알림.
@@ -65,8 +65,8 @@
 | 소스 | tier | 어댑터 | 비고 |
 |---|---|---|---|
 | Arsenal.com | 0 | html | 공식 — 영입 확정 (sign) 제목 전용 고정밀 필터 |
-| BBC Sport | 1 | html | |
-| Sky Sports | 1.5 | html | |
+| BBC Sport | 1.5 | html | 비전담 기준선 — 전담 (Mokbel) 은 min 가드로 tier 1 승격 |
+| Sky Sports | 2 | html | 비전담 기준선 — 전담 (Sheth) 은 min 가드로 tier 1.5 승격 |
 | The Guardian | 3 | guardian_api | Open Platform API (`GUARDIAN_API_KEY` 필요) |
 | Goal.com | 4 | html | 정적 서빙 확인으로 playwright → html 전환 · 재활성 (2026-07) |
 | BBC Football Gossip | 4 | html | 타 매체 루머 라운드업 |
@@ -80,8 +80,8 @@
 |---|---|
 | 1 | David Ornstein (The Athletic) · Sami Mokbel (BBC) |
 | 1.5 | Fabrizio Romano (독립) · James McNicholas (The Athletic) · Art de Roché (The Athletic) · Dharmesh Sheth (Sky Sports) · handofarsnal (ITK) |
-| 2 | Amy Lawrence (The Athletic) · James Olley (ESPN) · Matt Law (The Telegraph) · Sam Dean (The Telegraph) · Teamnewsandtix (ITK) |
-| 3 | Charles Watts (독립) · Simon Collings (Evening Standard) · Gary Jacob (The Times) · Miguel Delaney (The Independent) · Gianluca Di Marzio (Sky Italia) · LatteFirm (ITK) |
+| 2 | Amy Lawrence (The Athletic) · James Olley (ESPN) · Matt Law (The Telegraph) · Sam Dean (The Telegraph) · Luke Edwards (The Telegraph) · Sacha Tavolieri (Sky Sports) · Teamnewsandtix (ITK) |
+| 3 | Charles Watts (독립) · Simon Collings (The Sun) · Gary Jacob (The Times) · Miguel Delaney (The Independent) · Gianluca Di Marzio (Sky Italia) · LatteFirm (ITK) |
 | 4 | Tom Canton (football.london) |
 
 ## 4. 정량 지표 (SLO)

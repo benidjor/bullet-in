@@ -32,6 +32,16 @@ print(reg.journalists.get('@새핸들'.lower()))"   # 기대 tier 가 나와야 
 uv run pytest -q
 ```
 
+## 2.5 전담 · 비전담 기준선 (2026-07-19 확정)
+
+같은 언론사 안에서 아스날 전담 기자와 비전담 기자를 tier 로 구분한다.
+- **소스 tier = 비전담 기준선** — 전담 기자를 등재한 직접 수집 소스는 sources.yaml tier 를 전담 기자보다 0.5 높게 (= 공신력 낮게) 둔다 (bbc_sport 1.5 · skysports 2).
+- 전담 (등재) 기자 기사만 기존 min 승격 가드로 등재 tier 를 받는다 (Mokbel 1 · Sheth 1.5).
+  미등재 바이라인 (비전담 개인 · 조직명 · 저자 미상) 은 자동으로 비전담 기준선을 받으므로 별도 등재가 필요 없다.
+- 언급 라우팅용 outlets 레지스트리도 같은 값으로 동기화한다 (§3 두 파일 동시 수정 원칙 — BBC 1.5 · Sky Sports 2).
+- 전담 기자가 없는 소스 (guardian · goal) 는 현행 tier 유지 — 전담 등재 PR 에서 +0.5 조정을 함께 처리한다.
+- 서빙 facet 은 비전담도 "이름 (소속)" 라벨 + 기사 tier 그룹으로 분류하고, 조직 바이라인 (BBC Sport 등) 은 outlet 정식명으로 접는다.
+
 ## 3. tier 재조정 절차
 
 - **두 파일 동시 수정** — 직접 수집 소스는 `sources.yaml`, 같은 매체의 언급 라우팅은 `credibility.yaml` outlets.

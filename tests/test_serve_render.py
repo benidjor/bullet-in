@@ -410,9 +410,32 @@ def test_sidebar_renders_tier_heading_and_initial_only():
     html = render_index(rows, SOURCES, NOW, directory=directory, registry=_Reg())
     assert "Tier 1 · 공신력 최상" in html
     assert 'data-group="outlet" data-value="The Athletic"' in html
-    # Tier 4 는 접힌 단계 안에 있고 버튼이 그것을 예고한다
-    assert "더보기 · Tier 4 · 미등재" in html
+    # 미등재 기자도 기사 tier(4) 그룹으로 분류 — 접힌 단계 안에 있고 버튼이 예고한다
+    assert "더보기 · Tier 4" in html
     assert 'class="morestage"' in html
+
+def test_unregistered_journalist_grouped_by_row_tier():
+    """비전담 (미등재) 기자는 '이름 (소속)' 라벨 + 기사 tier 그룹으로 분류된다
+    (미등재 꼬리로 흘리지 않음 — 소스 tier = 비전담 기준선)."""
+    sources = {"bbc_sport": {"display_name": "BBC Sport", "outlet": "BBC"}}
+    html = render_index([_row(journalist="Alex Howell", tier=1.5)], sources, NOW)
+    section = _journalist_facet_section(html)
+    assert "Tier 1.5 · 공신력 상" in section
+    assert 'data-group="journalist" data-value="Alex Howell"' in section
+    assert "Alex Howell (BBC)" in section
+    assert "미등재" not in section
+
+
+def test_org_byline_folds_to_outlet_name():
+    """조직 바이라인 (BBC Sport 등) 은 outlet 정식명으로 접는다 — 칩 · 카드 키 모두 'BBC'."""
+    sources = {"bbc_sport": {"display_name": "BBC Sport", "outlet": "BBC"}}
+    html = render_index([_row(journalist="BBC Sport", tier=1.5)], sources, NOW)
+    assert 'data-journalist="BBC"' in html
+    section = _journalist_facet_section(html)
+    assert 'data-group="journalist" data-value="BBC"' in section
+    assert "BBC Sport" not in section          # 접힌 뒤 원문 표기는 남지 않는다
+    assert "BBC (BBC)" not in html             # name == outlet → 괄호 생략
+
 
 def test_index_card_data_tier_keeps_one_point_five():
     html = render_index([_row(tier=1.5)], SOURCES, NOW)
