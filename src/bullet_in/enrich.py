@@ -37,7 +37,10 @@ TRANSLATE_PROMPT = (
     "- body_ko: 본문 전체를 자연스러운 한국어로 번역. 2~4문장 단위 문단으로 나누고 "
     "문단 사이는 줄바꿈 문자(\\n)로 구분한다.\n"
     "- 여러 구단 소식을 나열한 라운드업(가십 등) 기사도 발췌하지 않는다: "
-    "아스날 무관 구단 항목까지 본문 전체를 빠짐없이 번역한다.\n"
+    "아스날 무관 구단 항목까지 본문 전체를 빠짐없이 번역하고, 단신을 하나도 빠뜨리지 않는다.\n"
+    "- 라운드업 단신 끝의 괄호 출처 표기 — 예: (Sky Sports) — 는 번역하지 않고 "
+    "원문 그대로 괄호 병기한다. ' - in Italian'·' - requires subscription' 류 "
+    "부가 설명과 ', external' 링크 잔재는 제외.\n"
     "- body_ko 지문도 신문 평어체(종결어미 '~다'): '관심을 갖고 있습니다' ❌ → "
     "'관심을 갖고 있다' ⭕. 인용문(따옴표 안 발화)은 화자의 말투를 그대로 두되, "
     "발화 인용은 반드시 큰따옴표로 감싼다.\n"
@@ -86,6 +89,26 @@ def _fold_latin(text: str) -> str:
     folded = unicodedata.normalize("NFD", text.casefold())
     folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
     return folded.replace("ø", "o").replace("æ", "ae").replace("ß", "ss")
+
+# BBC 가십 라운드업의 단신별 출처 링크 표지 — "(출처) , external". 일반 괄호 (£50.9m) 와 구분
+_ATTRIB_RE = re.compile(r"\(([^()]{2,60})\)\s*,\s*external")
+
+def detect_roundup_omission(body_source: str | None,
+                            body_ko: str | None) -> list[str]:
+    """라운드업 원문의 괄호 출처가 번역문에 빠졌으면 누락 출처 목록 반환.
+    출처 병기 = 단신 1건의 표지이므로 누락 출처 = 누락 단신의 결정적 신호.
+    같은 출처 단신 복수 건은 등장 횟수로 대조하고, ' - in Italian' 류 부가는
+    출처명만 남겨 비교한다. 표지 없는 일반 기사는 항상 빈 목록 (소스 분기 불필요)."""
+    if not body_source:
+        return []
+    ko = body_ko or ""
+    counts: dict[str, int] = {}
+    for m in _ATTRIB_RE.finditer(body_source):
+        # 출처명만 남기는 정규화 — " - in Italian" · ", in French" · " via …" 류 부가 제거
+        core = re.split(r"\s+-\s+|,\s+|\s+via\s+", m.group(1))[0].strip()
+        if core:
+            counts[core] = counts.get(core, 0) + 1
+    return [core for core, n in counts.items() if ko.count(core) < n]
 
 def detect_title_hallucination(title_ko: str | None, source_text: str,
                                name_map: dict[str, str]) -> list[str]:

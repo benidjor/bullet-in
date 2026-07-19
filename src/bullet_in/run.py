@@ -15,7 +15,7 @@ from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows,
                               apply_glossary, paragraphize,
-                              detect_title_hallucination)
+                              detect_title_hallucination, detect_roundup_omission)
 from bullet_in.tone import select_tone_backfill
 from bullet_in import transfer_stage
 from bullet_in.serve.render import write_site, write_ops
@@ -81,15 +81,21 @@ async def main(concurrency: int):
                                           r0.get("body_source"),
                                           r0.get("body_excerpt")]))
         suspects = detect_title_hallucination(v["title_ko"], src_text, name_map)
+        # 라운드업 단신 누락 게이트: 원문 괄호 출처 vs 번역 병기 대조 (환각 큐와 같은 재시도 1회)
+        omissions = detect_roundup_omission(r0.get("body_source"), v["body_ko"])
         title_ko = v["title_ko"]
-        if suspects and r0.get("summary_ko"):
+        retry = bool(r0.get("summary_ko"))
+        if suspects and retry:
             logging.getLogger(__name__).warning(
                 "제목 환각 재발 — 원문 제목 폴백 content_hash=%s 의심=%s", h, suspects)
             title_ko = r0.get("title_original")
-        elif suspects:
+        elif (suspects or omissions) and not retry:
             logging.getLogger(__name__).warning(
-                "제목 환각 의심 — 재번역 큐 content_hash=%s 의심=%s", h, suspects)
+                "재번역 큐 content_hash=%s 환각의심=%s 단신누락=%s", h, suspects, omissions)
             title_ko = None
+        if omissions and retry:
+            logging.getLogger(__name__).warning(
+                "라운드업 단신 누락 잔존 — 수동 확인 content_hash=%s 누락=%s", h, omissions)
         mart.set_translation(h, title_ko, v["summary_ko"],
                              v["summary3_ko"], paragraphize(v["body_ko"]))
 
