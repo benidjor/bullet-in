@@ -24,8 +24,8 @@ uv run python - <<'PY'
 from datetime import datetime, timedelta
 from bullet_in.serve.render import write_site
 now = datetime(2026, 6, 29, 12, 0, 0)
-sources = {"bbc_sport": {"display_name": "BBC Sport"},
-           "arsenal_official": {"display_name": "Arsenal.com"}}
+sources = {"bbc_sport": {"display_name": "BBC Sport", "serving": "full"},
+           "arsenal_official": {"display_name": "Arsenal.com", "serving": "full"}}
 rows = []
 for i in range(10):
     rows.append(dict(

@@ -5,7 +5,7 @@ from pathlib import Path
 FULL_SOURCES = {"arsenal_official", "x_afcstuff", "fmkorea"}
 
 def _modes():
-    data = yaml.safe_load(Path("config/sources.yaml").read_text(encoding="utf-8"))
+    data = yaml.safe_load((Path(__file__).parent.parent / "config" / "sources.yaml").read_text(encoding="utf-8"))
     return {s["source_id"]: s.get("serving") for s in data["sources"]}
 
 def test_every_source_declares_valid_serving_mode():
