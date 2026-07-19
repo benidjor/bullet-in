@@ -1,6 +1,6 @@
 from __future__ import annotations
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from dateutil import parser as dtparser
 from bullet_in.models import RawItem, Article
 from bullet_in.canonical import canonical_url, content_hash
@@ -17,12 +17,18 @@ def _is_womens_football(title: str, body: str | None) -> bool:
         return True
     return bool(_WOMEN_RE.search((body or "")[:400]))
 
-def _published(payload: dict) -> datetime:
+def _published(payload: dict, fetched_at: datetime) -> datetime:
+    """발행 시각 — payload 추출값 우선, 실패 시 수집 시각 폴백 (처리 시각 now() 아님).
+    naive 는 UTC 간주 · fetched_at+1h 초과 미래값은 오파싱으로 보고 폴백."""
     raw = payload.get("published") or payload.get("created_at")
     try:
-        return dtparser.parse(raw).astimezone(timezone.utc)
+        dt = dtparser.parse(raw)
     except (TypeError, ValueError):
-        return datetime.now(timezone.utc)
+        return fetched_at
+    dt = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    if dt > fetched_at + timedelta(hours=1):
+        return fetched_at
+    return dt
 
 def select_journalist(item, src: dict, registry: "Registry | None") -> str | None:
     """항목의 대표 기자 1명 — 기존 값 · 소스 통칭 · 추출 저자 (등재자 우선) 순.
@@ -83,7 +89,7 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
             outlet=item.raw_payload.get("outlet"),
             journalist=journalist,
             team="arsenal",
-            published_at=_published(item.raw_payload), fetched_at=item.fetched_at,
+            published_at=_published(item.raw_payload, item.fetched_at), fetched_at=item.fetched_at,
             revision=rev))
         source_counts[item.source_id] = source_counts.get(item.source_id, 0) + 1
     return out, {"dup_count": dup_count, "source_counts": source_counts,
