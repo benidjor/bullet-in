@@ -2,9 +2,11 @@ from __future__ import annotations
 import html as _html
 import json
 import re
+from datetime import datetime, timezone
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
+from dateutil import parser as dtparser
 
 def extract_og_image(html: str) -> str | None:
     soup = BeautifulSoup(html, "html.parser")
@@ -162,3 +164,63 @@ def extract_authors(html: str) -> list[str]:
         return out
     except Exception:
         return []
+
+
+def _walk_published(node) -> list[str]:
+    """JSON-LD 트리를 재귀 탐색해 datePublished 값을 등장 순서로 수집한다."""
+    found: list[str] = []
+    if isinstance(node, dict):
+        v = node.get("datePublished")
+        if isinstance(v, str):
+            found.append(v)
+        for val in node.values():
+            found += _walk_published(val)
+    elif isinstance(node, list):
+        for val in node:
+            found += _walk_published(val)
+    return found
+
+_TIME_COMPONENT_RE = re.compile(r"[T ]\d{1,2}:")
+
+def _parse_published(raw: str) -> tuple[datetime, str] | None:
+    """날짜 문자열 → (UTC datetime, precision). 시각 성분 없으면 'day' · naive 는 UTC 간주."""
+    try:
+        dt = dtparser.parse(raw)
+    except (ValueError, OverflowError, TypeError):
+        return None
+    precision = "time" if _TIME_COMPONENT_RE.search(raw.strip()) else "day"
+    dt = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    return dt, precision
+
+def extract_published_at(html: str) -> tuple[datetime, str] | None:
+    """기사 발행 시각 — JSON-LD datePublished → meta article:published_time → <time datetime>.
+    발행 시각은 부가 정보 — 어떤 실패도 None 폴백으로 수집을 막지 않는다."""
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        candidates: list[str] = []
+        for s in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(s.string or "")
+            except json.JSONDecodeError:
+                try:
+                    data = json.loads(s.string or "", strict=False)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+            except TypeError:
+                continue
+            candidates += _walk_published(data)
+        if not candidates:
+            tag = soup.find("meta", attrs={"property": "article:published_time"})
+            if tag and tag.get("content"):
+                candidates.append(tag["content"])
+        if not candidates:
+            t = soup.find("time", attrs={"datetime": True})
+            if t:
+                candidates.append(t["datetime"])
+        for raw in candidates:
+            parsed = _parse_published(raw)
+            if parsed:
+                return parsed
+        return None
+    except Exception:
+        return None

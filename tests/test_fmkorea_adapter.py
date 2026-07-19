@@ -357,3 +357,50 @@ def test_fmkorea_drops_official_prefix_posts():
                        base_url="https://www.fmkorea.com")
     items = asyncio.run(a.fetch())
     assert [i.raw_payload["outlet"] for i in items] == ["BBC"]
+
+from datetime import datetime, timezone
+from bullet_in.adapters.fmkorea import _post_published
+
+RD_HD = ('<div class="rd_hd"><div class="board clear">'
+         '<span class="date m_no">2026.06.11 10:04</span></div></div>')
+
+def test_post_published_parses_kst_to_utc():
+    html = f'<html><body>{RD_HD}</body></html>'
+    assert _post_published(html) == datetime(2026, 6, 11, 1, 4, tzinfo=timezone.utc)
+
+def test_post_published_none_when_absent():
+    assert _post_published("<html><body></body></html>") is None
+
+@respx.mock
+def test_fmkorea_free_path_uses_original_published():
+    art = ('<html><head><script type="application/ld+json">'
+           '{"datePublished":"2026-07-19T08:00:00Z"}</script></head>'
+           '<body><article><p>Arsenal news.</p></article></body></html>')
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(
+        200, text='<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날</a>'))
+    respx.get("https://www.fmkorea.com/1").mock(return_value=httpx.Response(
+        200, text=f'{RD_HD}<div class="xe_content"><p>본문.</p><p>https://ex.test/a</p></div>'))
+    respx.get("https://ex.test/a").mock(return_value=httpx.Response(200, text=art))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    it = asyncio.run(a.fetch())[0]
+    assert it.raw_payload["published"] == "2026-07-19T08:00:00+00:00"
+    assert it.raw_payload["published_precision"] == "time"
+
+@respx.mock
+def test_fmkorea_paywalled_path_uses_post_time():
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(
+        200, text='<a class="hx" href="/index.php?document_srl=2">[디 애슬레틱] 아스날</a>'))
+    respx.get("https://www.fmkorea.com/2").mock(return_value=httpx.Response(
+        200, text=f'{RD_HD}<div class="xe_content"><p>본문.</p>'
+                  '<p>https://www.nytimes.com/athletic/9/b</p></div>'))
+    respx.get("https://www.nytimes.com/athletic/9/b").mock(
+        return_value=httpx.Response(200, text="<html></html>"))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    it = asyncio.run(a.fetch())[0]
+    # KST 2026.06.11 10:04 → UTC 01:04
+    assert it.raw_payload["published"] == "2026-06-11T01:04:00+00:00"
+    assert it.raw_payload["published_precision"] == "time"

@@ -229,3 +229,23 @@ def test_to_articles_no_allowlist_source_unaffected():
     arts, stats = to_articles(raw, sources, seen={}, registry=REG)
     assert len(arts) == 1
     assert stats["author_drop_count"] == 0
+
+from datetime import timedelta
+from bullet_in.pipeline import _published
+
+_FETCH = datetime(2026, 7, 19, 13, 36, tzinfo=timezone.utc)
+
+def test_published_uses_payload_value():
+    assert _published({"published": "2026-07-19T08:00:00+00:00"}, _FETCH) == \
+        datetime(2026, 7, 19, 8, 0, tzinfo=timezone.utc)
+
+def test_published_fallback_is_fetched_at_not_now():
+    assert _published({}, _FETCH) == _FETCH
+
+def test_published_naive_value_treated_as_utc():
+    assert _published({"published": "2026-07-19T08:00:00"}, _FETCH) == \
+        datetime(2026, 7, 19, 8, 0, tzinfo=timezone.utc)
+
+def test_published_future_beyond_1h_discarded_to_fetched_at():
+    future = (_FETCH + timedelta(hours=2)).isoformat()
+    assert _published({"published": future}, _FETCH) == _FETCH

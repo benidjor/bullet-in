@@ -491,3 +491,25 @@ def test_layout_has_header_sort_select_with_views():
     assert 'id="sortSel"' in tpl and 'value="views"' in tpl and "조회순" in tpl
     assert tpl.index('id="sortSel"') < tpl.index('id="themeBtn"')
     assert 'name="sort"' not in tpl
+
+
+from bullet_in.serve.render import _sorted_latest
+
+def test_sorted_latest_ties_broken_by_fetched_at():
+    same = datetime(2026, 7, 19, 13, 37, 2)
+    rows = [
+        {"content_hash": "sky", "published_at": same,
+         "fetched_at": datetime(2026, 7, 19, 13, 36, 28)},
+        {"content_hash": "fmk", "published_at": same,
+         "fetched_at": datetime(2026, 7, 19, 13, 36, 36)},
+    ]
+    assert [r["content_hash"] for r in _sorted_latest(rows)] == ["fmk", "sky"]
+
+def test_sorted_latest_published_still_primary():
+    rows = [
+        {"content_hash": "old", "published_at": datetime(2026, 7, 18, 9, 0),
+         "fetched_at": datetime(2026, 7, 19, 23, 0)},
+        {"content_hash": "new", "published_at": datetime(2026, 7, 19, 9, 0),
+         "fetched_at": datetime(2026, 7, 19, 1, 0)},
+    ]
+    assert [r["content_hash"] for r in _sorted_latest(rows)] == ["new", "old"]
