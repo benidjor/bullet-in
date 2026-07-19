@@ -554,3 +554,28 @@ def test_decorate_day_precision_shows_date_not_relative():
     d = _decorate(row, {}, now)
     assert d["_when"] == "7월 19일"                       # "N시간 전" 아님
     assert d["_published_iso"] == "2026-07-19T11:02:00"   # 유효 시각 (보간) — data-published 계약
+
+
+# ---- SP-B 차등 서빙: serving_mode · excerpt_paras (spec §2.3) ----
+from bullet_in.serve.render import serving_mode, excerpt_paras
+
+def test_serving_mode_reads_config_and_defaults_to_excerpt():
+    sources = {"bbc_sport": {"serving": "excerpt"}, "x_afcstuff": {"serving": "full"}}
+    assert serving_mode("x_afcstuff", sources) == "full"
+    assert serving_mode("bbc_sport", sources) == "excerpt"
+    assert serving_mode("new_source", sources) == "excerpt"   # 미지정 소스 → 안전 기본값
+    assert serving_mode(None, sources) == "excerpt"
+
+def test_serving_mode_invalid_value_falls_back_to_excerpt():
+    assert serving_mode("s", {"s": {"serving": "banana"}}) == "excerpt"
+
+def test_excerpt_paras_takes_at_most_two_paragraphs():
+    paras = ["짧은 첫 문단.", "둘째 문단.", "셋째 문단."]
+    assert excerpt_paras(paras) == ["짧은 첫 문단.", "둘째 문단."]
+
+def test_excerpt_paras_stops_when_first_paragraph_reaches_limit():
+    long_first = "가" * 300
+    assert excerpt_paras([long_first, "둘째"]) == [long_first]
+
+def test_excerpt_paras_empty_input():
+    assert excerpt_paras([]) == []

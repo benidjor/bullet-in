@@ -423,6 +423,23 @@ def interleave_body(paras: list[str], images: list[str], every: int = 2) -> list
     return blocks
 
 
+def serving_mode(source_id: str | None, sources: dict) -> str:
+    """소스별 상세 페이지 서빙 범위 (spec §2.3). config 미지정 · 미상 값은 안전한 기본값 excerpt."""
+    mode = (sources.get(source_id) or {}).get("serving")
+    return mode if mode in ("full", "excerpt") else "excerpt"
+
+
+def excerpt_paras(paras: list[str], limit: int = 300, max_paras: int = 2) -> list[str]:
+    """발췌 모드 본문 — 첫 1~2문단, 누적 limit 자 도달 시 중단 (문단 중간은 자르지 않음)."""
+    out, total = [], 0
+    for p in paras[:max_paras]:
+        out.append(p)
+        total += len(p)
+        if total >= limit:
+            break
+    return out
+
+
 def _decorate(row: dict, sources: dict, now: datetime,
               directory: dict | None = None, outlet_dir: dict | None = None) -> dict:
     a = dict(row)
