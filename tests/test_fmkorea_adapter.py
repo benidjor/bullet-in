@@ -273,6 +273,75 @@ def test_fmkorea_paywalled_path_collects_post_images():
     items = asyncio.run(a.fetch())
     assert items[0].raw_payload["images"] == ["https://fmimg.test/p.jpg"]
 
+from bullet_in.adapters.fmkorea import _is_repost_blocked
+
+# 실측 DOM (2026-07-19, post 9940576222): 표식 strong 은 .rd_body 직하위 · 본문(.xe_content) 밖
+_BLOCK_STRONG = ('<strong>[퍼가기가 금지된 글입니다 - 캡처 방지 위해 글 열람 사용자 '
+                 '아이디/아이피가 자동으로 표기됩니다]</strong>')
+
+def _post_html(body_inner: str, blocked: bool = False) -> str:
+    return ('<div class="rd_body clear">'
+            + (_BLOCK_STRONG if blocked else "")
+            + f'<article><div class="xe_content">{body_inner}</div></article>'
+            '</div>')
+
+def test_is_repost_blocked_detects_marker_outside_body():
+    html = _post_html('<p>번역 본문.</p>', blocked=True)
+    assert _is_repost_blocked(html) is True
+
+def test_is_repost_blocked_false_on_normal_post():
+    html = _post_html('<p>일반 글 본문.</p>')
+    assert _is_repost_blocked(html) is False
+
+def test_is_repost_blocked_false_when_phrase_quoted_inside_body():
+    # 본문이 표식 문구를 인용해도 (xe_content 내부) 오탐하지 않는다
+    html = _post_html('<p><strong>퍼가기가 금지된 글입니다</strong> 라는 표식이 붙는다.</p>')
+    assert _is_repost_blocked(html) is False
+
+BLOCKED_PAY_POST = _post_html(
+    '<p>아스날이 센터백을 원한다.</p>'
+    '<img src="https://fmimg.test/p.jpg">'
+    '<p>https://www.nytimes.com/athletic/9/b</p>', blocked=True)
+
+@respx.mock
+def test_fmkorea_blocked_paywalled_keeps_headline_only(caplog):
+    # §9.1 ②: 퍼가기 금지 + 페이월 → 본문·게시글 이미지 미복제, 헤드라인 + 출처 + 링크만
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(
+        200, text='<a class="hx" href="/index.php?document_srl=2">[디 애슬레틱 - 온스테인] 아스날 수비수 보강</a>'))
+    respx.get("https://www.fmkorea.com/2").mock(return_value=httpx.Response(200, text=BLOCKED_PAY_POST))
+    respx.get("https://www.nytimes.com/athletic/9/b").mock(return_value=httpx.Response(
+        200, text='<html><head><meta property="og:image" content="https://img.nyt/a.jpg"></head></html>'))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    with caplog.at_level("INFO"):
+        items = asyncio.run(a.fetch())
+    assert len(items) == 1
+    it = items[0]
+    assert it.url == "https://www.nytimes.com/athletic/9/b"
+    assert it.raw_payload["body"] == ""            # fmkorea 번역 본문 미복제
+    assert it.raw_payload["images"] == []          # 게시글 이미지 미복제
+    assert it.raw_payload["image_url"] == "https://img.nyt/a.jpg"   # og 이미지는 원문에서
+    assert it.raw_payload["outlet"] == "The Athletic"
+    assert it.raw_payload["journalist"] == "온스테인"
+    assert it.raw_payload["lang"] == "ko"
+    assert any("퍼가기" in r.message for r in caplog.records)
+
+@respx.mock
+def test_fmkorea_blocked_free_outlet_keeps_original_body():
+    # 퍼가기 금지 + 무료 → 현행 무료 분기 그대로 (원문 en 본문, fmkorea 본문 원래 미복제)
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(
+        200, text='<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날</a>'))
+    respx.get("https://www.fmkorea.com/1").mock(return_value=httpx.Response(
+        200, text=_post_html('<p>아스날 본문.</p><p>https://ex.test/a</p>', blocked=True)))
+    respx.get("https://ex.test/a").mock(return_value=httpx.Response(200, text=FREE_ART))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    it = asyncio.run(a.fetch())[0]
+    assert it.raw_payload["lang"] == "en"
+    assert "Arsenal news." in it.raw_payload["body"]
+
 @respx.mock
 def test_fmkorea_drops_official_prefix_posts():
     # [공홈]·[아스날 공홈]·[맨유 공홈] 전부 drop — 아스날 공홈은 직수집 경로가 커버, 타 구단은 범위 밖
