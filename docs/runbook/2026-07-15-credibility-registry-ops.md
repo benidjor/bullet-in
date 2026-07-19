@@ -42,6 +42,19 @@ uv run pytest -q
 - 전담 기자가 없는 소스 (guardian · goal) 는 현행 tier 유지 — 전담 등재 PR 에서 +0.5 조정을 함께 처리한다.
 - 서빙 facet 은 비전담도 "이름 (소속)" 라벨 + 기사 tier 그룹으로 분류하고, 조직 바이라인 (BBC Sport 등) 은 outlet 정식명으로 접는다.
 
+## 2.7 매핑 · alias 제거 (해지) 체크리스트 (2026-07-19 신설)
+
+등재의 역방향 — 표기 매핑을 없앨 때는 **생산 경로와 소비 경로를 쌍으로** 제거한다.
+
+1. **생산 경로** — 그 표기를 outlet 값으로 만들어 내는 곳 (fmkorea `OUTLET_MAP` · 어댑터 payload).
+2. **소비 경로** — `credibility.yaml` 의 해당 alias.
+   생산처를 없애도 alias 를 남기면 향후 다른 매핑 경로가 같은 표기로 tier 를 재부여할 수 있는
+   잠재 경로가 남는다 (2026-07-19 `[공홈]` 사례 — tier 0 이라 비용 최대,
+   `docs/troubleshooting/2026-07-19-fmkorea-official-prefix-misattribution.md`).
+3. **README 표** — §1 관례대로 같은 PR 에서 갱신.
+4. **기존 적재분** — 잘못 부여된 행의 정리 (DELETE vs 강등 UPDATE) 는 별도 판단 · PR 에 기록
+   (공홈 사례 = 5건 DELETE, PR #70).
+
 ## 3. tier 재조정 절차
 
 - **두 파일 동시 수정** — 직접 수집 소스는 `sources.yaml`, 같은 매체의 언급 라우팅은 `credibility.yaml` outlets.
