@@ -9,6 +9,7 @@
      data-tier="{{ a._tier_key }}"
      data-published="{{ a._published_iso }}"
      data-confidence="{{ a.confidence_score or 0 }}"
+     data-hash="{{ a.content_hash }}"
      data-stage="{{ a._stage }}"
      data-journalist="{{ a._journalist }}"
      data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">

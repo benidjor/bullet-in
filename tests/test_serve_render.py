@@ -479,3 +479,12 @@ def test_decorate_body_images_false_drops_inline_but_keeps_thumbnail():
     a2 = _dec(row2, srcs, NOW)
     assert a2["image_url"] == "https://img/a.jpg"
     assert a2["_images"] == []
+
+def test_index_card_carries_content_hash_for_view_sort():
+    html = render_index([_row()], SOURCES, NOW)
+    assert 'data-hash="h1"' in html
+
+def test_layout_has_views_sort_option():
+    from pathlib import Path
+    tpl = (Path("src/bullet_in/serve/templates/_layout.html.j2")).read_text(encoding="utf-8")
+    assert 'data-value="views"' in tpl and "조회순" in tpl
