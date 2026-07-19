@@ -47,6 +47,7 @@ clubs:
   PSG: [Paris Saint-Germain, PSG]
   유벤투스: [Juventus, Juve]
   # 밀란은 "인터 밀란" 안에도 매치되므로 Inter 로도 접지 (원문이 Inter 단독 표기여도 통과)
+  # 좁은 코너: ko 원문 "인테르" + 번역 "인터 밀란" 이면 밀란 키가 부분 매치로 플래그 (잔존 WARNING 수용 — 최종 리뷰 관찰)
   밀란: [AC Milan, Milan, Inter]
   인터 밀란: [Inter Milan, Inter]
   인테르: [Inter Milan, Inter]
