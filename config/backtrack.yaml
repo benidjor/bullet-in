@@ -1,5 +1,5 @@
 params:
-  window_min: 180        # afcstuff가 기자 원본을 인용하기까지 시간창 (분)
+  window_min: 360        # afcstuff가 기자 원본을 인용하기까지 시간창 (분) — 실측 Δ3.9h 미승격으로 180→360 (진단 2026-07-19)
   overlap_min: 4         # 매칭 최소 토큰 겹침
   timeline_depth: 25     # 기자당 스크레이프 트윗 수
   max_journalists: 15    # 실행당 기자 스크레이프 상한
