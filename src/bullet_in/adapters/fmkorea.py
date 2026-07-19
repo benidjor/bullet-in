@@ -70,6 +70,18 @@ def parse_bracket(title: str) -> tuple[str | None, str | None, bool]:
     outlet = OUTLET_MAP.get(outlet, outlet)
     return (outlet or None), journalist, is_excl
 
+_REPOST_BLOCK_TEXT = "퍼가기가 금지된"
+
+def _is_repost_blocked(html: str) -> bool:
+    """퍼가기 금지 표식 감지 — 실측 DOM(2026-07-19): .rd_body 직하위 strong, 본문(.xe_content) 밖."""
+    soup = BeautifulSoup(html, "html.parser")
+    rb = soup.select_one(".rd_body")
+    if rb is None:
+        return False
+    return any(_REPOST_BLOCK_TEXT in s.get_text()
+               for s in rb.select("strong")
+               if s.find_parent(class_="xe_content") is None)
+
 def _extract_original_url(html: str, body_selector: str) -> str | None:
     soup = BeautifulSoup(html, "html.parser")
     el = soup.select_one(body_selector)
@@ -160,10 +172,15 @@ class FmkoreaAdapter:
                 log.warning("fmkorea 원문/말머리 해소 실패 — 스킵 url=%s", url)
                 continue
             if outlet in PAYWALLED_OUTLETS:
-                body = _body_text(html, self.body_selector)
+                if _is_repost_blocked(html):
+                    # §9.1 ②: 퍼가기 금지 + 페이월 → 헤드라인 + 출처 + 링크만 (본문·게시글 이미지 미복제)
+                    log.info("fmkorea 퍼가기 금지 + 페이월 — 헤드라인만 저장 url=%s", url)
+                    body, images = "", []
+                else:
+                    body = _body_text(html, self.body_selector)
+                    # 게시글 이미지 ≈ 원문 기사 이미지 재게재 (spec 확정 결정)
+                    images = extract_body_images(html, self.body_selector, base_url=url)
                 image = await _fetch_og_image(c, orig)
-                # 게시글 이미지 ≈ 원문 기사 이미지 재게재 (spec 확정 결정)
-                images = extract_body_images(html, self.body_selector, base_url=url)
                 lang = "ko"
             else:
                 try:

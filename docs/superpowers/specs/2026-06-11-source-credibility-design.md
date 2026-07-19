@@ -136,7 +136,7 @@ tier=tier, confidence_score=round(max(0.0, 1.0 - tier/4.0), 3)
 ### 3.7 sources.yaml 변경
 
 - `guardian` 항목 **삭제**.
-- `x_handofarsnal` → `x_afcstuff`(handle `afcstuff`), `credibility: x_mentions` 추가, 정적 tier 제거.
+- `x_handofarsnal` → `x_afcstuff` (handle `afcstuff`), `credibility: x_mentions` 추가, 정적 tier 제거.
 - `fmkorea` 항목 **추가** (adapter `fmkorea`, `credibility: fmkorea`, `lang: ko`,
   키워드 · list_url 설정).
 - 고정 소스 (arsenal_official · bbc_sport · goal · football_london)는 정적 tier 유지.
@@ -200,7 +200,11 @@ ingest → RawItems
 
 ## 9. 향후 작업 (live-e2e 트랙으로 이연)
 
-### 9.1 fmkorea '퍼가기 금지' 글 처리 정책 (미구현 — 실제 DOM 필요)
+### 9.1 fmkorea '퍼가기 금지' 글 처리 정책 (2026-07-19 구현 — 아래는 결정 당시 기록)
+
+> 구현 노트 (2026-07-19): 표식 실측 = `.rd_body` 직하위 `<strong>` (본문 · 댓글 밖), `_is_repost_blocked()` 로 감지.
+> 무료 아웃렛은 현행 원문 fetch 경로가 이미 ① 을 충족해 분기 불요, 페이월 (Athletic) 만 ② 헤드라인-온리 분기 추가.
+> 운영: `docs/runbook/2026-07-13-fmkorea-search-adapter-ops.md` 퍼가기 금지 절.
 
 fmkorea '축구 소식통'의 일부 글은 **작성자가 직접 번역한 2차 저작물**이며 '퍼가기 금지'
 표식이 붙는다 (예: `https://www.fmkorea.com/9940576222`). 이 본문을 그대로 복제 · 요약해
