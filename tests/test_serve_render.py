@@ -513,3 +513,44 @@ def test_sorted_latest_published_still_primary():
          "fetched_at": datetime(2026, 7, 19, 1, 0)},
     ]
     assert [r["content_hash"] for r in _sorted_latest(rows)] == ["new", "old"]
+
+
+from bullet_in.serve.render import _sort_ts, _fmt_day_only
+
+def test_sort_ts_day_interpolates_by_fetched_within_day():
+    row = {"published_at": datetime(2026, 7, 19),        # day 00:00
+           "fetched_at": datetime(2026, 7, 19, 11, 2),
+           "published_precision": "day"}
+    assert _sort_ts(row)[0] == datetime(2026, 7, 19, 11, 2)
+
+def test_sort_ts_day_clamps_late_fetch_into_published_day():
+    row = {"published_at": datetime(2026, 7, 19),
+           "fetched_at": datetime(2026, 7, 22, 9, 0),    # 수일 뒤 수집
+           "published_precision": "day"}
+    assert _sort_ts(row)[0] == datetime(2026, 7, 19, 23, 59, 59)
+
+def test_sort_ts_time_precision_passthrough():
+    row = {"published_at": datetime(2026, 7, 19, 14, 30),
+           "fetched_at": datetime(2026, 7, 19, 15, 0),
+           "published_precision": "time"}
+    assert _sort_ts(row)[0] == datetime(2026, 7, 19, 14, 30)
+
+def test_sort_ts_null_precision_passthrough():
+    row = {"published_at": datetime(2026, 7, 19, 14, 30),
+           "fetched_at": datetime(2026, 7, 19, 15, 0)}
+    assert _sort_ts(row)[0] == datetime(2026, 7, 19, 14, 30)
+
+def test_fmt_day_only_current_year_omits_year():
+    now = datetime(2026, 7, 20)
+    assert _fmt_day_only(datetime(2026, 7, 19), now) == "7월 19일"
+    assert _fmt_day_only(datetime(2025, 7, 19), now) == "2025년 7월 19일"
+
+def test_decorate_day_precision_shows_date_not_relative():
+    from bullet_in.serve.render import _decorate
+    now = datetime(2026, 7, 20, 12, 0)
+    row = {"published_at": datetime(2026, 7, 19),
+           "fetched_at": datetime(2026, 7, 19, 11, 2),
+           "published_precision": "day", "tier": 2}
+    d = _decorate(row, {}, now)
+    assert d["_when"] == "7월 19일"                       # "N시간 전" 아님
+    assert d["_published_iso"] == "2026-07-19T11:02:00"   # 유효 시각 (보간) — data-published 계약

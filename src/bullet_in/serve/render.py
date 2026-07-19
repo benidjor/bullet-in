@@ -3,7 +3,7 @@ import json
 import re
 import shutil
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup, escape
@@ -33,6 +33,24 @@ def humanize_when(dt: datetime, now: datetime) -> str:
 
 def fmt_date(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%d")
+
+
+def _fmt_day_only(dt: datetime, now: datetime) -> str:
+    """day 정밀도 표시 — 상대 시각 대신 날짜만 (실제보다 정밀한 척 금지)."""
+    if dt.year == now.year:
+        return f"{dt.month}월 {dt.day}일"
+    return f"{dt.year}년 {dt.month}월 {dt.day}일"
+
+
+def _sort_ts(row: dict) -> tuple[datetime, datetime]:
+    """정렬 키. day 정밀도는 fetched_at 을 발행일 [00:00, 23:59:59] 로 클램프해 보간."""
+    pub = row.get("published_at") or datetime.min
+    fet = row.get("fetched_at") or datetime.min
+    if row.get("published_precision") == "day" and pub is not datetime.min:
+        start = pub.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1) - timedelta(seconds=1)
+        return (min(max(fet, start), end), fet)
+    return (pub, fet)
 
 
 def outlet_display(row: dict, sources: dict, directory: dict | None = None,
@@ -413,8 +431,11 @@ def _decorate(row: dict, sources: dict, now: datetime,
     a["_tier_label"] = tier_label(row.get("tier"))
     a["_tier_key"] = tier_key(row.get("tier"))
     pub = row.get("published_at")
-    a["_when"] = humanize_when(pub, now) if pub else ""
-    a["_published_iso"] = pub.isoformat() if pub else ""
+    if pub and row.get("published_precision") == "day":
+        a["_when"] = _fmt_day_only(pub, now)
+    else:
+        a["_when"] = humanize_when(pub, now) if pub else ""
+    a["_published_iso"] = _sort_ts(row)[0].isoformat() if pub else ""
     a["_date"] = fmt_date(pub) if pub else ""
     iu = row.get("image_url")
     a["image_url"] = iu if iu and re.match(r"^https?://[^\s'\"()]+$", iu) else None
@@ -448,10 +469,7 @@ def _decorate(row: dict, sources: dict, now: datetime,
 
 
 def _sorted_latest(articles: list[dict]) -> list[dict]:
-    return sorted(articles,
-                  key=lambda a: (a.get("published_at") or datetime.min,
-                                 a.get("fetched_at") or datetime.min),
-                  reverse=True)
+    return sorted(articles, key=_sort_ts, reverse=True)
 
 
 def render_index(articles: list[dict], sources: dict, now: datetime,
