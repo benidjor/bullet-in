@@ -465,3 +465,17 @@ def test_layout_emits_no_whitespace_before_doctype():
     눈에 안 띄는 회귀라 고정한다 — {% endmacro -%} 를 쓸 것."""
     html = render_index([_row()], SOURCES, NOW)
     assert html.startswith("<!doctype html>")
+
+def test_decorate_body_images_false_drops_inline_but_keeps_thumbnail():
+    srcs = {"bbc_sport": {"display_name": "BBC Sport", "body_images": False}}
+    # 히어로 (썸네일) 유지 + 인라인만 제거
+    row = _row(image_url="https://img/hero.jpg",
+               images_json='["https://img/in1.jpg", "https://img/in2.jpg"]')
+    a = _dec(row, srcs, NOW)
+    assert a["image_url"] == "https://img/hero.jpg"
+    assert a["_images"] == []
+    # og:image 부재 → 인라인 1번의 썸네일 승격은 유지, 나머지 인라인은 제거
+    row2 = _row(image_url=None, images_json='["https://img/a.jpg", "https://img/b.jpg"]')
+    a2 = _dec(row2, srcs, NOW)
+    assert a2["image_url"] == "https://img/a.jpg"
+    assert a2["_images"] == []

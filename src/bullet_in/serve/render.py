@@ -409,6 +409,9 @@ def _decorate(row: dict, sources: dict, now: datetime,
     elif imgs:
         a["image_url"] = imgs[0]  # og:image 부재 → 인라인 1번을 히어로·카드 썸네일로 승격
         imgs = imgs[1:]
+    # body_images: false 소스 (가십 라운드업 등) 는 썸네일만 쓰고 본문 인라인 이미지 제외
+    if sources.get(row.get("source_id"), {}).get("body_images", True) is False:
+        imgs = []
     a["_images"] = imgs
     u = row.get("url") or ""
     a["url"] = u if re.match(r"^https?://", u) else "#"
