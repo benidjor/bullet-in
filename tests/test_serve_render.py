@@ -100,6 +100,20 @@ def test_decorate_sets_stage_fields():
     assert d["_stage_class"] == "s-med"
 
 
+def test_decorate_agreed_stage_badge():
+    from bullet_in.serve.render import _decorate
+    d = _decorate(_row(transfer_stage="agreed"), SOURCES, NOW)
+    assert d["_stage_badge"] is True
+    assert d["_stage_label"] == "이적 합의"
+    assert d["_stage_class"] == "s-agree"
+
+
+def test_sidebar_and_card_render_agreed():
+    html = render_index([_row(transfer_stage="agreed")], SOURCES, NOW)
+    assert 'data-value="agreed"' in html      # 사이드바 필터 체크박스
+    assert "이적 합의" in html                  # 라벨 노출
+
+
 def test_decorate_other_stage_no_badge():
     from bullet_in.serve.render import _decorate
     d = _decorate(_row(transfer_stage="other"), SOURCES, NOW)
