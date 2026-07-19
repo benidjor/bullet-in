@@ -249,3 +249,21 @@ def test_published_naive_value_treated_as_utc():
 def test_published_future_beyond_1h_discarded_to_fetched_at():
     future = (_FETCH + timedelta(hours=2)).isoformat()
     assert _published({"published": future}, _FETCH) == _FETCH
+
+def test_to_articles_carries_published_precision():
+    item = RawItem(source_id="skysports", source_type="html",
+                   url="https://ex.test/a", fetched_at=_FETCH,
+                   raw_payload={"title": "Arsenal sign", "body": "b",
+                                "published": "2026-07-19T08:00:00+00:00",
+                                "published_precision": "day"})
+    sources = {"skysports": {"source_id": "skysports", "tier": 4}}
+    arts, _ = to_articles([item], sources, seen={})
+    assert arts[0].published_precision == "day"
+
+def test_to_articles_precision_none_when_absent():
+    item = RawItem(source_id="skysports", source_type="html",
+                   url="https://ex.test/a", fetched_at=_FETCH,
+                   raw_payload={"title": "Arsenal sign", "body": "b"})
+    sources = {"skysports": {"source_id": "skysports", "tier": 4}}
+    arts, _ = to_articles([item], sources, seen={})
+    assert arts[0].published_precision is None

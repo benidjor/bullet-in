@@ -44,3 +44,9 @@ def test_broken_jsonld_skipped_meta_used():
 
 def test_none_when_nothing_found():
     assert extract_published_at("<html><body><p>hi</p></body></html>") is None
+
+def test_basic_iso_compact_time_is_time_precision():
+    html = ('<script type="application/ld+json">'
+            '{"datePublished":"20260719T143000Z"}</script>')
+    dt, prec = extract_published_at(html)
+    assert prec == "time"

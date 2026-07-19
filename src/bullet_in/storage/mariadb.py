@@ -34,12 +34,12 @@ class MartStore:
              title_original,title_ko,summary_ko,body_excerpt,
              summary3_ko,body_ko,body_source,image_url,images_json,outlet,journalist,team,
              transfer_stage,
-             published_at,fetched_at,revision)
+             published_at,published_precision,fetched_at,revision)
           VALUES (:content_hash,:url,:source_id,:author,:tier,:confidence_score,
              :title_original,:title_ko,:summary_ko,:body_excerpt,
              :summary3_ko,:body_ko,:body_source,:image_url,:images_json,:outlet,:journalist,:team,
              :transfer_stage,
-             :published_at,:fetched_at,:revision)
+             :published_at,:published_precision,:fetched_at,:revision)
           ON DUPLICATE KEY UPDATE
              title_ko=IF(articles.content_hash=VALUES(content_hash), articles.title_ko, NULL),
              summary_ko=IF(articles.content_hash=VALUES(content_hash), articles.summary_ko, NULL),
@@ -54,6 +54,7 @@ class MartStore:
              journalist=VALUES(journalist),
              team=VALUES(team),
              published_at=VALUES(published_at),
+             published_precision=VALUES(published_precision),
              tier=VALUES(tier),
              confidence_score=VALUES(confidence_score),
              fetched_at=VALUES(fetched_at),
