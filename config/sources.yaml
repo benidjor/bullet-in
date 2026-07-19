@@ -11,14 +11,11 @@ sources:
     outlet: Arsenal.com
     journalist_label: Arsenal Official
     medium: official
-    adapter: html
+    adapter: arsenal_api
     config:
-      # 남자팀 필터 URL + 'sign'(영입·재계약) 제목만 → 공식 영입 확정 전용 고정밀 소스
-      list_url: "https://www.arsenal.com/news?field_article_arsenal_team_value=men&revision_information="
-      item_selector: "a.responsive-card__wrapper"
-      base_url: "https://www.arsenal.com"
-      title_contains: "sign"
-      body_selector: "div.article-body, article"
+      # 2026-07 공홈 개편(목록 클라이언트 렌더링) → 비공식 GraphQL API 전환.
+      # 필터는 어댑터 내 taxonomy 판별(Transfer news · Contract news + Men) — 'sign' 제목 필터 폐기
+      pages: 2   # 페이지당 50건 · 최신순 — 평시 최근 100건 커버
     enabled: true
   - source_id: bbc_sport
     display_name: BBC Sport
