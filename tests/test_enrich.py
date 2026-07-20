@@ -588,3 +588,45 @@ def test_detect_club_injection_passes_korean_synonym_key():
               "body_ko": "맨유가 영입 경쟁에 뛰어들었다고 함."}
     src = "[오피셜] 맨체스터 유나이티드가 윙어 영입에 근접했다고 함"
     assert detect_club_injection(parsed, src, club_map) == []
+
+def _real_club_map():
+    import yaml
+    from pathlib import Path
+    cfg = Path(__file__).parent.parent / "config" / "club_map.yaml"
+    return (yaml.safe_load(cfg.read_text()) or {}).get("clubs", {})
+
+def test_detect_club_injection_real_config_bbc_st_germain_style():
+    """실사례 (mart 2026-07-20 전수 실측): BBC 는 'Paris St-Germain' 으로 표기한다.
+    별칭에 축약 표기가 없으면 라운드업 대부분이 오탐 (21건) — 실제 config 로 재현."""
+    from bullet_in.enrich import detect_club_injection
+    parsed = {"title_ko": None, "summary_ko": "아스날과 리버풀이 파리 생제르맹의 23세 공격수 영입 경쟁에 합류했다.",
+              "summary3_ko": None, "body_ko": None}
+    src = "Arsenal and Liverpool have joined the race for Paris St-Germain's 23-year-old forward."
+    assert detect_club_injection(parsed, src, _real_club_map()) == []
+
+def test_detect_club_injection_real_config_portuguese_adjective():
+    """실사례: 원문 형용사 'Portuguese' → 번역 '포르투갈' 이 포르투 키에 후행 결합.
+    Portugal 별칭은 단어 경계라 형용사형을 못 접지 — 실제 config 로 재현."""
+    from bullet_in.enrich import detect_club_injection
+    parsed = {"title_ko": None, "summary_ko": None, "summary3_ko": None,
+              "body_ko": "레알 마드리드도 21세 포르투갈 선수에게 관심을 보이고 있다."}
+    src = "Real Madrid are also interested in the 21-year-old Portuguese player."
+    assert detect_club_injection(parsed, src, _real_club_map()) == []
+
+def test_detect_club_injection_real_config_fortuna_dusseldorf():
+    """실사례: 원문 'Fortuna Dusseldorf' → 번역 '포르투나 뒤셀도르프' 가 포르투 키에 후행 결합."""
+    from bullet_in.enrich import detect_club_injection
+    parsed = {"title_ko": None, "summary_ko": None, "summary3_ko": None,
+              "body_ko": "그는 네덜란드의 트벤테와 독일의 포르투나 뒤셀도르프에서 임대 생활을 했다."}
+    src = "He had loan spells at Twente and Fortuna Dusseldorf."
+    assert detect_club_injection(parsed, src, _real_club_map()) == []
+
+def test_detect_club_injection_real_config_still_flags_unfounded():
+    """접지 별칭을 늘려도 검출력 유지 — 원문에 없는 구단명 (Hull City 단신을 울버햄튼으로
+    바꿔치기한 실사례) 은 실제 config 로도 계속 잡혀야 한다."""
+    from bullet_in.enrich import detect_club_injection
+    parsed = {"title_ko": None, "summary_ko": None,
+              "summary3_ko": "울버햄튼은 애스턴 빌라의 레온 베일리 영입을 시도하고 있다.",
+              "body_ko": None}
+    src = "Hull City are in talks with Aston Villa over a deal for winger Leon Bailey."
+    assert detect_club_injection(parsed, src, _real_club_map()) == ["울버햄튼"]
