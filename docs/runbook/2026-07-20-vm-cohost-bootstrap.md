@@ -102,7 +102,33 @@ sudo systemctl disable --now bullet-in.timer        # 스케줄 중지 (롤백)
 | available 메모리 2GB 미만 | 동거 한계 접근 | 스왑 파일 추가 또는 3-a (유료 VM) 전환 — 이 런북 절차 그대로 이주 |
 | 회차 30분 초과 실패 (TimeoutStartSec) | 행 (hang) | journalctl 로 단계 확인, 소스 셀렉터 드리프트 의심 |
 
-## 8. 참고
+## 8. Pages 배포 (SP-D)
+
+회차 끝 `ExecStartPost=` 가 `infra/deploy-site.sh` 로 site/ 를 Cloudflare Pages 에 직접 업로드한다.
+프로젝트 `bullet-in` → https://bullet-in.pages.dev — 배포 실패는 유닛 실패로 집계되어 Discord 알림.
+
+### 1회 셋업
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
+sudo npm install -g wrangler@4
+# .env 에 CLOUDFLARE_API_TOKEN (Pages Edit 최소 권한) · CLOUDFLARE_ACCOUNT_ID 추가
+wrangler pages project create bullet-in --production-branch main   # 1회만
+```
+
+### 수동 배포 · 진단
+
+```bash
+cd ~/bullet-in && set -a && source .env && set +a
+./infra/deploy-site.sh                                   # 수동 배포
+wrangler pages deployment list --project-name bullet-in  # 배포 이력
+```
+
+- 배포만 실패한 회차: site/ 는 VM 에 정상 생성돼 있으므로 수동 배포로 즉시 복구.
+- 토큰 만료 · 권한 오류: Cloudflare 대시보드에서 토큰 재발급 후 .env 갱신 (재시작 불필요 — 다음 회차부터 반영).
+
+## 9. 참고
 
 - 결정 배경: `docs/superpowers/specs/2026-07-20-deployment-mvp-track-design.md` §2.1 · §2.2.
 - X 쿠키 절차: `docs/runbook/2026-07-03-afcstuff-playwright-adapter-ops.md`.
