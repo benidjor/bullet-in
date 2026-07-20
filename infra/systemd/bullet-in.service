@@ -12,4 +12,5 @@ EnvironmentFile=/home/ubuntu/bullet-in/.env
 ExecStartPre=/usr/bin/docker compose up -d --wait
 ExecStartPre=/bin/sleep 10
 ExecStart=/home/ubuntu/.local/bin/uv run python -m bullet_in.run --concurrency 8
+ExecStartPost=/home/ubuntu/bullet-in/infra/deploy-site.sh
 TimeoutStartSec=1800

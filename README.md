@@ -1,6 +1,8 @@
 # Bullet-in
 
 > 영국 현지 언론 · ITK (X)의 Arsenal FC 소식을 매일 병렬 수집하고, 공신력으로 스코어링 · 중복제거한 뒤 LLM으로 번역 · 요약하여 신뢰도순으로 보여주는 뉴스 수집 파이프라인.
+>
+> **공개 서비스**: https://bullet-in.pages.dev — VM 스케줄이 하루 4회 자동 수집 · 배포.
 
 *Bullet-in = bulletin (단신) + bullet (병기고 Arsenal)의 언어유희.*
 
@@ -10,13 +12,13 @@
 
 ![Bullet-in 기사 상세 — 실데이터](docs/assets/article-detail-live.png)
 
-> 기사 상세. 3줄 요약 · 본문 전문 번역 · 인라인 이미지 · 기자 바이라인.
+> 기사 상세. 3줄 요약 · 소스별 차등 서빙 (언론사 = 발췌 + 원문 링크, X · 공식 = 전문) · 기자 바이라인.
 
 ---
 
 ## 1. 동기
 
-아스날 뉴스는 영국 현지 언론과 ITK (In The Know) 트위터에 흩어져 있고, 매체 · 계정마다 공신력 편차가 크다. 신뢰할 만한 소스만 골라 한곳에서, 한국어로 번역 · 요약해 신뢰도순으로 보고 싶다는 필요에서 출발했다. **영국 현지 소스를 한곳에 모아 공신력순으로 정렬하고 한국어로 번역 · 요약**하는 개인용 서비스다.
+아스날 뉴스는 영국 현지 언론과 ITK (In The Know) 트위터에 흩어져 있고, 매체 · 계정마다 공신력 편차가 크다. 신뢰할 만한 소스만 골라 한곳에서, 한국어로 번역 · 요약해 신뢰도순으로 보고 싶다는 필요에서 출발했다. **영국 현지 소스를 한곳에 모아 공신력순으로 정렬하고 한국어로 번역 · 요약**하는 서비스다.
 
 단순 "긁어서 저장" 스크립트가 아니라, 신뢰성 · 멱등성 · 데이터 품질 · 관측성을 갖춘 **데이터 프로덕트**로 설계했다.
 
@@ -46,7 +48,8 @@
    ▼ (통과 시)
 [Serve]     신뢰도순 정적 HTML
 
-오케스트레이션: Airflow (2.9 구축 → 3.0 마이그레이션) 가 전 단계를 하루 4회 조율
+스케줄: systemd timer (VM) 가 전 단계를 하루 4회 실행 · 회차 끝 Cloudflare Pages 자동 배포
+        Airflow DAG (2.9 구축 → 3.0 마이그레이션) 는 확장 자산으로 보존
 ```
 
 ## 3. 핵심 기능
@@ -106,7 +109,7 @@
 | 원본 랜딩 | **MongoDB** | 이종 원문을 손실 없이 schema-on-read로 보존 → 재처리 가능 |
 | 품질/분석 | **dbt + DuckDB** | dbt test가 "이상 점검"과 정면 일치, DuckDB가 MariaDB attach해 zero-infra 분석 |
 | 스크래핑 | **Playwright/httpx** | 소스 난이도 (정적~쿠키 인증 · 안티봇)에 맞는 도구 선택. X는 쿠키 주입 Playwright |
-| 오케스트레이션 | **Airflow 3.0** | 하루 4회 DAG. 2.9→3.0 마이그레이션 직접 수행 ([docs/MIGRATION.md](docs/MIGRATION.md)) |
+| 스케줄 · 배포 | **systemd timer + wrangler** | oneshot 회차 하루 4회 · OnFailure Discord 알림 · 회차 끝 Pages 직접 업로드. Airflow DAG (2.9→3.0 [마이그레이션](docs/MIGRATION.md))는 확장 자산으로 보존 |
 | LLM 번역 · 요약 | **Gemini 2.5 Flash-Lite** | 일 수백 건 저용량 · 단순 번역에 최적. [무료 티어](https://ai.google.dev/gemini-api/docs/pricing)로 비용 0, 유료도 1M 토큰당 입력 $0.10 · 출력 $0.40. `response_mime_type`으로 JSON 출력 유도 |
 
 **왜 CDC를 안 썼나** — CDC (Debezium/binlog)는 상류 트랜잭션 DB의 변경을 캡처하는 기술인데, 본 파이프라인의 소스는 웹/API/X라 읽을 binlog가 없다. 일 수백 건 배치에 Kafka+Debezium은 과설계이므로, **앱 레벨 변경 감지 (content_hash 비교 + revision)**로 뉴스 수정 · 삭제에 대응했다.
@@ -147,7 +150,7 @@ open site/index.html
 
 ## 8. 한계 & 향후
 
-- 현재는 얇은 정적 뷰 (수집 현황은 ops 뷰로 제공). 향후: 사용자 구독, AWS 배포.
+- 현재는 정적 서빙 (수집 현황은 ops 뷰로 제공). 향후: 방문 분석용 이벤트 로그, 사용자 구독.
 - 소스 확장 (The Athletic 등 하드 페이월, 추가 ITK)은 어댑터 추가로 대응.
 - 교차 corroboration 스코어링 (다수 소스 보도 시 신뢰도↑), 번역 정확도 스팟체크는 stretch.
 
@@ -156,3 +159,4 @@ open site/index.html
 - 공개 콘텐츠 대상, robots.txt 준수, 보수적 rate limit, 출처/링크 표기.
 - X (ITK)는 ToS 그레이존 → 버너 계정 사용, 자격증명은 `.env`로 분리 (커밋 금지), 개인 학습 용도.
 - 원문 전체 재배포가 아니라 메타데이터 · 요약 · 원문 링크 중심으로 서빙.
+- 소스 성질에 비례한 차등 서빙 — 언론사 기사는 요약 + 짧은 발췌 + 원문 링크, 수십 단어 트윗과 구단 공식 발표문만 전문, 퍼가기 금지 커뮤니티는 헤드라인만.

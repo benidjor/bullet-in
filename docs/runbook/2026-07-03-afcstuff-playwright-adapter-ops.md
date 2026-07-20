@@ -52,6 +52,15 @@ PY
 - **데이터센터 IP 운영 (2026-07-20 VM 동거 이후)**: 접촉 IP 가 가정 IP 에서 Oracle 고정 DC IP 로 바뀌어 차단 확률이 올라간 상태.
   첫 접촉 2회 (수동 종단 · 무인 회차) 는 정상 수집 — 차단되면 SLO-5 (X 24h) 알림이 감지하고, 폴백은 소스 비활성 (배포 spec §2.4).
 
+### 폴백 절차 — 소스 비활성 (배포 spec §2.4)
+
+차단 · 쿠키 만료가 SLO-5 (X 24h) 알림으로 감지되고 재추출로도 회복되지 않으면:
+
+1. `config/sources.yaml` 의 `x_afcstuff` 항목에 `enabled: false` 지정 → 커밋 · 머지.
+2. VM 에서 `cd ~/bullet-in && git pull --ff-only` — 다음 회차부터 X 수집 제외.
+3. 기존 트윗 페이지는 mart 에 남아 있으므로 서빙 유지 — 신규 수집만 멈춘다.
+4. 재활성: 쿠키 재추출 (위 사전 준비) 후 `enabled: true` 되돌리고 같은 경로로 반영.
+
 ## journalist 표시 vs tier 산출 핸들 차이
 
 - `journalist` (표시)는 `_CITE_RE` (마지막 `[ @X ]`)로, tier는 credibility `_HANDLE_RE` (본문 전체 `@멘션`의 `min`)로 산출된다.
