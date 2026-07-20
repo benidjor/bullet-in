@@ -1,4 +1,4 @@
-# 무근거 구단명 검출 사전 — 한글 통용 표기 → 영문 별칭 목록 (enrich.detect_club_injection).
+# 원문에 없는 구단명 검출 사전 — 한글 통용 표기 → 영문 별칭 목록 (enrich.detect_club_injection).
 # glossary (표기 교정 치환) · name_map (인명 검출) 과 목적이 달라 분리 — 치환하지 않는 검출 전용.
 # 등재 규칙:
 # ① 별칭 누락 = 오탐 — 원문이 통칭 (Boro · Spurs) 으로만 표기해도 근거로 인정되게 통칭까지 등재.
