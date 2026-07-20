@@ -632,3 +632,51 @@ def test_sweep_orphan_pages_returns_removed_names(tmp_path):
     removed = sweep_orphan_pages([{"content_hash": "keep1"}], tmp_path)
     assert removed == ["old1.html", "old2.html"]
     assert (art / "keep1.html").exists()
+
+# ── bbc_gossip 라운드업 항목화 — 원문 '(출처) , external' 표지 앵커 (옵션 B) ──
+from bullet_in.serve.render import gossip_itemize
+
+def test_gossip_itemize_converts_attributed_paragraph_to_item():
+    blocks = [{"type": "p", "text": "아스날은 존 스톤스 영입을 검토하고 있다. (Sun)"}]
+    out = gossip_itemize(blocks, {"Sun": 1})
+    assert out == [{"type": "item", "text": "아스날은 존 스톤스 영입을 검토하고 있다.",
+                    "source": "Sun"}]
+
+def test_gossip_itemize_matches_translated_suffix_by_core():
+    # 원문 "Athletic - subscription required" → core "Athletic",
+    # 번역 "(Athletic - 구독 필요)" 도 같은 core 로 앵커돼야 한다
+    blocks = [{"type": "p", "text": "첼시가 협상에 들어갔다. (Athletic - 구독 필요)"}]
+    out = gossip_itemize(blocks, {"Athletic": 1})
+    assert out[0]["type"] == "item"
+    assert out[0]["source"] == "Athletic - 구독 필요"
+
+def test_gossip_itemize_ignores_non_attribution_parenthetical():
+    # 라운드업 뒤쪽 일정 섹션의 경기장 · 시각 괄호는 출처가 아님 (실데이터 함정)
+    blocks = [{"type": "p", "text": "아스날 대 밀란 (Emirates Stadium, London, 14:00)"},
+              {"type": "p", "text": "본문 중간 괄호 (£50.9m) 는 끝이 아니라 무관하다."},
+              {"type": "img", "url": "https://x/i.jpg"}]
+    out = gossip_itemize(blocks, {"Sun": 1})
+    assert out == blocks
+
+def test_render_article_itemizes_gossip_with_body_source_anchor():
+    src = {"bbc_gossip": {"display_name": "BBC Football Gossip", "serving": "full"}}
+    row = _row(source_id="bbc_gossip",
+               body_ko="리드 문단이다.\n아스날이 영입을 검토 중이다. (Sun)",
+               body_source="Arsenal are weighing a move. (Sun) , external")
+    html = _ra(_dec(row, src, NOW), [], "h1", src, NOW)
+    assert 'class="gossip-item"' in html
+    assert 'class="src-tag"' in html and ">Sun<" in html
+    assert "(Sun)" not in html          # 본문 텍스트에서 괄호 표지는 배지로 이동
+
+def test_render_article_gossip_without_body_source_stays_plain():
+    src = {"bbc_gossip": {"display_name": "BBC Football Gossip", "serving": "full"}}
+    row = _row(source_id="bbc_gossip",
+               body_ko="아스날이 영입을 검토 중이다. (Sun)")
+    html = _ra(_dec(row, src, NOW), [], "h1", src, NOW)
+    assert "gossip-item" not in html    # 앵커 없으면 변환하지 않음 (오탐 방지)
+
+def test_render_article_non_gossip_not_itemized():
+    row = _row(body_ko="아스날이 영입을 검토 중이다. (Sun)",
+               body_source="Arsenal are weighing a move. (Sun) , external")
+    html = _ra(_dec(row, SOURCES, NOW), [], "h1", SOURCES, NOW)
+    assert "gossip-item" not in html

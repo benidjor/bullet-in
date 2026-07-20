@@ -140,7 +140,7 @@ async def main(concurrency: int):
     with engine.connect() as c:
         rows = [dict(r) for r in c.execute(text(
             "SELECT content_hash,url,source_id,title_original,title_ko,summary_ko,"
-            "summary3_ko,body_ko,image_url,images_json,outlet,journalist,team,transfer_stage,tier,"
+            "summary3_ko,body_ko,body_source,image_url,images_json,outlet,journalist,team,transfer_stage,tier,"
             "confidence_score,published_at,published_precision,fetched_at "
             "FROM articles")).mappings().all()]
     write_site(rows, sources, "site",
