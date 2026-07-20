@@ -1,8 +1,12 @@
-"""config/sources.yaml 의 차등 서빙 선언 계약 (spec §2.3 매핑표)."""
+"""config/sources.yaml 의 서빙 선언 계약 (spec §2.3 개정 2026-07-20 — 전 소스 전문 서빙).
+
+fmkorea 경로 ③ (퍼가기 금지 + 페이월) 은 수집 단계 헤드라인-온리라 serving 값과 무관."""
 import yaml
 from pathlib import Path
 
-FULL_SOURCES = {"arsenal_official", "x_afcstuff", "fmkorea"}
+FULL_SOURCES = {"arsenal_official", "x_afcstuff", "fmkorea",
+                "bbc_sport", "bbc_gossip", "skysports", "guardian",
+                "goal", "football_london"}
 
 def _modes():
     data = yaml.safe_load((Path(__file__).parent.parent / "config" / "sources.yaml").read_text(encoding="utf-8"))
