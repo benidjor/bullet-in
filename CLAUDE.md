@@ -83,6 +83,11 @@ SoT: `docs/conventions/2026-06-11-commit-pr-convention.md`. 핵심:
   `docs/troubleshooting/2026-06-28-github-contributor-misattribution.md`.)
 - PR 본문: 7섹션 한국어 구조, `--body-file`로 전달, **Claude 서명 금지** (§2.7).
 - GitHub Flow + squash merge, PR = Task.
+- **자연스러운 한국어 (2026-07-20 확정)**: 커밋 본문 · PR 본문 · docs 산문은 작업 중 만든 내부 용어 · 은유 · 압축 명사구 없이,
+  처음 읽는 사람이 대화 맥락 없이 이해할 문장으로 쓴다 (누적 사례집은 세션 메모리 natural-korean-in-commits-prs).
+  PR 본문 · 트러블슈팅 · 런북처럼 산문 비중이 큰 산출물은 게시 전에 humanize-korean 스킬 (fast) 문체 점검을 1회 통과시킨다
+  — 무변경 판정이면 그대로 게시, 변경 제안은 반영. 한 줄 제목 · 표 · 코드 블록 · 몇 줄짜리 설정 PR 은 대상 아님.
+  호출 시 서식 규칙 (§2.2) · 명사형 불릿 · 수치 · 경로를 변경 금지 목록으로 명시할 것.
 
 ## 공개 저장소 주의
 - 공개되는 글 (README · PR · 커밋)에 Claude 서명, '포트폴리오/이직/취업' 프레이밍, 회사 실명 금지.
