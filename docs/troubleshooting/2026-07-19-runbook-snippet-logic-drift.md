@@ -48,6 +48,14 @@ grep -rn "classify_stage_rows\|rows_missing_stage" docs/runbook/
   `outlet_dir` 인자를 반영하지 못한 상태로 남아 있었다.
   그대로 실행하면 날짜 정렬 보간 · 아웃렛 표시가 깨진 화면이 만들어진다.
   표기 백필 검증 중 발견 — 실행 전에 run.py 서빙 SELECT 와 대조해 회피했다.
+- **2026-07-20 ③ 새 기본값이 기존 예시 코드의 동작을 바꿈** (#98 최종 리뷰에서 발견 → 머지 전 정정):
+  차등 서빙을 넣으면서 "serving 을 지정하지 않으면 발췌 모드" 라는 기본값이 생겼다.
+  그러자 서빙 검증 런북 1단계의 픽스처 예시 (serving 을 지정하지 않은 sources 설정) 가 의도와 달리 발췌 모드로 렌더돼,
+  "여러 문단짜리 본문이 제대로 나오는지 확인한다" 는 픽스처의 원래 목적이 소리 없이 깨졌다.
+  앞선 두 사례는 코드를 고쳤는데 예시를 같이 안 고쳐서 생긴 어긋남이지만, 이번엔 예시도 예시가 부르는 코드도 그대로였다.
+  새 기본값이 "지정 안 함" 의 의미를 바꾼 것이 원인이라, 예시가 오류 없이 멀쩡히 돌기 때문에 더 찾기 어렵다.
+  교훈: 새 기본값을 만들면 그 키를 안 쓰는 기존 예시 전부가 새 기본값의 영향을 받는다.
+  바뀐 함수 이름으로 검색해서는 못 찾으므로 (예시가 그 함수를 직접 부르지 않음), 그 설정 (sources 등) 을 만드는 예시까지 찾아본다.
 
 ## 6. 관련
 
@@ -55,3 +63,4 @@ grep -rn "classify_stage_rows\|rows_missing_stage" docs/runbook/
 - 수정된 런북: `docs/runbook/2026-06-30-transfer-stage-classification-ops.md` §2 (rule_stage 분기 포함 스니펫)
   · `docs/runbook/2026-07-19-translation-quality-gates-ops.md` §5 (원문 결합 스윕)
   · `docs/runbook/2026-07-19-enrich-only-pass.md` §4 (서빙 계약 1:1 예시 + 주의 문구)
+  · `docs/runbook/2026-06-29-serving-ui-verification.md` 1단계 픽스처 (serving full 명시 — 사례 ③)
