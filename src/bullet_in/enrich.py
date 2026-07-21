@@ -36,6 +36,9 @@ TRANSLATE_PROMPT = (
     "- summary_ko·summary3_ko 존댓말 금지: '확정했습니다' ❌ → '확정했다' ⭕.\n"
     "- body_ko: 본문 전체를 자연스러운 한국어로 번역. 2~4문장 단위 문단으로 나누고 "
     "문단 사이는 줄바꿈 문자(\\n)로 구분한다.\n"
+    "- body_ko 는 요약이 아니라 완역이다: 기사 본문의 모든 문단을 순서대로 빠짐없이 "
+    "옮기고, 수치 · 인용 · 세부 사실을 임의로 줄이거나 합치지 않는다. 기사 내용과 "
+    "무관한 홍보 문구만 제외한다.\n"
     "- 여러 구단 소식을 나열한 라운드업(가십 등) 기사도 발췌하지 않는다: "
     "아스날 무관 구단 항목까지 본문 전체를 빠짐없이 번역하고, 단신을 하나도 빠뜨리지 않는다.\n"
     "- 라운드업 단신 끝의 괄호 출처 표기 — 예: (Sky Sports) — 는 번역하지 않고 "
@@ -246,6 +249,49 @@ def paragraphize(text: str | None, max_len: int = 400) -> str | None:
             chunks.append(chunk)
         blocks_out.extend(chunks)
     return "\n".join(blocks_out)
+
+def finalize_translation(v: dict, row: dict, glossary: dict[str, str],
+                         name_map: dict[str, str],
+                         club_map: dict[str, list[str]]
+                         ) -> tuple[str | None, str, str, str | None]:
+    """번역 결과에 표기 사전 · 환각 게이트 4축 · 문단 보정을 적용해
+    set_translation 인자 4필드를 만든다. row 는 rows_missing_translation 의 원본 행.
+    회차 경로 (run.py) 와 enrich 전용 백필 패스가 같은 규칙을 쓰도록 여기 한 벌만 둔다
+    — 런북 스니펫에 옮겨 적으면 게이트 · 문단 보정이 빠진 채 백필이 돈다."""
+    v = apply_glossary(v, glossary)
+    h = row.get("content_hash")
+    src_text = " ".join(filter(None, [row.get("title_original"),
+                                      row.get("body_source"),
+                                      row.get("body_excerpt")]))
+    # 제목 환각 검출 (설계 ②-A): 1차 검출 = 재번역 큐 (title NULL 저장 → 다음
+    # 사이클 재선별), 재검출 (summary_ko 기저장 = 재시도 행) = 원문 제목 폴백.
+    suspects = detect_title_hallucination(v["title_ko"], src_text, name_map)
+    # 역방향 축: 원문 제목 인명 누락 · 무근거 '임대' — 라운드업 (gossip) 은 제목 재초점이 정상이라 제외
+    if row.get("source_id") != "bbc_gossip":
+        suspects = suspects + detect_title_mistranslation(
+            v["title_ko"], row.get("title_original"), name_map)
+    # 라운드업 단신 누락 게이트: 원문 괄호 출처 vs 번역 병기 대조 (환각 큐와 같은 재시도 1회)
+    omissions = detect_roundup_omission(row.get("body_source"), v["body_ko"])
+    # 원문에 없는 구단명 게이트 (4축): 번역 4필드 × 원문 이중 대조 — 인명 suspects 와 분리
+    # (합치면 body 만 오염된 케이스에 불필요한 원문 제목 폴백이 걸린다)
+    club_suspects = detect_club_injection(v, src_text, club_map)
+    title_ko = v["title_ko"]
+    retry = bool(row.get("summary_ko"))
+    if suspects and retry:
+        log.warning("제목 환각 재발 — 원문 제목 폴백 content_hash=%s 의심=%s", h, suspects)
+        title_ko = row.get("title_original")
+    elif (suspects or omissions or club_suspects) and not retry:
+        log.warning(
+            "재번역 큐 content_hash=%s 환각의심=%s 단신누락=%s 원문에 없는 구단명=%s",
+            h, suspects, omissions, club_suspects)
+        title_ko = None
+    if omissions and retry:
+        log.warning(
+            "라운드업 단신 누락 잔존 — 수동 확인 content_hash=%s 누락=%s", h, omissions)
+    if club_suspects and retry:
+        log.warning(
+            "원문에 없는 구단명 잔존 — 수동 확인 content_hash=%s 구단=%s", h, club_suspects)
+    return title_ko, v["summary_ko"], v["summary3_ko"], paragraphize(v["body_ko"])
 
 def _extract_full(text: str) -> dict | None:
     m = re.search(r"\{.*\}", text, re.DOTALL)
