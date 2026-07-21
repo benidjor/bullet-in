@@ -1,4 +1,4 @@
-# 무근거 구단명 검출 사전 — 한글 통용 표기 → 영문 별칭 목록 (enrich.detect_club_injection).
+# 원문에 없는 구단명 검출 사전 — 한글 통용 표기 → 영문 별칭 목록 (enrich.detect_club_injection).
 # glossary (표기 교정 치환) · name_map (인명 검출) 과 목적이 달라 분리 — 치환하지 않는 검출 전용.
 # 등재 규칙:
 # ① 별칭 누락 = 오탐 — 원문이 통칭 (Boro · Spurs) 으로만 표기해도 근거로 인정되게 통칭까지 등재.
@@ -43,8 +43,9 @@ clubs:
   도르트문트: [Dortmund, Borussia Dortmund]
   레버쿠젠: [Leverkusen, Bayer Leverkusen]
   라이프치히: [Leipzig, RB Leipzig]
-  파리 생제르맹: [Paris Saint-Germain, PSG]
-  PSG: [Paris Saint-Germain, PSG]
+  # BBC 하우스 스타일은 'Paris St-Germain' 축약 표기 — 누락 시 라운드업 오탐 (실측 21건)
+  파리 생제르맹: [Paris Saint-Germain, Paris St-Germain, PSG]
+  PSG: [Paris Saint-Germain, Paris St-Germain, PSG]
   유벤투스: [Juventus, Juve]
   # 밀란은 "인터 밀란" 안에도 매치되므로 Inter 로도 접지 (원문이 Inter 단독 표기여도 통과)
   # 좁은 코너: ko 원문 "인테르" + 번역 "인터 밀란" 이면 밀란 키가 부분 매치로 플래그 (잔존 WARNING 수용 — 최종 리뷰 관찰)
@@ -52,8 +53,10 @@ clubs:
   인터 밀란: [Inter Milan, Inter]
   인테르: [Inter Milan, Inter]
   나폴리: [Napoli]
-  # 번역문의 "포르투갈" 이 키에 걸리는 후행 결합 — Portugal 별칭으로 접지 (규칙 ②)
-  포르투: [Porto, FC Porto, Portugal]
+  # 번역문의 "포르투갈" 이 키에 걸리는 후행 결합 — Portugal 별칭으로 접지 (규칙 ②).
+  # 형용사형 원문 (Portuguese → 포르투갈 선수) 과 "포르투나 뒤셀도르프" (Fortuna) 도 같은
+  # 후행 결합이라 각각의 영문 표기로 접지 (실측 3건)
+  포르투: [Porto, FC Porto, Portugal, Portuguese, Fortuna]
   AS 로마: [Roma]
   아약스: [Ajax]
   스포르팅: [Sporting]
