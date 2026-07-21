@@ -198,7 +198,58 @@ SQL
 
 복원 후 §4 로 사이트를 다시 만든다.
 
-## 6. 실패 모드
+## 6. 표기 사전 소급 적용 — 재번역 없이 표기만 고칠 때
+
+`config/glossary.yaml` 에 교정 항목을 더해도 **이미 저장된 번역은 바뀌지 않는다.**
+사전은 번역 직후 후처리로만 걸리기 때문이다.
+그래서 사전을 늘린 뒤에는 저장된 행에 같은 치환을 한 번 더 돌려야 화면에 반영된다.
+
+재번역 (§5) 과 혼동하지 말 것.
+표기만 고치는 일이라면 API 를 부를 이유가 없고, 재번역하면 문장까지 달라져 비교 기준이 흔들린다.
+
+- **비용** — API 호출 0회 · 수 초.
+- **멱등** — 이미 정규형인 행은 치환이 걸리지 않아 몇 번 돌려도 같다.
+- **주의** — 사전은 YAML 기재 순서대로 치환된다.
+짧은 표기를 먼저 두면 긴 표기 규칙이 영영 안 걸린다 (`클럽 브뤼헤` 가 `클럽 브뤼허` 로 바뀌어 버리는 식).
+순서 계약은 `tests/test_enrich.py` 가 실제 설정 파일을 읽어 고정하고 있다.
+- **함께 볼 것** — 구단명은 `config/club_map.yaml` 의 등록 키도 정규형과 같아야 한다.
+어긋나면 원문에 없는 구단명 게이트가 조용히 침묵한다.
+
+```bash
+uv run python - <<'EOF'
+import os, yaml
+from pathlib import Path
+from sqlalchemy import create_engine, text
+from bullet_in.enrich import apply_glossary
+
+FIELDS = ("title_ko", "summary_ko", "summary3_ko", "body_ko")
+glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
+            or {}).get("replacements", {})
+eng = create_engine(os.environ["MARIADB_URL"])
+with eng.connect() as c:
+    rows = [dict(r) for r in c.execute(text(
+        "SELECT content_hash," + ",".join(FIELDS) +
+        " FROM articles WHERE title_ko IS NOT NULL")).mappings()]
+
+changed = 0
+with eng.begin() as c:
+    for r in rows:
+        fixed = apply_glossary({f: r[f] for f in FIELDS}, glossary)
+        if all(fixed[f] == r[f] for f in FIELDS):
+            continue
+        c.execute(text("UPDATE articles SET title_ko=:t, summary_ko=:s, "
+                       "summary3_ko=:s3, body_ko=:b WHERE content_hash=:h"),
+                  {"t": fixed["title_ko"], "s": fixed["summary_ko"],
+                   "s3": fixed["summary3_ko"], "b": fixed["body_ko"],
+                   "h": r["content_hash"]})
+        changed += 1
+print("표기 교정:", changed, "/", len(rows), "행")
+EOF
+```
+
+반영이 끝나면 §4 로 사이트를 다시 만들고 배포한다.
+
+## 7. 실패 모드
 
 | 증상 | 판단 | 대응 |
 |---|---|---|
@@ -206,7 +257,7 @@ SQL
 | `Gemini rate limit(429)` 로그 후 중단 | 분당 속도 한도 | 기존 규칙 — 수 분 대기 후 재실행 또는 다음 회차 위임 |
 | 잔존 0 인데 화면에 원문 노출 | §4 미실행 (DB 만 갱신) | `write_site` 재실행 |
 
-## 7. 참고
+## 8. 참고
 
 - 모델 교체 판단 절차 · 채점 축: `docs/runbook/2026-07-21-translation-model-ab.md` (§8 이 이 런북 §5 를 가리킨다)
 - 유사 패턴: `docs/runbook/2026-07-15-tone-backfill-ops.md` (재요약 전용 enrich 패스 — fetch 없음 동일)

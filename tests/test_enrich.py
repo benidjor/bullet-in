@@ -692,3 +692,22 @@ def test_finalize_translation_applies_glossary_and_paragraphize():
     assert summary_ko == "아스날이 협상했다."
     assert "아스널" not in body_ko
     assert len(body_ko.split("\n")) > 1
+
+def test_glossary_file_normalizes_brugge_variants_in_order():
+    # 사전은 YAML 기재 순서대로 치환된다 — 짧은 표기가 앞서면 긴 표기 규칙이 안 걸린다.
+    # 실제 config 를 읽어 순서 계약을 고정한다 (주석만으로는 재발을 막지 못함).
+    import yaml
+    from pathlib import Path
+    from bullet_in.enrich import apply_glossary
+    g = (yaml.safe_load(Path("config/glossary.yaml").read_text()) or {})["replacements"]
+    out = apply_glossary({"body_ko": "클럽 브뤼헤와 클뤼프 브뤼헤, 그리고 브뤼헤"}, g)
+    assert out["body_ko"] == "클뤼프 브뤼허와 클뤼프 브뤼허, 그리고 브뤼허"
+
+def test_club_map_key_matches_glossary_normal_form():
+    # 사전이 만들어 내는 정규형과 club_map 등록 키가 어긋나면 구단명 게이트가 침묵한다.
+    import yaml
+    from pathlib import Path
+    clubs = (yaml.safe_load(Path("config/club_map.yaml").read_text()) or {})["clubs"]
+    glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text()) or {})["replacements"]
+    assert "클뤼프 브뤼허" in clubs
+    assert not (set(glossary) & set(clubs)), "club_map 키가 사전의 교정 대상(오표기)이면 안 됨"
