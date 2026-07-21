@@ -63,6 +63,30 @@ known 무료 아웃렛인데 tier가 fallback으로 떨어지는 결합.
 - **아웃렛 fetchability가 승격 여부를 가름** — 무료 (BBC · The Sun · arseblog)는 카드 有, Athletic은 페이월.
   - 특정 기자의 낮은 승격률은 그 기자가 아니라 아웃렛 특성일 수 있음.
 
+## 함정 4 — 트윗의 `outlet` 컬럼이 비어 있는 것은 결함이 아니다 (2026-07-22)
+
+트윗 40행의 `outlet` 이 전부 NULL 인 것을 보고 매핑이 덜 된 줄 알고 채우려 했다.
+소스 전체를 세어 보니 **243행 중 25행만 채워져 있었다** — fmkorea 뿐이고 나머지 소스도 전부 NULL 이었다.
+
+`outlet` 컬럼은 **원문 자체가 매체명을 들고 있을 때만** 채운다.
+fmkorea 는 제목 말머리 (`[디 애슬레틱]`) 를 파싱할 수 있지만 다른 소스에는 그런 표기가 없다.
+`pipeline.py` 가 `raw_payload.get("outlet")` 을 그대로 넣고 없으면 NULL 이다.
+
+화면 표시는 `render.outlet_display` 가 아래 순서로 대체 값을 찾는다.
+
+1. `outlet` 컬럼 값 (fmkorea)
+2. X 소스면 `journalist` 핸들 → `credibility.yaml` → 소속 매체 (`@garyjacob` → The Times)
+3. 소스 설정의 `display_name`
+
+트윗이 화면에서 `Gary Jacob (The Times)` 로 보이는 것은 임시 대체가 아니라 이 소스를 위해 일부러 만든 표시 경로다.
+dbt 모델 · 운영 뷰 어디도 `outlet` 컬럼을 직접 집계하지 않는다.
+
+**컬럼을 채우면 오히려 손해다.**
+지금은 `credibility.yaml` 을 고치면 과거 기사의 매체 표기가 즉시 따라오는데, 값을 컬럼에 저장해 두면 사전을 고칠 때마다 백필을 돌려야 한다.
+
+교훈은 진단 방법에 있다 — **컬럼 채움률은 한 소스만 보고 판단하지 말고 전체 분포를 먼저 센다.**
+비어 있는 값이 결함인지 의도한 설계인지는 화면 표시 코드의 대체 순서를 읽어야 알 수 있다.
+
 ## 참고
 
 - 어댑터 · 로직 — `src/bullet_in/adapters/x_backtrack.py` · `src/bullet_in/adapters/x_playwright.py`.
