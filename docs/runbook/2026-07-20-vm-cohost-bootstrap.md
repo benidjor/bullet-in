@@ -92,6 +92,35 @@ sudo systemctl disable --now bullet-in.timer        # 스케줄 중지 (롤백)
 - 무인 정상 판정: Discord 실패 알림이 없고, ops 뷰 (site/ops.html) 회차 이력이 6시간 간격으로 쌓이면 정상.
 - 실패 시 `bullet-in-fail-notify.service` 가 Discord 로 알린다 (수동 검증 완료 — 2026-07-20).
 
+### 6.1. 머지분 반영 — 자동 pull 이 없다
+
+**main 에 머지해도 실서비스는 바뀌지 않는다.**
+systemd 유닛은 `docker compose up` → `run.py` → `deploy-site.sh` 만 실행하고 `git pull` 을 하지 않는다.
+VM 체크아웃이 옛 커밋에 머물러 있으면 다음 회차도 옛 코드로 돈다.
+머지와 실서비스 반영 시점을 따로 고를 수 있다는 뜻이라 결함은 아니지만, "머지했는데 왜 화면이 그대로지" 로 헷갈리기 쉽다.
+
+```bash
+cd ~/bullet-in && git log --oneline -1     # VM 이 어느 커밋인지 먼저 확인
+git pull --ff-only
+```
+
+반영 방법은 무엇이 바뀌었는지에 따라 갈린다.
+
+- **수집 · 번역 로직이 바뀐 경우** — 다음 회차를 기다린다. 급하면 수동 회차 (X 접촉 1회 소모).
+- **서빙 · 템플릿 · CSS 만 바뀐 경우** — 회차를 돌릴 필요 없이 사이트만 다시 만들고 배포한다.
+enrich 전용 런북 §4 의 재생성 스니펫을 쓴 뒤 `./infra/deploy-site.sh` 를 실행한다.
+- 재생성 SELECT 는 `bullet_in.run.SERVING_SELECT_SQL` 을 import 해서 쓴다 (컬럼을 옮겨 적으면 어긋난다 — #107).
+
+반영 후 라이브에서 확인한다.
+
+```bash
+curl -sL https://bullet-in.pages.dev/ | grep -o 'article/[0-9a-f]\{64\}\.html' | sort -u | wc -l   # 카드 수
+curl -sL "https://bullet-in.pages.dev/article/<hash>" | grep -c 'excerpt-note'                     # 서빙 범위 확인
+```
+
+- `curl` 은 `-L` 을 붙인다 — Pages 가 확장자 없는 경로로 308 리다이렉트를 준다.
+- 배포 스크립트는 산출물이 50개 미만이면 배포를 거부한다 (렌더 실패 잔해 방어).
+
 ## 7. 실패 모드
 
 | 증상 | 판단 | 대응 |
