@@ -25,6 +25,15 @@ from bullet_in import notify
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 
+# 서빙 렌더 입력 — write_site 가 읽는 컬럼 전부. 런북의 사이트 재생성 절차도 이 상수를
+# import 해서 쓴다 (스니펫에 컬럼을 옮겨 적으면 서빙 코드와 어긋난다 — 실제 4회 재발,
+# docs/troubleshooting/2026-07-19-runbook-snippet-logic-drift.md).
+SERVING_SELECT_SQL = (
+    "SELECT content_hash,url,source_id,title_original,title_ko,summary_ko,"
+    "summary3_ko,body_ko,body_source,image_url,images_json,outlet,journalist,team,"
+    "transfer_stage,tier,confidence_score,published_at,published_precision,fetched_at "
+    "FROM articles")
+
 # started_at 은 Python UTC 바인딩 · finished_at 은 UTC_TIMESTAMP() — 세션 TZ 무관 (spec §5)
 RUN_INSERT_SQL = (
     "INSERT INTO pipeline_runs (run_id,dag_run_id,started_at,finished_at,"
@@ -138,11 +147,7 @@ async def main(concurrency: int):
             "말투 백필: 대상 %d건 중 %d건 재생성", len(tone_rows), len(fixed))
 
     with engine.connect() as c:
-        rows = [dict(r) for r in c.execute(text(
-            "SELECT content_hash,url,source_id,title_original,title_ko,summary_ko,"
-            "summary3_ko,body_ko,body_source,image_url,images_json,outlet,journalist,team,transfer_stage,tier,"
-            "confidence_score,published_at,published_precision,fetched_at "
-            "FROM articles")).mappings().all()]
+        rows = [dict(r) for r in c.execute(text(SERVING_SELECT_SQL)).mappings().all()]
     write_site(rows, sources, "site",
                directory=journalist_directory("config/credibility.yaml"),
                registry=registry,
