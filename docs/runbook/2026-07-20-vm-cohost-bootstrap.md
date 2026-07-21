@@ -157,6 +157,27 @@ wrangler pages deployment list --project-name bullet-in  # 배포 이력
 - 배포만 실패한 회차: site/ 는 VM 에 정상 생성돼 있으므로 수동 배포로 즉시 복구.
 - 토큰 만료 · 권한 오류: Cloudflare 대시보드에서 토큰 재발급 후 .env 갱신 (재시작 불필요 — 다음 회차부터 반영).
 
+### 배포 직후 검증 — 최상위 도메인에는 잠깐 이전 배포본이 남는다
+
+`wrangler` 가 `Deployment complete!` 를 찍은 직후에 https://bullet-in.pages.dev 를 그대로 요청하면 이전 배포본이 돌아올 수 있다.
+2026-07-22 실측에서 방금 고친 제목이 그대로 옛 값으로 보여, 배포가 실패한 줄 알고 원인을 찾아 나설 뻔했다.
+
+**세 곳을 순서대로 본다.**
+세 값이 같으면 정상이고, 최상위 도메인만 다르면 캐시 탓이다.
+
+```bash
+# ① VM 산출물 — write_site 결과 자체
+grep -c "찾는 문자열" site/index.html
+
+# ② 방금 배포된 프리뷰 URL — deploy-site.sh 출력 마지막 줄의 주소
+curl -sL https://<배포해시>.bullet-in.pages.dev | grep -c "찾는 문자열"
+
+# ③ 최상위 도메인 — 캐시를 우회해서
+curl -sL -H 'Cache-Control: no-cache' "https://bullet-in.pages.dev/?cb=$RANDOM" | grep -c "찾는 문자열"
+```
+
+①이 틀렸으면 HTML 생성 문제, ②가 틀렸으면 배포 문제, ③만 틀렸으면 캐시가 풀릴 때까지 기다리면 된다.
+
 ## 9. 참고
 
 - 결정 배경: `docs/superpowers/specs/2026-07-20-deployment-mvp-track-design.md` §2.1 · §2.2.

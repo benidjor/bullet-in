@@ -69,6 +69,30 @@ git fetch origin
 git log --oneline origin/main..main   # 비어 있어야 깨끗한 분기
 ```
 
+## 파생 함정 — squash 로 머지된 브랜치는 "미머지" 로 보인다 (2026-07-22)
+
+squash 는 새 커밋을 만들므로 원래 브랜치가 `main` 의 조상이 되지 않는다.
+그래서 머지가 끝난 브랜치도 조상 관계로만 판정하면 미머지로 나온다.
+
+```bash
+git merge-base --is-ancestor origin/<브랜치> main   # squash 머지는 여기서 false
+```
+
+브랜치를 안 지우면 **남은 브랜치가 아직 처리해야 할 작업처럼 보인다.**
+2026-07-22 에 병렬 세션과의 충돌을 점검하다가 `config/glossary.yaml` 을 건드리는 브랜치 두 개를 발견했는데, 두 브랜치가 추가하려던 17개 항목이 이미 전부 `main` 에 있었다.
+squash 로 반영된 뒤 브랜치만 남은 것이었다.
+
+**조상 관계 대신 내용을 본다.**
+
+```bash
+# 브랜치가 추가하려는 줄이 이미 main 에 있는지
+git diff $(git merge-base main origin/<브랜치>)..origin/<브랜치> -- <파일>
+grep -n "<추가하려는 키>" <파일>
+```
+
+저장소 설정 `delete_branch_on_merge` 가 꺼져 있어 원격 브랜치가 계속 쌓인다.
+예방은 하나다 — **머지 후 브랜치를 지운다.**
+
 ## 참고
 
 - 커밋 · PR 컨벤션 (GitHub Flow · squash · PR = Task): `docs/conventions/2026-06-11-commit-pr-convention.md`
