@@ -711,3 +711,16 @@ def test_club_map_key_matches_glossary_normal_form():
     glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text()) or {})["replacements"]
     assert "클뤼프 브뤼허" in clubs
     assert not (set(glossary) & set(clubs)), "club_map 키가 사전의 교정 대상(오표기)이면 안 됨"
+
+def test_glossary_is_idempotent_over_all_keys_and_values():
+    # 사전은 단순 문자열 치환이라, 교정 결과가 다른 규칙의 대상이 되면 두 번째 적용에서 또 바뀐다.
+    # 실사례로 막은 것: '라일리' → '오라일리' 를 넣었다면 '오라일리' 가 '오오라일리' 가 된다.
+    # 모든 키와 교정형을 한 줄에 담아 두 번 돌려, 1회차와 2회차가 같은지 확인한다.
+    import yaml
+    from pathlib import Path
+    from bullet_in.enrich import apply_glossary
+    g = (yaml.safe_load(Path("config/glossary.yaml").read_text()) or {})["replacements"]
+    text = " ".join(list(g) + list(g.values()))
+    once = apply_glossary({"body_ko": text}, g)
+    twice = apply_glossary(once, g)
+    assert twice["body_ko"] == once["body_ko"]
