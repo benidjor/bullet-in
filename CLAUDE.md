@@ -105,6 +105,8 @@ SoT: `docs/conventions/2026-06-11-commit-pr-convention.md`. 핵심:
 - **소스 셀렉터 드리프트**: `config/sources.yaml`의 selector/feed_url은 외부 사이트에 의존해 깨진다.
   신규/변경 소스는 머지 전 어댑터 단독 `fetch()`로 라이브 검증할 것 (단위 테스트는 모킹이라 못 잡음).
   사례: `docs/troubleshooting/2026-06-12-live-source-selector-drift.md`.
-- **Gemini 무료 티어 429**: ~15 RPM은 분당 *속도* 한도 (총량 아님). enrich는 429 식별 시 그 회차를 즉시 중단 · `WARNING` 로깅 (파싱 실패와 구분), 남은 건은 다음 사이클 누적. 전건 번역은 **하루 4회 스케줄로 멱등 누적** (옵션 C, 결제 불필요). per-row 백오프는 두지 않음 (스케줄이 재시도).
+- **Gemini 429 · 요금**: ~15 RPM은 분당 *속도* 한도 (총량 아님). enrich는 429 식별 시 그 회차를 즉시 중단 · `WARNING` 로깅 (파싱 실패와 구분), 남은 건은 다음 사이클 누적. per-row 백오프는 두지 않음 (스케줄이 재시도).
+  **요금은 무료가 아니다** — 운영 키가 물린 AI Studio `bullet-in` 프로젝트는 Tier 1 · 선불이고 실제로 과금되고 있다 (2026-07 실측 월 약 ₩700, 등급은 AI Studio 프로젝트 화면에서 확인). 비용 · 소요를 따질 때 무료 티어를 전제하지 말 것.
+  잔존 수렴 경로도 하루 4회 스케줄만 있는 것이 아니다 — 급하면 fetch 없이 enrich만 재실행한다 (`docs/runbook/2026-07-19-enrich-only-pass.md`).
 - **스키마 부트스트랩**: `run.py`가 `MartStore.ensure_schema()`로 `schema.sql`을 멱등 적용 (`CREATE TABLE IF NOT EXISTS`)한다. 수동 적용 불필요.
 - **git 신원**: `benidjor <94089198+benidjor@users.noreply.github.com>`로 커밋 (다른 이메일 금지).
