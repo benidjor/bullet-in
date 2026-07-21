@@ -96,6 +96,8 @@ def _fold_latin(text: str) -> str:
     return folded.replace("ø", "o").replace("æ", "ae").replace("ß", "ss")
 
 _LOAN_RE = re.compile(r"\bloan", re.IGNORECASE)
+# 사유 접두어 — 호출측이 축별로 걸러낼 때 쓴다 (문자열을 옮겨 적으면 조용히 어긋난다).
+NAME_MISSING_PREFIX = "인명 누락:"
 
 def detect_title_mistranslation(title_ko: str | None, title_original: str | None,
                                 name_map: dict[str, str]) -> list[str]:
@@ -115,7 +117,7 @@ def detect_title_mistranslation(title_ko: str | None, title_original: str | None
             if any(ko in title_ko for ko, v in name_map.items() if v == en):
                 present += 1
             else:
-                missing.append(f"인명 누락:{en}")
+                missing.append(f"{NAME_MISSING_PREFIX}{en}")
     if missing and present == 0:
         reasons.extend(missing)
     if "임대" in title_ko and "임대" not in title_original \
@@ -252,6 +254,14 @@ def paragraphize(text: str | None, max_len: int = 400) -> str | None:
         blocks_out.extend(chunks)
     return "\n".join(blocks_out)
 
+# 트윗은 별도 제목이 없어 title_original 에 본문 전문이 들어간다
+# (2026-07-22 실측 평균 211자 · 기사 제목은 39~83자).
+# 그래서 '원문 제목의 인명이 번역 제목에 남았는가' 축은 본문 대 제목 비교가 되어 구조적으로 오탐한다
+# — 여섯 명이 나오는 트윗에서 제목이 한둘만 담는 것은 정상이다.
+# 라운드업 (bbc_gossip) 을 축 전체에서 뺀 것과 같은 이유지만, 트윗은 '임대 무근거' 축이
+# 그대로 유효하므로 축을 끄지 않고 인명 누락 사유만 걸러낸다.
+BODY_AS_TITLE_SOURCES = {"x_afcstuff"}
+
 def finalize_translation(v: dict, row: dict, glossary: dict[str, str],
                          name_map: dict[str, str],
                          club_map: dict[str, list[str]]
@@ -270,8 +280,11 @@ def finalize_translation(v: dict, row: dict, glossary: dict[str, str],
     suspects = detect_title_hallucination(v["title_ko"], src_text, name_map)
     # 역방향 축: 원문 제목 인명 누락 · 무근거 '임대' — 라운드업 (gossip) 은 제목 재초점이 정상이라 제외
     if row.get("source_id") != "bbc_gossip":
-        suspects = suspects + detect_title_mistranslation(
+        reasons = detect_title_mistranslation(
             v["title_ko"], row.get("title_original"), name_map)
+        if row.get("source_id") in BODY_AS_TITLE_SOURCES:
+            reasons = [r for r in reasons if not r.startswith(NAME_MISSING_PREFIX)]
+        suspects = suspects + reasons
     # 라운드업 단신 누락 게이트: 원문 괄호 출처 vs 번역 병기 대조 (환각 큐와 같은 재시도 1회)
     omissions = detect_roundup_omission(row.get("body_source"), v["body_ko"])
     # 원문에 없는 구단명 게이트 (4축): 번역 4필드 × 원문 이중 대조 — 인명 suspects 와 분리
