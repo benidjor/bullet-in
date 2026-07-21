@@ -724,3 +724,42 @@ def test_glossary_is_idempotent_over_all_keys_and_values():
     once = apply_glossary({"body_ko": text}, g)
     twice = apply_glossary(once, g)
     assert twice["body_ko"] == once["body_ko"]
+
+def _tweet_row(**kw):
+    # 트윗은 별도 제목이 없어 title_original 에 본문 전문이 들어간다 (실사례 e1348256 축약).
+    row = {"content_hash": "t1", "source_id": "x_afcstuff",
+           "title_original": ("Arsenal have held discussions over Alex Scott & Ayyoub Bouaddi. "
+                              "Their main target has been Julian Alvarez & they are set to step "
+                              "up interest in Bruno Guimaraes. Arsenal also remain in talks for "
+                              "Ezri Konsa."),
+           "body_source": "", "body_excerpt": ""}
+    row.update(kw)
+    return row
+
+_TWEET_NAMES = {"기마랑이스": "Guimaraes", "콘사": "Konsa", "알바레스": "Alvarez"}
+
+def test_finalize_translation_keeps_tweet_title_despite_name_omission():
+    # 트윗 제목이 본문의 등재 인명을 전부 빼도 정상이다 — 여섯 건짜리 묶음의 제목은 원래 추린다.
+    from bullet_in.enrich import finalize_translation
+    v = {"title_ko": "아스날, 알렉스 스콧 · 아유브 부아디 영입 논의", "summary_ko": "요약",
+         "summary3_ko": "①\n②\n③", "body_ko": "본문이다."}
+    title_ko, _, _, _ = finalize_translation(v, _tweet_row(), {}, _TWEET_NAMES, {})
+    assert title_ko == "아스날, 알렉스 스콧 · 아유브 부아디 영입 논의"
+
+def test_finalize_translation_still_flags_unfounded_loan_on_tweets():
+    # 인명 누락만 걸러낸다 — '임대 무근거' 는 원문 대조가 유효하므로 트윗에서도 살아 있어야 한다.
+    from bullet_in.enrich import finalize_translation
+    v = {"title_ko": "아스날, 콘사 임대 영입 추진", "summary_ko": "요약",
+         "summary3_ko": "①\n②\n③", "body_ko": "본문이다."}
+    title_ko, _, _, _ = finalize_translation(v, _tweet_row(), {}, _TWEET_NAMES, {})
+    assert title_ko is None      # 1차 검출 → 재번역 큐
+
+def test_finalize_translation_keeps_name_omission_axis_for_normal_sources():
+    # 일반 기사는 원문 제목이 헤드라인이라 축이 그대로 성립한다 (회귀 방지).
+    from bullet_in.enrich import finalize_translation
+    v = {"title_ko": "아스날, 수비 보강 추진", "summary_ko": "요약",
+         "summary3_ko": "①\n②\n③", "body_ko": "본문이다."}
+    row = _tweet_row(source_id="football_london",
+                     title_original="Arsenal step up interest in Bruno Guimaraes")
+    title_ko, _, _, _ = finalize_translation(v, row, {}, _TWEET_NAMES, {})
+    assert title_ko is None
