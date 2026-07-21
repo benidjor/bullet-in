@@ -10,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup, escape
 
 from bullet_in import transfer_stage as _stage
+from bullet_in.enrich import attrib_core, roundup_attrib_counts
 
 log = logging.getLogger(__name__)
 
@@ -432,6 +433,27 @@ def serving_mode(source_id: str | None, sources: dict) -> str:
     return mode if mode in ("full", "excerpt") else "excerpt"
 
 
+# 라운드업 문단 끝 괄호 표지 — 출처 여부는 원문 표지 집합 (roundup_attrib_counts) 으로 판정
+_TRAIL_PAREN_RE = re.compile(r"\s*\(([^()]{2,60})\)\s*$")
+
+
+def gossip_itemize(blocks: list[dict], attrib_counts: dict[str, int]) -> list[dict]:
+    """가십 라운드업 본문의 출처 병기 문단을 item 블록 (본문 + 출처 배지) 으로 변환.
+    문단 끝 괄호의 출처명 (core) 이 원문 '(출처) , external' 표지 집합에 있을 때만 변환 —
+    라운드업 뒤쪽 일정 섹션의 경기장 · 시각 괄호는 원문에 표지가 없어 그대로 남는다."""
+    if not attrib_counts:
+        return blocks
+    out = []
+    for b in blocks:
+        m = _TRAIL_PAREN_RE.search(b["text"]) if b.get("type") == "p" else None
+        if m and attrib_core(m.group(1)) in attrib_counts:
+            out.append({"type": "item", "text": b["text"][:m.start()].strip(),
+                        "source": m.group(1).strip()})
+        else:
+            out.append(b)
+    return out
+
+
 def excerpt_paras(paras: list[str], limit: int = 300, max_paras: int = 2) -> list[str]:
     """발췌 모드 본문 — 첫 1~2문단, 누적 limit 자 도달 시 중단 (문단 중간은 자르지 않음)."""
     out, total = [], 0
@@ -547,6 +569,9 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
     if article["_excerpt"]:
         paras, images = excerpt_paras(paras), []
     article["_body_blocks"] = interleave_body(paras, images)
+    if article.get("source_id") == "bbc_gossip":
+        article["_body_blocks"] = gossip_itemize(
+            article["_body_blocks"], roundup_attrib_counts(article.get("body_source")))
     return _env().get_template("detail.html.j2").render(
         a=article, neighbors=neighbors, active=None, root="../", facets=facets)
 

@@ -139,3 +139,11 @@ h2.title{margin:0 0 18px;font-size:28px;line-height:1.3;font-weight:900;letter-s
 .excerpt-note{margin:18px 0 0;padding:12px 14px;border:1px solid var(--line);
   border-radius:9px;font-size:14px;color:var(--muted)}
 .excerpt-note a{font-weight:600}
+
+/* bbc_gossip 라운드업 — 단신 항목 + 출처 배지 */
+.body p.gossip-item{margin:0 0 12px;padding:12px 14px;border:1px solid var(--line);
+  border-left:3px solid var(--navy);border-radius:9px}
+html[data-theme="dark"] .body p.gossip-item{border-left-color:#9fc0ff}
+.src-tag{display:inline-block;margin-left:7px;padding:2px 9px;border-radius:99px;
+  background:var(--chip);color:var(--navy);font-size:12px;font-weight:700;white-space:nowrap}
+html[data-theme="dark"] .src-tag{color:#9fc0ff}

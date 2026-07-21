@@ -118,25 +118,36 @@ def detect_title_mistranslation(title_ko: str | None, title_original: str | None
         reasons.append("임대 무근거")
     return reasons
 
-# BBC 가십 라운드업의 단신별 출처 링크 표지 — "(출처) , external". 일반 괄호 (£50.9m) 와 구분
-_ATTRIB_RE = re.compile(r"\(([^()]{2,60})\)\s*,\s*external")
+# BBC 가십 라운드업의 단신별 출처 링크 표지 — 실측 두 형태 (2026-07-20):
+# "(출처) , external" 과 "( 출처 , external )" (', external' 이 괄호 안).
+# 일반 괄호 (£50.9m) 는 external 이 없어 구분된다.
+_ATTRIB_RE = re.compile(
+    r"\(\s*([^()]{2,60}?)\s*(?:,\s*external\s*\)|\)\s*,\s*external)")
+
+def attrib_core(label: str) -> str:
+    """출처 표지에서 부가 (" - in Italian" · ", in French" · " via …") 를 떼고 출처명만 남긴다."""
+    return re.split(r"\s+-\s+|,\s+|\s+via\s+", label)[0].strip()
+
+def roundup_attrib_counts(body_source: str | None) -> dict[str, int]:
+    """라운드업 원문의 '(출처) , external' 표지를 출처명 (core) 등장 횟수로 집계.
+    표지 없는 일반 기사는 빈 dict — 누락 게이트 · 서빙 항목화가 같은 집합을 공유한다."""
+    counts: dict[str, int] = {}
+    for m in _ATTRIB_RE.finditer(body_source or ""):
+        core = attrib_core(m.group(1))
+        if core:
+            counts[core] = counts.get(core, 0) + 1
+    return counts
 
 def detect_roundup_omission(body_source: str | None,
                             body_ko: str | None) -> list[str]:
     """라운드업 원문의 괄호 출처가 번역문에 빠졌으면 누락 출처 목록 반환.
     출처 병기 = 단신 1건의 표지이므로 누락 출처 = 누락 단신의 결정적 신호.
-    같은 출처 단신 복수 건은 등장 횟수로 대조하고, ' - in Italian' 류 부가는
-    출처명만 남겨 비교한다. 표지 없는 일반 기사는 항상 빈 목록 (소스 분기 불필요)."""
+    같은 출처 단신 복수 건은 등장 횟수로 대조한다."""
     if not body_source:
         return []
     ko = body_ko or ""
-    counts: dict[str, int] = {}
-    for m in _ATTRIB_RE.finditer(body_source):
-        # 출처명만 남기는 정규화 — " - in Italian" · ", in French" · " via …" 류 부가 제거
-        core = re.split(r"\s+-\s+|,\s+|\s+via\s+", m.group(1))[0].strip()
-        if core:
-            counts[core] = counts.get(core, 0) + 1
-    return [core for core, n in counts.items() if ko.count(core) < n]
+    return [core for core, n in roundup_attrib_counts(body_source).items()
+            if ko.count(core) < n]
 
 def detect_title_hallucination(title_ko: str | None, source_text: str,
                                name_map: dict[str, str]) -> list[str]:

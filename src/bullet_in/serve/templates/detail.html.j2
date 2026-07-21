@@ -26,6 +26,7 @@
     {% endif %}
     <div class="body">
       {% for b in a._body_blocks %}{% if b.type == 'p' %}<p>{{ b.text|md_bold }}</p>
+      {% elif b.type == 'item' %}<p class="gossip-item">{{ b.text|md_bold }} <span class="src-tag">{{ b.source }}</span></p>
       {% elif b.type == 'h3' %}<h3>{{ b.text|md_bold }}</h3>
       {% elif b.type == 'quote' %}<blockquote>{{ b.text|md_bold }}</blockquote>
       {% else %}<figure><img src="{{ b.url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'"></figure>

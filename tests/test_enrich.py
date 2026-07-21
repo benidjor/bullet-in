@@ -630,3 +630,28 @@ def test_detect_club_injection_real_config_still_flags_unfounded():
               "body_ko": None}
     src = "Hull City are in talks with Aston Villa over a deal for winger Leon Bailey."
     assert detect_club_injection(parsed, src, _real_club_map()) == ["울버햄튼"]
+def test_roundup_attrib_counts_extracts_cores_with_counts():
+    from bullet_in.enrich import roundup_attrib_counts
+    src = ("A move. (Sun) , external Another. (Athletic - subscription required) , external "
+           "Third. (Sun) , external Fixture list (Emirates Stadium, London, 14:00)")
+    # ', external' 이 붙은 표지만 출처 — 경기장 · 시각 괄호는 제외
+    assert roundup_attrib_counts(src) == {"Sun": 2, "Athletic": 1}
+
+def test_roundup_attrib_counts_empty_source():
+    from bullet_in.enrich import roundup_attrib_counts
+    assert roundup_attrib_counts(None) == {}
+    assert roundup_attrib_counts("일반 기사 본문") == {}
+
+def test_roundup_attrib_counts_handles_inner_external_form():
+    # BBC 표지 두 형태 실측 (2026-07-20): "(X) , external" 와 "( X , external )"
+    # — 후자는 ', external' 이 괄호 안. 기존 정규식은 전자만 잡아 절반이 미탐.
+    from bullet_in.enrich import roundup_attrib_counts
+    src = ("A. ( Athletic - subscription required , external ) B. ( Talksport , external ) "
+           "C. (Teamtalk) , external")
+    assert roundup_attrib_counts(src) == {"Athletic": 1, "Talksport": 1, "Teamtalk": 1}
+
+def test_detect_roundup_omission_sees_inner_external_form():
+    from bullet_in.enrich import detect_roundup_omission
+    src = "Item one. ( Talksport , external ) Item two. (Sun) , external"
+    ko = "첫 단신이다. (Sun)"   # Talksport 단신 누락
+    assert detect_roundup_omission(src, ko) == ["Talksport"]
