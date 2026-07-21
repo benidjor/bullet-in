@@ -14,16 +14,14 @@ from bullet_in.credibility import load_registry, journalist_directory, outlet_di
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows,
-                              apply_glossary, paragraphize,
-                              detect_title_hallucination, detect_roundup_omission,
-                              detect_title_mistranslation, detect_club_injection)
+                              apply_glossary, finalize_translation)
 from bullet_in.tone import select_tone_backfill
 from bullet_in import transfer_stage
 from bullet_in.serve.render import write_site, write_ops
 from bullet_in.quality import success_rate, volume_anomalies, evaluate_freshness
 from bullet_in import notify
 
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+GEMINI_MODEL = "gemini-3.1-flash-lite"
 
 # 서빙 렌더 입력 — write_site 가 읽는 컬럼 전부. 런북의 사이트 재생성 절차도 이 상수를
 # import 해서 쓴다 (스니펫에 컬럼을 옮겨 적으면 서빙 코드와 어긋난다 — 실제 4회 재발,
@@ -85,42 +83,8 @@ async def main(concurrency: int):
                 or {}).get("clubs", {})
     by_hash = {r["content_hash"]: r for r in missing}
     for h, v in results.items():
-        v = apply_glossary(v, glossary)
-        # 제목 환각 검출 (설계 ②-A): 1차 검출 = 재번역 큐 (title NULL 저장 → 다음
-        # 사이클 재선별), 재검출 (summary_ko 기저장 = 재시도 행) = 원문 제목 폴백.
-        r0 = by_hash.get(h, {})
-        src_text = " ".join(filter(None, [r0.get("title_original"),
-                                          r0.get("body_source"),
-                                          r0.get("body_excerpt")]))
-        suspects = detect_title_hallucination(v["title_ko"], src_text, name_map)
-        # 역방향 축: 원문 제목 인명 누락 · 무근거 '임대' — 라운드업 (gossip) 은 제목 재초점이 정상이라 제외
-        if r0.get("source_id") != "bbc_gossip":
-            suspects = suspects + detect_title_mistranslation(
-                v["title_ko"], r0.get("title_original"), name_map)
-        # 라운드업 단신 누락 게이트: 원문 괄호 출처 vs 번역 병기 대조 (환각 큐와 같은 재시도 1회)
-        omissions = detect_roundup_omission(r0.get("body_source"), v["body_ko"])
-        # 원문에 없는 구단명 게이트 (4축): 번역 4필드 × 원문 이중 대조 — 인명 suspects 와 분리
-        # (합치면 body 만 오염된 케이스에 불필요한 원문 제목 폴백이 걸린다)
-        club_suspects = detect_club_injection(v, src_text, club_map)
-        title_ko = v["title_ko"]
-        retry = bool(r0.get("summary_ko"))
-        if suspects and retry:
-            logging.getLogger(__name__).warning(
-                "제목 환각 재발 — 원문 제목 폴백 content_hash=%s 의심=%s", h, suspects)
-            title_ko = r0.get("title_original")
-        elif (suspects or omissions or club_suspects) and not retry:
-            logging.getLogger(__name__).warning(
-                "재번역 큐 content_hash=%s 환각의심=%s 단신누락=%s 원문에 없는 구단명=%s",
-                h, suspects, omissions, club_suspects)
-            title_ko = None
-        if omissions and retry:
-            logging.getLogger(__name__).warning(
-                "라운드업 단신 누락 잔존 — 수동 확인 content_hash=%s 누락=%s", h, omissions)
-        if club_suspects and retry:
-            logging.getLogger(__name__).warning(
-                "원문에 없는 구단명 잔존 — 수동 확인 content_hash=%s 구단=%s", h, club_suspects)
-        mart.set_translation(h, title_ko, v["summary_ko"],
-                             v["summary3_ko"], paragraphize(v["body_ko"]))
+        mart.set_translation(h, *finalize_translation(
+            v, by_hash.get(h, {}), glossary, name_map, club_map))
 
     # 분류 패스: 공홈은 소스 규칙으로 직접 태깅 (official 은 규칙 경로 전용), 나머지만 LLM 분류
     llm_rows = []

@@ -655,3 +655,40 @@ def test_detect_roundup_omission_sees_inner_external_form():
     src = "Item one. ( Talksport , external ) Item two. (Sun) , external"
     ko = "첫 단신이다. (Sun)"   # Talksport 단신 누락
     assert detect_roundup_omission(src, ko) == ["Talksport"]
+
+def _fin_row(**kw):
+    row = {"content_hash": "h1", "source_id": "goal", "title_original": "Arsenal move",
+           "body_source": "Arsenal are in talks.", "body_excerpt": ""}
+    row.update(kw)
+    return row
+
+def test_finalize_translation_queues_retranslation_on_first_detection():
+    # 1차 검출 (summary_ko 없음 = 신규 행) → title_ko NULL 저장 → 다음 사이클 재선별
+    from bullet_in.enrich import finalize_translation
+    v = {"title_ko": "펠레그리니 영입", "summary_ko": "요약", "summary3_ko": "①\n②\n③",
+         "body_ko": "본문이다."}
+    title_ko, _, _, _ = finalize_translation(
+        v, _fin_row(), {}, {"펠레그리니": "Pellegrini"}, {})
+    assert title_ko is None
+
+def test_finalize_translation_falls_back_to_original_on_retry():
+    # 재검출 (summary_ko 기저장 = 재시도 행) → 원문 제목 폴백
+    from bullet_in.enrich import finalize_translation
+    v = {"title_ko": "펠레그리니 영입", "summary_ko": "요약", "summary3_ko": "①\n②\n③",
+         "body_ko": "본문이다."}
+    title_ko, _, _, _ = finalize_translation(
+        v, _fin_row(summary_ko="기존 요약"), {}, {"펠레그리니": "Pellegrini"}, {})
+    assert title_ko == "Arsenal move"
+
+def test_finalize_translation_applies_glossary_and_paragraphize():
+    # 게이트 무결 행: 표기 사전 치환 + 400자 초과 무분할 블록 재분할이 모두 걸린다
+    from bullet_in.enrich import finalize_translation
+    body = " ".join(["아스널이 협상을 이어갔다."] * 40)
+    v = {"title_ko": "아스널 협상", "summary_ko": "아스널이 협상했다.",
+         "summary3_ko": "①\n②\n③", "body_ko": body}
+    title_ko, summary_ko, _, body_ko = finalize_translation(
+        v, _fin_row(), {"아스널": "아스날"}, {}, {})
+    assert title_ko == "아스날 협상"
+    assert summary_ko == "아스날이 협상했다."
+    assert "아스널" not in body_ko
+    assert len(body_ko.split("\n")) > 1
