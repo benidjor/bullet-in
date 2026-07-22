@@ -24,7 +24,7 @@
   --g0-bg:#fbecec; --g1-bg:#f4f1ea;              /* 상위 두 등급 배경 음영 */
   --serif:"Noto Serif KR",ui-serif,Georgia,"Apple SD Gothic Neo",serif;
   --sans:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",Roboto,sans-serif;
-  --max:1180px; --side:250px;
+  --max:1180px; --side:214px;
   color-scheme:light;
 }
 /* 다크 토큰 — OS 다크 기본 (data-theme 미지정) + 명시 토글 양쪽에 적용 (§4.3 · spec2 §11) */
@@ -106,10 +106,10 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
   background:none;border:0;padding:0;font:inherit;cursor:pointer;color:inherit}
 .grphead .caret{font-size:10px;color:var(--dim);transition:transform .15s}
 .grp.collapsed .grphead .caret{transform:rotate(-90deg)}
-.opt{display:flex;align-items:center;gap:9px;padding:5px 2px;font-size:14px;cursor:pointer}
+.opt{display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:13.5px;cursor:pointer}
 .opt:hover{color:var(--red)}
-.opt input{width:15px;height:15px;accent-color:var(--red);cursor:pointer;flex:0 0 auto}
-.opt .ct{margin-left:auto;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+.opt input{width:14px;height:14px;accent-color:var(--red);cursor:pointer;flex:0 0 auto}
+.opt .ct{margin-left:auto;font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums}
 .opt.auto{color:var(--red)}                      /* 공신력 연동 자동 체크 표시 */
 .tierhead{margin:10px 0 3px;font-size:10px;letter-spacing:.07em;color:var(--dim);text-transform:uppercase}
 .unreghead{display:flex;align-items:center;gap:7px;margin:10px 0 3px;font-size:10px;color:var(--dim)}
