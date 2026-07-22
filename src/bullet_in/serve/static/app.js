@@ -77,6 +77,15 @@ document.querySelectorAll('.reltoggle').forEach(btn => {
   };
 });
 
+// ── 가십 더보기 (초기 24묶음만 · 나머지는 버튼으로) ─────────────────
+const gossipList = document.querySelector('.gossiplist');
+const gossipMore = document.getElementById('gossipMore');
+function expandGossip() {
+  gossipList?.classList.remove('morecut');
+  if (gossipMore) gossipMore.hidden = true;
+}
+if (gossipMore) gossipMore.onclick = expandGossip;
+
 const URL_GROUPS = ['outlet', 'journalist', 'tier', 'stage', 'bucket'];
 const box = (g) => [...side.querySelectorAll(`input[data-group="${g}"]`)];
 const boxesOf = (g) => box(g).filter(c => !c.disabled);
@@ -117,6 +126,7 @@ function syncTierAll(changed) {
 
 // ── 필터 적용 ──────────────────────────────────────────────────────
 function applyFilters() {
+  expandGossip();                                        // 필터가 걸리면 가십 전체를 대상으로
   const q = (searchInput?.value || '').trim().toLowerCase();
   const outlets = checkedVals('outlet');
   const journalists = checkedVals('journalist');

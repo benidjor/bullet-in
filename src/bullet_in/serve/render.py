@@ -126,6 +126,16 @@ def title_pending(row: dict) -> bool:
     return not row.get("title_ko") and bool(row.get("title_original"))
 
 
+def gossip_when(row: dict, now: datetime) -> str:
+    """가십 카드 시각 (spec2 §7 · 6-3) — 발행 시각이 대부분 부재 · 배치 값이라 신뢰할 수
+    없으므로 시각(HH:MM) 대신 KST 날짜로 (오늘 · 어제 · 'M월 D일 (요일)'). 가십은 날짜 묶음이
+    없어 카드마다 날짜가 있어야 순서를 알 수 있다."""
+    ts = _group_ts(row)
+    if not ts:
+        return ""
+    return _day_label(to_kst(ts).date(), to_kst(now).date())
+
+
 def _sort_ts(row: dict) -> tuple[datetime, datetime]:
     """정렬 키. day 정밀도는 fetched_at 을 발행일 [00:00, 23:59:59] 로 클램프해 보간."""
     pub = row.get("published_at") or datetime.min
@@ -762,6 +772,8 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
 
     clusters = cluster_events(rest, players)
     gossip = [pick_representative(c["articles"]) for c in clusters if is_gossip_cluster(c)]
+    for g in gossip:
+        g["_gwhen"] = gossip_when(g, now)   # 가십 카드는 시각 대신 KST 날짜 (6-3)
     blocks = []
     for c in clusters:
         if is_gossip_cluster(c):
