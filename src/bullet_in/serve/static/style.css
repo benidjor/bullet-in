@@ -175,6 +175,7 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .daydiv .d{font-family:var(--serif);font-weight:700;font-size:15px}
 .daydiv .c{font-size:12px;color:var(--dim)}
 .daylist{column-count:2;column-gap:26px}       /* 신문 다단 흐름 — 빈 칸 없이 채움 (spec2 §8) */
+.latest.latestcut .daygroup.dg-extra{display:none}   /* 최근 3일 그룹만 초기 노출 (7) */
 
 /* 목록은 썸네일 칸을 두지 않는다 — 회색 상자 반복 방지 (spec2 §8, 밴드만 썸네일 유지) */
 .item{display:block;padding:11px 12px}
@@ -207,10 +208,11 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .gossiplist{column-count:3;column-gap:28px}
 .gossiplist .item{break-inside:avoid;-webkit-column-break-inside:avoid;padding:10px 0 12px}
 .gossiplist.morecut .item.gx{display:none}
-.gossipmore{display:block;width:100%;margin:14px 0 0;padding:10px;border:1px solid var(--hair);
+.gossipmore,.latestmore{display:block;width:100%;margin:14px 0 0;padding:10px;border:1px solid var(--hair);
   border-radius:2px;background:none;color:var(--mut);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
-.gossipmore:hover{color:var(--ink);border-color:var(--mut)}
-.gossipmore[hidden]{display:none}
+.gossipmore:hover,.latestmore:hover{color:var(--ink);border-color:var(--mut)}
+.gossipmore[hidden],.latestmore[hidden]{display:none}
+.latestmore{margin:18px 0 0}
 .gossipnote{font-size:12px;color:var(--dim);margin:12px 0 0}
 .cardbadges{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:0 0 5px}
 .item .htitle{font-weight:700;line-height:1.34;margin:0 0 5px;color:var(--tone,var(--ink))}

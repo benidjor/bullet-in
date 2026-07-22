@@ -86,6 +86,15 @@ function expandGossip() {
 }
 if (gossipMore) gossipMore.onclick = expandGossip;
 
+// ── 최신 소식 주 단위 더보기 (최근 3일 그룹만 · 이전 날짜는 버튼으로) ────
+const latestWrap = document.querySelector('.latest');
+const latestMore = document.getElementById('latestMore');
+function expandLatest() {
+  latestWrap?.classList.remove('latestcut');
+  if (latestMore) latestMore.hidden = true;
+}
+if (latestMore) latestMore.onclick = expandLatest;
+
 const URL_GROUPS = ['outlet', 'journalist', 'tier', 'stage', 'bucket'];
 const box = (g) => [...side.querySelectorAll(`input[data-group="${g}"]`)];
 const boxesOf = (g) => box(g).filter(c => !c.disabled);
@@ -127,6 +136,7 @@ function syncTierAll(changed) {
 // ── 필터 적용 ──────────────────────────────────────────────────────
 function applyFilters() {
   expandGossip();                                        // 필터가 걸리면 가십 전체를 대상으로
+  expandLatest();                                        // 이전 날짜 그룹도 필터 대상으로 편다
   const q = (searchInput?.value || '').trim().toLowerCase();
   const outlets = checkedVals('outlet');
   const journalists = checkedVals('journalist');

@@ -49,7 +49,9 @@
 
 <div class="sechead"><h2>최신 소식</h2><span class="kst">시각 KST 기준</span></div>
 
+<div class="latest{{ ' latestcut' if day_blocks|length > 3 }}">
 {% for day in day_blocks %}
+<div class="daygroup{{ ' dg-extra' if loop.index > 3 }}">
 <div class="daydiv"><span class="d">{{ day.label }}</span><span class="c">묶음 {{ day.n }}개 · 보도 {{ day.reports }}건</span></div>
 <div class="daylist">
   {% for b in day.blocks %}
@@ -68,7 +70,10 @@
   </div>
   {% endfor %}
 </div>
+</div>
 {% endfor %}
+</div>
+{% if day_blocks|length > 3 %}<button class="latestmore" id="latestMore" type="button">이전 날짜 더보기 · {{ day_blocks|length - 3 }}개 날짜</button>{% endif %}
 
 {% if gossip %}
 <div class="sechead gossiphead"><h2>가십</h2><span class="kst">묶음 {{ gossip_n }}개</span></div>
