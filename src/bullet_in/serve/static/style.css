@@ -139,15 +139,17 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mut)}
 .meta .dot{width:6px;height:6px;border-radius:50%;flex:0 0 auto;
   border:1.4px solid var(--mut);background:var(--dotf,transparent)}
-.meta .src{font-weight:600;color:var(--mut)}
+.meta .src{font-family:var(--serif);font-weight:700;color:var(--mut)}
 .meta .cred{color:var(--dim)}
 .meta .when{color:var(--dim);margin-left:auto;font-variant-numeric:tabular-nums}
 .pending{font-size:10px;font-weight:700;color:var(--yellow);border:1px solid var(--yellow);
   border-radius:2px;padding:0 5px;letter-spacing:.02em}
 
 /* ── 톱스토리 밴드 (§6.1) ─────────────────────────────────────────── */
+/* 톱스토리 밴드는 사이드바 위 전폭 (F안 · 히어로가 필터 영역까지 걸침) */
+.bandwrap{max-width:var(--max);margin:0 auto;padding:22px 20px 0}
 .band{display:grid;grid-template-columns:1.62fr 1fr;gap:32px;
-  padding-bottom:22px;margin-bottom:8px;border-bottom:2px solid var(--rule)}
+  padding-bottom:22px;border-bottom:2px solid var(--rule)}
 .lead .limg{aspect-ratio:21/9;background:var(--sunk);overflow:hidden;border-radius:1px}
 .lead .limg img{width:100%;height:100%;object-fit:cover;display:block}
 .lead h2{font-family:var(--serif);font-weight:900;font-size:28px;line-height:1.24;
@@ -218,7 +220,7 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .gossipnote{font-size:12px;color:var(--dim);margin:12px 0 0}
 /* 카드 상단 줄 (§ 리뷰) — 영입 단계 · 언론사 · 공신력 왼쪽, 시각 오른쪽 */
 .cardhead{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:0 0 5px;font-size:12px}
-.cardhead .src{font-weight:600;color:var(--mut)}
+.cardhead .src{font-family:var(--serif);font-weight:700;color:var(--mut)}
 .cardhead .cred{color:var(--dim)}
 .cardhead .when{margin-left:auto;color:var(--dim);font-variant-numeric:tabular-nums}
 .item .htitle{font-weight:700;line-height:1.34;margin:0 0 5px;color:var(--tone,var(--ink))}
@@ -302,6 +304,7 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
 /* ── 반응형 (§13) ─────────────────────────────────────────────────── */
 @media (max-width:1000px){
   .shell{grid-template-columns:1fr;gap:0;padding:16px}
+  .bandwrap{padding:16px 16px 0}
   .side{position:fixed;top:0;left:0;bottom:0;width:290px;max-height:none;z-index:40;
     background:var(--paper);border-right:1px solid var(--rule);padding:16px;
     transform:translateX(-100%);transition:transform .2s}

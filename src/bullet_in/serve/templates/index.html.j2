@@ -18,8 +18,9 @@
 {% endmacro %}
 {% macro relitem(a, rep) %}<a class="relitem" href="article/{{ a.content_hash }}.html"><span class="rt">{{ a._title }}</span><span class="rm">{{ a._outlet }}{% if a._reader_tier %} · {{ a._reader_tier }}{% endif %}{% if a._date and a._date != rep._date %} · {{ a._date }}{% endif %}</span></a>{% endmacro %}
 
-{% block content %}
+{% block band %}
 {% if lead %}
+<div class="bandwrap">
 <section class="band">
   <article class="lead">
     <a href="article/{{ lead.content_hash }}.html">
@@ -44,8 +45,11 @@
     {% endfor %}
   </div>
 </section>
+</div>
 {% endif %}
+{% endblock %}
 
+{% block content %}
 <div class="sechead"><h2>최신 소식</h2><span class="kst">시각 KST 기준</span></div>
 
 <div class="latest{{ ' latestcut' if day_blocks|length > 3 }}">
