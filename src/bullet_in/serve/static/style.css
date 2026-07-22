@@ -174,7 +174,8 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
   padding-bottom:5px;border-bottom:1px solid var(--rule)}
 .daydiv .d{font-family:var(--serif);font-weight:700;font-size:15px}
 .daydiv .c{font-size:12px;color:var(--dim)}
-.daylist{column-count:2;column-gap:26px}       /* 신문 다단 흐름 — 빈 칸 없이 채움 (spec2 §8) */
+/* 행 우선 배치 — 묶음이 최신순으로 왼→오 · 위→아래로 읽히고 행마다 위끝이 맞음 */
+.daylist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 26px;align-items:start}
 .latest.latestcut .daygroup.dg-extra{display:none}   /* 최근 3일 그룹만 초기 노출 (7) */
 
 /* 목록은 썸네일 칸을 두지 않는다 — 회색 상자 반복 방지 (spec2 §8, 밴드만 썸네일 유지) */
@@ -206,7 +207,7 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 /* ── 가십 구역 (spec2 §7) — 3열 압축 · 좌측 괘선 없음 · 이름 '가십' ──── */
 .gossiphead{margin-top:34px;border-top:2px solid var(--rule);padding-top:14px}
 /* 행 우선 채움 — 최신순이 왼→오 · 위→아래로 읽히게 (열 우선 column-count 는 열마다 채워 순서가 흩어짐) */
-.gossiplist{display:grid;grid-template-columns:repeat(3,1fr);gap:0 28px;align-items:start}
+.gossiplist{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 28px;align-items:start}
 .gossiplist .item{padding:10px 0 12px}
 .gossiplist.morecut .item.gx{display:none}
 .gossipmore,.latestmore{display:block;width:100%;margin:14px 0 0;padding:10px;border:1px solid var(--hair);
@@ -304,7 +305,7 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
   .hamb{display:grid}
   .nav{display:none}
   .band{grid-template-columns:1fr;gap:18px}
-  .daylist{column-count:1}
+  .daylist{grid-template-columns:1fr}
   .gossiplist{grid-template-columns:repeat(2,1fr)}
 }
 @media (max-width:640px){
