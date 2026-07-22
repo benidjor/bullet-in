@@ -106,6 +106,38 @@ def tier_label(tier) -> str:
     return f"Tier {tier_key(tier)}"
 
 
+# ── 표시 단계 매핑 (spec1 §5) — 저장 enum 7종을 독자용 6묶음으로 접는다.
+# 저장 enum 은 건드리지 않고 (transfer_stage.py 는 enrich 와 공유) 표시 계층에서만 묶는다.
+# medical 은 건수가 적어 협상 중에 합친다 · 순서는 진행이 많이 된 것부터.
+_DISPLAY_STAGE: dict[str, dict] = {
+    "official": {"label": "오피셜", "tone": "red", "filled": True},
+    "agreed": {"label": "이적 합의", "tone": "red", "filled": False},
+    "medical": {"label": "협상 중", "tone": "green", "filled": False},
+    "negotiating": {"label": "협상 중", "tone": "green", "filled": False},
+    "personal_terms": {"label": "개인 합의", "tone": "yellow", "filled": False},
+    "interest": {"label": "관심", "tone": "gray", "filled": False},
+    "rumour": {"label": "루머", "tone": "gray", "filled": False},
+}
+
+
+def display_stage(enum: str | None) -> dict | None:
+    """저장 단계 enum → 표시 배지 {label, tone, filled}. 미표시 (other · None) 는 None."""
+    d = _DISPLAY_STAGE.get(enum or "")
+    return dict(d) if d else None
+
+
+# ── 독자 등급 라벨 (spec1 §7.1) — 내부 tier 숫자를 절대 노출하지 않는다.
+_READER_TIER: dict[float, str] = {
+    0.0: "구단 공식", 1.0: "공신력 최상", 1.5: "공신력 상",
+    2.0: "공신력 중", 3.0: "공신력 하", 4.0: "공신력 최하",
+}
+
+
+def reader_tier(tier: float | None) -> str:
+    """저장 tier → 독자 표기. 미상은 빈 문자열."""
+    return _READER_TIER.get(float(tier), "") if tier is not None else ""
+
+
 def neighbor_window(n: int, idx: int, size: int = 5) -> tuple[int, int]:
     if n <= size:
         return (0, n)
