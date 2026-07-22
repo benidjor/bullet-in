@@ -83,9 +83,16 @@ def group_by_day(articles: list[dict], now: datetime) -> list[dict]:
             for d in sorted(buckets, reverse=True)]
 
 
+def _same_day_reports(day_blocks: list[dict], d) -> int:
+    """그 날짜(d)에 실제 발행된 기사 수 (spec2 §4.1 개정).
+    묶음은 날짜 경계가 없어 여러 날 기사를 품으므로, 대표 날짜와 같은 날 기사만 센다."""
+    return sum(1 for b in day_blocks for a in b.get("_articles", [])
+               if _group_ts(a) is not None and to_kst(_group_ts(a)).date() == d)
+
+
 def group_blocks_by_day(blocks: list[dict], now: datetime) -> list[dict]:
     """사건 블록을 대표 기사의 KST 날짜로 묶는다 (spec2 §4.1).
-    건수는 '묶음 N개 · 보도 M건' — 그 날짜에 배치된 묶음과 그 묶음이 품은 보도 수."""
+    건수는 '묶음 N개 · 보도 M건' — 그 날짜에 배치된 묶음 수와 그 날짜에 발행된 기사 수."""
     today = to_kst(now).date()
     buckets: dict = {}
     for b in blocks:
@@ -97,7 +104,7 @@ def group_blocks_by_day(blocks: list[dict], now: datetime) -> list[dict]:
         day_blocks = sorted(buckets[d], key=lambda b: _sort_ts(b["rep"]), reverse=True)
         out.append({"label": _day_label(d, today), "date": d, "blocks": day_blocks,
                     "n": len(day_blocks),
-                    "reports": sum(b["count"] for b in day_blocks)})
+                    "reports": _same_day_reports(day_blocks, d)})
     return out
 
 
@@ -314,7 +321,9 @@ def pick_top_stories(articles: list[dict], now: datetime,
             seen.add(ev)
             deduped.append(a)
         cands = deduped
-    return {"lead": cands[0] if cands else None, "mains": cands[1:5]}
+    # 히어로는 선정 순위 그대로, 주요 소식은 화면에서 최신 먼저 (Image #6)
+    mains = sorted(cands[1:5], key=_sort_ts, reverse=True)
+    return {"lead": cands[0] if cands else None, "mains": mains}
 
 
 def neighbor_window(n: int, idx: int, size: int = 5) -> tuple[int, int]:
@@ -789,7 +798,7 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
         branches = branch_views(related_reports(c, rep, ending, clubs), ending)
         blocks.append({"rep": rep, "ending": ending, "branches": branches,
                        "rel_count": sum(len(br["articles"]) for br in branches),
-                       "count": len(c["articles"])})
+                       "count": len(c["articles"]), "_articles": c["articles"]})
     day_blocks = group_blocks_by_day(blocks, now)
 
     facets = facet_counts(articles, sources, directory=directory, registry=registry,

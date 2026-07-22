@@ -145,6 +145,38 @@ def test_top_story_horizon_excludes_old():
     assert R.pick_top_stories([old], now)["lead"] is None   # 10일 초과 제외
 
 
+def test_top_story_mains_display_newest_first():
+    # 주요 소식은 선정 순위(단계·공신력)와 무관하게 화면에서 최신 먼저 (Image #6)
+    now = datetime(2026, 7, 23, 12, 0)
+    lead_pick = _row(content_hash="L", tier=0.0, title_ko="아스날, C 영입 오피셜",
+                     transfer_stage="official", published_at=datetime(2026, 7, 13, 10, 0),
+                     fetched_at=datetime(2026, 7, 13, 10, 0))
+    main_old = _row(content_hash="A", tier=0.0, title_ko="아스날, A 영입 합의",
+                    transfer_stage="agreed", published_at=datetime(2026, 7, 14, 10, 0),
+                    fetched_at=datetime(2026, 7, 14, 10, 0))
+    main_new = _row(content_hash="B", tier=0.0, title_ko="아스날, B 영입 협상",
+                    transfer_stage="negotiating", published_at=datetime(2026, 7, 22, 10, 0),
+                    fetched_at=datetime(2026, 7, 22, 10, 0))
+    picks = R.pick_top_stories([lead_pick, main_old, main_new], now)
+    assert picks["lead"]["content_hash"] == "L"        # 히어로는 선정 순위(단계 오피셜) 그대로
+    assert [m["content_hash"] for m in picks["mains"]] == ["B", "A"]   # 주요 소식만 최신순
+
+
+def test_group_blocks_reports_counts_same_day_only():
+    # 보도 건수는 그 날짜 기사만 (묶음은 여러 날에 걸치므로 대표 날짜 기사만 카운트)
+    now = datetime(2026, 7, 23)
+
+    def art(h, day):
+        return {"content_hash": h, "published_at": datetime(2026, 7, day, 1, 0),
+                "published_precision": "time", "fetched_at": datetime(2026, 7, day, 1, 0)}
+
+    rep = art("r", 19)
+    block = {"rep": rep, "count": 3, "_articles": [rep, art("a2", 19), art("a3", 15)]}
+    out = R.group_blocks_by_day([block], now)
+    assert out[0]["label"] == "7월 19일 (일)"
+    assert out[0]["reports"] == 2      # 7/19 기사 2건만 · 7/15 는 제외
+
+
 def test_top_story_mains_capped_at_four():
     now = datetime(2026, 7, 20, 12, 0)
     rows = [_row(tier=0.0, published_at=datetime(2026, 7, 20, h)) for h in range(6)]
