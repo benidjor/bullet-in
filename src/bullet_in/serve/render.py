@@ -128,17 +128,12 @@ def title_pending(row: dict) -> bool:
 
 def gossip_when(row: dict, now: datetime) -> str:
     """가십 카드 시각 (spec2 §7 · 6-3) — 가십은 날짜 묶음이 없어 카드마다 날짜가 있어야
-    순서를 알 수 있다. 기본은 KST 날짜 (오늘 · 어제 · 'M월 D일 (요일)'), 발행 시각이
-    실제로 있으면 (published_precision == 'time') KST 시각까지 병기한다.
-    precision 이 없는 소스는 배치 · 수집 시각이라 지어내지 않고 날짜만 보여 준다."""
+    순서를 알 수 있다. KST 날짜만 보여 준다 (오늘 · 어제 · 'M월 D일 (요일)').
+    상세한 발행 시각은 카드 메타 줄을 줄바꿈시켜 간격을 깨므로 상세 페이지 발행 칸에만 둔다."""
     ts = _group_ts(row)
     if not ts:
         return ""
-    kst = to_kst(ts)
-    label = _day_label(kst.date(), to_kst(now).date())
-    if row.get("published_precision") == "time":
-        return f"{label} {kst.strftime('%H:%M')}"
-    return label
+    return _day_label(to_kst(ts).date(), to_kst(now).date())
 
 
 def _sort_ts(row: dict) -> tuple[datetime, datetime]:

@@ -82,18 +82,19 @@ def test_title_pending_when_ko_missing():
     assert R.title_pending({"title_ko": None, "title_original": None}) is False
 
 
-def test_gossip_when_time_precision_appends_kst_time():
+def test_gossip_when_date_only_even_with_time_precision():
+    # 가십 카드는 날짜만 — 상세한 시각은 메타 줄을 줄바꿈시켜 3열 간격을 깬다 (상세 페이지에만)
     now = datetime(2026, 7, 23, 0, 0)
     row = {"published_at": datetime(2026, 7, 15, 11, 0), "published_precision": "time",
            "fetched_at": datetime(2026, 7, 20, 12, 0)}
-    assert R.gossip_when(row, now) == "7월 15일 (수) 20:00"    # 11:00 UTC + 9h = 20:00 KST
+    assert R.gossip_when(row, now) == "7월 15일 (수)"
 
 
 def test_gossip_when_none_precision_date_only():
     now = datetime(2026, 7, 23, 0, 0)
     row = {"published_at": datetime(2026, 7, 20, 12, 43), "published_precision": None,
            "fetched_at": datetime(2026, 7, 20, 18, 0)}
-    assert R.gossip_when(row, now) == "7월 20일 (월)"          # 시각 신뢰 불가 → 날짜만
+    assert R.gossip_when(row, now) == "7월 20일 (월)"
 
 
 def test_bbc_gossip_stage_forced_to_rumour():

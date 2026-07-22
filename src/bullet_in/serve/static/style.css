@@ -205,8 +205,9 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 
 /* ── 가십 구역 (spec2 §7) — 3열 압축 · 좌측 괘선 없음 · 이름 '가십' ──── */
 .gossiphead{margin-top:34px;border-top:2px solid var(--rule);padding-top:14px}
-.gossiplist{column-count:3;column-gap:28px}
-.gossiplist .item{break-inside:avoid;-webkit-column-break-inside:avoid;padding:10px 0 12px}
+/* 행 우선 채움 — 최신순이 왼→오 · 위→아래로 읽히게 (열 우선 column-count 는 열마다 채워 순서가 흩어짐) */
+.gossiplist{display:grid;grid-template-columns:repeat(3,1fr);gap:0 28px;align-items:start}
+.gossiplist .item{padding:10px 0 12px}
 .gossiplist.morecut .item.gx{display:none}
 .gossipmore,.latestmore{display:block;width:100%;margin:14px 0 0;padding:10px;border:1px solid var(--hair);
   border-radius:2px;background:none;color:var(--mut);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
@@ -304,11 +305,11 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
   .nav{display:none}
   .band{grid-template-columns:1fr;gap:18px}
   .daylist{column-count:1}
-  .gossiplist{column-count:2}
+  .gossiplist{grid-template-columns:repeat(2,1fr)}
 }
 @media (max-width:640px){
   .search,.sortsel{display:none}
   .lead h2{font-size:23px}
   .topbar .inner{gap:10px;padding:10px 14px}
-  .gossiplist{column-count:1}
+  .gossiplist{grid-template-columns:1fr}
 }
