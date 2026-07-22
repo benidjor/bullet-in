@@ -61,34 +61,43 @@ def _group_ts(row: dict) -> datetime | None:
     return row.get("published_at") or row.get("fetched_at")
 
 
+def _day_label(d, today) -> str:
+    delta = (today - d).days
+    if delta == 0:
+        return "오늘"
+    if delta == 1:
+        return "어제"
+    return f"{d.month}월 {d.day}일 ({_WEEKDAY_KO[d.weekday()]})"
+
+
 def group_by_day(articles: list[dict], now: datetime) -> list[dict]:
     """KST 날짜로 묶는다 (spec1 §6.2). 최신 날짜부터 · 그룹 안은 입력 순서 유지.
     라벨은 오늘 · 어제 · '7월 18일 (토)'. 기준 시각이 없는 행은 제외한다."""
     today = to_kst(now).date()
     buckets: dict = {}
-    order: list = []
-    for a in articles:
-        ts = _group_ts(a)
-        if ts is None:
-            continue
-        d = to_kst(ts).date()
-        if d not in buckets:
-            buckets[d] = []
-            order.append(d)
     for a in articles:
         ts = _group_ts(a)
         if ts is not None:
-            buckets[to_kst(ts).date()].append(a)
+            buckets.setdefault(to_kst(ts).date(), []).append(a)
+    return [{"label": _day_label(d, today), "date": d, "articles": buckets[d]}
+            for d in sorted(buckets, reverse=True)]
+
+
+def group_blocks_by_day(blocks: list[dict], now: datetime) -> list[dict]:
+    """사건 블록을 대표 기사의 KST 날짜로 묶는다 (spec2 §4.1).
+    건수는 '묶음 N개 · 보도 M건' — 그 날짜에 배치된 묶음과 그 묶음이 품은 보도 수."""
+    today = to_kst(now).date()
+    buckets: dict = {}
+    for b in blocks:
+        ts = _group_ts(b["rep"]) if b.get("rep") else None
+        if ts is not None:
+            buckets.setdefault(to_kst(ts).date(), []).append(b)
     out = []
-    for d in sorted(order, reverse=True):
-        delta = (today - d).days
-        if delta == 0:
-            label = "오늘"
-        elif delta == 1:
-            label = "어제"
-        else:
-            label = f"{d.month}월 {d.day}일 ({_WEEKDAY_KO[d.weekday()]})"
-        out.append({"label": label, "date": d, "articles": buckets[d]})
+    for d in sorted(buckets, reverse=True):
+        day_blocks = sorted(buckets[d], key=lambda b: _sort_ts(b["rep"]), reverse=True)
+        out.append({"label": _day_label(d, today), "date": d, "blocks": day_blocks,
+                    "n": len(day_blocks),
+                    "reports": sum(b["count"] for b in day_blocks)})
     return out
 
 
@@ -733,19 +742,38 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
                  outlet_dir: dict | None = None) -> str:
     ordered = [_decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
                for a in _sorted_latest(articles)]
-    top = pick_top_stories(ordered, now)
+    players, clubs = load_player_names(), load_clubs()
+    top = pick_top_stories(ordered, now, players)
     top_hashes = {a["content_hash"] for a in ([top["lead"]] if top["lead"] else []) + top["mains"]}
     rest = [a for a in ordered if a["content_hash"] not in top_hashes]
-    day_groups = group_by_day(rest, now)
+
+    clusters = cluster_events(rest, players)
+    gossip = [pick_representative(c["articles"]) for c in clusters if is_gossip_cluster(c)]
+    blocks = []
+    for c in clusters:
+        if is_gossip_cluster(c):
+            continue
+        rep = pick_representative(c["articles"])
+        ending = ending_card(c, clubs)
+        # 대표가 이미 다른 구단 결말 기사면 결말 카드를 따로 세우지 않는다 (중복 방지)
+        if ending and _is_other_club_report(rep, c["key"], clubs):
+            ending = None
+        branches = branch_views(related_reports(c, rep, ending, clubs), ending)
+        blocks.append({"rep": rep, "ending": ending, "branches": branches,
+                       "rel_count": sum(len(br["articles"]) for br in branches),
+                       "count": len(c["articles"])})
+    day_blocks = group_blocks_by_day(blocks, now)
+
     facets = facet_counts(articles, sources, directory=directory, registry=registry,
                           outlet_dir=outlet_dir)
     return _env().get_template("index.html.j2").render(
-        lead=top["lead"], mains=top["mains"], day_groups=day_groups,
-        facets=facets, active="home", root="")
+        lead=top["lead"], mains=top["mains"], day_blocks=day_blocks,
+        gossip=gossip, gossip_n=len(gossip), facets=facets, active="home", root="")
 
 
 # ── 사건 묶음 (spec2 §4-7) — 선수 사전 (name_map 정규형) 으로 묶는다 ──────
-_TRANSITION_WORDS = ["놓친", "대신", "대체", "무산", "결렬", "실패", "포기", "떠난"]
+# 전환어 (spec2 §4.3) — 뒤에 나온 선수가 주인공. 3.1 모델 실측 표현 '불발' 을 포함한다.
+_TRANSITION_WORDS = ["놓친", "대신", "대체", "무산", "불발", "결렬", "실패", "포기", "떠난"]
 
 
 def load_player_names(path: str = "config/name_map.yaml") -> list[str]:
@@ -873,6 +901,22 @@ def related_reports(cluster: dict, rep: dict | None, ending: dict | None,
     arsenal_side.sort(key=_sort_ts, reverse=True)
     other_side.sort(key=_sort_ts, reverse=True)
     return {"arsenal": arsenal_side, "other": other_side}
+
+
+def branch_views(related: dict, ending: dict | None) -> list[dict]:
+    """관련 보도 갈래를 이름표와 함께 정렬 (spec2 §6.3).
+    결말 있으면 다른 구단 갈래를 위로 · 갈래가 하나면 이름표 생략."""
+    ars, oth = related["arsenal"], related["other"]
+    if ending:
+        club = ending["club"]
+        branches = ([{"label": f"{club}행 관련", "articles": oth}] if oth else []) + \
+                   ([{"label": "아스날 쪽 보도", "articles": ars}] if ars else [])
+    else:
+        branches = ([{"label": "아스날 쪽 보도", "articles": ars}] if ars else []) + \
+                   ([{"label": "영입 경쟁", "articles": oth}] if oth else [])
+    if len(branches) == 1:
+        branches[0]["label"] = ""
+    return branches
 
 
 def is_gossip_cluster(cluster: dict) -> bool:

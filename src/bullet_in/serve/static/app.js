@@ -66,7 +66,16 @@ const resetBtn = document.getElementById('resetBtn');
 const searchInput = document.getElementById('q');
 const sortSel = document.getElementById('sortSel');
 const daylists = [...document.querySelectorAll('.daylist')];
-const items = [...document.querySelectorAll('.daylist .item')];
+const items = [...document.querySelectorAll('.daylist .item, .gossiplist .item')];
+
+// 관련 보도 펼치기 (사건 블록 안 접힌 갈래)
+document.querySelectorAll('.reltoggle').forEach(btn => {
+  btn.onclick = () => {
+    const rel = btn.nextElementSibling;
+    rel.hidden = !rel.hidden;
+    btn.setAttribute('aria-expanded', rel.hidden ? 'false' : 'true');
+  };
+});
 
 const URL_GROUPS = ['outlet', 'journalist', 'tier', 'stage', 'bucket'];
 const box = (g) => [...side.querySelectorAll(`input[data-group="${g}"]`)];
@@ -131,8 +140,8 @@ function applyFilters() {
     it.style.display = vis ? '' : 'none';
     if (vis) shown++;
   }
-  sortItems();
-  hideEmptyDays();
+  sortBlocks();
+  hideEmpty();
 
   const conds = outlets.length + journalists.length + tiers.length
     + stageSel.length + (showOther ? 1 : 0) + (q ? 1 : 0);
@@ -144,25 +153,35 @@ function applyFilters() {
   history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
 }
 
-function hideEmptyDays() {
+function hideEmpty() {
+  // 사건 블록 — 보이는 카드가 없으면 블록째 숨김
+  document.querySelectorAll('.block').forEach(bl => {
+    const vis = [...bl.querySelectorAll('.item')].some(i => i.style.display !== 'none');
+    bl.style.display = vis ? '' : 'none';
+  });
   for (const dl of daylists) {
-    const vis = [...dl.querySelectorAll('.item')].filter(i => i.style.display !== 'none');
+    const vis = [...dl.querySelectorAll('.item')].some(i => i.style.display !== 'none');
     const div = dl.previousElementSibling;               // .daydiv
-    if (div) {
-      div.style.display = vis.length ? '' : 'none';
-      const c = div.querySelector('.c');
-      if (c) c.textContent = `${vis.length}건`;
-    }
-    dl.style.display = vis.length ? '' : 'none';
+    if (div && div.classList.contains('daydiv')) div.style.display = vis ? '' : 'none';
+    dl.style.display = vis ? '' : 'none';
+  }
+  const gl = document.querySelector('.gossiplist');
+  if (gl) {
+    const vis = [...gl.querySelectorAll('.item')].some(i => i.style.display !== 'none');
+    document.querySelectorAll('.gossiphead, .gossipnote').forEach(e => { e.style.display = vis ? '' : 'none'; });
+    gl.style.display = vis ? '' : 'none';
   }
 }
 
-// ── 정렬 (날짜 그룹 안에서만) ───────────────────────────────────────
-function sortItems() {
+// ── 정렬 (날짜 그룹 안에서 사건 블록 단위로) ─────────────────────────
+function sortBlocks() {
   const key = sortSel?.value || 'latest';
   const views = key === 'views' ? readViews() : null;
+  const rep = (bl) => bl.querySelector('.item');
   for (const dl of daylists) {
-    const ordered = [...dl.querySelectorAll('.item')].sort((a, b) => {
+    const blocks = [...dl.querySelectorAll('.block')].sort((A, B) => {
+      const a = rep(A), b = rep(B);
+      if (!a || !b) return 0;
       if (key === 'confidence')
         return parseFloat(b.dataset.confidence || 0) - parseFloat(a.dataset.confidence || 0);
       if (key === 'views') {
@@ -171,7 +190,7 @@ function sortItems() {
       }
       return (b.dataset.published || '').localeCompare(a.dataset.published || '');
     });
-    for (const it of ordered) dl.appendChild(it);
+    for (const bl of blocks) dl.appendChild(bl);
   }
 }
 
@@ -224,11 +243,11 @@ if (items.length) {                                       // 인덱스
   });
   if (applyBtn) applyBtn.onclick = applyFilters;
   if (resetBtn) resetBtn.onclick = () => { resetAll(); applyFilters(); };
-  if (sortSel) sortSel.onchange = () => { sortItems(); const qs = filterParams().toString();
+  if (sortSel) sortSel.onchange = () => { sortBlocks(); const qs = filterParams().toString();
     history.replaceState(null, '', qs ? `?${qs}` : location.pathname); };
   if (searchInput) searchInput.addEventListener('input', applyFilters);
   if (restoreFromQuery()) applyFilters();
-  else { sortItems(); hideEmptyDays(); }
+  else { sortBlocks(); hideEmpty(); }
 } else if (side) {                                         // 상세 — 필터는 인덱스로 이동
   const indexHref = document.querySelector('.logo')?.getAttribute('href') || 'index.html';
   side.addEventListener('change', (e) => {

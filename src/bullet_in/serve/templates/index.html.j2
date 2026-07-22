@@ -3,6 +3,20 @@
 
 {% macro stage_badge(s) %}{% if s %}<span class="stage {{ s.tone }}{{ ' filled' if s.filled }}">{{ s.label }}</span>{% endif %}{% endmacro %}
 {% macro meta_line(a, when) %}<div class="meta"><span class="dot{{ ' fill' if a._dot.fill }}" style="--dotf:{{ a._dot.color }}"></span><span class="src">{{ a._outlet }}</span>{% if a._reader_tier %}<span class="cred">{{ a._reader_tier }}</span>{% endif %}{% if a._pending %}<span class="pending">번역 대기</span>{% endif %}<span class="when">{{ when }}</span></div>{% endmacro %}
+{% macro card(a, dest=None) %}
+<a class="item {{ a._grade }}"{% if not a._stage_disp %} style="display:none"{% endif %} href="article/{{ a.content_hash }}.html"
+   data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-tier="{{ a._tier_key }}"
+   data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}"
+   data-published="{{ a._published_iso }}" data-confidence="{{ a.confidence_score or 0 }}"
+   data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">
+  <div class="body">
+    <div class="htitle">{{ stage_badge(a._stage_disp) }}{% if dest %} <span class="dest">{{ dest }}</span>{% endif %} {{ a._title }}{% if a._pending %} <span class="pending">번역 대기</span>{% endif %}</div>
+    {% if a._show_summary and a.summary_ko %}<p class="dek">{{ a.summary_ko }}</p>{% endif %}
+    {{ meta_line(a, a._time) }}
+  </div>
+</a>
+{% endmacro %}
+{% macro relitem(a, rep) %}<a class="relitem" href="article/{{ a.content_hash }}.html"><span class="rt">{{ a._title }}</span><span class="rm">{{ a._outlet }}{% if a._reader_tier %} · {{ a._reader_tier }}{% endif %}{% if a._date and a._date != rep._date %} · {{ a._date }}{% endif %}</span></a>{% endmacro %}
 
 {% block content %}
 {% if lead %}
@@ -33,24 +47,34 @@
 
 <div class="sechead"><h2>최신 소식</h2><span class="kst">시각 KST 기준</span></div>
 
-{% for day in day_groups %}
-<div class="daydiv"><span class="d">{{ day.label }}</span><span class="c">{{ day.articles|length }}건</span></div>
+{% for day in day_blocks %}
+<div class="daydiv"><span class="d">{{ day.label }}</span><span class="c">묶음 {{ day.n }}개 · 보도 {{ day.reports }}건</span></div>
 <div class="daylist">
-  {% for a in day.articles %}
-  <a class="item {{ a._grade }}"{% if not a._stage_disp %} style="display:none"{% endif %} href="article/{{ a.content_hash }}.html"
-     data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-tier="{{ a._tier_key }}"
-     data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}"
-     data-published="{{ a._published_iso }}" data-confidence="{{ a.confidence_score or 0 }}"
-     data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">
-    <div class="body">
-      <div class="htitle">{{ stage_badge(a._stage_disp) }} {{ a._title }}{% if a._pending %} <span class="pending">번역 대기</span>{% endif %}</div>
-      {% if a._show_summary and a.summary_ko %}<p class="dek">{{ a.summary_ko }}</p>{% endif %}
-      {{ meta_line(a, a._time) }}
+  {% for b in day.blocks %}
+  <div class="block">
+    {{ card(b.rep) }}
+    {% if b.ending %}{{ card(b.ending.article, dest=b.ending.club) }}{% endif %}
+    {% if b.rel_count %}
+    <button class="reltoggle" type="button" aria-expanded="false">관련 보도 {{ b.rel_count }}건</button>
+    <div class="related" hidden>
+      {% for br in b.branches %}
+      {% if br.label %}<div class="branchlabel">{{ br.label }}</div>{% endif %}
+      {% for a in br.articles %}{{ relitem(a, b.rep) }}{% endfor %}
+      {% endfor %}
     </div>
-  </a>
+    {% endif %}
+  </div>
   {% endfor %}
 </div>
 {% endfor %}
+
+{% if gossip %}
+<div class="sechead gossiphead"><h2>가십</h2><span class="kst">묶음 {{ gossip_n }}개</span></div>
+<div class="gossiplist">
+  {% for a in gossip %}{{ card(a) }}{% endfor %}
+</div>
+<p class="gossipnote">나머지 최하 등급 보도는 위 사건 묶음 안에 들어 있습니다.</p>
+{% endif %}
 
 <footer class="sitefoot">
   <p>Bullet-in 은 아스날 관련 보도를 여러 매체에서 모아 한국어로 옮겨 보여 줍니다. 본문은 자동 번역이며 원문 링크를 함께 싣습니다.</p>
