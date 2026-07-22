@@ -216,7 +216,11 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .gossipmore[hidden],.latestmore[hidden]{display:none}
 .latestmore{margin:18px 0 0}
 .gossipnote{font-size:12px;color:var(--dim);margin:12px 0 0}
-.cardbadges{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:0 0 5px}
+/* 카드 상단 줄 (§ 리뷰) — 영입 단계 · 언론사 · 공신력 왼쪽, 시각 오른쪽 */
+.cardhead{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:0 0 5px;font-size:12px}
+.cardhead .src{font-weight:600;color:var(--mut)}
+.cardhead .cred{color:var(--dim)}
+.cardhead .when{margin-left:auto;color:var(--dim);font-variant-numeric:tabular-nums}
 .item .htitle{font-weight:700;line-height:1.34;margin:0 0 5px;color:var(--tone,var(--ink))}
 .item.g0 .htitle,.item.g1 .htitle{font-weight:900;font-size:17px}
 .item.g15 .htitle,.item.g2 .htitle{font-size:15.5px}
