@@ -606,6 +606,7 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
 
     for asset in ("style.css", "app.js"):
         shutil.copyfile(_STATIC_DIR / asset, out / asset)
+    shutil.copytree(_STATIC_DIR / "fonts", out / "fonts", dirs_exist_ok=True)
 
 
 def render_ops(view: dict) -> str:
