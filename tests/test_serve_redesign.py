@@ -66,3 +66,50 @@ def test_title_pending_when_ko_missing():
     assert R.title_pending({"title_ko": "", "title_original": "Arsenal sign X"}) is True
     assert R.title_pending({"title_ko": "아스날 X 영입", "title_original": "Arsenal sign X"}) is False
     assert R.title_pending({"title_ko": None, "title_original": None}) is False
+
+
+# ── Task 3: 톱스토리 선정 (히어로 · 주요 소식) ──────────────────────────
+
+def _row(**k):
+    base = {"title_ko": "제목", "tier": 1.0, "transfer_stage": "rumour",
+            "published_at": datetime(2026, 7, 20), "published_precision": "time",
+            "fetched_at": datetime(2026, 7, 20), "image_url": "https://x/y.jpg"}
+    base.update(k)
+    return base
+
+
+def test_arsenal_subject_startswith():
+    assert R.arsenal_subject({"title_ko": "아스날, 요케레스 영입"}) is True
+    assert R.arsenal_subject({"title_ko": "첼시, 로저스 영입 합의"}) is False
+    assert R.arsenal_subject({"title_ko": None}) is False
+
+
+def test_top_story_excludes_below_top_three_tiers():
+    now = datetime(2026, 7, 20, 12, 0)
+    low = _row(tier=4.0, title_ko="아스날 트로사르 방출")
+    hi = _row(tier=0.0, title_ko="레안드로 트로사르 베식타스 이적")
+    picks = R.pick_top_stories([low, hi], now)
+    assert picks["lead"] is hi            # tier 4 는 후보 제외 (상위 3등급만)
+    assert low not in picks["mains"]
+
+
+def test_arsenal_subject_beats_higher_tier():
+    now = datetime(2026, 7, 20, 12, 0)
+    leak = _row(tier=1.0, title_ko="맨시티, 아스날 유망주 은두카 영입")
+    ours = _row(tier=1.5, title_ko="아스날, 요케레스 영입 임박")
+    picks = R.pick_top_stories([leak, ours], now)
+    assert picks["lead"] is ours          # 아스날 주체가 공신력보다 앞 (spec2 §5 2번)
+
+
+def test_top_story_horizon_excludes_old():
+    now = datetime(2026, 7, 20, 12, 0)
+    old = _row(tier=0.0, published_at=datetime(2026, 7, 5), fetched_at=datetime(2026, 7, 5))
+    assert R.pick_top_stories([old], now)["lead"] is None   # 10일 초과 제외
+
+
+def test_top_story_mains_capped_at_four():
+    now = datetime(2026, 7, 20, 12, 0)
+    rows = [_row(tier=0.0, published_at=datetime(2026, 7, 20, h)) for h in range(6)]
+    picks = R.pick_top_stories(rows, now)
+    assert picks["lead"] is not None
+    assert len(picks["mains"]) == 4

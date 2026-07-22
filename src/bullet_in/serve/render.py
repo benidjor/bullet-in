@@ -196,6 +196,48 @@ def reader_tier(tier: float | None) -> str:
     return _READER_TIER.get(float(tier), "") if tier is not None else ""
 
 
+# ── 톱스토리 선정 (spec2 §5) — 히어로 1 + 주요 소식 4.
+# 순서: 상위 3등급만 → 아스날 주체 → 공신력 → 영입 단계 → 최신 → 이미지 유무.
+# arsenal.com 배제 규칙은 넣지 않는다 (앞 스펙 §16.1 재측정으로 무효 · spec2 §5.1).
+_TOP_TIERS = {0.0, 1.0, 1.5}
+_LEAD_STAGE_RANK = {"official": 5, "agreed": 4, "medical": 3,
+                    "personal_terms": 2, "negotiating": 1}
+_TOP_HORIZON_DAYS = 10
+
+
+def arsenal_subject(row: dict) -> bool:
+    """제목이 '아스날' 로 시작하는지 — 아스날 주체 근사 (spec2 §5 · team 플래그로는 못 가림)."""
+    return (row.get("title_ko") or "").lstrip().startswith("아스날")
+
+
+def top_story_key(row: dict) -> tuple:
+    """정렬 키 (내림차순 = 우선). 이미지 유무는 신뢰도를 밀지 않게 최하위 (spec2 §5.1)."""
+    tier = row.get("tier")
+    return (
+        1 if arsenal_subject(row) else 0,
+        -float(tier) if tier is not None else -99.0,
+        _LEAD_STAGE_RANK.get(row.get("transfer_stage") or "", 0),
+        _sort_ts(row)[0],
+        1 if row.get("image_url") else 0,
+    )
+
+
+def pick_top_stories(articles: list[dict], now: datetime) -> dict:
+    """{'lead': row|None, 'mains': [row..≤4]}. 상위 3등급 · 최근 10일 후보만 (spec1 §6.1 · spec2 §5).
+    사건 겹침 dedup 은 Task 14 (cluster_events) 에서 이 함수 위에 얹는다."""
+    cands = []
+    for a in articles:
+        tier = a.get("tier")
+        if tier is None or float(tier) not in _TOP_TIERS:
+            continue
+        ts = _group_ts(a)
+        if ts is None or (now - ts).days > _TOP_HORIZON_DAYS:
+            continue
+        cands.append(a)
+    cands.sort(key=top_story_key, reverse=True)
+    return {"lead": cands[0] if cands else None, "mains": cands[1:5]}
+
+
 def neighbor_window(n: int, idx: int, size: int = 5) -> tuple[int, int]:
     if n <= size:
         return (0, n)
