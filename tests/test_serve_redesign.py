@@ -192,6 +192,22 @@ def test_ending_card_ignores_arsenal_subject():
     assert R.ending_card(cluster, CLUBS) is None
 
 
+def test_related_reports_branch_sorted_by_sort_ts_desc():
+    # 발행 시각 있음 · day 정밀도 보간 · 시각 부재 폴백이 섞여도 갈래는 최신 먼저 (spec2 §6.3)
+    rep = _row(content_hash="rep", title_ko="아스날, 로저스 영입 추진")
+    newest = _row(content_hash="n", title_ko="아스날, 로저스 관련 최신",
+                  published_at=datetime(2026, 7, 21, 10, 0), published_precision="time",
+                  fetched_at=datetime(2026, 7, 21, 12, 0))
+    midday = _row(content_hash="m", title_ko="아스날, 로저스 관련 중간",
+                  published_at=datetime(2026, 7, 20, 0, 0), published_precision="day",
+                  fetched_at=datetime(2026, 7, 20, 15, 0))
+    publess = _row(content_hash="o", title_ko="아스날, 로저스 관련 시각부재",
+                   published_at=None, fetched_at=datetime(2026, 7, 19, 9, 0))
+    cluster = {"key": "로저스", "articles": [publess, midday, newest, rep]}
+    rel = R.related_reports(cluster, rep, None, CLUBS)
+    assert [a["content_hash"] for a in rel["arsenal"]] == ["n", "m", "o"]
+
+
 def test_is_other_club_report_arsenal_inbound_excluded():
     # 현 소속이 제목 앞머리에 나와도 '아스날 이적 의사' 면 아스날로 오는 사건 (오탐 차단)
     inbound = {"title_ko": "뉴캐슬 주장 기마랑이스, 아스날 이적 의사 구단에 전달"}
