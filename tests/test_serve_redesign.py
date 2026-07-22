@@ -61,6 +61,20 @@ def test_time_in_group_blank_for_day_precision():
     assert R.time_in_group(row_day) == ""
 
 
+def test_published_datetime_time_precision_shows_kst_time():
+    row = {"published_at": datetime(2026, 7, 14, 13, 37), "published_precision": "time"}
+    assert R.published_datetime(row) == "2026-07-14 22:37"   # KST = +9h
+
+
+def test_published_datetime_day_precision_date_only():
+    row = {"published_at": datetime(2026, 7, 14, 0, 0), "published_precision": "day"}
+    assert R.published_datetime(row) == "2026-07-14"         # 없는 시각을 지어내지 않음
+
+
+def test_published_datetime_blank_without_pub():
+    assert R.published_datetime({"published_at": None}) == ""
+
+
 def test_title_pending_when_ko_missing():
     assert R.title_pending({"title_ko": None, "title_original": "Arsenal sign X"}) is True
     assert R.title_pending({"title_ko": "", "title_original": "Arsenal sign X"}) is True

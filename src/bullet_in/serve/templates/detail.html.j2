@@ -14,7 +14,7 @@
     <div><dt>언론사</dt><dd>{{ a._outlet }}</dd></div>
     {% if a.journalist %}<div><dt>기자</dt><dd>{{ a._journalist or a.journalist }}</dd></div>{% endif %}
     {% if a._reader_tier %}<div><dt>공신력</dt><dd>{{ a._reader_tier }}</dd></div>{% endif %}
-    <div><dt>발행</dt><dd>{{ a._date or a._when }}</dd></div>
+    <div><dt>발행</dt><dd>{{ a._datetime or a._date or a._when }}</dd></div>
   </dl>
 
   <p class="tnote">이 글은 원문을 자동 번역한 것입니다. 표현이 어색하거나 뜻이 모호하면 원문을 확인해 주세요.</p>

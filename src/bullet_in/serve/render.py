@@ -109,6 +109,18 @@ def time_in_group(row: dict) -> str:
     return to_kst(ts).strftime("%H:%M") if ts else ""
 
 
+def published_datetime(row: dict) -> str:
+    """상세 발행 표시 (spec1 §12) — time 정밀도는 KST 날짜 + HH:MM, day 정밀도는 날짜만.
+    published_at 이 없으면 빈 문자열 (없는 시각을 지어내지 않는다)."""
+    pub = row.get("published_at")
+    if not pub:
+        return ""
+    kst = to_kst(pub)
+    if row.get("published_precision") == "time":
+        return kst.strftime("%Y-%m-%d %H:%M")
+    return kst.strftime("%Y-%m-%d")
+
+
 def title_pending(row: dict) -> bool:
     """재번역 큐 대기 — title_ko 가 비어 title_original 로 폴백 중인지 (spec2 §11.1)."""
     return not row.get("title_ko") and bool(row.get("title_original"))
@@ -728,6 +740,7 @@ def _decorate(row: dict, sources: dict, now: datetime,
     a["_dot"] = dot_info(row.get("tier"))
     a["_stage_disp"] = display_stage(st)
     a["_pending"] = title_pending(row)
+    a["_datetime"] = published_datetime(row)
     a["_time"] = time_in_group(row)
     a["_show_summary"] = show_summary(row.get("tier"))
     return a
