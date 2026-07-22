@@ -227,7 +227,7 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
 .detail .dek{font-size:17px;color:var(--mut);line-height:1.6;margin:0 0 20px}
 .metagrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0;
   margin:0 0 18px;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
-.metagrid > div{padding:11px 14px 11px 0;border-right:1px solid var(--hair)}
+.metagrid > div{padding:11px 14px;border-right:1px solid var(--hair);text-align:center}
 .metagrid > div:last-child{border-right:0}
 .metagrid dt{font-size:11px;letter-spacing:.05em;color:var(--dim);text-transform:uppercase;margin:0 0 3px}
 .metagrid dd{margin:0;font-size:14px;font-weight:600;color:var(--ink)}
