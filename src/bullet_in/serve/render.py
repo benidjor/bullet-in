@@ -140,13 +140,10 @@ def outlet_display(row: dict, sources: dict, directory: dict | None = None,
 
 TIER_ORDER: list[float] = [0.0, 1.0, 1.5, 2.0, 3.0, 4.0]
 INITIAL_MAX_TIER = 1.5                      # 초기 노출 상한 (spec §3.2)
+# 소스 · 기자 facet 그룹 견출 — 독자 라벨만 (내부 Tier 문자열 금지 · spec1 §7.1)
 TIER_HEADINGS: dict[float, str] = {
-    0.0: "Tier 0 · 공식",
-    1.0: "Tier 1 · 공신력 최상",
-    1.5: "Tier 1.5 · 공신력 상",
-    2.0: "Tier 2 · 공신력 중",
-    3.0: "Tier 3 · 공신력 하",
-    4.0: "Tier 4 · 공신력 최하",
+    0.0: "구단 공식", 1.0: "공신력 최상", 1.5: "공신력 상",
+    2.0: "공신력 중", 3.0: "공신력 하", 4.0: "공신력 최하",
 }
 
 
@@ -184,6 +181,17 @@ def display_stage(enum: str | None) -> dict | None:
     return dict(d) if d else None
 
 
+# 사이드바 단계 필터 — 표시 6묶음 (라벨, 저장 enum 목록). 협상 중이 negotiating · medical 을 함께 건다.
+_STAGE_DISPLAY_GROUPS: list[tuple[str, list[str]]] = [
+    ("오피셜", ["official"]),
+    ("이적 합의", ["agreed"]),
+    ("협상 중", ["negotiating", "medical"]),
+    ("개인 합의", ["personal_terms"]),
+    ("관심", ["interest"]),
+    ("루머", ["rumour"]),
+]
+
+
 # ── 독자 등급 라벨 (spec1 §7.1) — 내부 tier 숫자를 절대 노출하지 않는다.
 _READER_TIER: dict[float, str] = {
     0.0: "구단 공식", 1.0: "공신력 최상", 1.5: "공신력 상",
@@ -194,6 +202,34 @@ _READER_TIER: dict[float, str] = {
 def reader_tier(tier: float | None) -> str:
     """저장 tier → 독자 표기. 미상은 빈 문자열."""
     return _READER_TIER.get(float(tier), "") if tier is not None else ""
+
+
+# ── 위계 표현 채널 (spec2 §3.1) — 등급 클래스 · 출처 점 · 요약 유무.
+_GRADE_CLASS: dict[float, str] = {
+    0.0: "g0", 1.0: "g1", 1.5: "g15", 2.0: "g2", 3.0: "g3", 4.0: "g4",
+}
+
+
+def grade_class(tier: float | None) -> str:
+    """등급 CSS 클래스 (제목 급수 · 색 · 배경). 미상은 빈 문자열."""
+    return _GRADE_CLASS.get(float(tier), "") if tier is not None else ""
+
+
+def dot_info(tier: float | None) -> dict:
+    """출처 점 (spec2 §3.1) — 구단 공식 = 레드 채움 · 최상 · 상 = 채움 · 나머지 = 빈 원."""
+    if tier is None:
+        return {"fill": False, "color": "var(--mut)"}
+    t = float(tier)
+    if t == 0.0:
+        return {"fill": True, "color": "var(--red)"}
+    if t in (1.0, 1.5):
+        return {"fill": True, "color": "var(--mut)"}
+    return {"fill": False, "color": "var(--mut)"}
+
+
+def show_summary(tier: float | None) -> bool:
+    """요약문 표시 대상 (spec2 §3.1) — 하 · 최하 (tier 3 · 4) 는 마크업에서 뺀다."""
+    return tier is not None and float(tier) < 3.0
 
 
 # ── 톱스토리 선정 (spec2 §5) — 히어로 1 + 주요 소식 4.
@@ -312,7 +348,9 @@ def _facet_rows(counts: Counter, labels: dict, tiers: dict) -> dict:
     """tier 그룹 · 더보기 단계로 나눈 facet 뷰모델 (spec §3.1 · §3.2).
     TIER_ORDER 에 없는 tier (설정 오류) 는 미등재로 흘려보낸다."""
     def _item(n, c):
-        return {"value": n, "label": labels.get(n, n), "count": c}
+        # data-tier — 공신력 연동 자동 체크의 매칭 키 (spec1 §7.2 · 등급 미상은 빈 값)
+        return {"value": n, "label": labels.get(n, n), "count": c,
+                "tier": tier_key(tiers.get(n))}
 
     def _sorted(pairs):
         return [_item(n, c) for n, c in sorted(pairs, key=lambda kv: kv[0].lower())]
@@ -336,9 +374,9 @@ def _facet_rows(counts: Counter, labels: dict, tiers: dict) -> dict:
         if not g["items"] and not tail:
             continue                        # 빈 tier 는 단계에서 건너뛴다
         if g["items"] and tail:
-            label = f"더보기 · Tier {tier_key(t)} · 미등재"
+            label = f"더보기 · {reader_tier(t)} · 미등재"
         elif g["items"]:
-            label = f"더보기 · Tier {tier_key(t)}"
+            label = f"더보기 · {reader_tier(t)}"
         else:
             label = "더보기 · 미등재"
         stages.append({"label": label,
@@ -370,7 +408,8 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
         j_tier[e["name"]] = _journalist_tier(a, e, registry)
 
     seen = Counter(tier_key(a.get("tier")) for a in articles if a.get("tier") is not None)
-    tiers = [{"key": tier_key(t), "label": tier_label(t), "count": seen.get(tier_key(t), 0)}
+    # 사이드바 공신력 — 독자 라벨만 노출 (내부 Tier 문자열 금지 · spec1 §7.1)
+    tiers = [{"key": tier_key(t), "reader": reader_tier(t), "count": seen.get(tier_key(t), 0)}
              for t in TIER_ORDER]
 
     stage_counts = {e: 0 for e, _, _ in _stage.SIDEBAR_STAGES}
@@ -381,9 +420,14 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
             stage_counts[s] += 1
         else:
             other_count += 1
+    # 표시 6묶음 — 라벨 · 저장 enum 목록 (data-value) · 합산 건수 (spec1 §5)
+    stage_groups = [{"label": label, "value": ",".join(enums),
+                     "count": sum(stage_counts.get(e, 0) for e in enums)}
+                    for label, enums in _STAGE_DISPLAY_GROUPS]
 
     return {"total": len(articles), "team": dict(teams),
-            "tiers": tiers, "stage": stage_counts, "other": other_count,
+            "tiers": tiers, "stage": stage_counts, "stage_groups": stage_groups,
+            "other": other_count,
             "outlets": _facet_rows(o_ctr, {}, o_tier),
             "journalists": _facet_rows(j_ctr, j_labels, j_tier)}
 
@@ -657,6 +701,14 @@ def _decorate(row: dict, sources: dict, now: datetime,
     e = journalist_entry(row, sources, directory)
     a["_journalist"] = e["name"] if e else ""   # 카드 data 속성 · 필터 키
     a["_byline"] = e["label"] if e else None    # 표시 라벨 — 기자 (언론사)
+    # 개편 위계 · 표시 필드 (spec1 §5 · §7.1 · §12 · spec2 §3.1 · §11.1)
+    a["_reader_tier"] = reader_tier(row.get("tier"))
+    a["_grade"] = grade_class(row.get("tier"))
+    a["_dot"] = dot_info(row.get("tier"))
+    a["_stage_disp"] = display_stage(st)
+    a["_pending"] = title_pending(row)
+    a["_time"] = time_in_group(row)
+    a["_show_summary"] = show_summary(row.get("tier"))
     return a
 
 
@@ -669,10 +721,21 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
                  outlet_dir: dict | None = None) -> str:
     ordered = [_decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
                for a in _sorted_latest(articles)]
+    top = pick_top_stories(ordered, now)
+    top_hashes = {a["content_hash"] for a in ([top["lead"]] if top["lead"] else []) + top["mains"]}
+    rest = [a for a in ordered if a["content_hash"] not in top_hashes]
+    day_groups = group_by_day(rest, now)
     facets = facet_counts(articles, sources, directory=directory, registry=registry,
                           outlet_dir=outlet_dir)
     return _env().get_template("index.html.j2").render(
-        articles=ordered, facets=facets, active="home", root="")
+        lead=top["lead"], mains=top["mains"], day_groups=day_groups,
+        facets=facets, active="home", root="")
+
+
+def render_about() -> str:
+    """소개 페이지 (spec1 §10) — 사이드바 없는 프로즈 페이지."""
+    return _env().get_template("about.html.j2").render(
+        active="about", root="", about_page=True)
 
 
 def build_neighbors(ordered: list[dict], idx: int, sources: dict,
@@ -691,8 +754,8 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
                    sources: dict, now: datetime, facets: dict | None = None) -> str:
     # facets=None이면 빈 구조로 폴백 (하위 호환 유지)
     if facets is None:
-        facets = {"team": {}, "tiers": [], "total": 0, "stage": {}, "other": 0,
-                  "outlets": {"initial": [], "stages": []},
+        facets = {"team": {}, "tiers": [], "total": 0, "stage": {}, "stage_groups": [],
+                  "other": 0, "outlets": {"initial": [], "stages": []},
                   "journalists": {"initial": [], "stages": []}}
     article = dict(article)
     paras = [p for p in (article.get("body_ko") or "").split("\n") if p.strip()]
@@ -721,6 +784,7 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
         render_index(articles, sources, now, directory=directory, registry=registry,
                      outlet_dir=outlet_dir),
         encoding="utf-8")
+    (out / "about.html").write_text(render_about(), encoding="utf-8")
 
     ordered = _sorted_latest(articles)
     # 패싯은 전체 기사 기준으로 한 번만 계산해 모든 상세 페이지에 전달

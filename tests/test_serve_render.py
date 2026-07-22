@@ -6,9 +6,9 @@ STATIC = Path("src/bullet_in/serve/static")
 def test_static_assets_exist_and_nonempty():
     css = (STATIC / "style.css").read_text(encoding="utf-8")
     js = (STATIC / "app.js").read_text(encoding="utf-8")
-    assert "data-theme" in css and "--bg" in css      # 테마 변수
-    assert ".card" in css and ".side" in css
-    assert "s-interest" in css and "s-personal" in css  # 신규 단계 점 색
+    assert "data-theme" in css and "--paper" in css   # 테마 변수
+    assert ".item" in css and ".side" in css
+    assert ".stage.green" in css and ".stage.filled" in css  # 단계 배지 tone
     assert ".morebtn" in css                           # 기자 더보기 버튼
     # .morebtn 은 display:block 을 선언해 브라우저 기본 [hidden]{display:none} 을
     # 덮어쓴다 (작성자 스타일 > UA 스타일, 특정도 무관). JS 가 hidden 속성을
@@ -60,9 +60,10 @@ def test_index_prefers_korean_title_and_escapes():
     assert "한국어 제목" in html2
 
 def test_index_placeholder_when_no_image():
+    # 목록 항목엔 썸네일 자리표시가 없다 (spec2 §8) — 상위 3등급 리드만 밴드에 이미지
     html = render_index([_row(image_url=None)], SOURCES, NOW)
-    assert "PHOTO · 16:9" in html
-    html2 = render_index([_row(image_url="https://img/x.jpg")], SOURCES, NOW)
+    assert "PHOTO" not in html
+    html2 = render_index([_row(tier=1, image_url="https://img/x.jpg")], SOURCES, NOW)
     assert "https://img/x.jpg" in html2
 
 def test_index_sorts_latest_first():
@@ -73,7 +74,7 @@ def test_index_sorts_latest_first():
 
 def test_index_renders_active_stage_filter():
     html = render_index([_row(), _row(content_hash="h2")], SOURCES, NOW)
-    assert "Tier 2" in html
+    assert "공신력 중" in html
     # 영입 단계 필터가 활성 (2-b): 체크박스 + data-group="stage"
     assert "영입 단계" in html
     assert 'data-group="stage"' in html
@@ -127,7 +128,7 @@ def test_detail_shows_summary3_body_and_origin():
              url="https://src/article")
     nb = build_neighbors([a], 0, SOURCES, NOW)
     html = render_article(_decorated(a), nb, "cur", SOURCES, NOW)
-    assert "3줄 요약" in html
+    assert "핵심 요약" in html
     assert "첫째 줄" in html and "셋째 줄" in html
     assert "<li>첫째 줄</li>" in html
     assert "<p>첫 문단입니다.</p>" in html and "<p>둘째 문단입니다.</p>" in html
@@ -189,12 +190,11 @@ def test_write_site_creates_index_articles_and_assets(tmp_path):
 
 def test_index_rejects_malicious_image_url():
     bad = "x'); } body{display:none} a{background:url('http://evil/leak"
-    html = render_index([_row(image_url=bad)], SOURCES, NOW)
-    assert "evil" not in html
-    assert "PHOTO · 16:9" in html  # falls back to placeholder
+    html = render_index([_row(tier=1, image_url=bad)], SOURCES, NOW)   # tier 1 -> 밴드 리드
+    assert "evil" not in html   # _decorate 가 허용목록 밖 URL 을 제거
 
 def test_index_keeps_valid_image_url():
-    html = render_index([_row(image_url="https://picsum.photos/seed/1/800/450")], SOURCES, NOW)
+    html = render_index([_row(tier=1, image_url="https://picsum.photos/seed/1/800/450")], SOURCES, NOW)
     assert "https://picsum.photos/seed/1/800/450" in html
 
 def test_detail_rejects_javascript_origin_url():
@@ -214,7 +214,7 @@ def test_index_shows_stage_badge_and_data_attr():
     html = render_index([_row(transfer_stage="negotiating")], SOURCES, NOW)
     assert 'data-stage="negotiating"' in html
     assert "협상 중" in html
-    assert "stagebadge" in html
+    assert 'class="stage green' in html
 
 
 def test_index_other_stage_has_data_attr_but_no_badge():
@@ -227,7 +227,7 @@ def test_detail_shows_stage_badge():
     a = _row(content_hash="cur", transfer_stage="medical")
     nb = build_neighbors([a], 0, SOURCES, NOW)
     html = render_article(_decorated(a), nb, "cur", SOURCES, NOW)
-    assert "메디컬" in html and "stagebadge" in html
+    assert "협상 중" in html and 'class="stage green' in html   # medical -> 협상 중 (표시 묶음)
 
 
 import re as _re
@@ -236,8 +236,8 @@ def test_index_hides_offmission_card_by_default():
     tr = _row(content_hash="t", transfer_stage="rumour")
     ot = _row(content_hash="o", transfer_stage="other")
     html = render_index([tr, ot], SOURCES, NOW)
-    o_tag = _re.search(r'<a class="card"[^>]*href="article/o\.html"', html).group(0)
-    t_tag = _re.search(r'<a class="card"[^>]*href="article/t\.html"', html).group(0)
+    o_tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/o\.html"', html).group(0)
+    t_tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/t\.html"', html).group(0)
     assert "display:none" in o_tag       # off-mission(other) 카드만 숨김
     assert "display:none" not in t_tag   # 이적 카드(rumour)는 노출
 
@@ -250,7 +250,7 @@ def test_sidebar_has_other_bucket_checkbox():
 
 def test_app_js_has_other_bucket_toggle_contract():
     js = (STATIC / "app.js").read_text(encoding="utf-8")
-    assert "data-group=bucket" in js   # '기타' 토글 셀렉터
+    assert "bucket" in js              # '기타' 토글 셀렉터
     assert "showOther" in js            # other 노출 분기
 
 
@@ -339,8 +339,8 @@ def test_detail_shows_byline_under_title():
     row = _row(journalist="Miguel Delaney", body_ko="본문")
     a = _dec(row, SOURCES, NOW)
     html = _ra(a, [], "h1", SOURCES, NOW)
-    assert '<p class="byline">Miguel Delaney</p>' in html
-    assert html.index('class="title"') < html.index('class="byline"')
+    assert "Miguel Delaney" in html                              # 메타 그리드 기자 칸
+    assert html.index('class="title"') < html.index("Miguel Delaney")
 
 def test_detail_no_byline_when_journalist_missing():
     row = _row(body_ko="본문")
@@ -373,7 +373,7 @@ def _journalist_facet_section(html: str) -> str:
     """사이드바 '기자' 견출부터 다음 <h4> 전까지 — 기자 facet 만 스코프.
     언론사 facet 도 같은 .morestage/.morebtn 마크업을 쓰므로 전체 html 로 보면 오검출된다."""
     start = html.index("<h4>기자</h4>")
-    end = html.index("<h4>", start + 1)
+    end = html.index('id="fstatus"', start)   # 기자가 마지막 그룹 → 상태줄까지
     return html[start:end]
 
 
@@ -422,10 +422,10 @@ def test_sidebar_renders_tier_heading_and_initial_only():
         journalists = {"온스테인": 1.0, "david ornstein": 1.0}
 
     html = render_index(rows, SOURCES, NOW, directory=directory, registry=_Reg())
-    assert "Tier 1 · 공신력 최상" in html
+    assert "공신력 최상" in html
     assert 'data-group="outlet" data-value="The Athletic"' in html
     # 미등재 기자도 기사 tier(4) 그룹으로 분류 — 접힌 단계 안에 있고 버튼이 예고한다
-    assert "더보기 · Tier 4" in html
+    assert "더보기 · 공신력 최하" in html
     assert 'class="morestage"' in html
 
 def test_unregistered_journalist_grouped_by_row_tier():
@@ -434,7 +434,7 @@ def test_unregistered_journalist_grouped_by_row_tier():
     sources = {"bbc_sport": {"display_name": "BBC Sport", "outlet": "BBC"}}
     html = render_index([_row(journalist="Alex Howell", tier=1.5)], sources, NOW)
     section = _journalist_facet_section(html)
-    assert "Tier 1.5 · 공신력 상" in section
+    assert "공신력 상" in section
     assert 'data-group="journalist" data-value="Alex Howell"' in section
     assert "Alex Howell (BBC)" in section
     assert "미등재" not in section
@@ -443,7 +443,7 @@ def test_unregistered_journalist_grouped_by_row_tier():
 def test_org_byline_folds_to_outlet_name():
     """조직 바이라인 (BBC Sport 등) 은 outlet 정식명으로 접는다 — 칩 · 카드 키 모두 'BBC'."""
     sources = {"bbc_sport": {"display_name": "BBC Sport", "outlet": "BBC"}}
-    html = render_index([_row(journalist="BBC Sport", tier=1.5)], sources, NOW)
+    html = render_index([_row(journalist="BBC Sport", tier=2)], sources, NOW)
     assert 'data-journalist="BBC"' in html
     section = _journalist_facet_section(html)
     assert 'data-group="journalist" data-value="BBC"' in section
@@ -452,13 +452,17 @@ def test_org_byline_folds_to_outlet_name():
 
 
 def test_index_card_data_tier_keeps_one_point_five():
-    html = render_index([_row(tier=1.5)], SOURCES, NOW)
+    # 밴드(상위 3등급 최대 5건) 뒤로 밀린 1.5 등급 기사가 목록에 data-tier="1.5" 로 실린다
+    rows = ([_row(content_hash=f"f{i}", tier=0.0,
+                  published_at=datetime(2026, 6, 29, 11, i)) for i in range(5)]
+            + [_row(content_hash="x", tier=1.5)])
+    html = render_index(rows, SOURCES, NOW)
     assert 'data-tier="1.5"' in html
 
 def test_sidebar_tier_facet_lists_one_point_five():
     html = render_index([_row(tier=1.5)], SOURCES, NOW)
     assert 'data-group="tier" data-value="1.5"' in html
-    assert "Tier 1.5" in html
+    assert "공신력 상" in html
 
 def test_layout_emits_no_whitespace_before_doctype():
     """매크로 정의를 {% endmacro %} 로 닫으면 개행이 새어나와 doctype 앞에 붙는다.

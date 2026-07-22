@@ -1,36 +1,59 @@
 {% extends "_layout.html.j2" %}
-{% block title %}Bullet-in · 인덱스{% endblock %}
+{% block title %}Bullet-in · 아스날 이적 뉴스{% endblock %}
+
+{% macro stage_badge(s) %}{% if s %}<span class="stage {{ s.tone }}{{ ' filled' if s.filled }}">{{ s.label }}</span>{% endif %}{% endmacro %}
+{% macro meta_line(a, when) %}<div class="meta"><span class="dot{{ ' fill' if a._dot.fill }}" style="--dotf:{{ a._dot.color }}"></span><span class="src">{{ a._outlet }}</span>{% if a._reader_tier %}<span class="cred">{{ a._reader_tier }}</span>{% endif %}{% if a._pending %}<span class="pending">번역 대기</span>{% endif %}<span class="when">{{ when }}</span></div>{% endmacro %}
+
 {% block content %}
-<div class="grid">
-{% for a in articles %}
-  <a class="card"{% if not a._stage_badge %} style="display:none"{% endif %} href="article/{{ a.content_hash }}.html"
-     data-team="{{ a.team or 'arsenal' }}"
-     data-outlet="{{ a._outlet }}"
-     data-tier="{{ a._tier_key }}"
-     data-published="{{ a._published_iso }}"
-     data-confidence="{{ a.confidence_score or 0 }}"
-     data-hash="{{ a.content_hash }}"
-     data-stage="{{ a._stage }}"
-     data-journalist="{{ a._journalist }}"
-     data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">
-    {% if a.image_url %}
-    <div class="thumb" style="background-image:url('{{ a.image_url }}');background-size:cover;background-position:center"></div>
-    {% else %}
-    <div class="thumb">PHOTO · 16:9</div>
-    {% endif %}
-    <div class="pad">
-      <div class="chips">
-        <span class="chip team">{{ '아스날' if (a.team or 'arsenal') == 'arsenal' else a.team }}</span>
-        <span class="chip src">{{ a._outlet }}</span>
-        <span class="chip tier">{{ a._tier_label }}</span>
-        {% if a._stage_badge %}<span class="chip stagebadge"><span class="stage {{ a._stage_class }}"></span>{{ a._stage_label }}</span>{% endif %}
-        <span class="when">{{ a._when }}</span>
+{% if lead %}
+<section class="band">
+  <article class="lead">
+    <a href="article/{{ lead.content_hash }}.html">
+      {% if lead.image_url %}<div class="limg"><img src="{{ lead.image_url }}" alt="" loading="eager" referrerpolicy="no-referrer" onerror="this.closest('.limg').style.display='none'"></div>{% endif %}
+      <div class="badges">{{ stage_badge(lead._stage_disp) }}</div>
+      <h2>{{ lead._title }}</h2>
+      {% if lead.title_original and lead.title_original != lead._title %}<div class="orig">{{ lead.title_original }}</div>{% endif %}
+      {% if lead.summary_ko %}<p class="dek">{{ lead.summary_ko }}</p>{% endif %}
+      {{ meta_line(lead, lead._when) }}
+    </a>
+  </article>
+  <div class="mains">
+    {% for m in mains %}
+    <a class="mitem" href="article/{{ m.content_hash }}.html">
+      {% if m.image_url %}<div class="rimg"><img src="{{ m.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.rimg').style.display='none'"></div>{% else %}<div class="rimg"></div>{% endif %}
+      <div>
+        <h3>{{ m._title }}</h3>
+        {{ meta_line(m, m._when) }}
       </div>
-      <h2>{{ a._title }}</h2>
-      <p>{{ a.summary_ko or "" }}</p>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<div class="sechead"><h2>최신 소식</h2><span class="kst">시각 KST 기준</span></div>
+
+{% for day in day_groups %}
+<div class="daydiv"><span class="d">{{ day.label }}</span><span class="c">{{ day.articles|length }}건</span></div>
+<div class="daylist">
+  {% for a in day.articles %}
+  <a class="item {{ a._grade }}"{% if not a._stage_disp %} style="display:none"{% endif %} href="article/{{ a.content_hash }}.html"
+     data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-tier="{{ a._tier_key }}"
+     data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}"
+     data-published="{{ a._published_iso }}" data-confidence="{{ a.confidence_score or 0 }}"
+     data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">
+    <div class="body">
+      <div class="htitle">{{ stage_badge(a._stage_disp) }} {{ a._title }}{% if a._pending %} <span class="pending">번역 대기</span>{% endif %}</div>
+      {% if a._show_summary and a.summary_ko %}<p class="dek">{{ a.summary_ko }}</p>{% endif %}
+      {{ meta_line(a, a._time) }}
     </div>
   </a>
-{% endfor %}
+  {% endfor %}
 </div>
-<footer class="sitefoot"><a href="ops.html">수집 현황</a></footer>
+{% endfor %}
+
+<footer class="sitefoot">
+  <p>Bullet-in 은 아스날 관련 보도를 여러 매체에서 모아 한국어로 옮겨 보여 줍니다. 본문은 자동 번역이며 원문 링크를 함께 싣습니다.</p>
+  <p>저작권은 각 매체에 있습니다 · <a href="about.html">소개</a> · <a href="ops.html">수집 현황</a></p>
+</footer>
 {% endblock %}

@@ -43,13 +43,10 @@ def test_tier_label_uses_capital_tier():
     assert tier_label(None) == "Tier ?"
 
 def test_tier_headings_are_credibility_scale():
+    # 사이드바 견출은 독자 라벨만 — 내부 Tier 문자열 노출 금지 (spec1 §7.1)
     assert [TIER_HEADINGS[t] for t in TIER_ORDER] == [
-        "Tier 0 · 공식",
-        "Tier 1 · 공신력 최상",
-        "Tier 1.5 · 공신력 상",
-        "Tier 2 · 공신력 중",
-        "Tier 3 · 공신력 하",
-        "Tier 4 · 공신력 최하",
+        "구단 공식", "공신력 최상", "공신력 상",
+        "공신력 중", "공신력 하", "공신력 최하",
     ]
 
 def test_neighbor_window_centers_and_clamps():
@@ -82,7 +79,7 @@ def test_facet_counts_groups_outlets_by_tier_then_name():
     t1 = [g for g in f["outlets"]["initial"] if g["key"] == "1"][0]
     # 건수는 BBC 1 < The Athletic 3 이지만 이름 오름차순이 이긴다
     assert [i["value"] for i in t1["items"]] == ["BBC", "The Athletic"]
-    assert t1["heading"] == "Tier 1 · 공신력 최상"
+    assert t1["heading"] == "공신력 최상"
 
 def test_facet_counts_unregistered_goes_last_by_name():
     arts = [
@@ -94,7 +91,7 @@ def test_facet_counts_unregistered_goes_last_by_name():
                "sun": {"display_name": "The Sun", "tier": 4}}
     f = facet_counts(arts, sources, registry=_Reg(outlets={"the sun": 4.0}))
     last = f["outlets"]["stages"][-1]
-    assert last["label"] == "더보기 · Tier 4 · 미등재"
+    assert last["label"] == "더보기 · 공신력 최하 · 미등재"
     assert [i["value"] for i in last["unregistered"]] == ["afcstuff (aggregator)"]
 
 def test_outlet_tier_falls_back_to_source_tier_when_unregistered():
@@ -116,7 +113,7 @@ def test_facet_counts_skips_empty_tier_stages():
     sources = {"a": {}, "b": {}}
     reg = _Reg(outlets={"bbc": 1.0, "the times": 3.0})
     f = facet_counts(arts, sources, registry=reg)
-    assert [s["label"] for s in f["outlets"]["stages"]] == ["더보기 · Tier 3"]
+    assert [s["label"] for s in f["outlets"]["stages"]] == ["더보기 · 공신력 하"]
 
 def test_facet_counts_tiers_include_one_point_five():
     arts = [
@@ -126,7 +123,7 @@ def test_facet_counts_tiers_include_one_point_five():
     f = facet_counts(arts, {"a": {}}, registry=_Reg())
     rows = {t["key"]: t["count"] for t in f["tiers"]}
     assert rows == {"0": 0, "1": 1, "1.5": 1, "2": 0, "3": 0, "4": 0}
-    assert [t["label"] for t in f["tiers"]][:3] == ["Tier 0", "Tier 1", "Tier 1.5"]
+    assert [t["reader"] for t in f["tiers"]][:3] == ["구단 공식", "공신력 최상", "공신력 상"]
 
 def test_facet_counts_journalist_tier_from_registry():
     arts = [{"source_id": "a", "outlet": "BBC", "tier": 1, "team": "arsenal",
