@@ -46,6 +46,64 @@ def _fmt_day_only(dt: datetime, now: datetime) -> str:
     return f"{dt.year}년 {dt.month}월 {dt.day}일"
 
 
+_KST = timedelta(hours=9)
+_WEEKDAY_KO = "월화수목금토일"
+
+
+def to_kst(dt: datetime) -> datetime:
+    """저장 UTC (naive) → 한국 시간 (naive). 표시 · 날짜 경계에 공통으로 쓴다 (spec1 §12)."""
+    return dt + _KST
+
+
+def _group_ts(row: dict) -> datetime | None:
+    """날짜 묶기 · 시각 표시의 기준 시각 — published_at, 없으면 수집 시각 폴백 (spec1 §12)."""
+    return row.get("published_at") or row.get("fetched_at")
+
+
+def group_by_day(articles: list[dict], now: datetime) -> list[dict]:
+    """KST 날짜로 묶는다 (spec1 §6.2). 최신 날짜부터 · 그룹 안은 입력 순서 유지.
+    라벨은 오늘 · 어제 · '7월 18일 (토)'. 기준 시각이 없는 행은 제외한다."""
+    today = to_kst(now).date()
+    buckets: dict = {}
+    order: list = []
+    for a in articles:
+        ts = _group_ts(a)
+        if ts is None:
+            continue
+        d = to_kst(ts).date()
+        if d not in buckets:
+            buckets[d] = []
+            order.append(d)
+    for a in articles:
+        ts = _group_ts(a)
+        if ts is not None:
+            buckets[to_kst(ts).date()].append(a)
+    out = []
+    for d in sorted(order, reverse=True):
+        delta = (today - d).days
+        if delta == 0:
+            label = "오늘"
+        elif delta == 1:
+            label = "어제"
+        else:
+            label = f"{d.month}월 {d.day}일 ({_WEEKDAY_KO[d.weekday()]})"
+        out.append({"label": label, "date": d, "articles": buckets[d]})
+    return out
+
+
+def time_in_group(row: dict) -> str:
+    """날짜 그룹 안 항목의 시각 표시 (spec1 §6.2 · §12). day 정밀도는 지어내지 않고 빈 문자열."""
+    if row.get("published_precision") == "day":
+        return ""
+    ts = _group_ts(row)
+    return to_kst(ts).strftime("%H:%M") if ts else ""
+
+
+def title_pending(row: dict) -> bool:
+    """재번역 큐 대기 — title_ko 가 비어 title_original 로 폴백 중인지 (spec2 §11.1)."""
+    return not row.get("title_ko") and bool(row.get("title_original"))
+
+
 def _sort_ts(row: dict) -> tuple[datetime, datetime]:
     """정렬 키. day 정밀도는 fetched_at 을 발행일 [00:00, 23:59:59] 로 클램프해 보간."""
     pub = row.get("published_at") or datetime.min
