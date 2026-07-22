@@ -13,7 +13,7 @@
   <dl class="metagrid">
     <div><dt>언론사</dt><dd>{{ a._outlet }}</dd></div>
     {% if a.journalist %}<div><dt>기자</dt><dd>{{ a._journalist or a.journalist }}</dd></div>{% endif %}
-    {% if a._reader_tier %}<div><dt>공신력</dt><dd>{{ a._reader_tier }}</dd></div>{% endif %}
+    {% if a._reader_tier %}<div><dt>공신력</dt><dd>{{ a._reader_tier|replace('공신력 ', '') }}</dd></div>{% endif %}
     <div><dt>발행</dt><dd>{{ a._datetime or a._date or a._when }}</dd></div>
   </dl>
 
