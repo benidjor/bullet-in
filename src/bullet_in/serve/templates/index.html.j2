@@ -33,6 +33,7 @@
     </a>
   </article>
   <div class="mains">
+    <h3 class="bandhead">주요 소식</h3>
     {% for m in mains %}
     <a class="mitem" href="article/{{ m.content_hash }}.html">
       {% if m.image_url %}<div class="rimg"><img src="{{ m.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.rimg').style.display='none'"></div>{% else %}<div class="rimg"></div>{% endif %}
