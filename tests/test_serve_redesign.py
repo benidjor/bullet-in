@@ -82,6 +82,29 @@ def test_title_pending_when_ko_missing():
     assert R.title_pending({"title_ko": None, "title_original": None}) is False
 
 
+def test_gossip_when_time_precision_appends_kst_time():
+    now = datetime(2026, 7, 23, 0, 0)
+    row = {"published_at": datetime(2026, 7, 15, 11, 0), "published_precision": "time",
+           "fetched_at": datetime(2026, 7, 20, 12, 0)}
+    assert R.gossip_when(row, now) == "7월 15일 (수) 20:00"    # 11:00 UTC + 9h = 20:00 KST
+
+
+def test_gossip_when_none_precision_date_only():
+    now = datetime(2026, 7, 23, 0, 0)
+    row = {"published_at": datetime(2026, 7, 20, 12, 43), "published_precision": None,
+           "fetched_at": datetime(2026, 7, 20, 18, 0)}
+    assert R.gossip_when(row, now) == "7월 20일 (월)"          # 시각 신뢰 불가 → 날짜만
+
+
+def test_bbc_gossip_stage_forced_to_rumour():
+    now = datetime(2026, 7, 23)
+    row = {"content_hash": "x", "source_id": "bbc_gossip",
+           "transfer_stage": "negotiating", "title_ko": "t", "tier": 4.0}
+    a = R._decorate(row, {}, now)
+    assert a["_stage_disp"] == {"label": "루머", "tone": "gray", "filled": False}
+    assert a["_stage"] == "rumour"      # 필터 키도 루머로 일치
+
+
 # ── Task 3: 톱스토리 선정 (히어로 · 주요 소식) ──────────────────────────
 
 def _row(**k):
