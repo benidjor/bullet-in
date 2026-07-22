@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import shutil
+import yaml
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -258,9 +259,10 @@ def top_story_key(row: dict) -> tuple:
     )
 
 
-def pick_top_stories(articles: list[dict], now: datetime) -> dict:
+def pick_top_stories(articles: list[dict], now: datetime,
+                     players: list[str] | None = None) -> dict:
     """{'lead': row|None, 'mains': [row..≤4]}. 상위 3등급 · 최근 10일 후보만 (spec1 §6.1 · spec2 §5).
-    사건 겹침 dedup 은 Task 14 (cluster_events) 에서 이 함수 위에 얹는다."""
+    players 를 주면 히어로 + 주요 소식이 서로 다른 사건이도록 사건 key 로 dedup 한다."""
     cands = []
     for a in articles:
         tier = a.get("tier")
@@ -271,6 +273,16 @@ def pick_top_stories(articles: list[dict], now: datetime) -> dict:
             continue
         cands.append(a)
     cands.sort(key=top_story_key, reverse=True)
+    if players:
+        seen: set = set()
+        deduped = []
+        for a in cands:
+            ev = protagonist(a.get("title_ko") or "", players) or a["content_hash"]
+            if ev in seen:
+                continue
+            seen.add(ev)
+            deduped.append(a)
+        cands = deduped
     return {"lead": cands[0] if cands else None, "mains": cands[1:5]}
 
 
@@ -730,6 +742,144 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
     return _env().get_template("index.html.j2").render(
         lead=top["lead"], mains=top["mains"], day_groups=day_groups,
         facets=facets, active="home", root="")
+
+
+# ── 사건 묶음 (spec2 §4-7) — 선수 사전 (name_map 정규형) 으로 묶는다 ──────
+_TRANSITION_WORDS = ["놓친", "대신", "대체", "무산", "결렬", "실패", "포기", "떠난"]
+
+
+def load_player_names(path: str = "config/name_map.yaml") -> list[str]:
+    """서빙 사건 사전 — name_map 의 정규형 인명 키 (spec2 §4.2.2 · 변형은 glossary 담당).
+    긴 이름을 앞에 둬 부분 매치를 막는다."""
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    return sorted((data.get("names") or {}).keys(), key=len, reverse=True)
+
+
+def load_clubs(path: str = "config/club_map.yaml") -> dict:
+    """구단 검출 사전 (결말 · 행선지 칩) — club_map 의 한글 구단명."""
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    return data.get("clubs") or {}
+
+
+def _first_clause(title: str) -> str:
+    """제목 첫 절 — '…' 앞까지 (spec2 §6.2 · 뒤에 덧붙인 다른 사건 배제)."""
+    for sep in ("…", "..."):
+        i = title.find(sep)
+        if i >= 0:
+            return title[:i].strip()
+    return title.strip()
+
+
+def club_in_title(first_clause: str, club_map: dict) -> str | None:
+    """첫 절에 등장하는 비-아스날 구단 (한글 키 부분 매치 · 긴 키 우선)."""
+    for club in sorted(club_map or {}, key=len, reverse=True):
+        if club in first_clause:
+            return club
+    return None
+
+
+def protagonist(title: str, players: list[str]) -> str | None:
+    """사건 주인공 선수 (spec2 §4.3) — 전환어 뒤 선수를 우선, 없으면 첫 등장 선수."""
+    title = title or ""
+    found = sorted((title.find(p), p) for p in players if p in title)
+    if not found:
+        return None
+    trans = [title.find(w) for w in _TRANSITION_WORDS if w in title]
+    if trans:
+        after = [(pos, p) for pos, p in found if pos > min(trans)]
+        if after:
+            return min(after)[1]
+    return found[0][1]
+
+
+def cluster_events(articles: list[dict], players: list[str]) -> list[dict]:
+    """주인공 기준 사건 묶음 (spec2 §4) — 날짜 경계 없음 · 주인공 미상은 단독 묶음.
+    입력 등장 순서를 보존한다 (호출부가 최신순으로 정렬해 전달)."""
+    groups: dict = {}
+    order: list = []
+    singles: list = []
+    for a in articles:
+        key = protagonist(a.get("title_ko") or a.get("title_original") or "", players)
+        if key is None:
+            singles.append({"key": None, "articles": [a]})
+        else:
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            groups[key].append(a)
+    return [{"key": k, "articles": groups[k]} for k in order] + singles
+
+
+def _arsenal_subject_rank(a: dict) -> int:
+    """아스날 주어 순위 (spec2 §6.1 3번) — 제목 시작 3 · 본문 언급 2 · 없음 1."""
+    if (a.get("title_ko") or "").lstrip().startswith("아스날"):
+        return 3
+    return 2 if "아스날" in (a.get("body_ko") or "") else 1
+
+
+def pick_representative(articles: list[dict]) -> dict | None:
+    """묶음 대표 (spec2 §6.1) — 구단 공식 → 최하 제외 → 아스날 주어 → 최신 → 공신력 → 단계."""
+    if not articles:
+        return None
+    has_higher = any(a.get("tier") is not None and float(a["tier"]) < 4.0 for a in articles)
+
+    def key(a):
+        tier = a.get("tier")
+        tv = float(tier) if tier is not None else 99.0
+        official = 1 if tv == 0.0 else 0
+        not_lowest = 0 if (has_higher and tv >= 4.0) else 1
+        return (official, not_lowest, _arsenal_subject_rank(a), _sort_ts(a)[0],
+                -tv, _LEAD_STAGE_RANK.get(a.get("transfer_stage") or "", 0))
+
+    return max(articles, key=key)
+
+
+def _is_other_club_report(a: dict, key: str | None, club_map: dict) -> str | None:
+    """다른 구단 관점 기사면 그 구단명, 아니면 None (제목 비-아스날 시작 + 첫 절 비아스날 구단)."""
+    title = a.get("title_ko") or ""
+    if title.lstrip().startswith("아스날"):
+        return None
+    fc = _first_clause(title)
+    if key and key not in fc:
+        return None
+    return club_in_title(fc, club_map)
+
+
+def ending_card(cluster: dict, club_map: dict) -> dict | None:
+    """결말 카드 (spec2 §6.2) — 다른 구단이 데려간 사건 · 단계 협상 중 이상."""
+    for a in cluster["articles"]:
+        club = _is_other_club_report(a, cluster["key"], club_map)
+        if club and _LEAD_STAGE_RANK.get(a.get("transfer_stage") or "", 0) >= 1:
+            return {"article": a, "club": club}
+    return None
+
+
+def related_reports(cluster: dict, rep: dict | None, ending: dict | None,
+                    club_map: dict) -> dict:
+    """관련 보도 갈래 (spec2 §6.3) — 아스날 관점 / 다른 구단 관점 · 각 갈래 시간순 (최신 먼저)."""
+    excluded = set()
+    if rep:
+        excluded.add(rep["content_hash"])
+    if ending:
+        excluded.add(ending["article"]["content_hash"])
+    arsenal_side, other_side = [], []
+    for a in cluster["articles"]:
+        if a["content_hash"] in excluded:
+            continue
+        if _is_other_club_report(a, cluster["key"], club_map):
+            other_side.append(a)
+        else:
+            arsenal_side.append(a)
+    arsenal_side.sort(key=_sort_ts, reverse=True)
+    other_side.sort(key=_sort_ts, reverse=True)
+    return {"arsenal": arsenal_side, "other": other_side}
+
+
+def is_gossip_cluster(cluster: dict) -> bool:
+    """가십 묶음 (spec2 §7.1) — 묶음의 모든 기사가 최하 등급일 때만."""
+    arts = cluster["articles"]
+    return bool(arts) and all(
+        a.get("tier") is not None and float(a["tier"]) >= 4.0 for a in arts)
 
 
 def render_about() -> str:

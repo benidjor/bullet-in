@@ -113,3 +113,83 @@ def test_top_story_mains_capped_at_four():
     picks = R.pick_top_stories(rows, now)
     assert picks["lead"] is not None
     assert len(picks["mains"]) == 4
+
+
+# ── Task 10-14: 사건 묶음 ───────────────────────────────────────────
+
+PLAYERS = ["기마랑이스", "디오망데", "로저스", "트로사르"]
+CLUBS = {"첼시": ["Chelsea"], "뉴캐슬": ["Newcastle"], "토트넘": ["Tottenham", "Spurs"]}
+
+
+def test_protagonist_after_transition_word():
+    assert R.protagonist("아스날, 로저스 놓친 후 디오망데 측과 접촉", PLAYERS) == "디오망데"
+
+
+def test_protagonist_no_transition_uses_first():
+    assert R.protagonist("아스날, 트로사르 재계약 임박", PLAYERS) == "트로사르"
+
+
+def test_protagonist_transition_without_dict_player_keeps_first():
+    assert R.protagonist("아스날, 로저스 놓친 후 다른 선수 물색", PLAYERS) == "로저스"
+
+
+def test_protagonist_none_when_no_player():
+    assert R.protagonist("아스날, 여름 이적 시장 대비", PLAYERS) is None
+
+
+def test_cluster_groups_same_protagonist():
+    a = _row(content_hash="a", title_ko="아스날, 로저스 영입 추진")
+    b = _row(content_hash="b", title_ko="첼시, 로저스 영입 합의")
+    c = _row(content_hash="c", title_ko="아스날, 트로사르 방출")
+    clusters = R.cluster_events([a, b, c], PLAYERS)
+    by_key = {cl["key"]: [x["content_hash"] for x in cl["articles"]] for cl in clusters}
+    assert by_key["로저스"] == ["a", "b"]
+    assert by_key["트로사르"] == ["c"]
+
+
+def test_pick_representative_lowest_excluded_when_higher_exists():
+    afc = _row(content_hash="afc", tier=4.0, title_ko="아스날, 로저스 영입 추진", body_ko="")
+    sky = _row(content_hash="sky", tier=1.0, title_ko="첼시, 로저스 영입 합의", body_ko="")
+    assert R.pick_representative([afc, sky]) is sky        # 최하 제외 가드 (로저스 사고)
+
+
+def test_pick_representative_official_always():
+    off = _row(content_hash="off", tier=0.0, title_ko="첼시, 로저스 영입 공식 발표", body_ko="")
+    ars = _row(content_hash="ars", tier=1.5, title_ko="아스날, 로저스 관심", body_ko="")
+    assert R.pick_representative([off, ars]) is off
+
+
+def test_ending_card_detects_other_club_transfer():
+    cluster = {"key": "로저스", "articles": [
+        _row(content_hash="e", tier=1.0, transfer_stage="agreed",
+             title_ko="첼시, 로저스 영입 합의"),
+        _row(content_hash="a", tier=2.0, transfer_stage="rumour",
+             title_ko="아스날, 로저스 관심"),
+    ]}
+    end = R.ending_card(cluster, CLUBS)
+    assert end["article"]["content_hash"] == "e"
+    assert end["club"] == "첼시"
+
+
+def test_ending_card_ignores_arsenal_subject():
+    cluster = {"key": "트로사르", "articles": [
+        _row(content_hash="a", transfer_stage="agreed", title_ko="아스날, 트로사르 방출 합의"),
+    ]}
+    assert R.ending_card(cluster, CLUBS) is None
+
+
+def test_is_gossip_cluster_only_when_all_lowest():
+    assert R.is_gossip_cluster({"articles": [_row(tier=4.0), _row(tier=4.0)]}) is True
+    assert R.is_gossip_cluster({"articles": [_row(tier=4.0), _row(tier=1.5)]}) is False
+
+
+def test_top_stories_dedup_by_event():
+    now = datetime(2026, 7, 20, 12, 0)
+    rows = [_row(content_hash=f"t{i}", tier=1.0, title_ko="아스날, 트로사르 방출",
+                 published_at=datetime(2026, 7, 20, 10, i)) for i in range(3)]
+    rows.append(_row(content_hash="r", tier=1.0, title_ko="아스날, 로저스 영입"))
+    picks = R.pick_top_stories(rows, now, PLAYERS)
+    keys = [R.protagonist(a["title_ko"], PLAYERS)
+            for a in ([picks["lead"]] + picks["mains"])]
+    assert keys.count("트로사르") == 1        # 같은 사건은 한 번만
+    assert "로저스" in keys
