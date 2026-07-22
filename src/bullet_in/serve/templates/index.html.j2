@@ -10,7 +10,8 @@
    data-published="{{ a._published_iso }}" data-confidence="{{ a.confidence_score or 0 }}"
    data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">
   <div class="body">
-    <div class="htitle">{{ stage_badge(a._stage_disp) }}{% if dest %} <span class="dest">{{ dest }}</span>{% endif %} {{ a._title }}{% if a._pending %} <span class="pending">번역 대기</span>{% endif %}</div>
+    {% if a._stage_disp or dest %}<div class="cardbadges">{{ stage_badge(a._stage_disp) }}{% if dest %}<span class="dest">{{ dest }}</span>{% endif %}</div>{% endif %}
+    <div class="htitle">{{ a._title }}{% if a._pending %} <span class="pending">번역 대기</span>{% endif %}</div>
     {% if a._show_summary and a.summary_ko %}<p class="dek">{{ a.summary_ko }}</p>{% endif %}
     {{ meta_line(a, a._time) }}
   </div>
