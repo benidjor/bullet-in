@@ -235,7 +235,7 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
   border-radius:2px;margin:0 0 22px;line-height:1.6}
 .hero{margin:0 0 24px}
 .hero img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;border-radius:1px}
-.summary{border-top:2px solid var(--red);padding:16px 0 4px;margin:0 0 26px}
+.summary{border-top:2px solid var(--red);background:var(--sunk);padding:16px 18px 8px;margin:0 0 26px}
 .summary .shead{display:flex;align-items:baseline;gap:10px;margin:0 0 12px}
 .summary h2{font-family:var(--serif);font-size:16px;font-weight:700}
 .summary .auto{font-size:11px;color:var(--dim)}
