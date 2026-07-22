@@ -875,12 +875,20 @@ def pick_representative(articles: list[dict]) -> dict | None:
     return max(articles, key=key)
 
 
+# 아스날 인바운드 신호 (spec2 §6.2) — 현 소속이 제목 앞머리에 와도 아스날로 오는 사건.
+# '아스날 이적 의사' 는 '아스날 이적' 에, '아스날로 이적' 은 '아스날로' 에 걸린다.
+_ARSENAL_INBOUND = ("아스날 이적", "아스날 합류", "아스날행", "아스날로")
+
+
 def _is_other_club_report(a: dict, key: str | None, club_map: dict) -> str | None:
-    """다른 구단 관점 기사면 그 구단명, 아니면 None (제목 비-아스날 시작 + 첫 절 비아스날 구단)."""
+    """다른 구단 관점 기사면 그 구단명, 아니면 None (제목 비-아스날 시작 + 첫 절 비아스날 구단).
+    첫 절에 아스날 인바운드 신호가 있으면 현 소속이 앞머리에 와도 다른 구단행이 아니다."""
     title = a.get("title_ko") or ""
     if title.lstrip().startswith("아스날"):
         return None
     fc = _first_clause(title)
+    if any(sig in fc for sig in _ARSENAL_INBOUND):
+        return None
     if key and key not in fc:
         return None
     return club_in_title(fc, club_map)

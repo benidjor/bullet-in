@@ -192,6 +192,15 @@ def test_ending_card_ignores_arsenal_subject():
     assert R.ending_card(cluster, CLUBS) is None
 
 
+def test_is_other_club_report_arsenal_inbound_excluded():
+    # 현 소속이 제목 앞머리에 나와도 '아스날 이적 의사' 면 아스날로 오는 사건 (오탐 차단)
+    inbound = {"title_ko": "뉴캐슬 주장 기마랑이스, 아스날 이적 의사 구단에 전달"}
+    assert R._is_other_club_report(inbound, "기마랑이스", CLUBS) is None
+    # 실제 다른 구단행은 그대로 구단명 반환
+    other = {"title_ko": "첼시, 로저스 영입 합의"}
+    assert R._is_other_club_report(other, "로저스", CLUBS) == "첼시"
+
+
 def test_is_gossip_cluster_only_when_all_lowest():
     assert R.is_gossip_cluster({"articles": [_row(tier=4.0), _row(tier=4.0)]}) is True
     assert R.is_gossip_cluster({"articles": [_row(tier=4.0), _row(tier=1.5)]}) is False
