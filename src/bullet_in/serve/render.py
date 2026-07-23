@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import shutil
+import yaml
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -46,6 +47,102 @@ def _fmt_day_only(dt: datetime, now: datetime) -> str:
     return f"{dt.year}년 {dt.month}월 {dt.day}일"
 
 
+_KST = timedelta(hours=9)
+_WEEKDAY_KO = "월화수목금토일"
+
+
+def to_kst(dt: datetime) -> datetime:
+    """저장 UTC (naive) → 한국 시간 (naive). 표시 · 날짜 경계에 공통으로 쓴다 (spec1 §12)."""
+    return dt + _KST
+
+
+def _group_ts(row: dict) -> datetime | None:
+    """날짜 묶기 · 시각 표시의 기준 시각 — published_at, 없으면 수집 시각 폴백 (spec1 §12)."""
+    return row.get("published_at") or row.get("fetched_at")
+
+
+def _day_label(d, today) -> str:
+    delta = (today - d).days
+    if delta == 0:
+        return "오늘"
+    if delta == 1:
+        return "어제"
+    return f"{d.month}월 {d.day}일 ({_WEEKDAY_KO[d.weekday()]})"
+
+
+def group_by_day(articles: list[dict], now: datetime) -> list[dict]:
+    """KST 날짜로 묶는다 (spec1 §6.2). 최신 날짜부터 · 그룹 안은 입력 순서 유지.
+    라벨은 오늘 · 어제 · '7월 18일 (토)'. 기준 시각이 없는 행은 제외한다."""
+    today = to_kst(now).date()
+    buckets: dict = {}
+    for a in articles:
+        ts = _group_ts(a)
+        if ts is not None:
+            buckets.setdefault(to_kst(ts).date(), []).append(a)
+    return [{"label": _day_label(d, today), "date": d, "articles": buckets[d]}
+            for d in sorted(buckets, reverse=True)]
+
+
+def _same_day_reports(day_blocks: list[dict], d) -> int:
+    """그 날짜(d)에 실제 발행된 기사 수 (spec2 §4.1 개정).
+    묶음은 날짜 경계가 없어 여러 날 기사를 품으므로, 대표 날짜와 같은 날 기사만 센다."""
+    return sum(1 for b in day_blocks for a in b.get("_articles", [])
+               if _group_ts(a) is not None and to_kst(_group_ts(a)).date() == d)
+
+
+def group_blocks_by_day(blocks: list[dict], now: datetime) -> list[dict]:
+    """사건 블록을 대표 기사의 KST 날짜로 묶는다 (spec2 §4.1).
+    건수는 '묶음 N개 · 보도 M건' — 그 날짜에 배치된 묶음 수와 그 날짜에 발행된 기사 수."""
+    today = to_kst(now).date()
+    buckets: dict = {}
+    for b in blocks:
+        ts = _group_ts(b["rep"]) if b.get("rep") else None
+        if ts is not None:
+            buckets.setdefault(to_kst(ts).date(), []).append(b)
+    out = []
+    for d in sorted(buckets, reverse=True):
+        day_blocks = sorted(buckets[d], key=lambda b: _sort_ts(b["rep"]), reverse=True)
+        out.append({"label": _day_label(d, today), "date": d, "blocks": day_blocks,
+                    "n": len(day_blocks),
+                    "reports": _same_day_reports(day_blocks, d)})
+    return out
+
+
+def time_in_group(row: dict) -> str:
+    """날짜 그룹 안 항목의 시각 표시 (spec1 §6.2 · §12). day 정밀도는 지어내지 않고 빈 문자열."""
+    if row.get("published_precision") == "day":
+        return ""
+    ts = _group_ts(row)
+    return to_kst(ts).strftime("%H:%M") if ts else ""
+
+
+def published_datetime(row: dict) -> str:
+    """상세 발행 표시 (spec1 §12) — time 정밀도는 KST 날짜 + HH:MM, day 정밀도는 날짜만.
+    published_at 이 없으면 빈 문자열 (없는 시각을 지어내지 않는다)."""
+    pub = row.get("published_at")
+    if not pub:
+        return ""
+    kst = to_kst(pub)
+    if row.get("published_precision") == "time":
+        return kst.strftime("%Y-%m-%d %H:%M")
+    return kst.strftime("%Y-%m-%d")
+
+
+def title_pending(row: dict) -> bool:
+    """재번역 큐 대기 — title_ko 가 비어 title_original 로 폴백 중인지 (spec2 §11.1)."""
+    return not row.get("title_ko") and bool(row.get("title_original"))
+
+
+def gossip_when(row: dict, now: datetime) -> str:
+    """가십 카드 시각 (spec2 §7 · 6-3) — 가십은 날짜 묶음이 없어 카드마다 날짜가 있어야
+    순서를 알 수 있다. KST 날짜만 보여 준다 (오늘 · 어제 · 'M월 D일 (요일)').
+    상세한 발행 시각은 카드 메타 줄을 줄바꿈시켜 간격을 깨므로 상세 페이지 발행 칸에만 둔다."""
+    ts = _group_ts(row)
+    if not ts:
+        return ""
+    return _day_label(to_kst(ts).date(), to_kst(now).date())
+
+
 def _sort_ts(row: dict) -> tuple[datetime, datetime]:
     """정렬 키. day 정밀도는 fetched_at 을 발행일 [00:00, 23:59:59] 로 클램프해 보간."""
     pub = row.get("published_at") or datetime.min
@@ -82,13 +179,10 @@ def outlet_display(row: dict, sources: dict, directory: dict | None = None,
 
 TIER_ORDER: list[float] = [0.0, 1.0, 1.5, 2.0, 3.0, 4.0]
 INITIAL_MAX_TIER = 1.5                      # 초기 노출 상한 (spec §3.2)
+# 소스 · 기자 facet 그룹 견출 — 독자 라벨만 (내부 Tier 문자열 금지 · spec1 §7.1)
 TIER_HEADINGS: dict[float, str] = {
-    0.0: "Tier 0 · 공식",
-    1.0: "Tier 1 · 공신력 최상",
-    1.5: "Tier 1.5 · 공신력 상",
-    2.0: "Tier 2 · 공신력 중",
-    3.0: "Tier 3 · 공신력 하",
-    4.0: "Tier 4 · 공신력 최하",
+    0.0: "구단 공식", 1.0: "공신력 최상", 1.5: "공신력 상",
+    2.0: "공신력 중", 3.0: "공신력 하", 4.0: "공신력 최하",
 }
 
 
@@ -104,6 +198,132 @@ def tier_label(tier) -> str:
     if tier is None:
         return "Tier ?"
     return f"Tier {tier_key(tier)}"
+
+
+# ── 표시 단계 매핑 (spec1 §5) — 저장 enum 7종을 독자용 6묶음으로 접는다.
+# 저장 enum 은 건드리지 않고 (transfer_stage.py 는 enrich 와 공유) 표시 계층에서만 묶는다.
+# medical 은 건수가 적어 협상 중에 합친다 · 순서는 진행이 많이 된 것부터.
+_DISPLAY_STAGE: dict[str, dict] = {
+    "official": {"label": "오피셜", "tone": "red", "filled": True},
+    "agreed": {"label": "이적 합의", "tone": "red", "filled": False},
+    "medical": {"label": "협상 중", "tone": "green", "filled": False},
+    "negotiating": {"label": "협상 중", "tone": "green", "filled": False},
+    "personal_terms": {"label": "개인 합의", "tone": "yellow", "filled": False},
+    "interest": {"label": "관심", "tone": "gray", "filled": False},
+    "rumour": {"label": "루머", "tone": "gray", "filled": False},
+}
+
+
+def display_stage(enum: str | None) -> dict | None:
+    """저장 단계 enum → 표시 배지 {label, tone, filled}. 미표시 (other · None) 는 None."""
+    d = _DISPLAY_STAGE.get(enum or "")
+    return dict(d) if d else None
+
+
+# 사이드바 단계 필터 — 표시 6묶음 (라벨, 저장 enum 목록). 협상 중이 negotiating · medical 을 함께 건다.
+_STAGE_DISPLAY_GROUPS: list[tuple[str, list[str]]] = [
+    ("오피셜", ["official"]),
+    ("이적 합의", ["agreed"]),
+    ("협상 중", ["negotiating", "medical"]),
+    ("개인 합의", ["personal_terms"]),
+    ("관심", ["interest"]),
+    ("루머", ["rumour"]),
+]
+
+
+# ── 독자 등급 라벨 (spec1 §7.1) — 내부 tier 숫자를 절대 노출하지 않는다.
+_READER_TIER: dict[float, str] = {
+    0.0: "구단 공식", 1.0: "공신력 최상", 1.5: "공신력 상",
+    2.0: "공신력 중", 3.0: "공신력 하", 4.0: "공신력 최하",
+}
+
+
+def reader_tier(tier: float | None) -> str:
+    """저장 tier → 독자 표기. 미상은 빈 문자열."""
+    return _READER_TIER.get(float(tier), "") if tier is not None else ""
+
+
+# ── 위계 표현 채널 (spec2 §3.1) — 등급 클래스 · 출처 점 · 요약 유무.
+_GRADE_CLASS: dict[float, str] = {
+    0.0: "g0", 1.0: "g1", 1.5: "g15", 2.0: "g2", 3.0: "g3", 4.0: "g4",
+}
+
+
+def grade_class(tier: float | None) -> str:
+    """등급 CSS 클래스 (제목 급수 · 색 · 배경). 미상은 빈 문자열."""
+    return _GRADE_CLASS.get(float(tier), "") if tier is not None else ""
+
+
+def dot_info(tier: float | None) -> dict:
+    """출처 점 (spec2 §3.1) — 구단 공식 = 레드 채움 · 최상 · 상 = 채움 · 나머지 = 빈 원."""
+    if tier is None:
+        return {"fill": False, "color": "var(--mut)"}
+    t = float(tier)
+    if t == 0.0:
+        return {"fill": True, "color": "var(--red)"}
+    if t in (1.0, 1.5):
+        return {"fill": True, "color": "var(--mut)"}
+    return {"fill": False, "color": "var(--mut)"}
+
+
+def show_summary(tier: float | None) -> bool:
+    """요약문 표시 대상 (spec2 §3.1) — 하 · 최하 (tier 3 · 4) 는 마크업에서 뺀다."""
+    return tier is not None and float(tier) < 3.0
+
+
+# ── 톱스토리 선정 (spec2 §5) — 히어로 1 + 주요 소식 4.
+# 순서: 상위 3등급만 → 아스날 주체 → 공신력 → 영입 단계 → 최신 → 이미지 유무.
+# arsenal.com 배제 규칙은 넣지 않는다 (앞 스펙 §16.1 재측정으로 무효 · spec2 §5.1).
+_TOP_TIERS = {0.0, 1.0, 1.5}
+_LEAD_STAGE_RANK = {"official": 5, "agreed": 4, "medical": 3,
+                    "personal_terms": 2, "negotiating": 1}
+_TOP_HORIZON_DAYS = 10
+
+
+def arsenal_subject(row: dict) -> bool:
+    """제목이 '아스날' 로 시작하는지 — 아스날 주체 근사 (spec2 §5 · team 플래그로는 못 가림)."""
+    return (row.get("title_ko") or "").lstrip().startswith("아스날")
+
+
+def top_story_key(row: dict) -> tuple:
+    """정렬 키 (내림차순 = 우선). 이미지 유무는 신뢰도를 밀지 않게 최하위 (spec2 §5.1)."""
+    tier = row.get("tier")
+    return (
+        1 if arsenal_subject(row) else 0,
+        -float(tier) if tier is not None else -99.0,
+        _LEAD_STAGE_RANK.get(row.get("transfer_stage") or "", 0),
+        _sort_ts(row)[0],
+        1 if row.get("image_url") else 0,
+    )
+
+
+def pick_top_stories(articles: list[dict], now: datetime,
+                     players: list[str] | None = None) -> dict:
+    """{'lead': row|None, 'mains': [row..≤4]}. 상위 3등급 · 최근 10일 후보만 (spec1 §6.1 · spec2 §5).
+    players 를 주면 히어로 + 주요 소식이 서로 다른 사건이도록 사건 key 로 dedup 한다."""
+    cands = []
+    for a in articles:
+        tier = a.get("tier")
+        if tier is None or float(tier) not in _TOP_TIERS:
+            continue
+        ts = _group_ts(a)
+        if ts is None or (now - ts).days > _TOP_HORIZON_DAYS:
+            continue
+        cands.append(a)
+    cands.sort(key=top_story_key, reverse=True)
+    if players:
+        seen: set = set()
+        deduped = []
+        for a in cands:
+            ev = protagonist(a.get("title_ko") or "", players) or a["content_hash"]
+            if ev in seen:
+                continue
+            seen.add(ev)
+            deduped.append(a)
+        cands = deduped
+    # 히어로는 선정 순위 그대로, 주요 소식은 화면에서 최신 먼저 (Image #6)
+    mains = sorted(cands[1:5], key=_sort_ts, reverse=True)
+    return {"lead": cands[0] if cands else None, "mains": mains}
 
 
 def neighbor_window(n: int, idx: int, size: int = 5) -> tuple[int, int]:
@@ -180,7 +400,9 @@ def _facet_rows(counts: Counter, labels: dict, tiers: dict) -> dict:
     """tier 그룹 · 더보기 단계로 나눈 facet 뷰모델 (spec §3.1 · §3.2).
     TIER_ORDER 에 없는 tier (설정 오류) 는 미등재로 흘려보낸다."""
     def _item(n, c):
-        return {"value": n, "label": labels.get(n, n), "count": c}
+        # data-tier — 공신력 연동 자동 체크의 매칭 키 (spec1 §7.2 · 등급 미상은 빈 값)
+        return {"value": n, "label": labels.get(n, n), "count": c,
+                "tier": tier_key(tiers.get(n))}
 
     def _sorted(pairs):
         return [_item(n, c) for n, c in sorted(pairs, key=lambda kv: kv[0].lower())]
@@ -204,9 +426,9 @@ def _facet_rows(counts: Counter, labels: dict, tiers: dict) -> dict:
         if not g["items"] and not tail:
             continue                        # 빈 tier 는 단계에서 건너뛴다
         if g["items"] and tail:
-            label = f"더보기 · Tier {tier_key(t)} · 미등재"
+            label = f"더보기 · {reader_tier(t)} · 미등재"
         elif g["items"]:
-            label = f"더보기 · Tier {tier_key(t)}"
+            label = f"더보기 · {reader_tier(t)}"
         else:
             label = "더보기 · 미등재"
         stages.append({"label": label,
@@ -238,7 +460,8 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
         j_tier[e["name"]] = _journalist_tier(a, e, registry)
 
     seen = Counter(tier_key(a.get("tier")) for a in articles if a.get("tier") is not None)
-    tiers = [{"key": tier_key(t), "label": tier_label(t), "count": seen.get(tier_key(t), 0)}
+    # 사이드바 공신력 — 독자 라벨만 노출 (내부 Tier 문자열 금지 · spec1 §7.1)
+    tiers = [{"key": tier_key(t), "reader": reader_tier(t), "count": seen.get(tier_key(t), 0)}
              for t in TIER_ORDER]
 
     stage_counts = {e: 0 for e, _, _ in _stage.SIDEBAR_STAGES}
@@ -249,9 +472,14 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
             stage_counts[s] += 1
         else:
             other_count += 1
+    # 표시 6묶음 — 라벨 · 저장 enum 목록 (data-value) · 합산 건수 (spec1 §5)
+    stage_groups = [{"label": label, "value": ",".join(enums),
+                     "count": sum(stage_counts.get(e, 0) for e in enums)}
+                    for label, enums in _STAGE_DISPLAY_GROUPS]
 
     return {"total": len(articles), "team": dict(teams),
-            "tiers": tiers, "stage": stage_counts, "other": other_count,
+            "tiers": tiers, "stage": stage_counts, "stage_groups": stage_groups,
+            "other": other_count,
             "outlets": _facet_rows(o_ctr, {}, o_tier),
             "journalists": _facet_rows(j_ctr, j_labels, j_tier)}
 
@@ -518,6 +746,8 @@ def _decorate(row: dict, sources: dict, now: datetime,
     u = row.get("url") or ""
     a["url"] = u if re.match(r"^https?://", u) else "#"
     st = row.get("transfer_stage")
+    if row.get("source_id") == "bbc_gossip":
+        st = "rumour"          # BBC 가십은 루머 롤업 → 배지 · 필터 키를 항상 루머로
     a["_stage"] = st or ""
     a["_stage_badge"] = _stage.is_displayable(st)
     a["_stage_label"] = _stage.label_for(st)
@@ -525,6 +755,15 @@ def _decorate(row: dict, sources: dict, now: datetime,
     e = journalist_entry(row, sources, directory)
     a["_journalist"] = e["name"] if e else ""   # 카드 data 속성 · 필터 키
     a["_byline"] = e["label"] if e else None    # 표시 라벨 — 기자 (언론사)
+    # 개편 위계 · 표시 필드 (spec1 §5 · §7.1 · §12 · spec2 §3.1 · §11.1)
+    a["_reader_tier"] = reader_tier(row.get("tier"))
+    a["_grade"] = grade_class(row.get("tier"))
+    a["_dot"] = dot_info(row.get("tier"))
+    a["_stage_disp"] = display_stage(st)
+    a["_pending"] = title_pending(row)
+    a["_datetime"] = published_datetime(row)
+    a["_time"] = time_in_group(row)
+    a["_show_summary"] = show_summary(row.get("tier"))
     return a
 
 
@@ -537,10 +776,205 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
                  outlet_dir: dict | None = None) -> str:
     ordered = [_decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
                for a in _sorted_latest(articles)]
+    players, clubs = load_player_names(), load_clubs()
+    top = pick_top_stories(ordered, now, players)
+    top_hashes = {a["content_hash"] for a in ([top["lead"]] if top["lead"] else []) + top["mains"]}
+    rest = [a for a in ordered if a["content_hash"] not in top_hashes]
+
+    clusters = cluster_events(rest, players)
+    gossip = [pick_representative(c["articles"]) for c in clusters if is_gossip_cluster(c)]
+    gossip.sort(key=_sort_ts, reverse=True)   # 가십을 발행 · 수집 시각 내림차순으로 (2-2)
+    for g in gossip:
+        g["_gwhen"] = gossip_when(g, now)   # 가십 카드는 날짜 · time 정밀도면 시각까지 (6-3)
+    blocks = []
+    for c in clusters:
+        if is_gossip_cluster(c):
+            continue
+        rep = pick_representative(c["articles"])
+        ending = ending_card(c, clubs)
+        # 대표가 이미 다른 구단 결말 기사면 결말 카드를 따로 세우지 않는다 (중복 방지)
+        if ending and _is_other_club_report(rep, c["key"], clubs):
+            ending = None
+        branches = branch_views(related_reports(c, rep, ending, clubs), ending)
+        blocks.append({"rep": rep, "ending": ending, "branches": branches,
+                       "rel_count": sum(len(br["articles"]) for br in branches),
+                       "count": len(c["articles"]), "_articles": c["articles"]})
+    day_blocks = group_blocks_by_day(blocks, now)
+
     facets = facet_counts(articles, sources, directory=directory, registry=registry,
                           outlet_dir=outlet_dir)
     return _env().get_template("index.html.j2").render(
-        articles=ordered, facets=facets, active="home", root="")
+        lead=top["lead"], mains=top["mains"], day_blocks=day_blocks,
+        gossip=gossip, gossip_n=len(gossip), facets=facets, active="home", root="")
+
+
+# ── 사건 묶음 (spec2 §4-7) — 선수 사전 (name_map 정규형) 으로 묶는다 ──────
+# 전환어 (spec2 §4.3) — 뒤에 나온 선수가 주인공. 3.1 모델 실측 표현 '불발' 을 포함한다.
+_TRANSITION_WORDS = ["놓친", "대신", "대체", "무산", "불발", "결렬", "실패", "포기", "떠난"]
+
+
+def load_player_names(path: str = "config/name_map.yaml") -> list[str]:
+    """서빙 사건 사전 — name_map 의 정규형 인명 키 (spec2 §4.2.2 · 변형은 glossary 담당).
+    긴 이름을 앞에 둬 부분 매치를 막는다."""
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    return sorted((data.get("names") or {}).keys(), key=len, reverse=True)
+
+
+def load_clubs(path: str = "config/club_map.yaml") -> dict:
+    """구단 검출 사전 (결말 · 행선지 칩) — club_map 의 한글 구단명."""
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    return data.get("clubs") or {}
+
+
+def _first_clause(title: str) -> str:
+    """제목 첫 절 — '…' 앞까지 (spec2 §6.2 · 뒤에 덧붙인 다른 사건 배제)."""
+    for sep in ("…", "..."):
+        i = title.find(sep)
+        if i >= 0:
+            return title[:i].strip()
+    return title.strip()
+
+
+def club_in_title(first_clause: str, club_map: dict) -> str | None:
+    """첫 절에 등장하는 비-아스날 구단 (한글 키 부분 매치 · 긴 키 우선)."""
+    for club in sorted(club_map or {}, key=len, reverse=True):
+        if club in first_clause:
+            return club
+    return None
+
+
+def protagonist(title: str, players: list[str]) -> str | None:
+    """사건 주인공 선수 (spec2 §4.3) — 전환어 뒤 선수를 우선, 없으면 첫 등장 선수."""
+    title = title or ""
+    found = sorted((title.find(p), p) for p in players if p in title)
+    if not found:
+        return None
+    trans = [title.find(w) for w in _TRANSITION_WORDS if w in title]
+    if trans:
+        after = [(pos, p) for pos, p in found if pos > min(trans)]
+        if after:
+            return min(after)[1]
+    return found[0][1]
+
+
+def cluster_events(articles: list[dict], players: list[str]) -> list[dict]:
+    """주인공 기준 사건 묶음 (spec2 §4) — 날짜 경계 없음 · 주인공 미상은 단독 묶음.
+    입력 등장 순서를 보존한다 (호출부가 최신순으로 정렬해 전달)."""
+    groups: dict = {}
+    order: list = []
+    singles: list = []
+    for a in articles:
+        key = protagonist(a.get("title_ko") or a.get("title_original") or "", players)
+        if key is None:
+            singles.append({"key": None, "articles": [a]})
+        else:
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            groups[key].append(a)
+    return [{"key": k, "articles": groups[k]} for k in order] + singles
+
+
+def _arsenal_subject_rank(a: dict) -> int:
+    """아스날 주어 순위 (spec2 §6.1 3번) — 제목 시작 3 · 본문 언급 2 · 없음 1."""
+    if (a.get("title_ko") or "").lstrip().startswith("아스날"):
+        return 3
+    return 2 if "아스날" in (a.get("body_ko") or "") else 1
+
+
+def pick_representative(articles: list[dict]) -> dict | None:
+    """묶음 대표 (spec2 §6.1) — 구단 공식 → 최하 제외 → 아스날 주어 → 최신 → 공신력 → 단계."""
+    if not articles:
+        return None
+    has_higher = any(a.get("tier") is not None and float(a["tier"]) < 4.0 for a in articles)
+
+    def key(a):
+        tier = a.get("tier")
+        tv = float(tier) if tier is not None else 99.0
+        official = 1 if tv == 0.0 else 0
+        not_lowest = 0 if (has_higher and tv >= 4.0) else 1
+        return (official, not_lowest, _arsenal_subject_rank(a), _sort_ts(a)[0],
+                -tv, _LEAD_STAGE_RANK.get(a.get("transfer_stage") or "", 0))
+
+    return max(articles, key=key)
+
+
+# 아스날 인바운드 신호 (spec2 §6.2) — 현 소속이 제목 앞머리에 와도 아스날로 오는 사건.
+# '아스날 이적 의사' 는 '아스날 이적' 에, '아스날로 이적' 은 '아스날로' 에 걸린다.
+_ARSENAL_INBOUND = ("아스날 이적", "아스날 합류", "아스날행", "아스날로")
+
+
+def _is_other_club_report(a: dict, key: str | None, club_map: dict) -> str | None:
+    """다른 구단 관점 기사면 그 구단명, 아니면 None (제목 비-아스날 시작 + 첫 절 비아스날 구단).
+    첫 절에 아스날 인바운드 신호가 있으면 현 소속이 앞머리에 와도 다른 구단행이 아니다."""
+    title = a.get("title_ko") or ""
+    if title.lstrip().startswith("아스날"):
+        return None
+    fc = _first_clause(title)
+    if any(sig in fc for sig in _ARSENAL_INBOUND):
+        return None
+    if key and key not in fc:
+        return None
+    return club_in_title(fc, club_map)
+
+
+def ending_card(cluster: dict, club_map: dict) -> dict | None:
+    """결말 카드 (spec2 §6.2) — 다른 구단이 데려간 사건 · 단계 협상 중 이상."""
+    for a in cluster["articles"]:
+        club = _is_other_club_report(a, cluster["key"], club_map)
+        if club and _LEAD_STAGE_RANK.get(a.get("transfer_stage") or "", 0) >= 1:
+            return {"article": a, "club": club}
+    return None
+
+
+def related_reports(cluster: dict, rep: dict | None, ending: dict | None,
+                    club_map: dict) -> dict:
+    """관련 보도 갈래 (spec2 §6.3) — 아스날 관점 / 다른 구단 관점 · 각 갈래 시간순 (최신 먼저)."""
+    excluded = set()
+    if rep:
+        excluded.add(rep["content_hash"])
+    if ending:
+        excluded.add(ending["article"]["content_hash"])
+    arsenal_side, other_side = [], []
+    for a in cluster["articles"]:
+        if a["content_hash"] in excluded:
+            continue
+        if _is_other_club_report(a, cluster["key"], club_map):
+            other_side.append(a)
+        else:
+            arsenal_side.append(a)
+    arsenal_side.sort(key=_sort_ts, reverse=True)
+    other_side.sort(key=_sort_ts, reverse=True)
+    return {"arsenal": arsenal_side, "other": other_side}
+
+
+def branch_views(related: dict, ending: dict | None) -> list[dict]:
+    """관련 보도 갈래를 이름표와 함께 정렬 (spec2 §6.3).
+    결말 있으면 다른 구단 갈래를 위로 · 갈래가 하나면 이름표 생략."""
+    ars, oth = related["arsenal"], related["other"]
+    if ending:
+        club = ending["club"]
+        branches = ([{"label": f"{club}행 관련", "articles": oth}] if oth else []) + \
+                   ([{"label": "아스날 쪽 보도", "articles": ars}] if ars else [])
+    else:
+        branches = ([{"label": "아스날 쪽 보도", "articles": ars}] if ars else []) + \
+                   ([{"label": "영입 경쟁", "articles": oth}] if oth else [])
+    if len(branches) == 1:
+        branches[0]["label"] = ""
+    return branches
+
+
+def is_gossip_cluster(cluster: dict) -> bool:
+    """가십 묶음 (spec2 §7.1) — 묶음의 모든 기사가 최하 등급일 때만."""
+    arts = cluster["articles"]
+    return bool(arts) and all(
+        a.get("tier") is not None and float(a["tier"]) >= 4.0 for a in arts)
+
+
+def render_about() -> str:
+    """소개 페이지 (spec1 §10) — 사이드바 없는 프로즈 페이지."""
+    return _env().get_template("about.html.j2").render(
+        active="about", root="", about_page=True)
 
 
 def build_neighbors(ordered: list[dict], idx: int, sources: dict,
@@ -559,8 +993,8 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
                    sources: dict, now: datetime, facets: dict | None = None) -> str:
     # facets=None이면 빈 구조로 폴백 (하위 호환 유지)
     if facets is None:
-        facets = {"team": {}, "tiers": [], "total": 0, "stage": {}, "other": 0,
-                  "outlets": {"initial": [], "stages": []},
+        facets = {"team": {}, "tiers": [], "total": 0, "stage": {}, "stage_groups": [],
+                  "other": 0, "outlets": {"initial": [], "stages": []},
                   "journalists": {"initial": [], "stages": []}}
     article = dict(article)
     paras = [p for p in (article.get("body_ko") or "").split("\n") if p.strip()]
@@ -589,6 +1023,7 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
         render_index(articles, sources, now, directory=directory, registry=registry,
                      outlet_dir=outlet_dir),
         encoding="utf-8")
+    (out / "about.html").write_text(render_about(), encoding="utf-8")
 
     ordered = _sorted_latest(articles)
     # 패싯은 전체 기사 기준으로 한 번만 계산해 모든 상세 페이지에 전달
@@ -606,6 +1041,7 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
 
     for asset in ("style.css", "app.js"):
         shutil.copyfile(_STATIC_DIR / asset, out / asset)
+    shutil.copytree(_STATIC_DIR / "fonts", out / "fonts", dirs_exist_ok=True)
 
 
 def render_ops(view: dict) -> str:

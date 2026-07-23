@@ -1,55 +1,68 @@
 {% extends "_layout.html.j2" %}
 {% block title %}{{ a._title }} · Bullet-in{% endblock %}
 {% block content %}
-<a class="back" href="{{ root }}index.html">← 목록으로</a>
-<article class="article">
-  {% if a.image_url %}
-  <div class="hero" style="background-image:url('{{ a.image_url }}');background-size:cover;background-position:center"></div>
-  {% else %}
-  <div class="hero">HERO IMAGE · 21:9</div>
+<article class="detail">
+  <a class="back" href="{{ root }}index.html">← 목록으로</a>
+
+  {% if a._stage_disp %}<div class="badges"><span class="stage {{ a._stage_disp.tone }}{{ ' filled' if a._stage_disp.filled }}">{{ a._stage_disp.label }}</span></div>{% endif %}
+
+  <h1 class="title">{{ a._title }}{% if a._pending %} <span class="pending">번역 대기</span>{% endif %}</h1>
+  {% if a.title_original and a.title_original != a._title %}<p class="orig">{{ a.title_original }}</p>{% endif %}
+  {% if a.summary_ko %}<p class="dek">{{ a.summary_ko }}</p>{% endif %}
+
+  <dl class="metagrid">
+    <div><dt>언론사</dt><dd>{{ a._outlet }}</dd></div>
+    {% if a.journalist %}<div><dt>기자</dt><dd>{{ a._journalist or a.journalist }}</dd></div>{% endif %}
+    {% if a._reader_tier %}<div><dt>공신력</dt><dd>{{ a._reader_tier|replace('공신력 ', '') }}</dd></div>{% endif %}
+    <div><dt>발행 날짜</dt><dd>{{ a._datetime or a._date or a._when }}</dd></div>
+  </dl>
+
+  <p class="tnote">이 글은 원문을 자동 번역한 것입니다. 표현이 어색하거나 뜻이 모호하면 원문을 확인해 주세요.</p>
+
+  {% if a.image_url %}<figure class="hero"><img src="{{ a.image_url }}" alt="" loading="eager" referrerpolicy="no-referrer" onerror="this.closest('.hero').style.display='none'"></figure>{% endif %}
+
+  {% if a.summary3_ko %}
+  <section class="summary">
+    <div class="shead"><h2>핵심 요약</h2><span class="auto">자동 생성</span></div>
+    <ul>{% for line in a.summary3_ko.split('\n') if line.strip() %}<li>{{ line }}</li>{% endfor %}</ul>
+  </section>
   {% endif %}
-  <div class="pad">
-    <div class="chips">
-      <span class="chip team">{{ '아스날' if (a.team or 'arsenal') == 'arsenal' else a.team }}</span>
-      <span class="chip src">{{ a._outlet }}</span>
-      <span class="chip tier">{{ a._tier_label }}</span>
-      {% if a._stage_badge %}<span class="chip stagebadge"><span class="stage {{ a._stage_class }}"></span>{{ a._stage_label }}</span>{% endif %}
-      <span class="when">{{ a._date }}</span>
-    </div>
-    <h2 class="title">{{ a._title }}</h2>
-    {% if a._byline %}<p class="byline">{{ a._byline }}</p>{% endif %}
-    {% if a.summary3_ko %}
-    <section class="summary">
-      <h3>3줄 요약</h3>
-      <ul>{% for line in a.summary3_ko.split('\n') if line.strip() %}<li>{{ line }}</li>{% endfor %}</ul>
-    </section>
-    {% endif %}
-    <div class="body">
-      {% for b in a._body_blocks %}{% if b.type == 'p' %}<p>{{ b.text|md_bold }}</p>
-      {% elif b.type == 'item' %}<p class="gossip-item">{{ b.text|md_bold }} <span class="src-tag">{{ b.source }}</span></p>
-      {% elif b.type == 'h3' %}<h3>{{ b.text|md_bold }}</h3>
-      {% elif b.type == 'quote' %}<blockquote>{{ b.text|md_bold }}</blockquote>
-      {% else %}<figure><img src="{{ b.url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'"></figure>
-      {% endif %}{% endfor %}
-    </div>
-    {% if a._excerpt %}
-    <p class="excerpt-note">이 기사는 요약과 앞부분 발췌만 제공합니다 — <a href="{{ a.url }}" target="_blank" rel="noopener">원문 전체 보기 ↗</a></p>
-    {% endif %}
-    <p class="origin">출처: {{ a._outlet }}{% if a.journalist %} · {{ a.journalist }}{% endif %} · <a href="{{ a.url }}" target="_blank" rel="noopener">원문 기사 보기 ↗</a></p>
+
+  <div class="body">
+    {% for b in a._body_blocks %}{% if b.type == 'p' %}<p>{{ b.text|md_bold }}</p>
+    {% elif b.type == 'item' %}<p class="gossip-item">{{ b.text|md_bold }} <span class="src-tag">{{ b.source }}</span></p>
+    {% elif b.type == 'h3' %}<h3>{{ b.text|md_bold }}</h3>
+    {% elif b.type == 'quote' %}<blockquote>{{ b.text|md_bold }}</blockquote>
+    {% else %}<figure><img src="{{ b.url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'"></figure>
+    {% endif %}{% endfor %}
   </div>
+
+  {% if a._excerpt %}
+  <p class="excerpt-note">이 기사는 요약과 앞부분 발췌만 제공합니다 — <a href="{{ a.url }}" target="_blank" rel="noopener">원문 전체 보기 ↗</a></p>
+  {% endif %}
+
+  <aside class="origin">
+    <div class="ometa"><span>{{ a._outlet }}</span>{% if a.journalist %}<span>{{ a.journalist }}</span>{% endif %}{% if a._date %}<span>{{ a._date }}</span>{% endif %}</div>
+    <a class="obtn" href="{{ a.url }}" target="_blank" rel="noopener">원문 기사 보기 ↗</a>
+  </aside>
 </article>
 
 <section class="more">
-  <h3>기사 목록 · 현재 글 중심</h3>
+  <h2>함께 볼 소식</h2>
   <ul>
   {% for n in neighbors %}
     <li class="{{ 'cur' if n._is_current else '' }}">
       <a href="{{ root }}article/{{ n.content_hash }}.html">
         <span class="mt">{% if n._is_current %}<span class="nowtag">지금</span>{% endif %}{{ n._title }}</span>
-        <span class="ms">{{ n._outlet }} · {{ n._tier_label }}</span>
+        <span class="ms">{{ n._outlet }}{% if n._reader_tier %} · {{ n._reader_tier }}{% endif %}</span>
       </a>
     </li>
   {% endfor %}
   </ul>
 </section>
+
+<footer class="sitefoot">
+  <p>본문은 자동 번역이며, 저작권은 각 매체에 있습니다. 원문 링크를 통해 원 기사를 확인하실 수 있습니다.</p>
+  <p><a href="{{ root }}about.html">소개</a> · <a href="{{ root }}index.html">목록으로</a></p>
+</footer>
 {% endblock %}
