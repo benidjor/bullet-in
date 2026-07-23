@@ -52,6 +52,14 @@ async def main(concurrency: int):
     started_at_utc = datetime.now(timezone.utc).replace(tzinfo=None)
     raw, errors = await gather_all(adapters, concurrency=concurrency)
     fetch_sec = round(time.perf_counter() - t0, 2)
+
+    # 공홈 커버리지 감시: 창 후보 · Men 퍼널 불변식 위반 시 알림 (spec 2026-07-24 §5)
+    for a in adapters:
+        breaches = evaluate_coverage(getattr(a, "coverage", {}) or {})
+        if breaches:
+            notify.send_alert(**notify.build_coverage_alert(
+                breaches, a.coverage, run_id=run_id))
+
     for it in raw:
         it.content_hash = content_hash(
             it.raw_payload.get("title") or it.raw_payload.get("text") or "",
@@ -122,13 +130,6 @@ async def main(concurrency: int):
                directory=journalist_directory("config/credibility.yaml"),
                registry=registry,
                outlet_dir=outlet_directory("config/credibility.yaml"))
-
-    # 공홈 커버리지 감시: 창 후보 · Men 퍼널 불변식 위반 시 알림 (spec 2026-07-24 §5)
-    for a in adapters:
-        breaches = evaluate_coverage(getattr(a, "coverage", {}) or {})
-        if breaches:
-            notify.send_alert(**notify.build_coverage_alert(
-                breaches, a.coverage, run_id=run_id))
 
     # 수집량 이상탐지 (SLO-6): 지난 12회 source_counts 대비 소스별 드롭 · 스파이크 알림
     with engine.connect() as c:
