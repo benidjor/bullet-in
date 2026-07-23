@@ -28,7 +28,6 @@
       {% if lead.image_url %}<div class="limg"><img src="{{ lead.image_url }}" alt="" loading="eager" referrerpolicy="no-referrer" onerror="this.closest('.limg').style.display='none'"></div>{% endif %}
       <div class="cardhead">{{ stage_badge(lead._stage_disp) }}<span class="src">{{ lead._outlet }}</span>{% if lead._reader_tier %}<span class="cred">{{ lead._reader_tier }}</span>{% endif %}<span class="when">{{ lead._date or lead._when }}</span></div>
       <h2>{{ lead._title }}</h2>
-      {% if lead.title_original and lead.title_original != lead._title %}<div class="orig">{{ lead.title_original }}</div>{% endif %}
       {% if lead.summary_ko %}<p class="dek">{{ lead.summary_ko }}</p>{% endif %}
     </a>
   </article>
