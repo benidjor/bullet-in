@@ -36,6 +36,17 @@ data = await self._gql(c, "GetArticlesByTaxonomy", LIST_QUERY, {
 # ② sum(_accept(a) for a in articles) 가 0 이면 클라이언트 필터 기아
 ```
 
+## 정정 — 원인 추가 (2026-07-24 커버리지 감사)
+
+- 위 "원인" 은 창 도배 하나로 서술했으나, 감사 라이브 실측으로 **리스트 피드 동결**이 추가 확인됐다.
+피드 최신 항목이 07-22 14:01 UTC 에서 멈췄고 (31시간+ 지속), `sortField` 변경도 무효였다.
+- `total` 은 46,895 → 46,896 으로 증가
+→ 인덱스는 새 기사를 아는데 리스트가 내주지 않는 상태.
+- 공홈 프론트엔드 (`/news`) 도 같은 `GetArticlesByTaxonomy` 를 사용
+→ 공홈 자체 뉴스 목록도 동일하게 동결돼 있었고, 수리 시점을 외부에서 예측할 수 없다.
+- 해결은 발견 경로를 sitemap 으로 교체하는 것으로 확정
+— spec `docs/superpowers/specs/2026-07-24-arsenal-official-sitemap-recovery-design.md`.
+
 ## 해결 방향 (이 문서 시점 미구현 · 후속 트랙)
 
 - 서버 필터 인자 재조사 — 유효한 taxonomy 값 · articleTypes 조합을 프론트엔드 호출에서 다시 캡처.
