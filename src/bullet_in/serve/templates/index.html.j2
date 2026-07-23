@@ -11,7 +11,7 @@
    data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">
   {% if show_thumb %}<div class="cimg"><img src="{{ a.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.item').classList.remove('hasthumb');this.closest('.cimg').remove()"></div>{% endif %}
   <div class="body">
-    <div class="cardhead">{{ stage_badge(a._stage_disp) }}{% if dest %}<span class="dest">{{ dest }}</span>{% endif %}<span class="src">{{ a._outlet }}</span>{% if show_cred and a._reader_tier %}<span class="cred">{{ a._reader_tier }}</span>{% endif %}<span class="when">{{ when or a._time }}</span></div>
+    <div class="cardhead">{{ stage_badge(a._stage_disp) }}{% if dest %}<span class="dest">{{ dest }}</span>{% endif %}<span class="src">{{ a._outlet | replace(' (aggregator)', '') }}</span>{% if show_cred and a._reader_tier %}<span class="cred">{{ a._reader_tier }}</span>{% endif %}<span class="when">{{ when or a._time }}</span></div>
     <div class="htitle">{{ a._title }}{% if a._pending %} <span class="pending">번역 대기</span>{% endif %}</div>
     {% if a._show_summary and a.summary_ko %}<p class="dek">{{ a.summary_ko }}</p>{% endif %}
   </div>
