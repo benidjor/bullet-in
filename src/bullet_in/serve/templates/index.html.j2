@@ -3,12 +3,14 @@
 
 {% macro stage_badge(s) %}{% if s %}<span class="stage {{ s.tone }}{{ ' filled' if s.filled }}">{{ s.label }}</span>{% endif %}{% endmacro %}
 {% macro meta_line(a, when) %}<div class="meta"><span class="dot{{ ' fill' if a._dot.fill }}" style="--dotf:{{ a._dot.color }}"></span><span class="src">{{ a._outlet }}</span>{% if a._reader_tier %}<span class="cred">{{ a._reader_tier }}</span>{% endif %}{% if a._pending %}<span class="pending">번역 대기</span>{% endif %}<span class="when">{{ when }}</span></div>{% endmacro %}
-{% macro card(a, dest=None, when=None, cls='', show_cred=True) %}
-<a class="item {{ a._grade }}{{ ' ' ~ cls if cls }}"{% if not a._stage_disp %} style="display:none"{% endif %} href="article/{{ a.content_hash }}.html"
+{% macro card(a, dest=None, when=None, cls='', show_cred=True, thumb=False) %}
+{% set show_thumb = thumb and a.image_url %}
+<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if not a._stage_disp %} style="display:none"{% endif %} href="article/{{ a.content_hash }}.html"
    data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-tier="{{ a._tier_key }}"
    data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}"
    data-published="{{ a._published_iso }}" data-confidence="{{ a.confidence_score or 0 }}"
    data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">
+  {% if show_thumb %}<div class="cimg"><img src="{{ a.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.item').classList.remove('hasthumb');this.closest('.cimg').remove()"></div>{% endif %}
   <div class="body">
     <div class="cardhead">{{ stage_badge(a._stage_disp) }}{% if dest %}<span class="dest">{{ dest }}</span>{% endif %}<span class="src">{{ a._outlet }}</span>{% if show_cred and a._reader_tier %}<span class="cred">{{ a._reader_tier }}</span>{% endif %}<span class="when">{{ when or a._time }}</span></div>
     <div class="htitle">{{ a._title }}{% if a._pending %} <span class="pending">번역 대기</span>{% endif %}</div>
@@ -59,8 +61,8 @@
 <div class="daylist">
   {% for b in day.blocks %}
   <div class="block">
-    {{ card(b.rep) }}
-    {% if b.ending %}{{ card(b.ending.article, dest=b.ending.club) }}{% endif %}
+    {{ card(b.rep, thumb=True) }}
+    {% if b.ending %}{{ card(b.ending.article, dest=b.ending.club, thumb=True) }}{% endif %}
     {% if b.rel_count %}
     <button class="reltoggle" type="button" aria-expanded="false">관련 보도 {{ b.rel_count }}건</button>
     <div class="related" hidden>

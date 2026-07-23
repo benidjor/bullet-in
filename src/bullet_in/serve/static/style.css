@@ -60,9 +60,9 @@ h1,h2,h3,h4{margin:0}
 .topbar{position:sticky;top:0;z-index:30;background:var(--paper);border-bottom:1px solid var(--rule)}
 .topbar .inner{max-width:var(--max);margin:0 auto;display:flex;align-items:center;
   gap:14px;padding:11px 20px}
-.logo{display:flex;align-items:baseline;gap:8px;font-family:var(--serif);font-weight:900;
+.logo{display:inline-flex;align-items:baseline;font-family:var(--serif);font-weight:900;
   font-size:23px;letter-spacing:-.01em;white-space:nowrap;color:var(--ink)}
-.logo .crest{width:9px;height:20px;background:var(--red);border-radius:1px;transform:translateY(2px)}
+.logo .dot{color:var(--red)}                     /* 이름 끝 빨간 점 — bullet(점)-in 말장난 (F안) */
 .nav{display:flex;gap:4px}
 .nav a{padding:6px 10px;font-weight:600;font-size:14px;color:var(--mut);white-space:nowrap;border-radius:2px}
 .nav a:hover{color:var(--ink)}
@@ -182,6 +182,10 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 
 /* 목록은 썸네일 칸을 두지 않는다 — 회색 상자 반복 방지 (spec2 §8, 밴드만 썸네일 유지) */
 .item{display:block;padding:11px 12px}
+/* 최신 소식 카드 썸네일 (F안 · 이미지 있을 때만 · 없으면 텍스트 전용) */
+.item.hasthumb{display:grid;grid-template-columns:132px minmax(0,1fr);gap:14px;align-items:start}
+.cimg{aspect-ratio:3/2;background:var(--sunk);overflow:hidden;border-radius:1px}
+.cimg img{width:100%;height:100%;object-fit:cover;display:block}
 .item.g1{background:var(--g1-bg)}                /* 최상 = 한 톤 밝은 배경 (§3.2 · .item 범위 한정) */
 .item.g0{background:var(--g0-bg)}                /* 구단 공식 = 붉은 기 배경 */
 .item .body{min-width:0}
