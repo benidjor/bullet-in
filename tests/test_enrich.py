@@ -678,14 +678,28 @@ def test_finalize_translation_queues_retranslation_on_first_detection():
         v, _fin_row(), {}, {"펠레그리니": "Pellegrini"}, {})
     assert title_ko is None
 
-def test_finalize_translation_falls_back_to_original_on_retry():
-    # 재검출 (summary_ko 기저장 = 재시도 행) → 원문 제목 폴백
+def test_finalize_translation_requeues_on_retry_instead_of_english_fallback():
+    # B5 방안 1: 재검출 (summary_ko 기저장 = 재시도 행) → 영어 원문 고정이 아니라
+    # NULL 재큐 (다음 사이클 재선별 · title_pending 배지). 영어 침묵 노출 방지.
     from bullet_in.enrich import finalize_translation
     v = {"title_ko": "펠레그리니 영입", "summary_ko": "요약", "summary3_ko": "①\n②\n③",
          "body_ko": "본문이다."}
     title_ko, _, _, _ = finalize_translation(
         v, _fin_row(summary_ko="기존 요약"), {}, {"펠레그리니": "Pellegrini"}, {})
-    assert title_ko == "Arsenal move"
+    assert title_ko is None
+
+def test_retranslation_summary_counts_new_stuck_resolved():
+    # B5 관측 ②: finalize 결과(hash→title_ko)와 원본 행으로 큐 추이를 집계한다.
+    # 신규 = 신규 행(summary_ko 없음)이 NULL, 잔존 = 재시도 행이 여전히 NULL,
+    # 해소 = 재시도 행이 제목 확보, 정상 신규 성공은 미집계.
+    from bullet_in.enrich import retranslation_summary
+    finals = {"n": (None, "s", None, None),      # 신규 행 → NULL
+              "j": (None, "s", None, None),      # 재시도 행 → 여전히 NULL
+              "r": ("해소된 제목", "s", None, None),  # 재시도 행 → 해소
+              "ok": ("정상 제목", "s", None, None)}   # 신규 성공 (미집계)
+    by_hash = {"n": {"summary_ko": ""}, "j": {"summary_ko": "기존"},
+               "r": {"summary_ko": "기존"}, "ok": {"summary_ko": ""}}
+    assert retranslation_summary(finals, by_hash) == (1, 1, 1)
 
 def test_finalize_translation_applies_glossary_and_paragraphize():
     # 게이트 무결 행: 표기 사전 치환 + 400자 초과 무분할 블록 재분할이 모두 걸린다

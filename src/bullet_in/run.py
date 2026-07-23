@@ -14,7 +14,8 @@ from bullet_in.credibility import load_registry, journalist_directory, outlet_di
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows,
-                              apply_glossary, finalize_translation)
+                              apply_glossary, finalize_translation,
+                              retranslation_summary)
 from bullet_in.tone import select_tone_backfill
 from bullet_in import transfer_stage
 from bullet_in.serve.render import write_site, write_ops
@@ -82,9 +83,14 @@ async def main(concurrency: int):
     club_map = (yaml.safe_load(Path("config/club_map.yaml").read_text())
                 or {}).get("clubs", {})
     by_hash = {r["content_hash"]: r for r in missing}
-    for h, v in results.items():
-        mart.set_translation(h, *finalize_translation(
-            v, by_hash.get(h, {}), glossary, name_map, club_map))
+    finals = {h: finalize_translation(v, by_hash.get(h, {}), glossary, name_map, club_map)
+              for h, v in results.items()}
+    for h, final in finals.items():
+        mart.set_translation(h, *final)
+    if finals:  # 관측 ②: 재번역 큐 추이 한 줄 (신규 진입 · 잔존 · 해소)
+        logging.getLogger(__name__).warning(
+            "재번역 큐 요약: 신규 %d · 잔존 %d · 해소 %d",
+            *retranslation_summary(finals, by_hash))
 
     # 분류 패스: 공홈은 소스 규칙으로 직접 태깅 (official 은 규칙 경로 전용), 나머지만 LLM 분류
     llm_rows = []
