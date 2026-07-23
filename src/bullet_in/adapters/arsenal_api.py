@@ -15,8 +15,6 @@ from bullet_in.models import RawItem
 log = logging.getLogger(__name__)
 
 GRAPHQL_URL = "https://afc-prd.graph.arsenal.com/graphql"
-BASE_URL = "https://www.arsenal.com"
-PAGE_SIZE = 50
 SITEMAP_URL = "https://www.arsenal.com/sitemaps/articles/1/sitemap.xml"
 WINDOW_HOURS = 48.0
 
@@ -46,15 +44,9 @@ def _glide_id(url: str) -> str | None:
 
 # 프론트엔드 번들에서 추출한 쿼리 — 필드 드리프트 시 validation 에러로 fetch 가 실패한다
 # (구 셀렉터의 조용한 0건과 달리 에러로 드러남).
-LIST_QUERY = """query GetArticlesByTaxonomy($taxonomy: String = "", $pageNumber: Float = 1, $pageSize: Float = 50, $sortField: String = "", $sort: String = "", $articleTypes: String = "", $excludedArticles: [Float!]! = []) {
-  getArticlesByTaxonomy(taxonomy: $taxonomy, pageNumber: $pageNumber, pageSize: $pageSize, articleTypes: $articleTypes, excludedArticles: $excludedArticles, sortField: $sortField, sort: $sort) {
-    total
-    articles { articleId glideId title path publicationDate taxonomies articleType }
-  }
-}"""
 ARTICLE_QUERY = """query GetArticle($articleId: String = "", $glideId: String = "", $glidePath: String = "") {
   getArticle(articleId: $articleId, glideId: $glideId, glidePath: $glidePath) {
-    articleBody
+    title publicationDate taxonomies articleType articleBody
   }
 }"""
 
@@ -79,9 +71,10 @@ def _body_payload(blocks: list[dict]) -> dict:
 class ArsenalApiAdapter:
     source_type = "api"
 
-    def __init__(self, source_id: str, pages: int = 1):
+    def __init__(self, source_id: str, window_hours: float = WINDOW_HOURS):
         self.source_id = source_id
-        self.pages = pages
+        self.window_hours = window_hours
+        self.coverage: dict = {}
 
     async def _gql(self, client: httpx.AsyncClient, operation: str,
                    query: str, variables: dict) -> dict:
@@ -93,30 +86,40 @@ class ArsenalApiAdapter:
     async def fetch(self) -> list[RawItem]:
         now = datetime.now(timezone.utc)
         out: list[RawItem] = []
+        men = 0
+        urls: list[str] = []
         async with httpx.AsyncClient(timeout=20,
                                      headers={"User-Agent": "bullet-in/0.1"}) as c:
-            matched: list[dict] = []
-            for page in range(1, self.pages + 1):
-                data = await self._gql(c, "GetArticlesByTaxonomy", LIST_QUERY, {
-                    "taxonomy": "", "pageNumber": page, "pageSize": PAGE_SIZE,
-                    "sortField": "publishedDate", "sort": "desc",
-                    "articleTypes": "", "excludedArticles": []})
-                listing = data.get("getArticlesByTaxonomy")
-                if not listing:
-                    log.warning("%s: 목록 응답 비어 있음 (page %d) — API 인자 드리프트 의심",
-                                self.source_id, page)
-                    break
-                matched.extend(a for a in listing["articles"] if _accept(a))
-            for a in matched:
-                payload = {"title": a["title"], "published": a.get("publicationDate")}
+            r = await c.get(SITEMAP_URL)
+            r.raise_for_status()  # sitemap 장애 = 에러로 전파 (조용한 폴백 없음)
+            urls = _sitemap_candidates(r.text, now, self.window_hours)
+            for url in urls:
+                gid = _glide_id(url)
+                if gid is None:
+                    log.warning("%s: glideId 추출 실패 — %s", self.source_id, url)
+                    continue
                 try:
                     art = (await self._gql(c, "GetArticle", ARTICLE_QUERY, {
-                        "articleId": "", "glideId": a["glideId"], "glidePath": ""}
-                        )).get("getArticle") or {}
-                    payload.update(_body_payload(art.get("articleBody") or []))
-                except httpx.HTTPError:
-                    payload["body"] = ""  # 본문 실패 — 제목만 유지, 다음 회차 재시도
+                        "articleId": "", "glideId": gid, "glidePath": ""}
+                        )).get("getArticle")
+                except httpx.HTTPError as e:
+                    log.warning("%s: GetArticle 실패 (%s) — %s", self.source_id, e, url)
+                    continue
+                if not art:
+                    log.warning("%s: GetArticle 응답 없음 — %s", self.source_id, url)
+                    continue
+                if "Men" in (art.get("taxonomies") or []):
+                    men += 1
+                if not _accept(art):
+                    continue
+                payload = {"title": art.get("title"),
+                           "published": art.get("publicationDate"),
+                           "published_precision": "time",
+                           **_body_payload(art.get("articleBody") or [])}
                 out.append(RawItem(source_id=self.source_id, source_type="api",
-                                   url=BASE_URL + a["path"], fetched_at=now,
-                                   raw_payload=payload))
+                                   url=url, fetched_at=now, raw_payload=payload))
+        self.coverage = {"candidates": len(urls), "men_tagged": men,
+                         "accepted": len(out)}
+        log.info("%s: 창 후보 %d · Men %d · accept %d",
+                 self.source_id, len(urls), men, len(out))
         return out
