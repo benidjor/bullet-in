@@ -293,13 +293,17 @@ def finalize_translation(v: dict, row: dict, glossary: dict[str, str],
     title_ko = v["title_ko"]
     retry = bool(row.get("summary_ko"))
     if suspects and retry:
-        log.warning("제목 환각 재발 — 원문 제목 폴백 content_hash=%s 의심=%s", h, suspects)
-        title_ko = row.get("title_original")
+        # B5 방안 1: 영어 원문 고정 대신 NULL 재큐 (다음 사이클 재선별 · title_pending 배지).
+        # 영어 제목이 배지 없이 조용히 노출되던 종착 상태를 제거한다.
+        log.warning("재번역 재시도 잔존 → 재큐 content_hash=%s 의심=%s", h, suspects)
+        title_ko = None
     elif (suspects or omissions or club_suspects) and not retry:
         log.warning(
-            "재번역 큐 content_hash=%s 환각의심=%s 단신누락=%s 원문에 없는 구단명=%s",
+            "재번역 큐(1차) content_hash=%s 환각의심=%s 단신누락=%s 원문에 없는 구단명=%s",
             h, suspects, omissions, club_suspects)
         title_ko = None
+    elif retry and not suspects:
+        log.info("제목 해소 content_hash=%s title_ko=%s", h, title_ko)
     if omissions and retry:
         log.warning(
             "라운드업 단신 누락 잔존 — 수동 확인 content_hash=%s 누락=%s", h, omissions)
@@ -307,6 +311,25 @@ def finalize_translation(v: dict, row: dict, glossary: dict[str, str],
         log.warning(
             "원문에 없는 구단명 잔존 — 수동 확인 content_hash=%s 구단=%s", h, club_suspects)
     return title_ko, v["summary_ko"], v["summary3_ko"], paragraphize(v["body_ko"])
+
+def retranslation_summary(finals: dict[str, tuple], by_hash: dict[str, dict]
+                          ) -> tuple[int, int, int]:
+    """finalize_translation 결과로 재번역 큐 추이를 집계 → (신규, 잔존, 해소).
+
+    신규 = 신규 행 (summary_ko 없음) 이 NULL 로 큐 진입, 잔존 = 재시도 행이 여전히 NULL,
+    해소 = 재시도 행이 제목 확보. 정상 신규 성공 (NULL 아님 · 재시도 아님) 은 집계 밖.
+    관측 ② — 호출측 (run.py) 이 사이클 요약 한 줄로 로깅한다."""
+    new_q = stuck = resolved = 0
+    for h, final in finals.items():
+        title_ko = final[0]
+        retry = bool(by_hash.get(h, {}).get("summary_ko"))
+        if title_ko is None and not retry:
+            new_q += 1
+        elif title_ko is None and retry:
+            stuck += 1
+        elif title_ko is not None and retry:
+            resolved += 1
+    return new_q, stuck, resolved
 
 def _extract_full(text: str) -> dict | None:
     m = re.search(r"\{.*\}", text, re.DOTALL)
@@ -449,10 +472,11 @@ STAGE_PROMPT = (
     "단계 (반드시 아래 영문 값 중 하나로 답한다):\n"
     "- rumour: 근거 약한 소문 · 연결설\n"
     "- interest: 구단이 실제 관심 표명 · 스카우팅\n"
-    "- negotiating: 구단 간 · 에이전트와 이적료/조건 협상 중\n"
+    "- negotiating: 구단 간 · 에이전트와 이적료/조건 협상 중 (아직 합의 전 — '합의 도달'이면 agreed)\n"
     "- personal_terms: 선수와 개인 조건 (연봉 등) 합의\n"
     "- medical: 메디컬 테스트 진행 · 통과\n"
-    "- agreed: 구단 간 이적 합의 · 딜 확정/임박 보도 (타 매체의 공식 발표 보도 포함)\n"
+    "- agreed: 구단 간 이적 합의 · 딜 확정/임박 보도 (구두 합의 · 원칙적 합의 · verbal agreement · "
+    "agreement in principle · 'on verge of signing' 포함 · 타 매체의 공식 발표 보도 포함)\n"
     "- other: 이적과 무관하거나 단계를 판단할 수 없음\n"
     "각 기사의 content_hash는 그대로 두고 stage만 채운다.\n"
     'ONLY JSON 배열: [{{"content_hash":"...","stage":"rumour"}}]\n\n'
