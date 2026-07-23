@@ -2,7 +2,6 @@
 {% block title %}Bullet-in · 아스날 이적 뉴스{% endblock %}
 
 {% macro stage_badge(s) %}{% if s %}<span class="stage {{ s.tone }}{{ ' filled' if s.filled }}">{{ s.label }}</span>{% endif %}{% endmacro %}
-{% macro meta_line(a, when) %}<div class="meta"><span class="dot{{ ' fill' if a._dot.fill }}" style="--dotf:{{ a._dot.color }}"></span><span class="src">{{ a._outlet }}</span>{% if a._reader_tier %}<span class="cred">{{ a._reader_tier }}</span>{% endif %}{% if a._pending %}<span class="pending">번역 대기</span>{% endif %}<span class="when">{{ when }}</span></div>{% endmacro %}
 {% macro card(a, dest=None, when=None, cls='', show_cred=True, thumb=False) %}
 {% set show_thumb = thumb and a.image_url %}
 <a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if not a._stage_disp %} style="display:none"{% endif %} href="article/{{ a.content_hash }}.html"
@@ -27,11 +26,10 @@
   <article class="lead">
     <a href="article/{{ lead.content_hash }}.html">
       {% if lead.image_url %}<div class="limg"><img src="{{ lead.image_url }}" alt="" loading="eager" referrerpolicy="no-referrer" onerror="this.closest('.limg').style.display='none'"></div>{% endif %}
-      <div class="badges">{{ stage_badge(lead._stage_disp) }}</div>
+      <div class="cardhead">{{ stage_badge(lead._stage_disp) }}<span class="src">{{ lead._outlet }}</span>{% if lead._reader_tier %}<span class="cred">{{ lead._reader_tier }}</span>{% endif %}<span class="when">{{ lead._date or lead._when }}</span></div>
       <h2>{{ lead._title }}</h2>
       {% if lead.title_original and lead.title_original != lead._title %}<div class="orig">{{ lead.title_original }}</div>{% endif %}
       {% if lead.summary_ko %}<p class="dek">{{ lead.summary_ko }}</p>{% endif %}
-      {{ meta_line(lead, lead._when) }}
     </a>
   </article>
   <div class="mains">
@@ -40,8 +38,8 @@
     <a class="mitem" href="article/{{ m.content_hash }}.html">
       {% if m.image_url %}<div class="rimg"><img src="{{ m.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.rimg').style.display='none'"></div>{% else %}<div class="rimg"></div>{% endif %}
       <div>
+        <div class="cardhead">{{ stage_badge(m._stage_disp) }}<span class="src">{{ m._outlet }}</span>{% if m._reader_tier %}<span class="cred">{{ m._reader_tier }}</span>{% endif %}<span class="when">{{ m._date or m._when }}</span></div>
         <h3>{{ m._title }}</h3>
-        {{ meta_line(m, m._when) }}
       </div>
     </a>
     {% endfor %}

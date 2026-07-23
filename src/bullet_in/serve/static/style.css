@@ -99,7 +99,7 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
   scrollbar-gutter:stable;padding-right:4px}
 .side h4{margin:20px 0 8px;font-size:11px;letter-spacing:.09em;color:var(--dim);
   text-transform:uppercase;font-weight:700}
-.side h4:first-child{margin-top:2px}
+.side > h4:first-child{margin-top:2px}   /* 맨 위 '팀'만 · 그룹 헤더(공신력·소스…)는 여백 유지 */
 .grp{border-top:1px solid var(--hair)}
 .grp.collapsed .facetgroup,.grp.collapsed .grpbody{display:none}
 .grphead{width:100%;display:flex;align-items:center;justify-content:space-between;
@@ -135,13 +135,7 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .stage.yellow{color:var(--yellow)} .stage.gray{color:var(--dim)}
 .stage.filled.red{color:#fff}
 
-/* ── 카드 공통 — 출처 · 공신력 · 시각 메타 줄 ───────────────────────── */
-.meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mut)}
-.meta .dot{width:6px;height:6px;border-radius:50%;flex:0 0 auto;
-  border:1.4px solid var(--mut);background:var(--dotf,transparent)}
-.meta .src{font-family:var(--serif);font-weight:700;color:var(--mut)}
-.meta .cred{color:var(--dim)}
-.meta .when{color:var(--dim);margin-left:auto;font-variant-numeric:tabular-nums}
+/* ── 카드 공통 ─────────────────────────────────────────────────────── */
 .pending{font-size:10px;font-weight:700;color:var(--yellow);border:1px solid var(--yellow);
   border-radius:2px;padding:0 5px;letter-spacing:.02em}
 
@@ -227,7 +221,7 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .cardhead .src{font-family:var(--serif);font-weight:700;color:var(--mut)}
 .cardhead .cred{color:var(--dim)}
 .cardhead .when{margin-left:auto;color:var(--dim);font-variant-numeric:tabular-nums}
-.item .htitle{font-weight:700;line-height:1.34;margin:0 0 5px;color:var(--tone,var(--ink))}
+.item .htitle{font-family:var(--serif);font-weight:700;line-height:1.34;margin:0 0 5px;color:var(--tone,var(--ink))}
 .item.g0 .htitle,.item.g1 .htitle{font-weight:900;font-size:17px}
 .item.g15 .htitle,.item.g2 .htitle{font-size:15.5px}
 .item.g3 .htitle{font-size:14.5px;color:var(--mut)}
