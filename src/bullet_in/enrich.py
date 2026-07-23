@@ -449,10 +449,11 @@ STAGE_PROMPT = (
     "단계 (반드시 아래 영문 값 중 하나로 답한다):\n"
     "- rumour: 근거 약한 소문 · 연결설\n"
     "- interest: 구단이 실제 관심 표명 · 스카우팅\n"
-    "- negotiating: 구단 간 · 에이전트와 이적료/조건 협상 중\n"
+    "- negotiating: 구단 간 · 에이전트와 이적료/조건 협상 중 (아직 합의 전 — '합의 도달'이면 agreed)\n"
     "- personal_terms: 선수와 개인 조건 (연봉 등) 합의\n"
     "- medical: 메디컬 테스트 진행 · 통과\n"
-    "- agreed: 구단 간 이적 합의 · 딜 확정/임박 보도 (타 매체의 공식 발표 보도 포함)\n"
+    "- agreed: 구단 간 이적 합의 · 딜 확정/임박 보도 (구두 합의 · 원칙적 합의 · verbal agreement · "
+    "agreement in principle · 'on verge of signing' 포함 · 타 매체의 공식 발표 보도 포함)\n"
     "- other: 이적과 무관하거나 단계를 판단할 수 없음\n"
     "각 기사의 content_hash는 그대로 두고 stage만 채운다.\n"
     'ONLY JSON 배열: [{{"content_hash":"...","stage":"rumour"}}]\n\n'

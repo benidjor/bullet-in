@@ -262,6 +262,13 @@ def test_stage_prompt_lists_llm_stages_and_excludes_official():
         assert enum in STAGE_PROMPT, f"STAGE_PROMPT가 {enum} 단계를 누락 — transfer_stage와 동기화 필요"
     assert "official" not in STAGE_PROMPT
 
+def test_stage_prompt_disambiguates_reached_agreement_as_agreed():
+    """'합의 도달' 표현(구두 합의·원칙적 합의 등)이 negotiating이 아니라 agreed로 가도록
+    프롬프트가 경계를 명확화한다 (B2 — cc2c7b58 오분류 방지)."""
+    from bullet_in.enrich import STAGE_PROMPT
+    assert "구두 합의" in STAGE_PROMPT
+    assert "원칙적 합의" in STAGE_PROMPT
+
 from bullet_in.enrich import resummarize_rows
 
 def test_resummarize_returns_summary_fields_only():
