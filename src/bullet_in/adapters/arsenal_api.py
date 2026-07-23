@@ -6,8 +6,9 @@
 태그로 잡히고, 재계약은 Contract news + Men 한정으로 포함한다 (아카데미 차단).
 """
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import logging
+import re
 import httpx
 from bullet_in.models import RawItem
 
@@ -16,6 +17,32 @@ log = logging.getLogger(__name__)
 GRAPHQL_URL = "https://afc-prd.graph.arsenal.com/graphql"
 BASE_URL = "https://www.arsenal.com"
 PAGE_SIZE = 50
+SITEMAP_URL = "https://www.arsenal.com/sitemaps/articles/1/sitemap.xml"
+WINDOW_HOURS = 48.0
+
+# <loc>·<lastmod> 인접 쌍 — 실측 sitemap 구조 (2026-07-24). 구조가 바뀌면 후보 0 알림으로 드러난다.
+_LOC_RE = re.compile(r"<loc>([^<]+)</loc>\s*<lastmod>([^<]+)</lastmod>")
+_GLIDE_RE = re.compile(r"-([A-Za-z0-9]{10,})$")
+
+def _sitemap_candidates(xml: str, now: datetime, window_hours: float) -> list[str]:
+    """sitemap XML → 창 안 /news/ URL 목록 (등장 순서 = 최신순 유지)."""
+    cutoff = now - timedelta(hours=window_hours)
+    out: list[str] = []
+    for url, lastmod in _LOC_RE.findall(xml):
+        if "/news/" not in url:
+            continue
+        try:
+            lm = datetime.fromisoformat(lastmod.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if lm >= cutoff:
+            out.append(url)
+    return out
+
+def _glide_id(url: str) -> str | None:
+    """기사 URL 끝 토큰 = glideId (Tzolis 실증). 미검출 None."""
+    m = _GLIDE_RE.search(url)
+    return m.group(1) if m else None
 
 # 프론트엔드 번들에서 추출한 쿼리 — 필드 드리프트 시 validation 에러로 fetch 가 실패한다
 # (구 셀렉터의 조용한 0건과 달리 에러로 드러남).

@@ -1,6 +1,8 @@
 import asyncio, json
 import httpx, respx
 from bullet_in.adapters.arsenal_api import ArsenalApiAdapter
+from datetime import datetime, timezone
+from bullet_in.adapters.arsenal_api import _sitemap_candidates, _glide_id
 
 GQL = "https://afc-prd.graph.arsenal.com/graphql"
 
@@ -96,3 +98,28 @@ def test_null_list_response_returns_empty():
     respx.post(GQL).mock(return_value=httpx.Response(
         200, json={"data": {"getArticlesByTaxonomy": None}}))
     assert asyncio.run(ArsenalApiAdapter("arsenal_official").fetch()) == []
+
+SITEMAP_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://www.arsenal.com/news/christos-tzolis-signs-for-arsenal-axDM85b0dBUW</loc><lastmod>2026-07-23T12:10:38.401Z</lastmod></url>
+  <url><loc>https://www.arsenal.com/gallery/christos-tzolis.-in-arsenal-colours.-af95S4s4Avgu</loc><lastmod>2026-07-23T12:41:00.000Z</lastmod></url>
+  <url><loc>https://www.arsenal.com/news/old-article-aOLD11111111</loc><lastmod>2026-07-01T09:00:00.000Z</lastmod></url>
+  <url><loc>https://www.arsenal.com/news/broken-lastmod-aBRK22222222</loc><lastmod>not-a-date</lastmod></url>
+</urlset>"""
+
+def test_sitemap_candidates_window_and_news_filter():
+    now = datetime(2026, 7, 24, 12, 0, tzinfo=timezone.utc)
+    urls = _sitemap_candidates(SITEMAP_XML, now, 48)
+    # /news/ 경로 + 48h 창 안 + lastmod 파싱 실패 제외 → Tzolis 1건
+    assert urls == ["https://www.arsenal.com/news/"
+                    "christos-tzolis-signs-for-arsenal-axDM85b0dBUW"]
+
+def test_sitemap_candidates_wide_window_keeps_order():
+    now = datetime(2026, 7, 24, 12, 0, tzinfo=timezone.utc)
+    urls = _sitemap_candidates(SITEMAP_XML, now, 24 * 60)
+    assert [u.rsplit("-", 1)[1] for u in urls] == ["axDM85b0dBUW", "aOLD11111111"]
+
+def test_glide_id_extraction():
+    assert _glide_id("https://www.arsenal.com/news/"
+                     "christos-tzolis-signs-for-arsenal-axDM85b0dBUW") == "axDM85b0dBUW"
+    assert _glide_id("https://www.arsenal.com/news/no-token") is None
