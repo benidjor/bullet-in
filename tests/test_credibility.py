@@ -227,6 +227,40 @@ def test_tom_canton_registered_tier_4_is_neutral():
     d = journalist_directory(REG)
     assert d["tom canton"]["name"] == "Tom Canton"
 
+# B1: Gary Jacob tier 2 상향 · Ben Jacobs tier 3 등재 (2026-07-23)
+def test_gary_jacob_raised_to_tier_two():
+    r = load_registry(REG)
+    assert r.journalists["@garyjacob"] == 2.0
+    assert r.journalists["gary jacob"] == 2.0
+
+def test_ben_jacobs_handle_beats_talksport_outlet_fallback():
+    # afcstuff 가 [ @JacobsBen ] 로 인용하면 핸들 매칭(tier 3)이
+    # talkSPORT outlet 폴백(tier 4)보다 우선한다.
+    r = load_registry(REG)
+    sources = {"x_afcstuff": {"credibility": "x_mentions"}}
+    it = _item("x_afcstuff",
+               {"text": "Arsenal in talks for target [ @JacobsBen ]",
+                "outlet": "talkSPORT"})
+    assert resolve_tier(it, sources, r) == 3.0
+
+def test_ben_jacobs_korean_name_not_shadowed_by_gary_in_fmkorea():
+    # fmkorea 부분 문자열 모드에서 Ben 한글명이 Gary 별칭에 가려지지 않는다.
+    r = load_registry(REG)
+    sources = {"fmkorea": {"credibility": "fmkorea"}}
+    it = _item("fmkorea",
+               {"title": "아스날 이적 소식 [talkSPORT]",
+                "body": "벤 제이콥스 기자에 따르면 협상이 진행 중이다."})
+    assert resolve_tier(it, sources, r) == 3.0
+
+def test_ben_jacobs_english_name_not_shadowed_by_gary_jacob():
+    # Gary 의 바 별칭 "Jacob" 이 "Jacobs" 를 부분 매칭해선 안 된다 (min 이 Gary 를 집으면 오귀속).
+    r = load_registry(REG)
+    sources = {"fmkorea": {"credibility": "fmkorea"}}
+    it = _item("fmkorea",
+               {"title": "Arsenal transfer news",
+                "body": "According to Ben Jacobs, talks are progressing."})
+    assert resolve_tier(it, sources, r) == 3.0
+
 def test_outlet_directory_maps_aliases_to_official_name(tmp_path):
     from bullet_in.credibility import outlet_directory
     p = tmp_path / "cred.yaml"

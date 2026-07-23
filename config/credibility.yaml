@@ -9,7 +9,8 @@ journalists:
   - {name: Amy Lawrence,      tier: 2,   outlet: The Athletic,    aliases: ["@amylawrence71", "에이미 로런스", "Lawrence"]}
   - {name: Teamnewsandtix,    tier: 2,   aliases: ["@Teamnewsandtix", "팀뉴스앤틱스"]}
   - {name: James Olley,       tier: 2,   outlet: ESPN,            aliases: ["@JamesOlley", "올리", "Olley"]}
-  - {name: Gary Jacob,        tier: 3,   outlet: The Times,       aliases: ["@garyjacob", "게리 제이콥", "Jacob"]}
+  - {name: Gary Jacob,        tier: 2,   outlet: The Times,       aliases: ["@garyjacob", "게리 제이콥"]}   # 바 별칭 "Jacob" 제거 — Ben Jacobs "Jacobs" 부분 매칭 함정
+  - {name: Ben Jacobs,        tier: 3,   outlet: talkSPORT,       aliases: ["@JacobsBen", "벤 제이콥스"]}   # 핸들 매칭이 talkSPORT outlet 폴백(4)보다 우선
   - {name: Simon Collings,    tier: 3,   outlet: The Sun,          aliases: ["@sr_collings", "사이먼 콜링스", "Collings"]}
   - {name: Gianluca Di Marzio,tier: 3,   outlet: Sky Italia,      aliases: ["@DiMarzio", "디 마르지오", "Di Marzio"]}
   - {name: Sam Dean,          tier: 2,   outlet: The Telegraph,   aliases: ["@SamJDean", "샘 딘", "Sam Dean"]}
