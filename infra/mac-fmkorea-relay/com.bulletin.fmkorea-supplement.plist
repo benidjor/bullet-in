@@ -6,7 +6,7 @@
   <key>Label</key><string>com.bulletin.fmkorea-supplement</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/aryijq/Documents/01_DE_project/bullet-in/infra/mac-fmkorea-relay/supplement.sh</string>
+    <string>/Users/aryijq/.bullet-in/supplement.sh</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>StartInterval</key><integer>900</integer>
