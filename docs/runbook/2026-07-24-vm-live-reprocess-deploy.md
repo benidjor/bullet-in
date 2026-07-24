@@ -69,6 +69,21 @@ tier 델타 재계산의 old 는 **VM 이 실제로 돌리던 커밋** (pull 전
 B5 는 결정적 오탐으로 진단됐던 행이 이번 재번역에서 게이트를 통과했다.
 매번 걸리는 행도 LLM 변동성으로 가끔 풀리는 경로가 실재함을 확인 — 다만 근본 해소는 게이트 오탐 후속 트랙 몫.
 
+## 5.1. 실측 기록 (2026-07-24 · PR #128 arsenal 백필)
+
+| 항목 | 대상 | 결과 |
+|---|---|---|
+| label (precision) | arsenal 5행 | dry-run 5행 확인 → `time` 적용 · 잔존 NULL 0 |
+| reverify (소급) | sitemap 6/1 이후 351건 | accept 6 = 기존 5 중복 + Tzolis 신규 1 적재 (`official` 태깅) |
+| 재생성 · 배포 | 299행 | Tzolis 상세 · 인덱스 노출 (번역은 다음 회차 흡수) |
+
+- **타이머는 정지하지 않았다** — 다음 발화가 2시간 밖이라 §1 기준 (작업 예상 시간 안) 에 걸리지 않음.
+정지 여부는 관례가 아니라 남은 시간으로 판단한다.
+- **reverify 는 VM 에서 dry-run 을 한 번 더 떴다** — 로컬과 발신 IP 가 달라
+대상 사이트의 IP 차단 여부가 갈릴 수 있다 (fmkorea 사례:
+`docs/troubleshooting/2026-07-24-fmkorea-vm-ip-persistent-430.md`).
+로컬 검증을 VM 검증으로 갈음하지 말 것.
+
 ## 6. 참고
 
 - 로컬 mock 검증: `docs/runbook/2026-07-23-config-tier-backfill-local-verify.md`
