@@ -64,6 +64,13 @@ launchctl load infra/mac-fmkorea-relay/com.bulletin.fmkorea-supplement.plist
 ```
 
 RunAtLoad 로 곧바로 1 회 실행되므로, 맥의 `/tmp/fmkorea-supplement.out` 로그와 VM DB 를 확인한다.
+로그에 "적재 N" 대신 "보충 수집 스킵 — 마지막 접촉" 이 찍히면 3 시간 가드에 걸린 것이다.
+이때는 VM 에서 `--force` 로 가드를 우회해 1 회만 수집한다 (직전 접촉 2 시간 대기는 그대로 지킨다).
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  'bash -lc "cd /home/ubuntu/bullet-in && set -a && source .env && set +a && export FMKOREA_PROXY=socks5://127.0.0.1:1080 && uv run python -m bullet_in.collect_fmkorea --force"'
+```
 
 ## 6. VM `.env` 에 정기 회차용 프록시 등록
 
