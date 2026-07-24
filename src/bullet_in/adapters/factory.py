@@ -49,7 +49,8 @@ def build_adapters(cfg: dict) -> list:
                 item_selector=c.get("item_selector", "a.hx"),
                 base_url=c.get("base_url", "https://www.fmkorea.com"),
                 body_selector=c.get("body_selector", ".xe_content"),
-                max_posts=c.get("max_posts", 15)))
+                max_posts=c.get("max_posts", 15),
+                proxy=os.environ.get("FMKOREA_PROXY")))
         else:
             raise ValueError(f"unknown adapter: {kind}")
     return out

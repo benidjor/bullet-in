@@ -404,3 +404,31 @@ def test_fmkorea_paywalled_path_uses_post_time():
     # KST 2026.06.11 10:04 → UTC 01:04
     assert it.raw_payload["published"] == "2026-06-11T01:04:00+00:00"
     assert it.raw_payload["published_precision"] == "time"
+
+import httpx as _httpx
+from bullet_in.adapters.fmkorea import FmkoreaAdapter as _FA
+
+def test_fmkorea_adapter_stores_proxy():
+    a = _FA(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+            search_keywords=[], proxy="socks5://127.0.0.1:1080")
+    assert a.proxy == "socks5://127.0.0.1:1080"
+
+def test_fmkorea_adapter_proxy_defaults_none():
+    a = _FA(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+            search_keywords=[])
+    assert a.proxy is None
+
+@respx.mock
+def test_fmkorea_fetch_passes_proxy_to_client(monkeypatch):
+    seen = {}
+    orig = _httpx.AsyncClient
+    def spy(*args, **kwargs):
+        seen["proxy"] = kwargs.get("proxy")
+        return orig(*args, **kwargs)
+    monkeypatch.setattr(_httpx, "AsyncClient", spy)
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(200, text=""))
+    a = _FA(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+            search_keywords=[{"keyword": "kw1", "target": "title"}],
+            base_url="https://www.fmkorea.com", proxy="socks5://127.0.0.1:1080")
+    asyncio.run(a.fetch())
+    assert seen["proxy"] == "socks5://127.0.0.1:1080"
