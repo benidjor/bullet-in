@@ -53,12 +53,14 @@ fmkorea (1-B 복구)  ──> The Athletic 전문   : 맥 릴레이 프록시 ·
 
 ### 4.2 어댑터 proxy 주입 — 3곳 변경
 
-- `config/sources.yaml` 의 fmkorea `config` 블록에 `proxy` 한 줄을 추가한다
-  (예: `proxy: "socks5://127.0.0.1:<포트>"`).
-- `src/bullet_in/adapters/factory.py` 의 `FmkoreaAdapter(...)` 생성에 `proxy=c.get("proxy")` 를 전달한다.
+- proxy 는 환경변수 `FMKOREA_PROXY` 로 준다 (예: `socks5://127.0.0.1:<포트>`)
+  — 배포 환경 분리 · 시크릿 성격 · 로컬 무영향 (2026-07-25 plan 에서 sources.yaml 방식 대신 확정).
+- `src/bullet_in/adapters/factory.py` 의 `FmkoreaAdapter(...)` 생성에 `proxy=os.environ.get("FMKOREA_PROXY")` 를 전달한다.
 - `src/bullet_in/adapters/fmkorea.py` 의 `__init__` 에 `proxy` 파라미터를 받아 저장하고,
   `fetch` 안의 `httpx.AsyncClient(...)` 생성 지점에 `proxy=self.proxy` 를 넘긴다 (httpx 0.28 은 `proxy=`, `proxies=` 없음).
-- `proxy` 미지정이면 현행 동작 (직접 접속) 을 유지해, 다른 소스 · 로컬 개발은 영향받지 않는다.
+- httpx 의 socks5 프록시는 `socksio` 가 필요하다.
+  현재는 twikit 의 transitive 의존으로만 설치돼 있어 pyproject 에 `httpx[socks]` 로 명시한다 (twikit 제거 시 조용히 깨지는 것 방지).
+- `FMKOREA_PROXY` 미지정이면 현행 동작 (직접 접속) 을 유지해, 다른 소스 · 로컬 개발은 영향받지 않는다.
 
 ### 4.3 정기 회차 동작
 
@@ -70,7 +72,12 @@ fmkorea (1-B 복구)  ──> The Athletic 전문   : 맥 릴레이 프록시 ·
 
 - 맥 launchd 가 깨어날 때, VM 에 "fmkorea 만 수집" 을 원격 트리거한다 (터널 위 SSH 명령).
 - **중복 가드는 이 보충 수집에만 적용한다** (정기 회차는 타이머 스케줄대로 가드와 무관하게 돈다).
-  맥 깨어남 시 fmkorea 마지막 성공 (정기 · 보충 어느 경로든) 이 3시간 이내면 스킵한다.
+  맥 깨어남 시 fmkorea 마지막 접촉이 3시간 이내면 스킵한다.
+- 가드 기준은 "마지막 접촉" — VM 로컬 접촉 스탬프 파일과 DB `MAX(fetched_at)` 중 최신값 (2026-07-25 재검토 반영).
+  DB 워터마크는 신규 행이 적재될 때만 전진하므로, 단독으로 쓰면 새 글 없는 시간대에 launchd 주기 (15분) 마다 재접촉하는 구멍 (fail-open) 이 생긴다.
+- 보충 스크립트는 수집 전에 SOCKS 포트 TCP 연결성만 확인한다 (fmkorea 접촉 아님).
+  터널이 없으면 스탬프 없이 종료하고 (다음 주기 재시도), 터널이 있으면 수집 후 신규 건수와 무관하게 접촉 시각을 스탬프한다.
+- 잔여 리스크 (허용) — 정기 회차의 접촉은 스탬프에 잡히지 않아, 새 글 없는 시간대에 정기 접촉 후 2시간 안에 보충 접촉이 드물게 겹칠 수 있다 (빈도 3시간당 최대 1회).
 - 3시간 근거는 fmkorea 2시간 규칙 준수 + 정기 주기 (3시간 · 2026-07-25 에 6h → 3h 변경) 와의 정렬이다.
   정기 회차가 방금 커버한 시간대를 보충이 또 건드리는 중복 · 잦은 접촉의 430 위험을 막는다.
 - 정기 주기는 VM systemd 타이머 `OnCalendar=*-*-* 00/3:00:00 UTC` 로, KST 기준 하루 8회 (00 · 03 · 06 · 09 · 12 · 15 · 18 · 21) 다.
@@ -162,7 +169,8 @@ fmkorea (1-B 복구)  ──> The Athletic 전문   : 맥 릴레이 프록시 ·
 
 ## 11. 롤백
 
-- fmkorea proxy — `config` 에서 `proxy` 줄 제거 (직접 접속 복귀 · 현행 강등으로 degrade).
+- fmkorea proxy — VM `.env` 에서 `FMKOREA_PROXY` 제거 (직접 접속 복귀 · 현행 강등으로 degrade).
+  보충 수집까지 끄려면 `enabled: false` — 보충 스크립트도 이 플래그를 존중한다.
 - 온스테인 X — `x_ornstein.enabled: false`.
 - 터널 · launchd — 맥에서 launchd 언로드.
 - DB 스키마 변경이 없어 마이그레이션 롤백은 불필요하다.
