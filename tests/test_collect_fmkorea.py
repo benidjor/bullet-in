@@ -1,7 +1,8 @@
 import socket
 from datetime import datetime, timedelta, timezone
 from bullet_in.collect_fmkorea import (should_supplement, read_last_contact,
-                                       write_last_contact, tunnel_alive)
+                                       write_last_contact, tunnel_alive,
+                                       build_fmkorea_adapter)
 
 _NOW = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
 
@@ -46,3 +47,21 @@ def test_tunnel_dead_when_port_closed():
     port = srv.getsockname()[1]
     srv.close()                          # 닫힌 포트 = 터널 없음
     assert tunnel_alive(f"socks5://127.0.0.1:{port}", timeout=0.5) is False
+
+_CFG = {"sources": [
+    {"source_id": "bbc_sport", "adapter": "html", "config": {}},
+    {"source_id": "fmkorea", "adapter": "fmkorea", "config": {
+        "search_url": "https://fm.test/s?t={target}&kw={keyword}",
+        "search_keywords": [{"keyword": "아스날", "target": "title"}],
+        "max_posts": 15}}]}
+
+def test_build_fmkorea_adapter_reads_config_and_proxy():
+    a = build_fmkorea_adapter(_CFG, "socks5://127.0.0.1:1080")
+    assert a.source_id == "fmkorea"
+    assert a.proxy == "socks5://127.0.0.1:1080"
+    assert a.max_posts == 15
+    assert a.search_keywords == [{"keyword": "아스날", "target": "title"}]
+
+def test_build_fmkorea_adapter_none_proxy():
+    a = build_fmkorea_adapter(_CFG, None)
+    assert a.proxy is None
