@@ -68,3 +68,15 @@ def evaluate_freshness(watermarks: dict[str, datetime | None], now: datetime,
         age = (now - wm).total_seconds() / 3600
         out.append(SourceFreshness(sid, wm, thr, age, age > thr))
     return out
+
+
+def evaluate_coverage(coverage: dict) -> list[str]:
+    """공홈 퍼널 불변식 위반 목록 — 후보 0 = 발견 경로 장애 · Men 소멸 = taxonomy 드리프트.
+    accept 0 은 비수기 정상이라 판정하지 않는다 (spec 2026-07-24 §5)."""
+    if not coverage:
+        return []
+    if coverage.get("candidates", 0) == 0:
+        return ["no_candidates"]
+    if coverage.get("men_tagged", 0) == 0:
+        return ["no_men_tag"]
+    return []

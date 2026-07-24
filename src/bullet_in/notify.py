@@ -131,3 +131,24 @@ def build_failure_alert(context) -> dict:
     return {"title": "❌ 파이프라인 실패 — run_pipeline",
             "description": f"수집 파이프라인이 예외로 중단되었습니다.\n```\n{str(exc)[:400]}\n```",
             "color": COLOR_FAILURE, "fields": fields}
+
+
+COVERAGE_BREACH_FIELDS = {
+    "no_candidates": ("창 후보 0", "sitemap 경로 변경 · 발견 경로 장애 의심"),
+    "no_men_tag": ("Men 태그 소멸", "taxonomy 어휘 변경 — 필터 기아 재발 위험"),
+}
+
+def build_coverage_alert(breaches: list[str], coverage: dict, *, run_id: str) -> dict:
+    fields = []
+    for b in breaches:
+        name, hint = COVERAGE_BREACH_FIELDS[b]
+        fields.append({"name": name, "value": f"- 원인 후보: {hint}", "inline": False})
+    fields.append({"name": "퍼널",
+                   "value": (f"후보 {coverage.get('candidates', 0)} · "
+                             f"Men {coverage.get('men_tagged', 0)} · "
+                             f"accept {coverage.get('accepted', 0)}"),
+                   "inline": True})
+    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    return {"title": "🏟️ 공홈 커버리지 경고 — arsenal_official",
+            "description": "수집 창 퍼널 불변식 위반 — 조용한 기아 신호",
+            "color": COLOR_ANOMALY, "fields": fields}

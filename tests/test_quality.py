@@ -101,3 +101,22 @@ def test_evaluate_freshness_empty_input():
 def test_evaluate_freshness_returns_all_sources_sorted():
     records = evaluate_freshness({"b": _wm(1), "a": None}, _NOW, default_hours=48)
     assert [r.source_id for r in records] == ["a", "b"]
+
+
+from bullet_in.quality import evaluate_coverage
+
+def test_evaluate_coverage_no_candidates():
+    assert evaluate_coverage({"candidates": 0, "men_tagged": 0,
+                              "accepted": 0}) == ["no_candidates"]
+
+def test_evaluate_coverage_men_vanished():
+    assert evaluate_coverage({"candidates": 12, "men_tagged": 0,
+                              "accepted": 0}) == ["no_men_tag"]
+
+def test_evaluate_coverage_quiet_window_is_normal():
+    # accept 0 은 비수기 정상 — 알림 축이 아니다 (spec §5)
+    assert evaluate_coverage({"candidates": 12, "men_tagged": 5,
+                              "accepted": 0}) == []
+
+def test_evaluate_coverage_empty_dict_is_normal():
+    assert evaluate_coverage({}) == []

@@ -29,7 +29,7 @@ def build_adapters(cfg: dict) -> list:
                                        tag=c.get("tag", "football/arsenal"),
                                        title_contains=c.get("title_contains")))
         elif kind == "arsenal_api":
-            out.append(ArsenalApiAdapter(sid, pages=c.get("pages", 1)))
+            out.append(ArsenalApiAdapter(sid))
         elif kind == "html":
             out.append(HtmlAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url"),
                                    title_contains=c.get("title_contains"),

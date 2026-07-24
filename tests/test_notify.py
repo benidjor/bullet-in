@@ -229,3 +229,17 @@ def test_build_anomaly_alert_sequence_counts_absent_rounds_as_zero():
     alert = notify.build_anomaly_alert([Anomaly("fmkorea", 0, 11.2, "drop")], 12,
                                        hist=hist, sources={}, run_id="rrrrrrrrrrrr")
     assert "- 최근: 14 → 14 → 14 → 14 → 0 → (오늘) 0" in alert["fields"][0]["value"]
+
+
+from bullet_in.notify import build_coverage_alert, COLOR_ANOMALY
+
+def test_build_coverage_alert_embed_shape():
+    kwargs = build_coverage_alert(
+        ["no_men_tag"], {"candidates": 12, "men_tagged": 0, "accepted": 0},
+        run_id="abcdef12-0000")
+    assert kwargs["color"] == COLOR_ANOMALY
+    assert "arsenal_official" in kwargs["title"]
+    names = [f["name"] for f in kwargs["fields"]]
+    assert "Men 태그 소멸" in names
+    funnel = next(f for f in kwargs["fields"] if f["name"] == "퍼널")
+    assert funnel["value"] == "후보 12 · Men 0 · accept 0"

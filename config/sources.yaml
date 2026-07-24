@@ -13,10 +13,9 @@ sources:
     journalist_label: Arsenal Official
     medium: official
     adapter: arsenal_api
-    config:
-      # 2026-07 공홈 개편(목록 클라이언트 렌더링) → 비공식 GraphQL API 전환.
-      # 필터는 어댑터 내 taxonomy 판별(Transfer news · Contract news + Men) — 'sign' 제목 필터 폐기
-      pages: 2   # 페이지당 50건 · 최신순 — 평시 최근 100건 커버
+    # 2026-07 리스트 피드 동결 → sitemap 발견 (48h 창) + GetArticle 전환 (spec 2026-07-24).
+    # 필터는 어댑터 내 taxonomy 판별 (Transfer news · Contract news + Men)
+    config: {}
     enabled: true
   - source_id: bbc_sport
     display_name: BBC Sport

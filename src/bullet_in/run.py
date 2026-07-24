@@ -19,7 +19,7 @@ from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows
 from bullet_in.tone import select_tone_backfill
 from bullet_in import transfer_stage
 from bullet_in.serve.render import write_site, write_ops
-from bullet_in.quality import success_rate, volume_anomalies, evaluate_freshness
+from bullet_in.quality import success_rate, volume_anomalies, evaluate_freshness, evaluate_coverage
 from bullet_in import notify
 
 GEMINI_MODEL = "gemini-3.1-flash-lite"
@@ -52,6 +52,14 @@ async def main(concurrency: int):
     started_at_utc = datetime.now(timezone.utc).replace(tzinfo=None)
     raw, errors = await gather_all(adapters, concurrency=concurrency)
     fetch_sec = round(time.perf_counter() - t0, 2)
+
+    # 공홈 커버리지 감시: 창 후보 · Men 퍼널 불변식 위반 시 알림 (spec 2026-07-24 §5)
+    for a in adapters:
+        breaches = evaluate_coverage(getattr(a, "coverage", {}) or {})
+        if breaches:
+            notify.send_alert(**notify.build_coverage_alert(
+                breaches, a.coverage, run_id=run_id))
+
     for it in raw:
         it.content_hash = content_hash(
             it.raw_payload.get("title") or it.raw_payload.get("text") or "",
