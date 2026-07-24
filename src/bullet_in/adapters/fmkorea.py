@@ -127,7 +127,8 @@ class FmkoreaAdapter:
     def __init__(self, source_id: str, search_url: str, search_keywords: list[dict],
                  item_selector: str = "a.hx",
                  base_url: str = "https://www.fmkorea.com",
-                 body_selector: str = ".xe_content", max_posts: int = 15):
+                 body_selector: str = ".xe_content", max_posts: int = 15,
+                 proxy: str | None = None):
         self.source_id = source_id
         self.search_url = search_url            # {keyword} · {target} 자리표시 포함
         self.search_keywords = search_keywords
@@ -135,6 +136,7 @@ class FmkoreaAdapter:
         self.base_url = base_url
         self.body_selector = body_selector
         self.max_posts = max_posts
+        self.proxy = proxy
 
     async def _discover(self, c: httpx.AsyncClient) -> list[tuple[str, str]]:
         """키워드별 검색 → a.hx 파싱 → 정규 글 URL. 키워드별 결과를 라운드로빈으로 max_posts 배분."""
@@ -225,6 +227,6 @@ class FmkoreaAdapter:
     async def fetch(self) -> list[RawItem]:
         headers = {"User-Agent": "Mozilla/5.0 bullet-in/0.1"}
         async with httpx.AsyncClient(timeout=20, follow_redirects=True,
-                                     headers=headers) as c:
+                                     headers=headers, proxy=self.proxy) as c:
             matched = await self._discover(c)
             return await self._process(c, matched)
