@@ -19,6 +19,8 @@ SoT: `docs/superpowers/specs/2026-07-25-fmkorea-recovery-ornstein-x-design.md`.
 ```bash
 brew install autossh
 cp infra/mac-fmkorea-relay/*.plist ~/Library/LaunchAgents/
+mkdir -p ~/.bullet-in && cp infra/mac-fmkorea-relay/supplement.sh ~/.bullet-in/
+chmod +x ~/.bullet-in/supplement.sh
 launchctl load ~/Library/LaunchAgents/com.bulletin.fmkorea-tunnel.plist
 ```
 
@@ -31,6 +33,9 @@ launchctl load ~/Library/LaunchAgents/com.bulletin.fmkorea-tunnel.plist
 - `com.bulletin.fmkorea-supplement` 은 `RunAtLoad` 로 로드 직후 1 회, 이후 900 초마다 실행을 시도한다.
   파이썬 `logging` 모듈은 기본적으로 stderr 로 출력하므로, "적재 N" 등 실행 로그는 `/tmp/fmkorea-supplement.err` 에 쌓이고, 순수 stdout 은 `/tmp/fmkorea-supplement.out` 에 쌓인다.
 - plist 를 수정했을 때는 `~/Library/LaunchAgents/` 로 재복사한 뒤 `unload` → `load` 를 다시 실행해야 변경이 반영된다.
+- `supplement.sh` 는 저장소 경로가 아니라 `~/.bullet-in/` 복사본을 실행한다 (plist 가 이 경로를 가리킴).
+  macOS TCC 가 launchd 의 `~/Documents` 안 스크립트 실행을 차단하기 때문이다 (`Operation not permitted` · 2026-07-25 라이브 검증 실측).
+  스크립트를 수정했을 때도 `~/.bullet-in/` 로 재복사해야 반영된다.
 
 ## 2. VM 코드 배포
 
@@ -45,10 +50,10 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
 ## 3. supplement.sh 실행 권한
 
 launchd 는 `supplement.sh` 를 직접 실행하므로 실행 비트가 없으면 트리거가 조용히 실패한다.
-저장소에는 이미 100755 로 커밋돼 있지만, 배포 환경에 따라 clone 방식이 비트를 보존하지 않을 수 있어 재확인한다.
+저장소에는 100755 로 커밋돼 있지만, 실행 대상은 §1 에서 만든 `~/.bullet-in/` 복사본이므로 그쪽 비트를 재확인한다.
 
 ```bash
-chmod +x infra/mac-fmkorea-relay/supplement.sh
+chmod +x ~/.bullet-in/supplement.sh
 ```
 
 ## 4. 터널 로드 · 프록시 경유 확인
@@ -116,6 +121,7 @@ launchctl unload ~/Library/LaunchAgents/com.bulletin.fmkorea-supplement.plist
 launchctl unload ~/Library/LaunchAgents/com.bulletin.fmkorea-tunnel.plist
 rm ~/Library/LaunchAgents/com.bulletin.fmkorea-supplement.plist
 rm ~/Library/LaunchAgents/com.bulletin.fmkorea-tunnel.plist
+rm ~/.bullet-in/supplement.sh
 ```
 
 ```bash
