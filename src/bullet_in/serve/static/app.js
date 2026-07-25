@@ -86,14 +86,50 @@ function expandGossip() {
 }
 if (gossipMore) gossipMore.onclick = expandGossip;
 
-// ── 최신 소식 주 단위 더보기 (최근 3일 그룹만 · 이전 날짜는 버튼으로) ────
+// ── 최신 소식 · 전체 기사 — 주 단위 더보기 · 접기 (spec §4) ─────────
 const latestWrap = document.querySelector('.latest');
 const latestMore = document.getElementById('latestMore');
-function expandLatest() {
+const dayGroups = latestWrap ? [...latestWrap.querySelectorAll('.daygroup')] : [];
+const LATEST_INIT = 3;
+function latestHiddenCount() {
+  if (latestWrap?.classList.contains('latestcut'))
+    return dayGroups.filter(g => g.classList.contains('dg-extra')).length;
+  return dayGroups.filter(g => g.classList.contains('wcut')).length;
+}
+function latestSync() {
+  if (!latestMore) return;
+  const n = latestHiddenCount();
+  latestMore.textContent = n
+    ? (latestWrap.classList.contains('latestcut')
+        ? `이전 날짜 더보기 · ${n}개 날짜` : `이전 7일 더보기 · ${n}개 날짜`)
+    : '접기';
+}
+function latestReveal() {
+  const vis = dayGroups.filter(g => !g.classList.contains('wcut')
+    && !(latestWrap.classList.contains('latestcut') && g.classList.contains('dg-extra')));
+  const oldest = new Date(vis[vis.length - 1].dataset.date);
+  oldest.setDate(oldest.getDate() - 7);                    // 7일 창 확장
+  if (latestWrap.classList.contains('latestcut')) {
+    latestWrap.classList.remove('latestcut');
+    dayGroups.forEach((g, i) => { if (i >= LATEST_INIT) g.classList.add('wcut'); });
+  }
+  dayGroups.forEach(g => { if (new Date(g.dataset.date) >= oldest) g.classList.remove('wcut'); });
+  latestSync();
+}
+function latestCollapse() {
+  dayGroups.forEach(g => g.classList.remove('wcut'));
+  latestWrap.classList.add('latestcut');
+  latestSync();
+  latestWrap.previousElementSibling?.scrollIntoView();     // 구역 상단 (sechead) 보정
+}
+function expandLatest() {                                  // 필터 활성 시 전체 전개 (기존 계약)
   latestWrap?.classList.remove('latestcut');
+  dayGroups.forEach(g => g.classList.remove('wcut'));
   if (latestMore) latestMore.hidden = true;
 }
-if (latestMore) latestMore.onclick = expandLatest;
+if (latestMore) latestMore.onclick = () =>
+  latestHiddenCount() ? latestReveal() : latestCollapse();
+if (latestMore) latestSync();
 
 const URL_GROUPS = ['outlet', 'journalist', 'tier', 'stage', 'bucket'];
 const box = (g) => [...side.querySelectorAll(`input[data-group="${g}"]`)];

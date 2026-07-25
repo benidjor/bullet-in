@@ -37,7 +37,7 @@
 
 <div class="latest{{ ' latestcut' if day_blocks|length > 3 }}">
 {% for day in day_blocks %}
-<div class="daygroup{{ ' dg-extra' if loop.index > 3 }}">
+<div class="daygroup{{ ' dg-extra' if loop.index > 3 }}" data-date="{{ day.date }}">
 <div class="daydiv"{% if day.all_dup %} style="display:none"{% endif %}><span class="d">{{ day.label }}</span><span class="c">묶음 {{ day.n }}개 · 보도 {{ day.reports }}건</span></div>
 <div class="daylist">
   {% for b in day.blocks %}

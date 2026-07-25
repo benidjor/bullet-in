@@ -72,6 +72,12 @@ def test_index_sorts_latest_first():
     html = render_index([old, new], SOURCES, NOW)
     assert html.index("최신") < html.index("옛날")
 
+def test_index_daygroup_carries_date_attr():
+    # 주 단위 더보기 (spec §4) 의 JS 계약 — 날짜 그룹이 data-date 를 가진다
+    html = render_index([_row()], SOURCES, NOW)
+    assert 'class="daygroup' in html
+    assert 'data-date="2026-06-29"' in html
+
 def test_index_renders_active_stage_filter():
     html = render_index([_row(), _row(content_hash="h2")], SOURCES, NOW)
     assert "공신력 중" in html

@@ -173,6 +173,7 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 /* 행 우선 배치 — 묶음이 최신순으로 왼→오 · 위→아래로 읽히고 행마다 위끝이 맞음 */
 .daylist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 26px;align-items:start}
 .latest.latestcut .daygroup.dg-extra{display:none}   /* 최근 3일 그룹만 초기 노출 (7) */
+.daygroup.wcut{display:none}                     /* 주 단위 더보기 — JS 가 관리 */
 
 /* 목록은 썸네일 칸을 두지 않는다 — 회색 상자 반복 방지 (spec2 §8, 밴드만 썸네일 유지) */
 .item{display:block;padding:11px 12px}
