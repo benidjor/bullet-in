@@ -65,3 +65,17 @@ def test_build_fmkorea_adapter_reads_config_and_proxy():
 def test_build_fmkorea_adapter_none_proxy():
     a = build_fmkorea_adapter(_CFG, None)
     assert a.proxy is None
+
+def test_build_fmkorea_adapter_passes_backfill_options():
+    a = build_fmkorea_adapter(_CFG, None, pages=3, request_gap_sec=1.5,
+                              exclude_titles={"[BBC] 기존"}, max_posts=60)
+    assert a.pages == 3
+    assert a.request_gap_sec == 1.5
+    assert a.exclude_titles == {"[BBC] 기존"}
+    assert a.max_posts == 60
+
+
+def test_build_fmkorea_adapter_defaults_match_regular_round():
+    a = build_fmkorea_adapter(_CFG, None)
+    assert (a.pages, a.request_gap_sec, a.exclude_titles) == (1, 0.0, set())
+    assert a.max_posts == 15          # config 값 유지
