@@ -805,3 +805,12 @@ def test_all_page_nav_active_and_sidebar():
 def test_index_nav_links_all_page():
     html = render_index([_row()], SOURCES, NOW)
     assert 'href="all.html"' in html
+
+
+def test_section_heads_link_to_all_page():
+    # 최신 소식 · 가십 헤더 오른쪽에 전체 기사 진입 링크 (발견성 — 사용자 확정 배치)
+    g = _row(content_hash="sl1", source_id="goal", tier=4, transfer_stage="rumour",
+             title_ko="아스날, 에제 루머")
+    html = render_index([_row(), g], {**SOURCES, **FILTER_SOURCES}, NOW)
+    assert html.count('class="seclink"') == 2
+    assert '전체 기사' in html

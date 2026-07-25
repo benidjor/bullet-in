@@ -8,7 +8,7 @@
 {% for day in days %}
 <div class="daygroup{{ ' dg-extra' if loop.index > 3 }}" data-date="{{ day.date }}">
 <div class="daydiv"><span class="d">{{ day.label }}</span><span class="c">보도 {{ day.articles|length }}건</span></div>
-<div class="daylist">
+<div class="daylist flatlist">
   {% for a in day.articles %}
   <div class="block">{{ card(a, thumb=True) }}</div>
   {% endfor %}

@@ -172,6 +172,9 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .daydiv .c{font-size:12px;color:var(--dim)}
 /* 행 우선 배치 — 묶음이 최신순으로 왼→오 · 위→아래로 읽히고 행마다 위끝이 맞음 */
 .daylist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 26px;align-items:start}
+.daylist.flatlist{align-items:stretch}          /* 전체 기사 — 행 높이를 채워 구분선이 행 단위로 정렬 */
+.seclink{color:var(--red);font-weight:600;white-space:nowrap}
+.seclink:hover{text-decoration:underline}
 .latest.latestcut .daygroup.dg-extra{display:none}   /* 최근 3일 그룹만 초기 노출 (7) */
 .daygroup.wcut{display:none}                     /* 주 단위 더보기 — JS 가 관리 */
 

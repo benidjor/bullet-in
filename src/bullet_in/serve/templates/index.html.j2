@@ -33,7 +33,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="sechead"><h2>최신 소식</h2><span class="kst">시각 KST 기준</span></div>
+<div class="sechead"><h2>최신 소식</h2><span class="kst">시각 KST 기준 · <a class="seclink" href="all.html">전체 기사 →</a></span></div>
 
 <div class="latest{{ ' latestcut' if day_blocks|length > 3 }}">
 {% for day in day_blocks %}
@@ -62,7 +62,7 @@
 {% if day_blocks|length > 3 %}<button class="latestmore" id="latestMore" type="button">이전 날짜 더보기 · {{ day_blocks|length - 3 }}개 날짜</button>{% endif %}
 
 {% if gossip %}
-<div class="sechead gossiphead"><h2>가십</h2><span class="kst">묶음 {{ gossip_n }}개</span></div>
+<div class="sechead gossiphead"><h2>가십</h2><span class="kst">묶음 {{ gossip_n }}개 · <a class="seclink" href="all.html">전체 기사 →</a></span></div>
 <div class="gossiplist{{ ' weekcut' if gossip_hidden }}">
   {% for a in gossip %}{{ card(a, when=a._gwhen, cls='dupcard' if a._dup else ('gwk' if a._gwk else ''), hidden=a._dup, show_cred=False) }}{% endfor %}
 </div>
