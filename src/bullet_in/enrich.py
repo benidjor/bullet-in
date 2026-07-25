@@ -260,7 +260,8 @@ def paragraphize(text: str | None, max_len: int = 400) -> str | None:
 # — 여섯 명이 나오는 트윗에서 제목이 한둘만 담는 것은 정상이다.
 # 라운드업 (bbc_gossip) 을 축 전체에서 뺀 것과 같은 이유지만, 트윗은 '임대 무근거' 축이
 # 그대로 유효하므로 축을 끄지 않고 인명 누락 사유만 걸러낸다.
-BODY_AS_TITLE_SOURCES = {"x_afcstuff"}
+# x_ornstein 도 같은 트윗 구조 (제목 = 본문 전문) 라 동일 예외 대상.
+BODY_AS_TITLE_SOURCES = {"x_afcstuff", "x_ornstein"}
 
 def finalize_translation(v: dict, row: dict, glossary: dict[str, str],
                          name_map: dict[str, str],
