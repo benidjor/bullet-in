@@ -9,6 +9,7 @@ from sqlalchemy import create_engine
 from pymongo import MongoClient
 from bullet_in.adapters.fmkorea import FmkoreaAdapter
 from bullet_in.canonical import content_hash, canonical_url
+from bullet_in.models import RawItem
 from bullet_in.pipeline import to_articles
 from bullet_in.score import load_sources
 from bullet_in.credibility import load_registry
@@ -50,8 +51,12 @@ def tunnel_alive(proxy_url: str, timeout: float = 3.0) -> bool:
         return False
 
 
-def build_fmkorea_adapter(cfg: dict, proxy: str | None) -> FmkoreaAdapter:
-    """config 에서 fmkorea 소스 블록을 읽어 어댑터를 만든다 (factory 와 동일 인자)."""
+def build_fmkorea_adapter(cfg: dict, proxy: str | None, *, pages: int = 1,
+                          request_gap_sec: float = 0.0,
+                          exclude_titles: set[str] | None = None,
+                          max_posts: int | None = None) -> FmkoreaAdapter:
+    """config 에서 fmkorea 소스 블록을 읽어 어댑터를 만든다 (factory 와 동일 인자).
+    선택 인자는 백필 회차 전용이고, 기본값이면 정기 회차와 같은 어댑터가 된다."""
     s = next(x for x in cfg["sources"] if x["source_id"] == "fmkorea")
     c = s["config"]
     return FmkoreaAdapter(
@@ -59,7 +64,23 @@ def build_fmkorea_adapter(cfg: dict, proxy: str | None) -> FmkoreaAdapter:
         item_selector=c.get("item_selector", "a.hx"),
         base_url=c.get("base_url", "https://www.fmkorea.com"),
         body_selector=c.get("body_selector", ".xe_content"),
-        max_posts=c.get("max_posts", 15), proxy=proxy)
+        max_posts=max_posts if max_posts is not None else c.get("max_posts", 15),
+        proxy=proxy, pages=pages, request_gap_sec=request_gap_sec,
+        exclude_titles=exclude_titles)
+
+
+def persist(raw: list[RawItem], mart: MartStore) -> tuple[int, int]:
+    """수집 결과를 raw (Mongo) · mart (MariaDB) 에 적재한다.
+    번역 · 분류 · 렌더는 하지 않는다 — 다음 정기 회차가 흡수한다."""
+    for it in raw:
+        it.content_hash = content_hash(
+            it.raw_payload.get("title") or "", canonical_url(it.url))
+    mongo = MongoClient(os.environ["MONGO_URI"])[os.environ.get("MONGO_DB", "bulletin")]
+    RawStore(mongo).insert_many(raw)
+    sources = load_sources("config/sources.yaml")
+    registry = load_registry("config/credibility.yaml")
+    arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
+    return mart.upsert(arts), stats["dup_count"]
 
 
 async def main(force: bool = False) -> None:
@@ -73,8 +94,6 @@ async def main(force: bool = False) -> None:
         log.info("fmkorea 터널 미접속 — 보충 수집 스킵 (스탬프 없음 · 다음 주기 재시도)")
         return
 
-    sources = load_sources("config/sources.yaml")
-    registry = load_registry("config/credibility.yaml")
     engine = create_engine(os.environ["MARIADB_URL"])
     mart = MartStore(engine)
     mart.ensure_schema()
@@ -93,18 +112,9 @@ async def main(force: bool = False) -> None:
     if not raw:
         log.info("fmkorea 보충 수집 — 신규 0 (새 글 없음 · 전부 스킵)")
         return
-
-    for it in raw:
-        it.content_hash = content_hash(
-            it.raw_payload.get("title") or "", canonical_url(it.url))
-    mongo = MongoClient(os.environ["MONGO_URI"])[os.environ.get("MONGO_DB", "bulletin")]
-    RawStore(mongo).insert_many(raw)
-
-    arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
-    n = mart.upsert(arts)
-    # 번역 · 분류 · 렌더는 하지 않는다 — 다음 정기 회차가 흡수 (번역 전 상태 노출 방지)
+    n, dup = persist(raw, mart)
     log.info("fmkorea 보충 수집 완료 — 적재 %d · 중복 %d (번역 · 렌더는 다음 정기 회차)",
-             n, stats["dup_count"])
+             n, dup)
 
 
 if __name__ == "__main__":
