@@ -684,3 +684,65 @@ def test_render_article_non_gossip_not_itemized():
                body_source="Arsenal are weighing a move. (Sun) , external")
     html = _ra(_dec(row, SOURCES, NOW), [], "h1", SOURCES, NOW)
     assert "gossip-item" not in html
+
+
+# ── 필터 도달 (2026-07-25 필터 버튼 버그 — 접힌 관련 보도 · 밴드 기사) ────
+
+FILTER_SOURCES = {
+    "skysports": {"display_name": "Sky Sports", "outlet": "Sky Sports", "serving": "full"},
+    "goal": {"display_name": "Goal.com", "outlet": "Goal.com", "serving": "full"},
+}
+
+
+def test_index_relitem_carries_filter_data_attrs():
+    # 접힌 관련 보도도 필터 대상 — 대표 카드와 같은 필터 키를 data 속성으로 가진다
+    rep = _row(content_hash="r1", source_id="skysports", tier=2,
+               title_ko="아스날, 에제 영입 합의", transfer_stage="agreed")
+    rel = _row(content_hash="r2", source_id="goal", tier=4, summary_ko="한 줄",
+               title_ko="아스날, 에제 이적 임박", transfer_stage="rumour")
+    html = render_index([rep, rel], FILTER_SOURCES, NOW)
+    i = html.index('href="article/r2.html"')
+    seg = html[max(0, i - 200):i + 700]
+    assert 'class="relitem"' in seg
+    assert 'data-outlet="Goal.com"' in seg
+    assert 'data-tier="4"' in seg
+    assert 'data-stage="rumour"' in seg
+    assert 'data-text=' in seg
+
+
+def test_index_band_article_reappears_as_hidden_card_with_thumb():
+    # 밴드 (히어로) 로 뽑힌 기사도 목록에 숨김 카드로 존재해야 필터가 찾는다 (썸네일 포함)
+    lead = _row(content_hash="lead1", source_id="skysports", tier=1,
+                image_url="https://img/lead.jpg", title_ko="아스날, 에제 영입 합의")
+    other = _row(content_hash="o1", source_id="goal", tier=2,
+                 title_ko="아스날, 사카 재계약 임박")
+    html = render_index([lead, other], FILTER_SOURCES, NOW)
+    assert html.count('href="article/lead1.html"') == 2   # 밴드 1 + 목록 숨김 카드 1
+    i = html.index("dupcard")
+    seg = html[max(0, i - 300):i + 900]
+    assert "display:none" in seg
+    assert "https://img/lead.jpg" in seg                   # 재출현 카드에도 썸네일
+
+
+def test_index_day_header_counts_exclude_band_dup():
+    # 날짜 헤더 '묶음 N개 · 보도 M건' 은 재출현 숨김 카드를 세지 않는다
+    lead = _row(content_hash="lead1", source_id="skysports", tier=1,
+                image_url="https://img/lead.jpg", title_ko="아스날, 에제 영입 합의")
+    other = _row(content_hash="o1", source_id="goal", tier=2,
+                 title_ko="아스날, 사카 재계약 임박")
+    html = render_index([lead, other], FILTER_SOURCES, NOW)
+    assert "묶음 1개 · 보도 1건" in html
+
+
+def test_index_gossip_nonrep_reappears_as_hidden_dupcard():
+    # 가십 묶음의 비대표 기사도 숨김 카드로 렌더돼야 필터가 기사 단위로 닿는다
+    g1 = _row(content_hash="g1", source_id="goal", tier=4, transfer_stage="rumour",
+              title_ko="아스날, 에제 영입설", published_at=datetime(2026, 6, 29, 11, 0))
+    g2 = _row(content_hash="g2", source_id="goal", tier=4, transfer_stage="rumour",
+              title_ko="아스날, 에제 이적 임박설", published_at=datetime(2026, 6, 29, 9, 0))
+    html = render_index([g1, g2], FILTER_SOURCES, NOW)
+    assert 'href="article/g2.html"' in html                # 비대표도 DOM 에 존재
+    i = html.index('href="article/g2.html"')
+    seg = html[max(0, i - 300):i + 300]
+    assert "dupcard" in seg
+    assert "display:none" in seg
