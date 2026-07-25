@@ -294,3 +294,14 @@ def test_outlet_display_promoted_and_non_x_rows_unchanged():
     # 비 X 소스는 기존 폴백 유지
     row = {"outlet": None, "source_id": "bbc_sport", "journalist": "Sami Mokbel"}
     assert outlet_display(row, sources, directory=directory) == "BBC"
+
+
+def test_facet_stage_counts_bbc_gossip_as_rumour():
+    # 카드 필터 키는 bbc_gossip → rumour 고정 (_decorate) — 사이드바 건수도 같은 키로
+    # 세야 카운트와 필터 결과가 일치한다 (2026-07-25 필터 도달 수정)
+    arts = [{"source_id": "bbc_gossip", "outlet": None, "tier": 4, "team": "arsenal",
+             "transfer_stage": "interest"}]
+    f = facet_counts(arts, {"bbc_gossip": {"display_name": "BBC Football Gossip"}})
+    assert f["stage"]["rumour"] == 1
+    assert f["stage"]["interest"] == 0
+    assert f["other"] == 0

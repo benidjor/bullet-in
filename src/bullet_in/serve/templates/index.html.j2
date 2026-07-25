@@ -2,9 +2,9 @@
 {% block title %}Bullet-in · 아스날 이적 뉴스{% endblock %}
 
 {% macro stage_badge(s) %}{% if s %}<span class="stage {{ s.tone }}{{ ' filled' if s.filled }}">{{ s.label }}</span>{% endif %}{% endmacro %}
-{% macro card(a, dest=None, when=None, cls='', show_cred=True, thumb=False) %}
+{% macro card(a, dest=None, when=None, cls='', show_cred=True, thumb=False, hidden=False) %}
 {% set show_thumb = thumb and a.image_url %}
-<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if not a._stage_disp %} style="display:none"{% endif %} href="article/{{ a.content_hash }}.html"
+<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if hidden or not a._stage_disp %} style="display:none"{% endif %} href="article/{{ a.content_hash }}.html"
    data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-tier="{{ a._tier_key }}"
    data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}"
    data-published="{{ a._published_iso }}" data-confidence="{{ a.confidence_score or 0 }}"
@@ -17,7 +17,9 @@
   </div>
 </a>
 {% endmacro %}
-{% macro relitem(a, rep) %}<a class="relitem" href="article/{{ a.content_hash }}.html"><span class="rt">{{ a._title }}</span><span class="rm">{{ a._outlet }}{% if a._reader_tier %} · {{ a._reader_tier }}{% endif %}{% if a._date and a._date != rep._date %} · {{ a._date }}{% endif %}</span></a>{% endmacro %}
+{% macro relitem(a, rep) %}<a class="relitem" href="article/{{ a.content_hash }}.html"
+   data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}" data-tier="{{ a._tier_key }}"
+   data-stage="{{ a._stage }}" data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}"><span class="rt">{{ a._title }}</span><span class="rm">{{ a._outlet }}{% if a._reader_tier %} · {{ a._reader_tier }}{% endif %}{% if a._date and a._date != rep._date %} · {{ a._date }}{% endif %}</span></a>{% endmacro %}
 
 {% block band %}
 {% if lead %}
@@ -54,11 +56,11 @@
 <div class="latest{{ ' latestcut' if day_blocks|length > 3 }}">
 {% for day in day_blocks %}
 <div class="daygroup{{ ' dg-extra' if loop.index > 3 }}">
-<div class="daydiv"><span class="d">{{ day.label }}</span><span class="c">묶음 {{ day.n }}개 · 보도 {{ day.reports }}건</span></div>
+<div class="daydiv"{% if day.all_dup %} style="display:none"{% endif %}><span class="d">{{ day.label }}</span><span class="c">묶음 {{ day.n }}개 · 보도 {{ day.reports }}건</span></div>
 <div class="daylist">
   {% for b in day.blocks %}
-  <div class="block">
-    {{ card(b.rep, thumb=True) }}
+  <div class="block"{% if b.band_dup %} style="display:none"{% endif %}>
+    {{ card(b.rep, thumb=True, cls='dupcard' if b.band_dup else '', hidden=b.band_dup) }}
     {% if b.ending %}{{ card(b.ending.article, dest=b.ending.club, thumb=True) }}{% endif %}
     {% if b.rel_count %}
     <button class="reltoggle" type="button" aria-expanded="false">관련 보도 {{ b.rel_count }}건</button>
@@ -80,7 +82,9 @@
 {% if gossip %}
 <div class="sechead gossiphead"><h2>가십</h2><span class="kst">묶음 {{ gossip_n }}개</span></div>
 <div class="gossiplist{{ ' morecut' if gossip_n > 24 }}">
-  {% for a in gossip %}{{ card(a, when=a._gwhen, cls='gx' if loop.index > 24 else '', show_cred=False) }}{% endfor %}
+  {% set ns = namespace(vis=0) %}
+  {% for a in gossip %}{% if not a._dup %}{% set ns.vis = ns.vis + 1 %}{% endif -%}
+  {{ card(a, when=a._gwhen, cls='dupcard' if a._dup else ('gx' if ns.vis > 24 else ''), hidden=a._dup, show_cred=False) }}{% endfor %}
 </div>
 {% if gossip_n > 24 %}<button class="gossipmore" id="gossipMore" type="button">가십 더보기 · {{ gossip_n - 24 }}개</button>{% endif %}
 <p class="gossipnote">나머지 최하 등급 보도는 위 사건 묶음 안에 들어 있습니다.</p>

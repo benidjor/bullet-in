@@ -102,9 +102,12 @@ def group_blocks_by_day(blocks: list[dict], now: datetime) -> list[dict]:
     out = []
     for d in sorted(buckets, reverse=True):
         day_blocks = sorted(buckets[d], key=lambda b: _sort_ts(b["rep"]), reverse=True)
+        # 밴드 재출현 카드 (band_dup) 는 평소 숨김 — 헤더 건수에서 제외
+        counted = [b for b in day_blocks if not b.get("band_dup")]
         out.append({"label": _day_label(d, today), "date": d, "blocks": day_blocks,
-                    "n": len(day_blocks),
-                    "reports": _same_day_reports(day_blocks, d)})
+                    "n": len(counted),
+                    "reports": _same_day_reports(counted, d),
+                    "all_dup": not counted})
     return out
 
 
@@ -437,6 +440,14 @@ def _facet_rows(counts: Counter, labels: dict, tiers: dict) -> dict:
     return {"initial": initial, "stages": stages}
 
 
+def filter_stage(row: dict) -> str | None:
+    """카드 · 사이드바 건수가 공유하는 필터 단계 키.
+    BBC 가십은 루머 롤업 → 배지 · 필터 키 · 건수를 항상 루머로 (#121 리뷰 2차)."""
+    if row.get("source_id") == "bbc_gossip":
+        return "rumour"
+    return row.get("transfer_stage")
+
+
 def facet_counts(articles: list[dict], sources: dict, directory: dict | None = None,
                  registry=None, outlet_dir: dict | None = None) -> dict:
     teams = Counter(a.get("team") or "arsenal" for a in articles)
@@ -467,7 +478,7 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
     stage_counts = {e: 0 for e, _, _ in _stage.SIDEBAR_STAGES}
     other_count = 0
     for a in articles:
-        s = a.get("transfer_stage")
+        s = filter_stage(a)
         if s in stage_counts:
             stage_counts[s] += 1
         else:
@@ -745,9 +756,7 @@ def _decorate(row: dict, sources: dict, now: datetime,
     a["_images"] = imgs
     u = row.get("url") or ""
     a["url"] = u if re.match(r"^https?://", u) else "#"
-    st = row.get("transfer_stage")
-    if row.get("source_id") == "bbc_gossip":
-        st = "rumour"          # BBC 가십은 루머 롤업 → 배지 · 필터 키를 항상 루머로
+    st = filter_stage(row)
     a["_stage"] = st or ""
     a["_stage_badge"] = _stage.is_displayable(st)
     a["_stage_label"] = _stage.label_for(st)
@@ -782,7 +791,17 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
     rest = [a for a in ordered if a["content_hash"] not in top_hashes]
 
     clusters = cluster_events(rest, players)
-    gossip = [pick_representative(c["articles"]) for c in clusters if is_gossip_cluster(c)]
+    # 가십 — 대표만 보이되, 비대표도 숨김 카드 (_dup) 로 내보내 필터가 기사 단위로 닿게 한다
+    gossip, gossip_reps = [], 0
+    for c in clusters:
+        if not is_gossip_cluster(c):
+            continue
+        rep = pick_representative(c["articles"])
+        gossip_reps += 1
+        for a in c["articles"]:
+            if a is not rep:
+                a["_dup"] = True
+            gossip.append(a)
     gossip.sort(key=_sort_ts, reverse=True)   # 가십을 발행 · 수집 시각 내림차순으로 (2-2)
     for g in gossip:
         g["_gwhen"] = gossip_when(g, now)   # 가십 카드는 날짜 · time 정밀도면 시각까지 (6-3)
@@ -799,13 +818,19 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
         blocks.append({"rep": rep, "ending": ending, "branches": branches,
                        "rel_count": sum(len(br["articles"]) for br in branches),
                        "count": len(c["articles"]), "_articles": c["articles"]})
+    # 밴드 (히어로 · 주요 소식) 기사도 목록에 숨김 카드로 내보낸다 — 필터가 기사 단위로
+    # 전 기사에 닿도록 (spec2 §6.3). 평소엔 숨김, app.js 가 필터 활성 시에만 노출.
+    for a in ordered:
+        if a["content_hash"] in top_hashes:
+            blocks.append({"rep": a, "ending": None, "branches": [], "rel_count": 0,
+                           "count": 1, "_articles": [a], "band_dup": True})
     day_blocks = group_blocks_by_day(blocks, now)
 
     facets = facet_counts(articles, sources, directory=directory, registry=registry,
                           outlet_dir=outlet_dir)
     return _env().get_template("index.html.j2").render(
         lead=top["lead"], mains=top["mains"], day_blocks=day_blocks,
-        gossip=gossip, gossip_n=len(gossip), facets=facets, active="home", root="")
+        gossip=gossip, gossip_n=gossip_reps, facets=facets, active="home", root="")
 
 
 # ── 사건 묶음 (spec2 §4-7) — 선수 사전 (name_map 정규형) 으로 묶는다 ──────

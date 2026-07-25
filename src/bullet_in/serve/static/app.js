@@ -134,6 +134,9 @@ function syncTierAll(changed) {
 }
 
 // ── 필터 적용 ──────────────────────────────────────────────────────
+// 기사 단위 도달 (spec2 §6.3): 접힌 관련 보도 · 밴드 재출현 카드까지 판정한다.
+// 블록은 구성 기사 중 하나라도 매칭이면 표시 — 대표가 조건 밖이면 흐림 (.ctxdim),
+// 매칭 갈래는 자동 펼침. 필터 활성 시 밴드는 숨기고 재출현 카드 (.dupcard) 로 대체.
 function applyFilters() {
   expandGossip();                                        // 필터가 걸리면 가십 전체를 대상으로
   expandLatest();                                        // 이전 날짜 그룹도 필터 대상으로 편다
@@ -145,28 +148,78 @@ function applyFilters() {
   const stageEnums = new Set(stageSel.flatMap(v => v.split(',')));
   const showOther = boxesOf('bucket').some(c => c.checked);
   const srcActive = outlets.length || journalists.length;
+  const conds = outlets.length + journalists.length + tiers.length
+    + stageSel.length + (showOther ? 1 : 0) + (q ? 1 : 0);
+  const active = conds > 0;
+
+  const match = (d) => {
+    const okText = !q || (d.text || '').includes(q);
+    const okSrc = !srcActive
+      || outlets.includes(d.outlet) || journalists.includes(d.journalist);
+    const okTier = tiers.length === 0 || tiers.includes(d.tier);
+    const isOther = !d.stage || d.stage === 'other';
+    const okStage = isOther ? showOther
+      : (stageEnums.size === 0 || stageEnums.has(d.stage));
+    return okText && okSrc && okTier && okStage;
+  };
 
   let shown = 0;
+  const selfHit = new Map();                             // 카드별 자기 매칭 (블록 판정용)
   for (const it of items) {
-    const okText = !q || (it.dataset.text || '').includes(q);
-    const okSrc = !srcActive
-      || outlets.includes(it.dataset.outlet) || journalists.includes(it.dataset.journalist);
-    const okTier = tiers.length === 0 || tiers.includes(it.dataset.tier);
-    const st = it.dataset.stage;
-    const isOther = !st || st === 'other';
-    const okStage = isOther ? showOther
-      : (stageEnums.size === 0 || stageEnums.has(st));
-    const vis = okText && okSrc && okTier && okStage;
-    it.style.display = vis ? '' : 'none';
-    if (vis) shown++;
+    const m = match(it.dataset);
+    selfHit.set(it, m);
+    if (it.classList.contains('dupcard')) {              // 밴드 · 가십 비대표 재출현 — 필터 활성 시에만
+      const vis = active && m;
+      it.style.display = vis ? '' : 'none';
+      if (vis) shown++;
+    } else if (!it.closest('.block')) {                  // 가십 등 낱개 카드
+      it.style.display = m ? '' : 'none';
+      if (m) shown++;
+    }
   }
+  for (const bl of document.querySelectorAll('.block')) {
+    if (bl.querySelector('.dupcard')) continue;
+    const cards = [...bl.querySelectorAll('.item')];     // 대표 + 결말
+    const rels = [...bl.querySelectorAll('.relitem')];
+    const relHits = active ? rels.filter(r => match(r.dataset)) : [];
+    const blockHit = cards.some(c => selfHit.get(c)) || relHits.length > 0;
+    shown += cards.filter(c => selfHit.get(c)).length + relHits.length;
+    for (const c of cards) {
+      // 조건 없음 = 기존 카드 단위 (기타 단계 숨김 유지) · 조건 있음 = 블록 단위
+      c.style.display = (active ? blockHit : selfHit.get(c)) ? '' : 'none';
+      c.classList.toggle('ctxdim', active && blockHit && !selfHit.get(c));
+    }
+    const rel = bl.querySelector('.related');
+    const tog = bl.querySelector('.reltoggle');
+    if (active) {
+      rels.forEach(r => { r.style.display = relHits.includes(r) ? '' : 'none'; });
+      if (rel) rel.hidden = relHits.length === 0;
+      if (tog) {
+        tog.style.display = relHits.length ? '' : 'none';
+        tog.setAttribute('aria-expanded', relHits.length ? 'true' : 'false');
+      }
+      bl.querySelectorAll('.branchlabel').forEach(lb => {
+        let n = lb.nextElementSibling, any = false;
+        while (n && n.classList.contains('relitem')) {
+          if (n.style.display !== 'none') any = true;
+          n = n.nextElementSibling;
+        }
+        lb.style.display = any ? '' : 'none';
+      });
+    } else {                                             // 조건 없음 — 접힌 원상태로
+      rels.forEach(r => { r.style.display = ''; });
+      if (rel) rel.hidden = true;
+      if (tog) { tog.style.display = ''; tog.setAttribute('aria-expanded', 'false'); }
+      bl.querySelectorAll('.branchlabel').forEach(lb => { lb.style.display = ''; });
+    }
+  }
+  const bandwrap = document.querySelector('.bandwrap');
+  if (bandwrap) bandwrap.style.display = active ? 'none' : '';
   sortBlocks();
   hideEmpty();
 
-  const conds = outlets.length + journalists.length + tiers.length
-    + stageSel.length + (showOther ? 1 : 0) + (q ? 1 : 0);
   const touched = userTouchedSrc ? ' · 직접 고름' : '';
-  if (fstatus) fstatus.textContent = conds
+  if (fstatus) fstatus.textContent = active
     ? `조건 ${conds}개 · ${shown}건${touched}` : `전체 ${shown}건`;
   applyBtn?.classList.remove('dirty');
   const qs = filterParams().toString();
