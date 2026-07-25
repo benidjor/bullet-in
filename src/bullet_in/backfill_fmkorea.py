@@ -48,7 +48,17 @@ def check_page_placeholder(search_url: str, pages: int) -> None:
             "— 같은 페이지 반복 접촉 위험 (--pages 1 로 실행하거나 config 를 고칠 것)")
 
 
-async def main(pages: int, limit: int | None, dry_run: bool, force: bool) -> None:
+def resolve_keywords(config_keywords: list[dict], names: list[str] | None,
+                     target: str) -> list[dict]:
+    """--keyword 로 임시 키워드를 지정하면 config 의 광역 키워드 대신 그것만 쓴다.
+    미지정 (None · 빈 리스트) 이면 config 그대로 — 정기 회차와 같은 동작."""
+    if not names:
+        return config_keywords
+    return [{"keyword": n, "target": target} for n in names]
+
+
+async def main(pages: int, limit: int | None, dry_run: bool, force: bool,
+               keywords: list[str] | None = None, target: str = "title") -> None:
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
     src = next(s for s in cfg["sources"] if s["source_id"] == "fmkorea")
     if not src.get("enabled", True):
@@ -73,9 +83,12 @@ async def main(pages: int, limit: int | None, dry_run: bool, force: bool) -> Non
         return
 
     known = existing_titles(engine)
+    src["config"]["search_keywords"] = resolve_keywords(
+        src["config"]["search_keywords"], keywords, target)
     adapter = build_fmkorea_adapter(
         cfg, proxy, pages=pages, request_gap_sec=REQUEST_GAP_SEC,
         exclude_titles=known, max_posts=limit if limit is not None else MAX_POSTS)
+    log.info("검색 키워드: %s", [k["keyword"] for k in src["config"]["search_keywords"]])
 
     if dry_run:
         found = await adapter.discover()
@@ -105,5 +118,9 @@ if __name__ == "__main__":
     ap.add_argument("--dry-run", action="store_true",
                     help="검색만 하고 글 본문을 받지 않으며 DB 에 데이터를 쓰지 않는다 (스키마 부트스트랩은 수행)")
     ap.add_argument("--force", action="store_true", help="3시간 접촉 가드 우회")
+    ap.add_argument("--keyword", action="append", default=None,
+                    help="검색 키워드 직접 지정 (여러 번 사용 가능) — 미지정 시 config 키워드 사용")
+    ap.add_argument("--target", choices=["title", "title_content"], default="title",
+                    help="--keyword 의 검색 범위 (기본 title)")
     a = ap.parse_args()
-    asyncio.run(main(a.pages, a.limit, a.dry_run, a.force))
+    asyncio.run(main(a.pages, a.limit, a.dry_run, a.force, a.keyword, a.target))
