@@ -478,3 +478,76 @@ def test_fmkorea_page_error_keeps_earlier_pages_and_next_keyword(caplog):
     titles = {t for t, _ in found}
     assert titles == {"[BBC] 아스날 1", "[BBC] 아스날 9"}
     assert "429" in caplog.text
+
+
+@respx.mock
+def test_fmkorea_excludes_known_titles_without_fetching():
+    html = ('<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날 1</a>'
+            '<a class="hx" href="/index.php?document_srl=2">[BBC] 아스날 2</a>')
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(200, text=html))
+    known = respx.get("https://www.fmkorea.com/1").mock(
+        return_value=httpx.Response(200, text=FREE_BODY))
+    respx.get("https://www.fmkorea.com/2").mock(return_value=httpx.Response(200, text=FREE_BODY))
+    respx.get("https://ex.test/a").mock(return_value=httpx.Response(200, text=FREE_ART))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com",
+                       exclude_titles={"[BBC] 아스날 1"})
+    items = asyncio.run(a.fetch())
+    assert len(items) == 1
+    assert known.call_count == 0          # 이미 있는 글은 접촉하지 않는다
+
+
+@respx.mock
+def test_fmkorea_exclusion_frees_max_posts_slots():
+    html = ('<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날 1</a>'
+            '<a class="hx" href="/index.php?document_srl=2">[BBC] 아스날 2</a>'
+            '<a class="hx" href="/index.php?document_srl=3">[BBC] 아스날 3</a>')
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(200, text=html))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com", max_posts=2,
+                       exclude_titles={"[BBC] 아스날 1"})
+    found = asyncio.run(a.discover())
+    assert [t for t, _ in found] == ["[BBC] 아스날 2", "[BBC] 아스날 3"]
+
+
+@respx.mock
+def test_fmkorea_sleeps_between_requests(monkeypatch):
+    slept = []
+    async def fake_sleep(sec):
+        slept.append(sec)
+    monkeypatch.setattr("bullet_in.adapters.fmkorea.asyncio.sleep", fake_sleep)
+    p1 = '<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날 1</a>'
+    p2 = '<a class="hx" href="/index.php?document_srl=2">[BBC] 아스날 2</a>'
+    respx.get("https://fm.test/s?t=title&kw=kw1&p=1").mock(return_value=httpx.Response(200, text=p1))
+    respx.get("https://fm.test/s?t=title&kw=kw1&p=2").mock(return_value=httpx.Response(200, text=p2))
+    respx.get("https://www.fmkorea.com/1").mock(return_value=httpx.Response(200, text=FREE_BODY))
+    respx.get("https://www.fmkorea.com/2").mock(return_value=httpx.Response(200, text=FREE_BODY))
+    respx.get("https://ex.test/a").mock(return_value=httpx.Response(200, text=FREE_ART))
+    a = FmkoreaAdapter(source_id="fmkorea",
+                       search_url="https://fm.test/s?t={target}&kw={keyword}&p={page}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com", pages=2, request_gap_sec=1.5)
+    asyncio.run(a.fetch())
+    # 검색 2페이지 사이 1회 + 글 2건 사이 1회
+    assert slept == [1.5, 1.5]
+
+
+@respx.mock
+def test_fmkorea_no_sleep_when_gap_zero(monkeypatch):
+    slept = []
+    async def fake_sleep(sec):
+        slept.append(sec)
+    monkeypatch.setattr("bullet_in.adapters.fmkorea.asyncio.sleep", fake_sleep)
+    html = ('<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날 1</a>'
+            '<a class="hx" href="/index.php?document_srl=2">[BBC] 아스날 2</a>')
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(200, text=html))
+    respx.get("https://www.fmkorea.com/1").mock(return_value=httpx.Response(200, text=FREE_BODY))
+    respx.get("https://www.fmkorea.com/2").mock(return_value=httpx.Response(200, text=FREE_BODY))
+    respx.get("https://ex.test/a").mock(return_value=httpx.Response(200, text=FREE_ART))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    asyncio.run(a.fetch())
+    assert slept == []

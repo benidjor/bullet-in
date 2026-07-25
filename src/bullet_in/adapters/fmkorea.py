@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
 import re
@@ -128,7 +129,9 @@ class FmkoreaAdapter:
                  item_selector: str = "a.hx",
                  base_url: str = "https://www.fmkorea.com",
                  body_selector: str = ".xe_content", max_posts: int = 15,
-                 proxy: str | None = None, pages: int = 1):
+                 proxy: str | None = None, pages: int = 1,
+                 request_gap_sec: float = 0.0,
+                 exclude_titles: set[str] | None = None):
         self.source_id = source_id
         self.search_url = search_url            # {keyword} · {target} 자리표시 포함
         self.search_keywords = search_keywords
@@ -138,16 +141,26 @@ class FmkoreaAdapter:
         self.max_posts = max_posts
         self.proxy = proxy
         self.pages = pages
+        self.request_gap_sec = request_gap_sec
+        self.exclude_titles = exclude_titles or set()
+
+    async def _gap(self) -> None:
+        """fmkorea 요청 사이 간격 — 0 이면 대기 없음 (정기 회차 동작 불변)."""
+        if self.request_gap_sec:
+            await asyncio.sleep(self.request_gap_sec)
 
     async def _discover(self, c: httpx.AsyncClient) -> list[tuple[str, str]]:
         """키워드 × 페이지 검색 → a.hx 파싱 → 정규 글 URL.
         키워드별 결과를 라운드로빈으로 max_posts 배분한다."""
-        per_kw, seen = [], set()
+        per_kw, seen, first = [], set(), True
         for kw in self.search_keywords:
             results = []
             for page in range(1, self.pages + 1):
                 url = self.search_url.format(keyword=quote(kw["keyword"]),
                                              target=kw["target"], page=page)
+                if not first:
+                    await self._gap()
+                first = False
                 try:
                     r = await c.get(url)
                     r.raise_for_status()
@@ -170,6 +183,8 @@ class FmkoreaAdapter:
                     if not title or not post_url or post_url in seen:
                         continue
                     seen.add(post_url)
+                    if title in self.exclude_titles:
+                        continue            # 이미 적재된 글 — 본문 접촉 없이 건너뛴다
                     results.append((title, post_url))
             per_kw.append(results)
         return _round_robin(per_kw, self.max_posts)
@@ -180,7 +195,9 @@ class FmkoreaAdapter:
         from bullet_in.adapters.meta import (extract_og_image, extract_article_body,
                                              extract_body_images, extract_published_at)
         now, out = datetime.now(timezone.utc), []
-        for title, url in matched:
+        for i, (title, url) in enumerate(matched):
+            if i:
+                await self._gap()
             pub: tuple | None = None
             try:
                 rb = await c.get(url)
