@@ -181,6 +181,7 @@ async def main(concurrency: int):
     print(summary)
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     ap = argparse.ArgumentParser()
     ap.add_argument("--concurrency", type=int, default=8)
     asyncio.run(main(ap.parse_args().concurrency))
