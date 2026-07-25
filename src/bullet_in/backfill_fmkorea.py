@@ -103,7 +103,7 @@ if __name__ == "__main__":
     ap.add_argument("--limit", type=int, default=None,
                     help="신규 글 처리 상한 (소규모 검증용)")
     ap.add_argument("--dry-run", action="store_true",
-                    help="검색만 하고 글 본문 · DB 는 건드리지 않는다")
+                    help="검색만 하고 글 본문을 받지 않으며 DB 에 데이터를 쓰지 않는다 (스키마 부트스트랩은 수행)")
     ap.add_argument("--force", action="store_true", help="3시간 접촉 가드 우회")
     a = ap.parse_args()
     asyncio.run(main(a.pages, a.limit, a.dry_run, a.force))
