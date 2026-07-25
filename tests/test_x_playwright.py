@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from bullet_in.adapters.x_playwright import parse_afcstuff_tweets, _accumulate_tweets
+from bullet_in.adapters.x_playwright import parse_afcstuff_tweets, _accumulate_tweets, XPlaywrightAdapter
 
 NOW = datetime(2026, 7, 1, 3, 30, tzinfo=timezone.utc)
 
@@ -104,3 +104,20 @@ def test_self_source_missing_author_passes_through():
     # DOM 이 author 를 못 뽑은 경우 (빈 문자열) 는 가드를 통과시킨다 — 실 DOM 에선 항상 존재
     rts = [_rt(text="Arsenal latest #AFC", status_id="29", author="")]
     assert len(parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW)) == 1
+
+
+def test_adapter_parse_tweets_self_source_branch():
+    a = XPlaywrightAdapter("x_ornstein", "David_Ornstein", self_source=True)
+    rts = [_rt(text="Deal done #AFC", status_id="31"),
+           _rt(text="News [ @SamiMokbel_BBC ]", status_id="32")]  # 인용은 있으나 #AFC 없음 → 드롭
+    items = a._parse_tweets(rts, NOW)
+    assert [i.raw_payload["journalist"] for i in items] == ["@David_Ornstein"]
+    assert items[0].url == "https://x.com/David_Ornstein/status/31"
+
+def test_adapter_parse_tweets_default_afcstuff_branch():
+    # 회귀 가드: 기본값(self_source 미지정)은 기존 "인용만" 경로 그대로 (spec §5.2)
+    a = XPlaywrightAdapter("x_afcstuff", "afcstuff")
+    rts = [_rt(text="Deal done #AFC", status_id="31"),
+           _rt(text="News [ @SamiMokbel_BBC ]", status_id="32")]
+    items = a._parse_tweets(rts, NOW)
+    assert [i.raw_payload["journalist"] for i in items] == ["@SamiMokbel_BBC"]

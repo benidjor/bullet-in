@@ -97,10 +97,12 @@ class XPlaywrightAdapter:
     source_type = "x"
 
     def __init__(self, source_id: str, handle: str, max_tweets: int = 20,
-                 cookies_path: str = "x_cookies.json", backtrack_config_path: str | None = None):
+                 cookies_path: str = "x_cookies.json", backtrack_config_path: str | None = None,
+                 self_source: bool = False):
         self.source_id, self.handle = source_id, handle
         self.max_tweets, self.cookies_path = max_tweets, cookies_path
         self.backtrack_config_path = backtrack_config_path
+        self.self_source = self_source
 
     async def fetch(self) -> list[RawItem]:
         from datetime import timezone
@@ -120,7 +122,7 @@ class XPlaywrightAdapter:
             await page.goto(f"https://x.com/{self.handle}", wait_until="domcontentloaded")
             await page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
             raw_tweets = await _scroll_collect(page, _TWEET_JS, self.max_tweets)
-            items = parse_afcstuff_tweets(self.source_id, self.handle, raw_tweets, now)
+            items = self._parse_tweets(raw_tweets, now)
             timelines = {}
             if bt:
                 timelines = await self._scrape_journalists(ctx, items, bt, log)
@@ -158,6 +160,12 @@ class XPlaywrightAdapter:
                 if page is not None:
                     await page.close()
         return timelines
+
+    def _parse_tweets(self, raw_tweets: list[dict], now: datetime) -> list[RawItem]:
+        """파서 선택 — self_source 면 본인 트윗 경로, 아니면 기존 인용 경로 (spec §5.2)."""
+        if self.self_source:
+            return parse_self_tweets(self.source_id, self.handle, raw_tweets, now)
+        return parse_afcstuff_tweets(self.source_id, self.handle, raw_tweets, now)
 
 
 def parse_afcstuff_tweets(source_id: str, handle: str,
