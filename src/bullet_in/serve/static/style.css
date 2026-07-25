@@ -208,12 +208,13 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .relitem .rt{font-size:13px;line-height:1.4;flex:1;min-width:0}
 .relitem .rm{font-size:11px;color:var(--dim);white-space:nowrap}
 
-/* ── 가십 구역 (spec2 §7) — 3열 압축 · 좌측 괘선 없음 · 이름 '가십' ──── */
+/* ── 가십 구역 (spec2 §7) — 2열 압축 · 좌측 괘선 없음 · 이름 '가십' ──── */
 .gossiphead{margin-top:34px;border-top:2px solid var(--rule);padding-top:14px}
 /* 행 우선 채움 — 최신순이 왼→오 · 위→아래로 읽히게 (열 우선 column-count 는 열마다 채워 순서가 흩어짐) */
-.gossiplist{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 28px;align-items:start}
+.gossiplist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 28px;align-items:start}
 .gossiplist .item{padding:10px 0 12px}
-.gossiplist.morecut .item.gx{display:none}
+.gossiplist.weekcut .item.gwk{display:none}      /* 초기 7일 컷 (서버 표식) */
+.gossiplist .item.wcut{display:none}              /* 주 단위 더보기 — JS 관리 */
 .gossipmore,.latestmore{display:block;width:100%;margin:14px 0 0;padding:10px;border:1px solid var(--hair);
   border-radius:2px;background:none;color:var(--mut);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .gossipmore:hover,.latestmore:hover{color:var(--ink);border-color:var(--mut)}
@@ -315,7 +316,6 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
   .nav{display:none}
   .band{grid-template-columns:1fr;gap:18px}
   .daylist{grid-template-columns:1fr}
-  .gossiplist{grid-template-columns:repeat(2,1fr)}
 }
 @media (max-width:640px){
   .search,.sortsel{display:none}

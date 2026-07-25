@@ -77,14 +77,50 @@ document.querySelectorAll('.reltoggle').forEach(btn => {
   };
 });
 
-// ── 가십 더보기 (초기 24묶음만 · 나머지는 버튼으로) ─────────────────
+// ── 가십 — 주 단위 더보기 · 접기 (초기 = 최근 7일, 서버 gwk 표식) ────
 const gossipList = document.querySelector('.gossiplist');
 const gossipMore = document.getElementById('gossipMore');
-function expandGossip() {
-  gossipList?.classList.remove('morecut');
+const gossipCards = gossipList ? [...gossipList.querySelectorAll('.item:not(.dupcard)')] : [];
+function gossipHiddenCount() {
+  if (gossipList?.classList.contains('weekcut'))
+    return gossipCards.filter(c => c.classList.contains('gwk')).length;
+  return gossipCards.filter(c => c.classList.contains('wcut')).length;
+}
+function gossipSync() {
+  if (!gossipMore) return;
+  const n = gossipHiddenCount();
+  gossipMore.textContent = n ? `이전 날짜 가십 더보기 · ${n}건` : '접기';
+}
+function gossipReveal() {
+  const hidden = gossipCards.filter(c => gossipList.classList.contains('weekcut')
+    ? c.classList.contains('gwk') : c.classList.contains('wcut'));
+  if (!hidden.length) return;
+  const anchor = new Date(hidden[0].dataset.published);
+  anchor.setDate(anchor.getDate() - 6);
+  if (gossipList.classList.contains('weekcut')) {
+    gossipList.classList.remove('weekcut');
+    gossipCards.forEach(c => { if (c.classList.contains('gwk')) c.classList.add('wcut'); });
+  }
+  gossipCards.forEach(c => {
+    const d = c.dataset.published;
+    if (!d || new Date(d) >= anchor) c.classList.remove('wcut');
+  });
+  gossipSync();
+}
+function gossipCollapse() {
+  gossipCards.forEach(c => c.classList.remove('wcut'));
+  gossipList.classList.add('weekcut');
+  gossipSync();
+  document.querySelector('.gossiphead')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function expandGossip() {                        // 필터 활성 시 전체 전개 (기존 계약)
+  gossipList?.classList.remove('weekcut');
+  gossipCards.forEach(c => c.classList.remove('wcut'));
   if (gossipMore) gossipMore.hidden = true;
 }
-if (gossipMore) gossipMore.onclick = expandGossip;
+if (gossipMore) gossipMore.onclick = () =>
+  gossipHiddenCount() ? gossipReveal() : gossipCollapse();
+if (gossipMore) gossipSync();
 
 // ── 최신 소식 · 전체 기사 — 주 단위 더보기 · 접기 (spec §4) ─────────
 const latestWrap = document.querySelector('.latest');
@@ -189,9 +225,9 @@ function applyFilters() {
   if (active) {
     expandGossip();                                      // 필터가 걸리면 가십 전체를 대상으로
     expandLatest();                                       // 이전 날짜 그룹도 필터 대상으로 편다
-  } else if (latestMore) {
-    latestMore.hidden = false;
-    latestSync();
+  } else {
+    if (latestMore) { latestMore.hidden = false; latestSync(); }
+    if (gossipMore) { gossipMore.hidden = false; gossipSync(); }
   }
 
   const match = (d) => {

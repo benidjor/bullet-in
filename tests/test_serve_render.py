@@ -754,6 +754,25 @@ def test_index_gossip_nonrep_reappears_as_hidden_dupcard():
     assert "display:none" in seg
 
 
+def test_gossip_older_than_week_marked_gwk():
+    # 가십 초기 노출 = 최신 가십 기준 최근 7일 (spec §4 — 24건 개수 컷 대체)
+    recent = _row(content_hash="g1", source_id="bbc_gossip", tier=4,
+                  title_ko="아스날, 촐리스 루머",
+                  published_at=datetime(2026, 6, 29, 10, 0))
+    old = _row(content_hash="g2", source_id="bbc_gossip", tier=4,
+               title_ko="아스날, 진첸코 루머",
+               published_at=datetime(2026, 6, 20, 10, 0))
+    html = render_index([recent, old], {**SOURCES, "bbc_gossip":
+        {"display_name": "BBC Football Gossip", "serving": "full"}}, NOW)
+    i_old = html.index('href="article/g2.html"')
+    seg_old = html[max(0, i_old - 400):i_old]
+    assert "gwk" in seg_old                    # 7일 밖 → 초기 숨김 표식
+    i_new = html.index('href="article/g1.html"')
+    seg_new = html[max(0, i_new - 400):i_new]
+    assert "gwk" not in seg_new
+    assert "weekcut" in html                   # 숨길 것이 있으면 목록에 초기 컷
+
+
 # ── 전체 기사 페이지 (spec 2026-07-26 §3) ────────────────────────────
 
 from bullet_in.serve.render import render_all

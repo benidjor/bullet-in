@@ -63,12 +63,10 @@
 
 {% if gossip %}
 <div class="sechead gossiphead"><h2>가십</h2><span class="kst">묶음 {{ gossip_n }}개</span></div>
-<div class="gossiplist{{ ' morecut' if gossip_n > 24 }}">
-  {% set ns = namespace(vis=0) %}
-  {% for a in gossip %}{% if not a._dup %}{% set ns.vis = ns.vis + 1 %}{% endif -%}
-  {{ card(a, when=a._gwhen, cls='dupcard' if a._dup else ('gx' if ns.vis > 24 else ''), hidden=a._dup, show_cred=False) }}{% endfor %}
+<div class="gossiplist{{ ' weekcut' if gossip_hidden }}">
+  {% for a in gossip %}{{ card(a, when=a._gwhen, cls='dupcard' if a._dup else ('gwk' if a._gwk else ''), hidden=a._dup, show_cred=False) }}{% endfor %}
 </div>
-{% if gossip_n > 24 %}<button class="gossipmore" id="gossipMore" type="button">가십 더보기 · {{ gossip_n - 24 }}개</button>{% endif %}
+{% if gossip_hidden %}<button class="gossipmore" id="gossipMore" type="button">이전 날짜 가십 더보기 · {{ gossip_hidden }}건</button>{% endif %}
 <p class="gossipnote">나머지 최하 등급 보도는 위 사건 묶음 안에 들어 있습니다.</p>
 {% endif %}
 
