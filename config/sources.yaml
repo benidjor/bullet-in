@@ -118,7 +118,7 @@ sources:
     credibility: fmkorea
     lang: ko
     config:
-      search_url: "https://www.fmkorea.com/search.php?mid=football_news&search_target={target}&search_keyword={keyword}"
+      search_url: "https://www.fmkorea.com/search.php?mid=football_news&search_target={target}&search_keyword={keyword}&page={page}"
       search_keywords:
         - {keyword: "아스날", target: "title"}
         - {keyword: '"de roche"', target: "title_content"}

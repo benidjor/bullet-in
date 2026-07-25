@@ -128,7 +128,7 @@ class FmkoreaAdapter:
                  item_selector: str = "a.hx",
                  base_url: str = "https://www.fmkorea.com",
                  body_selector: str = ".xe_content", max_posts: int = 15,
-                 proxy: str | None = None):
+                 proxy: str | None = None, pages: int = 1):
         self.source_id = source_id
         self.search_url = search_url            # {keyword} · {target} 자리표시 포함
         self.search_keywords = search_keywords
@@ -137,33 +137,40 @@ class FmkoreaAdapter:
         self.body_selector = body_selector
         self.max_posts = max_posts
         self.proxy = proxy
+        self.pages = pages
 
     async def _discover(self, c: httpx.AsyncClient) -> list[tuple[str, str]]:
-        """키워드별 검색 → a.hx 파싱 → 정규 글 URL. 키워드별 결과를 라운드로빈으로 max_posts 배분."""
+        """키워드 × 페이지 검색 → a.hx 파싱 → 정규 글 URL.
+        키워드별 결과를 라운드로빈으로 max_posts 배분한다."""
         per_kw, seen = [], set()
         for kw in self.search_keywords:
-            url = self.search_url.format(keyword=quote(kw["keyword"]), target=kw["target"])
-            try:
-                r = await c.get(url)
-                r.raise_for_status()
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 429:
-                    log.warning("fmkorea 검색 429(rate limit) kw=%s — 스킵", kw["keyword"])
-                else:
-                    log.warning("fmkorea 검색 HTTP %s kw=%s — 스킵", e.response.status_code, kw["keyword"])
-                continue
-            except httpx.HTTPError as e:
-                log.warning("fmkorea 검색 실패 kw=%s err=%s — 스킵", kw["keyword"], e)
-                continue
-            soup = BeautifulSoup(r.text, "html.parser")
             results = []
-            for a in soup.select(self.item_selector):
-                title = a.get_text(strip=True)
-                post_url = _post_url_from_href(a.get("href", ""), self.base_url)
-                if not title or not post_url or post_url in seen:
-                    continue
-                seen.add(post_url)
-                results.append((title, post_url))
+            for page in range(1, self.pages + 1):
+                url = self.search_url.format(keyword=quote(kw["keyword"]),
+                                             target=kw["target"], page=page)
+                try:
+                    r = await c.get(url)
+                    r.raise_for_status()
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 429:
+                        log.warning("fmkorea 검색 429(rate limit) kw=%s p=%s — 스킵",
+                                    kw["keyword"], page)
+                    else:
+                        log.warning("fmkorea 검색 HTTP %s kw=%s p=%s — 스킵",
+                                    e.response.status_code, kw["keyword"], page)
+                    break                       # 이 키워드의 남은 페이지도 중단
+                except httpx.HTTPError as e:
+                    log.warning("fmkorea 검색 실패 kw=%s p=%s err=%s — 스킵",
+                                kw["keyword"], page, e)
+                    break
+                soup = BeautifulSoup(r.text, "html.parser")
+                for a in soup.select(self.item_selector):
+                    title = a.get_text(strip=True)
+                    post_url = _post_url_from_href(a.get("href", ""), self.base_url)
+                    if not title or not post_url or post_url in seen:
+                        continue
+                    seen.add(post_url)
+                    results.append((title, post_url))
             per_kw.append(results)
         return _round_robin(per_kw, self.max_posts)
 
@@ -224,9 +231,17 @@ class FmkoreaAdapter:
                              "image_url": image, "images": images, **extra}))
         return out
 
+    def _client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(timeout=20, follow_redirects=True,
+                                 headers={"User-Agent": "Mozilla/5.0 bullet-in/0.1"},
+                                 proxy=self.proxy)
+
+    async def discover(self) -> list[tuple[str, str]]:
+        """검색 페이지만 읽어 후보 (제목 · 글 URL) 를 반환한다 — 글 본문은 받지 않는다."""
+        async with self._client() as c:
+            return await self._discover(c)
+
     async def fetch(self) -> list[RawItem]:
-        headers = {"User-Agent": "Mozilla/5.0 bullet-in/0.1"}
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True,
-                                     headers=headers, proxy=self.proxy) as c:
+        async with self._client() as c:
             matched = await self._discover(c)
             return await self._process(c, matched)

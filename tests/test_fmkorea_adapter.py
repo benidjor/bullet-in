@@ -432,3 +432,49 @@ def test_fmkorea_fetch_passes_proxy_to_client(monkeypatch):
             base_url="https://www.fmkorea.com", proxy="socks5://127.0.0.1:1080")
     asyncio.run(a.fetch())
     assert seen["proxy"] == "socks5://127.0.0.1:1080"
+
+@respx.mock
+def test_fmkorea_discovers_across_pages():
+    p1 = '<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날 1</a>'
+    p2 = '<a class="hx" href="/index.php?document_srl=2">[BBC] 아스날 2</a>'
+    respx.get("https://fm.test/s?t=title&kw=kw1&p=1").mock(return_value=httpx.Response(200, text=p1))
+    respx.get("https://fm.test/s?t=title&kw=kw1&p=2").mock(return_value=httpx.Response(200, text=p2))
+    a = FmkoreaAdapter(source_id="fmkorea",
+                       search_url="https://fm.test/s?t={target}&kw={keyword}&p={page}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com", pages=2)
+    found = asyncio.run(a.discover())
+    assert [t for t, _ in found] == ["[BBC] 아스날 1", "[BBC] 아스날 2"]
+
+
+@respx.mock
+def test_fmkorea_single_page_by_default():
+    p1 = '<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날 1</a>'
+    route = respx.get("https://fm.test/s?t=title&kw=kw1").mock(
+        return_value=httpx.Response(200, text=p1))
+    a = FmkoreaAdapter(source_id="fmkorea",
+                       search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    found = asyncio.run(a.discover())
+    assert route.call_count == 1
+    assert len(found) == 1
+
+
+@respx.mock
+def test_fmkorea_page_error_keeps_earlier_pages_and_next_keyword(caplog):
+    p1 = '<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날 1</a>'
+    p2 = '<a class="hx" href="/index.php?document_srl=9">[BBC] 아스날 9</a>'
+    respx.get("https://fm.test/s?t=title&kw=kw1&p=1").mock(return_value=httpx.Response(200, text=p1))
+    respx.get("https://fm.test/s?t=title&kw=kw1&p=2").mock(return_value=httpx.Response(429))
+    respx.get("https://fm.test/s?t=title&kw=kw2&p=1").mock(return_value=httpx.Response(200, text=p2))
+    respx.get("https://fm.test/s?t=title&kw=kw2&p=2").mock(return_value=httpx.Response(200, text=""))
+    a = FmkoreaAdapter(source_id="fmkorea",
+                       search_url="https://fm.test/s?t={target}&kw={keyword}&p={page}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"},
+                                        {"keyword": "kw2", "target": "title"}],
+                       base_url="https://www.fmkorea.com", pages=2)
+    found = asyncio.run(a.discover())
+    titles = {t for t, _ in found}
+    assert titles == {"[BBC] 아스날 1", "[BBC] 아스날 9"}
+    assert "429" in caplog.text
