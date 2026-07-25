@@ -42,7 +42,8 @@ def build_adapters(cfg: dict) -> list:
             out.append(XPlaywrightAdapter(sid, c["handle"],
                                           c.get("max_tweets", 20),
                                           c.get("cookies_path", "x_cookies.json"),
-                                          c.get("backtrack_config")))
+                                          c.get("backtrack_config"),
+                                          self_source=c.get("self_source", False)))
         elif kind == "fmkorea":
             out.append(FmkoreaAdapter(
                 sid, c["search_url"], c["search_keywords"],

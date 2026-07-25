@@ -4,7 +4,7 @@ fmkorea 경로 ③ (퍼가기 금지 + 페이월) 은 수집 단계 헤드라인
 import yaml
 from pathlib import Path
 
-FULL_SOURCES = {"arsenal_official", "x_afcstuff", "fmkorea",
+FULL_SOURCES = {"arsenal_official", "x_afcstuff", "x_ornstein", "fmkorea",
                 "bbc_sport", "bbc_gossip", "skysports", "guardian",
                 "goal", "football_london"}
 

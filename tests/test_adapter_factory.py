@@ -76,3 +76,15 @@ def test_factory_builds_arsenal_api_default_window():
                         "enabled": True, "config": {}}]}
     a = build_adapters(cfg)[0]
     assert isinstance(a, ArsenalApiAdapter) and a.window_hours == WINDOW_HOURS
+
+def test_factory_passes_self_source_to_x_playwright():
+    cfg = {"sources": [{"source_id": "x_ornstein", "adapter": "x_playwright", "enabled": True,
+                        "config": {"handle": "David_Ornstein", "self_source": True}}]}
+    a = build_adapters(cfg)[0]
+    assert a.self_source is True
+
+def test_factory_x_playwright_defaults_to_cited_path():
+    cfg = {"sources": [{"source_id": "x_afcstuff", "adapter": "x_playwright", "enabled": True,
+                        "config": {"handle": "afcstuff"}}]}
+    a = build_adapters(cfg)[0]
+    assert a.self_source is False

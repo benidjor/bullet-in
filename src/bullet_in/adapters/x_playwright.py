@@ -14,10 +14,12 @@ els => els.map(a => {
   const img = a.querySelector('[data-testid="tweetPhoto"] img');
   const href = link ? link.getAttribute('href') : '';
   const m = href ? href.match(/status\\/(\\d+)/) : null;
+  const am = href ? href.match(/^\\/([A-Za-z0-9_]+)\\/status\\//) : null;
   return {
     text: t ? t.innerText : '',
     created_at: time ? time.getAttribute('datetime') : '',
     status_id: m ? m[1] : '',
+    author: am ? am[1] : '',
     image_url: img ? img.src : null
   };
 })
@@ -95,10 +97,12 @@ class XPlaywrightAdapter:
     source_type = "x"
 
     def __init__(self, source_id: str, handle: str, max_tweets: int = 20,
-                 cookies_path: str = "x_cookies.json", backtrack_config_path: str | None = None):
+                 cookies_path: str = "x_cookies.json", backtrack_config_path: str | None = None,
+                 self_source: bool = False):
         self.source_id, self.handle = source_id, handle
         self.max_tweets, self.cookies_path = max_tweets, cookies_path
         self.backtrack_config_path = backtrack_config_path
+        self.self_source = self_source
 
     async def fetch(self) -> list[RawItem]:
         from datetime import timezone
@@ -118,7 +122,7 @@ class XPlaywrightAdapter:
             await page.goto(f"https://x.com/{self.handle}", wait_until="domcontentloaded")
             await page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
             raw_tweets = await _scroll_collect(page, _TWEET_JS, self.max_tweets)
-            items = parse_afcstuff_tweets(self.source_id, self.handle, raw_tweets, now)
+            items = self._parse_tweets(raw_tweets, now)
             timelines = {}
             if bt:
                 timelines = await self._scrape_journalists(ctx, items, bt, log)
@@ -157,6 +161,12 @@ class XPlaywrightAdapter:
                     await page.close()
         return timelines
 
+    def _parse_tweets(self, raw_tweets: list[dict], now: datetime) -> list[RawItem]:
+        """파서 선택 — self_source 면 본인 트윗 경로, 아니면 기존 인용 경로 (spec §5.2)."""
+        if self.self_source:
+            return parse_self_tweets(self.source_id, self.handle, raw_tweets, now)
+        return parse_afcstuff_tweets(self.source_id, self.handle, raw_tweets, now)
+
 
 def parse_afcstuff_tweets(source_id: str, handle: str,
                           raw_tweets: list[dict], now: datetime) -> list[RawItem]:
@@ -173,5 +183,31 @@ def parse_afcstuff_tweets(source_id: str, handle: str,
             url=f"https://x.com/{handle}/status/{sid}", fetched_at=now,
             raw_payload={"text": text, "created_at": t.get("created_at"),
                          "journalist": cited[-1], "handles": cited,
+                         "image_url": t.get("image_url")}))
+    return out
+
+
+_AFC_TAG_RE = re.compile(r"#AFC\b", re.IGNORECASE)
+
+
+def parse_self_tweets(source_id: str, handle: str,
+                      raw_tweets: list[dict], now: datetime) -> list[RawItem]:
+    """본인 트윗 파싱(self_source) — 인용 불요, #AFC 태그 있는 것만 RawItem (spec §5.2·§5.4).
+    #AFCB(본머스)·#AFCON 은 \\b 경계로 자연 배제. journalist 는 계정 주인으로 고정.
+    리트윗은 status 링크 작성자(author)가 계정 주인과 달라 드롭된다 (tier 1 오귀속 가드)."""
+    out: list[RawItem] = []
+    for t in raw_tweets:
+        author = t.get("author") or ""
+        if author and author.lower() != handle.lower():
+            continue
+        text = t.get("text") or ""
+        if not _AFC_TAG_RE.search(text):
+            continue
+        sid = t.get("status_id") or ""
+        out.append(RawItem(
+            source_id=source_id, source_type="x",
+            url=f"https://x.com/{handle}/status/{sid}", fetched_at=now,
+            raw_payload={"text": text, "created_at": t.get("created_at"),
+                         "journalist": "@" + handle,
                          "image_url": t.get("image_url")}))
     return out

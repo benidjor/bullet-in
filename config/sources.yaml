@@ -110,6 +110,15 @@ sources:
     freshness_hours: 24   # X 는 고빈도 소스 — 전역 48h 보다 좁게 감시
     config: { handle: "afcstuff", max_tweets: 30, cookies_path: "x_cookies.json", backtrack_config: "config/backtrack.yaml" }
     enabled: true
+  - source_id: x_ornstein
+    display_name: David Ornstein (X)
+    serving: full      # 상세 페이지 서빙 범위 (spec §2.3) — 트윗 원문은 수십 단어 = 인용 수준
+    medium: x
+    adapter: x_playwright
+    tier: 1            # 고정 tier — 본인 트윗엔 @핸들이 없어 x_mentions 판정 불가 (spec 2026-07-25 §5.1)
+    freshness_hours: 24   # X 는 고빈도 소스 — 전역 48h 보다 좁게 감시 (afcstuff 와 동일)
+    config: { handle: "David_Ornstein", max_tweets: 30, cookies_path: "x_cookies.json", self_source: true }
+    enabled: true
   - source_id: fmkorea
     display_name: fmkorea 축구 소식통
     serving: full      # 상세 페이지 서빙 범위 (spec §2.3) — 퍼가기 금지 정책 (#85) 이 별도 처리

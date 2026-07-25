@@ -767,6 +767,16 @@ def test_finalize_translation_keeps_tweet_title_despite_name_omission():
     title_ko, _, _, _ = finalize_translation(v, _tweet_row(), {}, _TWEET_NAMES, {})
     assert title_ko == "아스날, 알렉스 스콧 · 아유브 부아디 영입 논의"
 
+def test_finalize_translation_keeps_ornstein_tweet_title_despite_name_omission():
+    # 온스테인 (x_ornstein) 도 x_afcstuff 와 동일한 '제목 = 본문 전문' 트윗 구조라
+    # 인명 누락 축을 걸러야 한다 (BODY_AS_TITLE_SOURCES 누락 시 재큐 루프 회귀 방지).
+    from bullet_in.enrich import finalize_translation
+    v = {"title_ko": "아스날, 알렉스 스콧 · 아유브 부아디 영입 논의", "summary_ko": "요약",
+         "summary3_ko": "①\n②\n③", "body_ko": "본문이다."}
+    row = _tweet_row(source_id="x_ornstein")
+    title_ko, _, _, _ = finalize_translation(v, row, {}, _TWEET_NAMES, {})
+    assert title_ko == "아스날, 알렉스 스콧 · 아유브 부아디 영입 논의"
+
 def test_finalize_translation_still_flags_unfounded_loan_on_tweets():
     # 인명 누락만 걸러낸다 — '임대 무근거' 는 원문 대조가 유효하므로 트윗에서도 살아 있어야 한다.
     from bullet_in.enrich import finalize_translation
