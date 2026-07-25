@@ -274,3 +274,18 @@ def test_outlet_directory_maps_aliases_to_official_name(tmp_path):
     assert d["talksport"] == "talkSPORT"
     assert d["lequipe"] == "L'Équipe"
     assert d["레키프"] == "L'Équipe"
+
+def test_live_config_x_ornstein_fixed_tier_one():
+    """spec 2026-07-25 §5.1 — 본인 트윗엔 @핸들이 없어 x_mentions 판정 불가, 고정 tier 1."""
+    from datetime import datetime, timezone
+    from bullet_in.models import RawItem
+    from bullet_in.score import load_sources
+    sources = load_sources("config/sources.yaml")
+    assert sources["x_ornstein"]["tier"] == 1
+    assert sources["x_ornstein"]["config"]["self_source"] is True
+    registry = load_registry("config/credibility.yaml")
+    it = RawItem(source_id="x_ornstein", source_type="x",
+                 url="https://x.com/David_Ornstein/status/1",
+                 fetched_at=datetime(2026, 7, 26, tzinfo=timezone.utc),
+                 raw_payload={"text": "Arsenal deal #AFC", "journalist": "@David_Ornstein"})
+    assert resolve_tier(it, sources, registry, journalist="@David_Ornstein") == 1.0
