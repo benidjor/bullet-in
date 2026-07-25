@@ -53,3 +53,54 @@ def test_accumulate_skips_missing_status_id():
     acc: dict[str, dict] = {}
     _accumulate_tweets(acc, [_rt(status_id=""), _rt(status_id="7")])
     assert list(acc.keys()) == ["7"]
+
+
+from bullet_in.adapters.x_playwright import parse_self_tweets
+
+def test_self_source_keeps_uncited_afc_tweet():
+    # 온스테인 본인 트윗: 인용([ @handle ]) 없음 — afcstuff 경로라면 버려질 형태 (spec §5.2)
+    rts = [_rt(text="🚨 EXCL: Arsenal agree £60m deal for X #AFC", status_id="21")]
+    items = parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW)
+    assert len(items) == 1
+    it = items[0]
+    assert it.url == "https://x.com/David_Ornstein/status/21"
+    assert it.source_type == "x"
+    assert it.raw_payload["journalist"] == "@David_Ornstein"
+    assert it.raw_payload["text"].startswith("🚨 EXCL")
+
+def test_self_source_drops_tweets_without_afc_tag():
+    # 관련성 필터 (spec §5.4): #AFC 없는 타 클럽 · 유사 태그(#AFCB 본머스 · #AFCON)는 드롭
+    rts = [
+        _rt(text="Chelsea close in on midfielder #CFC", status_id="22"),
+        _rt(text="Bournemouth complete signing #AFCB", status_id="23"),
+        _rt(text="AFCON squads announced #AFCON", status_id="24"),
+    ]
+    assert parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW) == []
+
+def test_self_source_matches_afc_tag_mid_text():
+    rts = [_rt(text="Arsenal + Sporting agree Gyokeres fee. #AFC latest on @TheAthleticFC", status_id="25")]
+    items = parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW)
+    assert len(items) == 1
+
+def test_self_source_passes_image_and_created_at():
+    rts = [_rt(text="Team news #AFC", image_url="https://img/o.jpg",
+               created_at="2026-07-01T02:00:00.000Z", status_id="26")]
+    it = parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW)[0]
+    assert it.raw_payload["image_url"] == "https://img/o.jpg"
+    assert it.raw_payload["created_at"] == "2026-07-01T02:00:00.000Z"
+
+def test_self_source_drops_retweet_by_author_mismatch():
+    # 리트윗 가드 (A안): status 링크 작성자가 계정 주인이 아니면 #AFC 가 있어도 드롭
+    # — 리트윗은 원작자 status URL 이 잡히므로 author 세그먼트로 판별된다
+    rts = [_rt(text="Arsenal have agreed a deal #AFC", status_id="27",
+               author="SamiMokbel_BBC")]
+    assert parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW) == []
+
+def test_self_source_keeps_own_author_case_insensitive():
+    rts = [_rt(text="Arsenal latest #AFC", status_id="28", author="david_ornstein")]
+    assert len(parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW)) == 1
+
+def test_self_source_missing_author_passes_through():
+    # DOM 이 author 를 못 뽑은 경우 (빈 문자열) 는 가드를 통과시킨다 — 실 DOM 에선 항상 존재
+    rts = [_rt(text="Arsenal latest #AFC", status_id="29", author="")]
+    assert len(parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW)) == 1

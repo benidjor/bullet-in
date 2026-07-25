@@ -14,10 +14,12 @@ els => els.map(a => {
   const img = a.querySelector('[data-testid="tweetPhoto"] img');
   const href = link ? link.getAttribute('href') : '';
   const m = href ? href.match(/status\\/(\\d+)/) : null;
+  const am = href ? href.match(/^\\/([A-Za-z0-9_]+)\\/status\\//) : null;
   return {
     text: t ? t.innerText : '',
     created_at: time ? time.getAttribute('datetime') : '',
     status_id: m ? m[1] : '',
+    author: am ? am[1] : '',
     image_url: img ? img.src : null
   };
 })
@@ -173,5 +175,31 @@ def parse_afcstuff_tweets(source_id: str, handle: str,
             url=f"https://x.com/{handle}/status/{sid}", fetched_at=now,
             raw_payload={"text": text, "created_at": t.get("created_at"),
                          "journalist": cited[-1], "handles": cited,
+                         "image_url": t.get("image_url")}))
+    return out
+
+
+_AFC_TAG_RE = re.compile(r"#AFC\b", re.IGNORECASE)
+
+
+def parse_self_tweets(source_id: str, handle: str,
+                      raw_tweets: list[dict], now: datetime) -> list[RawItem]:
+    """본인 트윗 파싱(self_source) — 인용 불요, #AFC 태그 있는 것만 RawItem (spec §5.2·§5.4).
+    #AFCB(본머스)·#AFCON 은 \\b 경계로 자연 배제. journalist 는 계정 주인으로 고정.
+    리트윗은 status 링크 작성자(author)가 계정 주인과 달라 드롭된다 (tier 1 오귀속 가드)."""
+    out: list[RawItem] = []
+    for t in raw_tweets:
+        author = t.get("author") or ""
+        if author and author.lower() != handle.lower():
+            continue
+        text = t.get("text") or ""
+        if not _AFC_TAG_RE.search(text):
+            continue
+        sid = t.get("status_id") or ""
+        out.append(RawItem(
+            source_id=source_id, source_type="x",
+            url=f"https://x.com/{handle}/status/{sid}", fetched_at=now,
+            raw_payload={"text": text, "created_at": t.get("created_at"),
+                         "journalist": "@" + handle,
                          "image_url": t.get("image_url")}))
     return out
