@@ -746,3 +746,37 @@ def test_index_gossip_nonrep_reappears_as_hidden_dupcard():
     seg = html[max(0, i - 300):i + 300]
     assert "dupcard" in seg
     assert "display:none" in seg
+
+
+# ── 전체 기사 페이지 (spec 2026-07-26 §3) ────────────────────────────
+
+from bullet_in.serve.render import render_all
+
+
+def test_all_page_flat_without_clusters():
+    # 같은 주인공 2건도 묶지 않고 낱개 카드로 — relitem 이 없어야 한다
+    a1 = _row(content_hash="f1", title_ko="아스날, 에제 영입 합의", tier=2,
+              transfer_stage="agreed")
+    a2 = _row(content_hash="f2", title_ko="아스날, 에제 이적 임박", tier=4,
+              transfer_stage="rumour", source_id="bbc_sport")
+    html = render_all([a1, a2], SOURCES, NOW)
+    assert 'href="article/f1.html"' in html
+    assert 'href="article/f2.html"' in html
+    assert "relitem" not in html
+    assert 'class="reltoggle"' not in html
+
+
+def test_all_page_daygroup_carries_date_attr():
+    html = render_all([_row()], SOURCES, NOW)
+    assert 'data-date="2026-06-29"' in html
+
+
+def test_all_page_nav_active_and_sidebar():
+    html = render_all([_row()], SOURCES, NOW)
+    assert 'href="all.html"' in html          # 네비 항목
+    assert 'id="applyBtn"' in html            # 필터 사이드바 재사용
+
+
+def test_index_nav_links_all_page():
+    html = render_index([_row()], SOURCES, NOW)
+    assert 'href="all.html"' in html

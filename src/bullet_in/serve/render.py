@@ -833,6 +833,19 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
         gossip=gossip, gossip_n=gossip_reps, facets=facets, active="home", root="")
 
 
+def render_all(articles: list[dict], sources: dict, now: datetime,
+               directory: dict | None = None, registry=None,
+               outlet_dir: dict | None = None) -> str:
+    """전체 기사 평면 페이지 — 사건 묶음 없이 날짜 그룹 + 시간순 낱개 카드 (spec §3)."""
+    ordered = [_decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
+               for a in _sorted_latest(articles)]
+    days = group_by_day(ordered, now)
+    facets = facet_counts(articles, sources, directory=directory, registry=registry,
+                          outlet_dir=outlet_dir)
+    return _env().get_template("all.html.j2").render(
+        days=days, facets=facets, active="all", root="")
+
+
 # ── 사건 묶음 (spec2 §4-7) — 선수 사전 (name_map 정규형) 으로 묶는다 ──────
 # 전환어 (spec2 §4.3) — 뒤에 나온 선수가 주인공. 3.1 모델 실측 표현 '불발' 을 포함한다.
 _TRANSITION_WORDS = ["놓친", "대신", "대체", "무산", "불발", "결렬", "실패", "포기", "떠난"]
@@ -1047,6 +1060,10 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
     (out / "index.html").write_text(
         render_index(articles, sources, now, directory=directory, registry=registry,
                      outlet_dir=outlet_dir),
+        encoding="utf-8")
+    (out / "all.html").write_text(
+        render_all(articles, sources, now, directory=directory, registry=registry,
+                   outlet_dir=outlet_dir),
         encoding="utf-8")
     (out / "about.html").write_text(render_about(), encoding="utf-8")
 

@@ -1,0 +1,20 @@
+{% extends "_layout.html.j2" %}
+{% from "_cards.html.j2" import card %}
+{% block title %}전체 기사 · Bullet-in{% endblock %}
+
+{% block content %}
+<div class="sechead"><h2>전체 기사</h2><span class="kst">시각 KST 기준 · 묶음 없이 시간순</span></div>
+<div class="latest{{ ' latestcut' if days|length > 3 }}">
+{% for day in days %}
+<div class="daygroup{{ ' dg-extra' if loop.index > 3 }}" data-date="{{ day.date }}">
+<div class="daydiv"><span class="d">{{ day.label }}</span><span class="c">보도 {{ day.articles|length }}건</span></div>
+<div class="daylist">
+  {% for a in day.articles %}
+  <div class="block">{{ card(a, thumb=True) }}</div>
+  {% endfor %}
+</div>
+</div>
+{% endfor %}
+</div>
+{% if days|length > 3 %}<button class="latestmore" id="latestMore" type="button">이전 날짜 더보기 · {{ days|length - 3 }}개 날짜</button>{% endif %}
+{% endblock %}
