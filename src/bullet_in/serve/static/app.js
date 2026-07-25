@@ -95,15 +95,16 @@ function gossipReveal() {
   const hidden = gossipCards.filter(c => gossipList.classList.contains('weekcut')
     ? c.classList.contains('gwk') : c.classList.contains('wcut'));
   if (!hidden.length) return;
-  const anchor = new Date(hidden[0].dataset.published);
+  const day = s => s ? new Date(s.slice(0, 10)) : null;   // 캘린더 날짜 (latest 와 동일 규칙)
+  const anchor = day(hidden[0].dataset.published);
   anchor.setDate(anchor.getDate() - 6);
   if (gossipList.classList.contains('weekcut')) {
     gossipList.classList.remove('weekcut');
     gossipCards.forEach(c => { if (c.classList.contains('gwk')) c.classList.add('wcut'); });
   }
   gossipCards.forEach(c => {
-    const d = c.dataset.published;
-    if (!d || new Date(d) >= anchor) c.classList.remove('wcut');
+    const d = day(c.dataset.published);
+    if (!d || d >= anchor) c.classList.remove('wcut');
   });
   gossipSync();
 }

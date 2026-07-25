@@ -806,10 +806,10 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
     for g in gossip:
         g["_gwhen"] = gossip_when(g, now)   # 가십 카드는 날짜 · time 정밀도면 시각까지 (6-3)
     if gossip:
-        newest = _sort_ts(gossip[0])[0]
-        cut = newest - timedelta(days=7)
+        newest_day = to_kst(_sort_ts(gossip[0])[0]).date()
+        cut = newest_day - timedelta(days=6)   # 최신 날짜 포함 7개 캘린더 날짜
         for g in gossip:
-            g["_gwk"] = _sort_ts(g)[0] < cut   # 최신 가십 기준 7일 밖 → 초기 숨김
+            g["_gwk"] = to_kst(_sort_ts(g)[0]).date() < cut
     gossip_hidden = sum(1 for g in gossip if g.get("_gwk") and not g.get("_dup"))
     blocks = []
     for c in clusters:
