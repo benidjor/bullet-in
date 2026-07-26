@@ -12,6 +12,8 @@ els => els.map(a => {
   const time = a.querySelector('time');
   const link = a.querySelector('a[href*="/status/"]');
   const img = a.querySelector('[data-testid="tweetPhoto"] img');
+  const card = a.querySelector('[data-testid="card.wrapper"]');
+  const ca = card ? card.querySelector('a[href]') : null;
   const href = link ? link.getAttribute('href') : '';
   const m = href ? href.match(/status\\/(\\d+)/) : null;
   const am = href ? href.match(/^\\/([A-Za-z0-9_]+)\\/status\\//) : null;
@@ -20,7 +22,8 @@ els => els.map(a => {
     created_at: time ? time.getAttribute('datetime') : '',
     status_id: m ? m[1] : '',
     author: am ? am[1] : '',
-    image_url: img ? img.src : null
+    image_url: img ? img.src : null,
+    card_href: ca ? ca.getAttribute('href') : ''
   };
 })
 """
@@ -209,5 +212,6 @@ def parse_self_tweets(source_id: str, handle: str,
             url=f"https://x.com/{handle}/status/{sid}", fetched_at=now,
             raw_payload={"text": text, "created_at": t.get("created_at"),
                          "journalist": "@" + handle,
-                         "image_url": t.get("image_url")}))
+                         "image_url": t.get("image_url"),
+                         "card_href": t.get("card_href") or None}))
     return out

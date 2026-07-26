@@ -121,3 +121,13 @@ def test_adapter_parse_tweets_default_afcstuff_branch():
            _rt(text="News [ @SamiMokbel_BBC ]", status_id="32")]
     items = a._parse_tweets(rts, NOW)
     assert [i.raw_payload["journalist"] for i in items] == ["@SamiMokbel_BBC"]
+
+def test_self_source_passes_card_href():
+    rts = [_rt(text="Exclusive #AFC", status_id="41", card_href="https://t.co/abc")]
+    it = parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW)[0]
+    assert it.raw_payload["card_href"] == "https://t.co/abc"
+
+def test_self_source_card_absent_is_none():
+    rts = [_rt(text="News #AFC", status_id="42")]
+    it = parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW)[0]
+    assert it.raw_payload["card_href"] is None
