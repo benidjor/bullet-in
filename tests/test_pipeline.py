@@ -85,7 +85,7 @@ def test_to_articles_prefers_en_source_over_fmkorea_for_same_url():
     arts, stats = to_articles(raw, sources, seen={})
     assert len(arts) == 1
     assert arts[0].source_id == "bbc_sport"   # EN 우선, fmkorea 스킵
-    assert stats["dup_count"] == 1
+    assert stats["blocked_count"] == 1
 
 def test_to_articles_passes_inline_images():
     raw = [RawItem(source_id="bbc_sport", source_type="html",
@@ -267,3 +267,75 @@ def test_to_articles_precision_none_when_absent():
     sources = {"skysports": {"source_id": "skysports", "tier": 4}}
     arts, _ = to_articles([item], sources, seen={})
     assert arts[0].published_precision is None
+
+def test_cross_run_complete_row_blocks_fmkorea():
+    # cross-run: DB 에 BBC 완전체 존재 → fmkorea 퍼온 글 드롭 (2026-07-25 오염 사례 재현 차단)
+    from bullet_in.canonical import canonical_url
+    now = datetime.now(timezone.utc)
+    url = "https://www.bbc.com/sport/football/articles/x1"
+    raw = [RawItem(source_id="fmkorea", source_type="html", url=url, fetched_at=now,
+                   raw_payload={"title": "한국어 퍼온 제목", "body": "퍼온 본문"})]
+    sources = {"fmkorea": {"source_id": "fmkorea", "tier": 4}}
+    seen = {canonical_url(url): ("h_en", 1, "bbc_sport", True)}
+    arts, stats = to_articles(raw, sources, seen=seen)
+    assert arts == []
+    assert stats["blocked_count"] == 1
+
+def test_cross_run_stub_upgraded_by_complete_item():
+    # 온스테인 스텁 → fmkorea 전문 도착 시 같은 행 승격 (rev+1 · 새 소스 귀속)
+    from bullet_in.canonical import canonical_url
+    now = datetime.now(timezone.utc)
+    url = "https://www.nytimes.com/athletic/12345/"
+    raw = [RawItem(source_id="fmkorea", source_type="html", url=url, fetched_at=now,
+                   raw_payload={"title": "전문 제목", "body": "전문 본문"})]
+    sources = {"fmkorea": {"source_id": "fmkorea", "tier": 4}}
+    seen = {canonical_url(url): ("h_tweet", 1, "x_ornstein", False)}
+    arts, stats = to_articles(raw, sources, seen=seen)
+    assert len(arts) == 1
+    assert arts[0].revision == 2
+    assert arts[0].source_id == "fmkorea"
+    assert stats["blocked_count"] == 0
+
+def test_cross_run_stub_not_replaced_by_stub():
+    from bullet_in.canonical import canonical_url
+    now = datetime.now(timezone.utc)
+    url = "https://www.nytimes.com/athletic/12345/"
+    raw = [RawItem(source_id="fmkorea", source_type="html", url=url, fetched_at=now,
+                   raw_payload={"title": "헤드라인만"})]
+    sources = {"fmkorea": {"source_id": "fmkorea", "tier": 4}}
+    seen = {canonical_url(url): ("h_tweet", 1, "x_ornstein", False)}
+    arts, stats = to_articles(raw, sources, seen=seen)
+    assert arts == []
+    assert stats["blocked_count"] == 1
+
+def test_in_batch_complete_en_beats_complete_fmkorea():
+    # 같은 배치: 정렬로 EN 이 먼저 완전체 선점 → fmkorea blocked
+    # (기존엔 한국어 제목 hash 불일치 = "changed" 로 두 행 모두 실려 뒤가 앞을 덮었다)
+    now = datetime.now(timezone.utc)
+    url = "https://www.bbc.com/sport/football/articles/x2"
+    raw = [
+        RawItem(source_id="fmkorea", source_type="html", url=url, fetched_at=now,
+                raw_payload={"title": "한국어 퍼온 제목", "body": "퍼온 본문"}),
+        RawItem(source_id="bbc_sport", source_type="html", url=url, fetched_at=now,
+                raw_payload={"title": "Arsenal sign X", "body": "full body"}),
+    ]
+    sources = {"fmkorea": {"source_id": "fmkorea", "tier": 4},
+               "bbc_sport": {"source_id": "bbc_sport", "tier": 2}}
+    arts, stats = to_articles(raw, sources, seen={})
+    assert len(arts) == 1
+    assert arts[0].source_id == "bbc_sport"
+    assert stats["blocked_count"] == 1
+
+def test_same_source_revision_still_allowed():
+    # 같은 소스의 제목 수정 재수집은 가드 무관하게 통과 (revision 원 목적 보존)
+    from bullet_in.canonical import canonical_url
+    now = datetime.now(timezone.utc)
+    url = "https://www.bbc.com/sport/football/articles/x3"
+    raw = [RawItem(source_id="bbc_sport", source_type="html", url=url, fetched_at=now,
+                   raw_payload={"title": "Arsenal sign X (updated)", "body": "full"})]
+    sources = {"bbc_sport": {"source_id": "bbc_sport", "tier": 2}}
+    seen = {canonical_url(url): ("h_old", 1, "bbc_sport", True)}
+    arts, stats = to_articles(raw, sources, seen=seen)
+    assert len(arts) == 1
+    assert arts[0].revision == 2
+    assert stats["blocked_count"] == 0
