@@ -1,5 +1,5 @@
 from datetime import datetime
-from bullet_in.serve.render import build_ops_view, render_ops, write_ops
+from bullet_in.serve.render import build_ops_view, render_ops, write_ops, unmatched_articles
 
 NOW = datetime(2026, 7, 14, 9, 12, 0)
 SOURCES = {"bbc_sport": {"display_name": "BBC Sport"}}
@@ -60,3 +60,15 @@ def test_render_ops_stale_badge_renders():
     snap["freshness"][0]["stale"] = 1                 # PR #39 이월 ③ — 미검증 경로
     html = render_ops(build_ops_view(snap, SOURCES, 0, NOW))
     assert "✕ 초과" in html and "b-stale" in html
+
+
+def test_unmatched_requires_stage_and_no_player():
+    src = {"skysports": {"display_name": "Sky Sports"}}
+    hit = {"source_id": "skysports", "title_ko": "아스날, 스콧 영입 논의",
+           "summary_ko": "", "body_ko": "", "transfer_stage": "interest",
+           "published_at": datetime(2026, 7, 21, 9, 0),
+           "published_precision": "time", "fetched_at": datetime(2026, 7, 21, 9, 0)}
+    known = dict(hit, title_ko="아스날, 에제 영입 논의")   # 사전 선수 → 제외
+    nostage = dict(hit, transfer_stage=None)              # 단계 없음 → 제외
+    rows = unmatched_articles([hit, known, nostage], src)
+    assert [r["title"] for r in rows] == ["아스날, 스콧 영입 논의"]

@@ -885,6 +885,22 @@ def attribution_players(row: dict, sources: dict, players: list[str]) -> list[st
     return [p for p in players if p in text]
 
 
+def unmatched_articles(articles: list[dict], sources: dict) -> list[dict]:
+    """영입 단계가 있는데 사전 귀속 0명인 기사 — name_map 확장 후보 (spec §8)."""
+    players = load_player_names()
+    out = []
+    for a in _sorted_latest(articles):
+        if filter_stage(a) not in _STAGE_RANK:
+            continue
+        if attribution_players(a, sources, players):
+            continue
+        ts = _sort_ts(a)[0]
+        out.append({"title": a.get("title_ko") or a.get("title_original") or "",
+                    "source": a.get("source_id") or "",
+                    "date": fmt_date(to_kst(ts))})
+    return out
+
+
 def player_slug(name: str, surname: str, taken: set) -> str:
     """소문자 영문 성 slug. 충돌 시 한글키 해시 4자 접미 (렌더 경고는 호출부)."""
     base = re.sub(r"[^a-z0-9]", "", (surname or "").lower()) or "player"
@@ -1200,14 +1216,14 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
     shutil.copytree(_STATIC_DIR / "fonts", out / "fonts", dirs_exist_ok=True)
 
 
-def render_ops(view: dict) -> str:
-    return _env().get_template("ops.html.j2").render(view=view)
+def render_ops(view: dict, unmatched: list[dict] | None = None) -> str:
+    return _env().get_template("ops.html.j2").render(view=view, unmatched=unmatched)
 
 
 def write_ops(snapshot: dict, sources: dict, out_dir: str | Path,
-              anomaly_count: int, now: datetime) -> None:
+              anomaly_count: int, now: datetime, unmatched: list[dict] | None = None) -> None:
     """운영 뷰 site/ops.html 생성. 실패 격리는 호출부 (run.py) 책임."""
     view = build_ops_view(snapshot, sources, anomaly_count, now)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "ops.html").write_text(render_ops(view), encoding="utf-8")
+    (out / "ops.html").write_text(render_ops(view, unmatched=unmatched), encoding="utf-8")
