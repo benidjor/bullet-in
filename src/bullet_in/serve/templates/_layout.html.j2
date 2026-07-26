@@ -42,6 +42,7 @@
   <a class="logo" href="{{ root }}index.html">Bullet-in<span class="dot">.</span></a>
   <nav class="nav">
     <a class="{{ 'active' if active == 'home' else '' }}" href="{{ root }}index.html">홈</a>
+    <a class="{{ 'active' if active == 'all' else '' }}" href="{{ root }}all.html">전체 기사</a>
     <a class="{{ 'active' if active == 'about' else '' }}" href="{{ root }}about.html">소개</a>
   </nav>
   <label class="search">
@@ -49,7 +50,7 @@
     <input id="q" placeholder="선수·구단·이적 키워드 검색">
   </label>
   <span class="spacer"></span>
-  {% if active == 'home' %}
+  {% if active in ('home', 'all') %}
   <select class="sortsel" id="sortSel" title="정렬 — 조회순은 이 기기에서 연 기사 기록 기준">
     <option value="latest" selected>최신순</option>
     <option value="confidence">신뢰도순</option>

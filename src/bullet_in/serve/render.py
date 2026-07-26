@@ -805,6 +805,12 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
     gossip.sort(key=_sort_ts, reverse=True)   # 가십을 발행 · 수집 시각 내림차순으로 (2-2)
     for g in gossip:
         g["_gwhen"] = gossip_when(g, now)   # 가십 카드는 날짜 · time 정밀도면 시각까지 (6-3)
+    if gossip:
+        newest_day = to_kst(_sort_ts(gossip[0])[0]).date()
+        cut = newest_day - timedelta(days=6)   # 최신 날짜 포함 7개 캘린더 날짜
+        for g in gossip:
+            g["_gwk"] = to_kst(_sort_ts(g)[0]).date() < cut
+    gossip_hidden = sum(1 for g in gossip if g.get("_gwk") and not g.get("_dup"))
     blocks = []
     for c in clusters:
         if is_gossip_cluster(c):
@@ -830,7 +836,21 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
                           outlet_dir=outlet_dir)
     return _env().get_template("index.html.j2").render(
         lead=top["lead"], mains=top["mains"], day_blocks=day_blocks,
-        gossip=gossip, gossip_n=gossip_reps, facets=facets, active="home", root="")
+        gossip=gossip, gossip_n=gossip_reps, gossip_hidden=gossip_hidden,
+        facets=facets, active="home", root="")
+
+
+def render_all(articles: list[dict], sources: dict, now: datetime,
+               directory: dict | None = None, registry=None,
+               outlet_dir: dict | None = None) -> str:
+    """전체 기사 평면 페이지 — 사건 묶음 없이 날짜 그룹 + 시간순 낱개 카드 (spec §3)."""
+    ordered = [_decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
+               for a in _sorted_latest(articles)]
+    days = group_by_day(ordered, now)
+    facets = facet_counts(articles, sources, directory=directory, registry=registry,
+                          outlet_dir=outlet_dir)
+    return _env().get_template("all.html.j2").render(
+        days=days, facets=facets, active="all", root="")
 
 
 # ── 사건 묶음 (spec2 §4-7) — 선수 사전 (name_map 정규형) 으로 묶는다 ──────
@@ -1047,6 +1067,10 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
     (out / "index.html").write_text(
         render_index(articles, sources, now, directory=directory, registry=registry,
                      outlet_dir=outlet_dir),
+        encoding="utf-8")
+    (out / "all.html").write_text(
+        render_all(articles, sources, now, directory=directory, registry=registry,
+                   outlet_dir=outlet_dir),
         encoding="utf-8")
     (out / "about.html").write_text(render_about(), encoding="utf-8")
 

@@ -72,6 +72,12 @@ def test_index_sorts_latest_first():
     html = render_index([old, new], SOURCES, NOW)
     assert html.index("최신") < html.index("옛날")
 
+def test_index_daygroup_carries_date_attr():
+    # 주 단위 더보기 (spec §4) 의 JS 계약 — 날짜 그룹이 data-date 를 가진다
+    html = render_index([_row()], SOURCES, NOW)
+    assert 'class="daygroup' in html
+    assert 'data-date="2026-06-29"' in html
+
 def test_index_renders_active_stage_filter():
     html = render_index([_row(), _row(content_hash="h2")], SOURCES, NOW)
     assert "공신력 중" in html
@@ -746,3 +752,65 @@ def test_index_gossip_nonrep_reappears_as_hidden_dupcard():
     seg = html[max(0, i - 300):i + 300]
     assert "dupcard" in seg
     assert "display:none" in seg
+
+
+def test_gossip_older_than_week_marked_gwk():
+    # 가십 초기 노출 = 최신 가십 기준 최근 7일 (spec §4 — 24건 개수 컷 대체)
+    recent = _row(content_hash="g1", source_id="bbc_gossip", tier=4,
+                  title_ko="아스날, 촐리스 루머",
+                  published_at=datetime(2026, 6, 29, 10, 0))
+    old = _row(content_hash="g2", source_id="bbc_gossip", tier=4,
+               title_ko="아스날, 진첸코 루머",
+               published_at=datetime(2026, 6, 20, 10, 0))
+    html = render_index([recent, old], {**SOURCES, "bbc_gossip":
+        {"display_name": "BBC Football Gossip", "serving": "full"}}, NOW)
+    i_old = html.index('href="article/g2.html"')
+    seg_old = html[max(0, i_old - 400):i_old]
+    assert "gwk" in seg_old                    # 7일 밖 → 초기 숨김 표식
+    i_new = html.index('href="article/g1.html"')
+    seg_new = html[max(0, i_new - 400):i_new]
+    assert "gwk" not in seg_new
+    assert "weekcut" in html                   # 숨길 것이 있으면 목록에 초기 컷
+
+
+# ── 전체 기사 페이지 (spec 2026-07-26 §3) ────────────────────────────
+
+from bullet_in.serve.render import render_all
+
+
+def test_all_page_flat_without_clusters():
+    # 같은 주인공 2건도 묶지 않고 낱개 카드로 — relitem 이 없어야 한다
+    a1 = _row(content_hash="f1", title_ko="아스날, 에제 영입 합의", tier=2,
+              transfer_stage="agreed")
+    a2 = _row(content_hash="f2", title_ko="아스날, 에제 이적 임박", tier=4,
+              transfer_stage="rumour", source_id="bbc_sport")
+    html = render_all([a1, a2], SOURCES, NOW)
+    assert 'href="article/f1.html"' in html
+    assert 'href="article/f2.html"' in html
+    assert "relitem" not in html
+    assert 'class="reltoggle"' not in html
+
+
+def test_all_page_daygroup_carries_date_attr():
+    html = render_all([_row()], SOURCES, NOW)
+    assert 'data-date="2026-06-29"' in html
+
+
+def test_all_page_nav_active_and_sidebar():
+    html = render_all([_row()], SOURCES, NOW)
+    assert 'href="all.html"' in html          # 네비 항목
+    assert 'id="applyBtn"' in html            # 필터 사이드바 재사용
+
+
+def test_index_nav_links_all_page():
+    html = render_index([_row()], SOURCES, NOW)
+    assert 'href="all.html"' in html
+
+
+def test_section_heads_link_to_all_page():
+    # 최신 소식 · 가십 헤더 오른쪽에 전체 기사 진입 링크 (발견성 — 사용자 확정 배치)
+    g = _row(content_hash="sl1", source_id="goal", tier=4, transfer_stage="rumour",
+             title_ko="아스날, 에제 루머")
+    html = render_index([_row(), g], {**SOURCES, **FILTER_SOURCES}, NOW)
+    assert html.count('class="seclink"') == 2
+    assert '전체 기사 보기' in html

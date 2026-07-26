@@ -77,23 +77,97 @@ document.querySelectorAll('.reltoggle').forEach(btn => {
   };
 });
 
-// ── 가십 더보기 (초기 24묶음만 · 나머지는 버튼으로) ─────────────────
+// ── 가십 — 주 단위 더보기 · 접기 (초기 = 최근 7일, 서버 gwk 표식) ────
 const gossipList = document.querySelector('.gossiplist');
 const gossipMore = document.getElementById('gossipMore');
-function expandGossip() {
-  gossipList?.classList.remove('morecut');
+const gossipCards = gossipList ? [...gossipList.querySelectorAll('.item:not(.dupcard)')] : [];
+function gossipHiddenCount() {
+  if (gossipList?.classList.contains('weekcut'))
+    return gossipCards.filter(c => c.classList.contains('gwk')).length;
+  return gossipCards.filter(c => c.classList.contains('wcut')).length;
+}
+function gossipSync() {
+  if (!gossipMore) return;
+  const n = gossipHiddenCount();
+  gossipMore.textContent = n ? `이전 날짜 가십 더보기 · ${n}건` : '접기';
+}
+function gossipReveal() {
+  const hidden = gossipCards.filter(c => gossipList.classList.contains('weekcut')
+    ? c.classList.contains('gwk') : c.classList.contains('wcut'));
+  if (!hidden.length) return;
+  const day = s => s ? new Date(s.slice(0, 10)) : null;   // 캘린더 날짜 (latest 와 동일 규칙)
+  const anchor = day(hidden[0].dataset.published);
+  if (anchor) anchor.setDate(anchor.getDate() - 6);
+  if (gossipList.classList.contains('weekcut')) {
+    gossipList.classList.remove('weekcut');
+    gossipCards.forEach(c => { if (c.classList.contains('gwk')) c.classList.add('wcut'); });
+  }
+  gossipCards.forEach(c => {
+    const d = day(c.dataset.published);
+    if (!anchor || !d || d >= anchor) c.classList.remove('wcut');
+  });
+  gossipSync();
+}
+function gossipCollapse() {
+  gossipCards.forEach(c => c.classList.remove('wcut'));
+  gossipList.classList.add('weekcut');
+  gossipSync();
+  document.querySelector('.gossiphead')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function expandGossip() {                        // 필터 활성 시 전체 전개 (기존 계약)
+  gossipList?.classList.remove('weekcut');
+  gossipCards.forEach(c => c.classList.remove('wcut'));
   if (gossipMore) gossipMore.hidden = true;
 }
-if (gossipMore) gossipMore.onclick = expandGossip;
+if (gossipMore) gossipMore.onclick = () =>
+  gossipHiddenCount() ? gossipReveal() : gossipCollapse();
+if (gossipMore) gossipSync();
 
-// ── 최신 소식 주 단위 더보기 (최근 3일 그룹만 · 이전 날짜는 버튼으로) ────
+// ── 최신 소식 · 전체 기사 — 주 단위 더보기 · 접기 (spec §4) ─────────
 const latestWrap = document.querySelector('.latest');
 const latestMore = document.getElementById('latestMore');
-function expandLatest() {
+const dayGroups = latestWrap ? [...latestWrap.querySelectorAll('.daygroup')] : [];
+const LATEST_INIT = 3;
+function latestHiddenCount() {
+  if (latestWrap?.classList.contains('latestcut'))
+    return dayGroups.filter(g => g.classList.contains('dg-extra')).length;
+  return dayGroups.filter(g => g.classList.contains('wcut')).length;
+}
+function latestSync() {
+  if (!latestMore) return;
+  const n = latestHiddenCount();
+  latestMore.textContent = n
+    ? (latestWrap.classList.contains('latestcut')
+        ? `이전 날짜 더보기 · ${n}개 날짜` : `이전 7일 더보기 · ${n}개 날짜`)
+    : '접기';
+}
+function latestReveal() {
+  const hidden = dayGroups.filter(g => latestWrap.classList.contains('latestcut')
+    ? g.classList.contains('dg-extra') : g.classList.contains('wcut'));
+  if (!hidden.length) return;
+  const anchor = new Date(hidden[0].dataset.date);          // 가장 최신의 숨은 그룹부터 7일 창
+  anchor.setDate(anchor.getDate() - 6);
+  if (latestWrap.classList.contains('latestcut')) {
+    latestWrap.classList.remove('latestcut');
+    dayGroups.forEach((g, i) => { if (i >= LATEST_INIT) g.classList.add('wcut'); });
+  }
+  dayGroups.forEach(g => { if (new Date(g.dataset.date) >= anchor) g.classList.remove('wcut'); });
+  latestSync();
+}
+function latestCollapse() {
+  dayGroups.forEach(g => g.classList.remove('wcut'));
+  latestWrap.classList.add('latestcut');
+  latestSync();
+  latestWrap.previousElementSibling?.scrollIntoView({ behavior: 'smooth', block: 'start' });  // 구역 상단 (sechead) 보정
+}
+function expandLatest() {                                  // 필터 활성 시 전체 전개 (기존 계약)
   latestWrap?.classList.remove('latestcut');
+  dayGroups.forEach(g => g.classList.remove('wcut'));
   if (latestMore) latestMore.hidden = true;
 }
-if (latestMore) latestMore.onclick = expandLatest;
+if (latestMore) latestMore.onclick = () =>
+  latestHiddenCount() ? latestReveal() : latestCollapse();
+if (latestMore) latestSync();
 
 const URL_GROUPS = ['outlet', 'journalist', 'tier', 'stage', 'bucket'];
 const box = (g) => [...side.querySelectorAll(`input[data-group="${g}"]`)];
@@ -138,8 +212,6 @@ function syncTierAll(changed) {
 // 블록은 구성 기사 중 하나라도 매칭이면 표시 — 대표가 조건 밖이면 흐림 (.ctxdim),
 // 매칭 갈래는 자동 펼침. 필터 활성 시 밴드는 숨기고 재출현 카드 (.dupcard) 로 대체.
 function applyFilters() {
-  expandGossip();                                        // 필터가 걸리면 가십 전체를 대상으로
-  expandLatest();                                        // 이전 날짜 그룹도 필터 대상으로 편다
   const q = (searchInput?.value || '').trim().toLowerCase();
   const outlets = checkedVals('outlet');
   const journalists = checkedVals('journalist');
@@ -151,6 +223,13 @@ function applyFilters() {
   const conds = outlets.length + journalists.length + tiers.length
     + stageSel.length + (showOther ? 1 : 0) + (q ? 1 : 0);
   const active = conds > 0;
+  if (active) {
+    expandGossip();                                      // 필터가 걸리면 가십 전체를 대상으로
+    expandLatest();                                       // 이전 날짜 그룹도 필터 대상으로 편다
+  } else {
+    if (latestMore) { latestMore.hidden = false; latestSync(); }
+    if (gossipMore) { gossipMore.hidden = false; gossipSync(); }
+  }
 
   const match = (d) => {
     const okText = !q || (d.text || '').includes(q);

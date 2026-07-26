@@ -1,25 +1,7 @@
 {% extends "_layout.html.j2" %}
 {% block title %}Bullet-in · 아스날 이적 뉴스{% endblock %}
 
-{% macro stage_badge(s) %}{% if s %}<span class="stage {{ s.tone }}{{ ' filled' if s.filled }}">{{ s.label }}</span>{% endif %}{% endmacro %}
-{% macro card(a, dest=None, when=None, cls='', show_cred=True, thumb=False, hidden=False) %}
-{% set show_thumb = thumb and a.image_url %}
-<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if hidden or not a._stage_disp %} style="display:none"{% endif %} href="article/{{ a.content_hash }}.html"
-   data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-tier="{{ a._tier_key }}"
-   data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}"
-   data-published="{{ a._published_iso }}" data-confidence="{{ a.confidence_score or 0 }}"
-   data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">
-  {% if show_thumb %}<div class="cimg"><img src="{{ a.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.item').classList.remove('hasthumb');this.closest('.cimg').remove()"></div>{% endif %}
-  <div class="body">
-    <div class="cardhead">{{ stage_badge(a._stage_disp) }}{% if dest %}<span class="dest">{{ dest }}</span>{% endif %}<span class="src">{{ a._outlet | replace(' (aggregator)', '') }}</span>{% if show_cred and a._reader_tier %}<span class="cred">{{ a._reader_tier }}</span>{% endif %}<span class="when">{{ when or a._time }}</span></div>
-    <div class="htitle">{{ a._title }}{% if a._pending %} <span class="pending">번역 대기</span>{% endif %}</div>
-    {% if a._show_summary and a.summary_ko %}<p class="dek">{{ a.summary_ko }}</p>{% endif %}
-  </div>
-</a>
-{% endmacro %}
-{% macro relitem(a, rep) %}<a class="relitem" href="article/{{ a.content_hash }}.html"
-   data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}" data-tier="{{ a._tier_key }}"
-   data-stage="{{ a._stage }}" data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}"><span class="rt">{{ a._title }}</span><span class="rm">{{ a._outlet }}{% if a._reader_tier %} · {{ a._reader_tier }}{% endif %}{% if a._date and a._date != rep._date %} · {{ a._date }}{% endif %}</span></a>{% endmacro %}
+{% from "_cards.html.j2" import stage_badge, card, relitem %}
 
 {% block band %}
 {% if lead %}
@@ -51,11 +33,11 @@
 {% endblock %}
 
 {% block content %}
-<div class="sechead"><h2>최신 소식</h2><span class="kst">시각 KST 기준</span></div>
+<div class="sechead"><h2>최신 소식</h2><span class="secside"><span class="kst">시각 KST 기준</span><a class="seclink" href="all.html">전체 기사 보기</a></span></div>
 
 <div class="latest{{ ' latestcut' if day_blocks|length > 3 }}">
 {% for day in day_blocks %}
-<div class="daygroup{{ ' dg-extra' if loop.index > 3 }}">
+<div class="daygroup{{ ' dg-extra' if loop.index > 3 }}" data-date="{{ day.date }}">
 <div class="daydiv"{% if day.all_dup %} style="display:none"{% endif %}><span class="d">{{ day.label }}</span><span class="c">묶음 {{ day.n }}개 · 보도 {{ day.reports }}건</span></div>
 <div class="daylist">
   {% for b in day.blocks %}
@@ -80,18 +62,16 @@
 {% if day_blocks|length > 3 %}<button class="latestmore" id="latestMore" type="button">이전 날짜 더보기 · {{ day_blocks|length - 3 }}개 날짜</button>{% endif %}
 
 {% if gossip %}
-<div class="sechead gossiphead"><h2>가십</h2><span class="kst">묶음 {{ gossip_n }}개</span></div>
-<div class="gossiplist{{ ' morecut' if gossip_n > 24 }}">
-  {% set ns = namespace(vis=0) %}
-  {% for a in gossip %}{% if not a._dup %}{% set ns.vis = ns.vis + 1 %}{% endif -%}
-  {{ card(a, when=a._gwhen, cls='dupcard' if a._dup else ('gx' if ns.vis > 24 else ''), hidden=a._dup, show_cred=False) }}{% endfor %}
+<div class="sechead gossiphead"><h2>가십</h2><span class="secside"><span class="kst">묶음 {{ gossip_n }}개</span><a class="seclink" href="all.html">전체 기사 보기</a></span></div>
+<div class="gossiplist{{ ' weekcut' if gossip_hidden }}">
+  {% for a in gossip %}{{ card(a, when=a._gwhen, cls='dupcard' if a._dup else ('gwk' if a._gwk else ''), hidden=a._dup, show_cred=False) }}{% endfor %}
 </div>
-{% if gossip_n > 24 %}<button class="gossipmore" id="gossipMore" type="button">가십 더보기 · {{ gossip_n - 24 }}개</button>{% endif %}
+{% if gossip_hidden %}<button class="gossipmore" id="gossipMore" type="button">이전 날짜 가십 더보기 · {{ gossip_hidden }}건</button>{% endif %}
 <p class="gossipnote">나머지 최하 등급 보도는 위 사건 묶음 안에 들어 있습니다.</p>
 {% endif %}
 
 <footer class="sitefoot">
   <p>Bullet-in 은 아스날 관련 보도를 여러 매체에서 모아 한국어로 옮겨 보여 줍니다. 본문은 자동 번역이며 원문 링크를 함께 싣습니다.</p>
-  <p>저작권은 각 매체에 있습니다 · <a href="about.html">소개</a> · <a href="ops.html">수집 현황</a></p>
+  <p>저작권은 각 매체에 있습니다 · <a href="all.html">전체 기사</a> · <a href="about.html">소개</a> · <a href="ops.html">수집 현황</a></p>
 </footer>
 {% endblock %}
