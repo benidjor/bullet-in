@@ -247,6 +247,22 @@ def test_index_hides_offmission_card_by_default():
     assert "display:none" in o_tag       # off-mission(other) 카드만 숨김
     assert "display:none" not in t_tag   # 이적 카드(rumour)는 노출
 
+
+# ── 선수 색인 (spec §5) ─────────────────────────────────────────────
+
+from bullet_in.serve.render import render_players
+
+
+def test_players_index_orders_by_stage_then_count():
+    agreed = _row(content_hash="p1", title_ko="아스날, 에제 영입 합의",
+                  transfer_stage="agreed")
+    rumour = _row(content_hash="p2", title_ko="아스날, 콘사 루머",
+                  transfer_stage="rumour")
+    html = render_players([agreed, rumour], SOURCES, NOW)
+    assert html.index("에제") < html.index("콘사")
+    assert 'href="player/eze.html"' in html
+    assert "이적 후보" in html and "스쿼드 · 기타" in html
+
 def test_sidebar_has_other_bucket_checkbox():
     html = render_index([_row(transfer_stage="other")], SOURCES, NOW)
     assert 'data-group="bucket"' in html

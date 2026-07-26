@@ -1,0 +1,22 @@
+{% extends "_layout.html.j2" %}
+{% block title %}선수 · Bullet-in{% endblock %}
+{% block content %}
+<div class="sechead"><h2>선수</h2><span class="kst">단계 · 보도량 기준 정렬</span></div>
+<div class="playerlist">
+  <h3 class="plgroup">이적 후보</h3>
+  {% for e in stats if not e.squad %}
+  <a class="pcard" href="player/{{ e.slug }}.html">
+    <span class="pname">{{ e.name }}</span>
+    {% if e._badge %}<span class="stage {{ e._badge.tone }}{{ ' filled' if e._badge.filled }}">{{ e._badge.label }}</span>{% endif %}
+    <span class="pmeta">기사 {{ e.count }}건 · 최근 {{ e._last }}</span>
+  </a>
+  {% endfor %}
+  <h3 class="plgroup">스쿼드 · 기타</h3>
+  {% for e in stats if e.squad %}
+  <a class="pcard" href="player/{{ e.slug }}.html">
+    <span class="pname">{{ e.name }}</span>
+    <span class="pmeta">기사 {{ e.count }}건 · 최근 {{ e._last }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

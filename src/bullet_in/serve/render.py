@@ -934,6 +934,16 @@ def player_stats(articles: list[dict], sources: dict) -> list[dict]:
     return transfer + squad
 
 
+def render_players(articles: list[dict], sources: dict, now: datetime) -> str:
+    """선수 색인 페이지 — 단계 · 기사 수 기준 정렬 (spec §5)."""
+    stats = player_stats(articles, sources)
+    for e in stats:
+        e["_badge"] = display_stage(e["stage"])
+        e["_last"] = fmt_date(to_kst(e["last_ts"]))
+    return _env().get_template("players.html.j2").render(
+        stats=stats, active="players", root="", solo=True)
+
+
 def load_clubs(path: str = "config/club_map.yaml") -> dict:
     """구단 검출 사전 (결말 · 행선지 칩) — club_map 의 한글 구단명."""
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
