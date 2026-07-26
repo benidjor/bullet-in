@@ -1,0 +1,24 @@
+{% extends "_layout.html.j2" %}
+{% from "_cards.html.j2" import card with context %}
+{% block title %}{{ e.name }} · Bullet-in{% endblock %}
+{% block content %}
+<div class="phead">
+  <h2>{{ e.name }}</h2>
+  {% if badge %}<span class="stage {{ badge.tone }}{{ ' filled' if badge.filled }}">{{ badge.label }}</span>{% endif %}
+  <span class="pmeta">기사 {{ e.count }}건 · 최근 보도 {{ last }}</span>
+</div>
+<div class="timeline">
+  {% for a in articles %}
+  <div class="tlnode">
+    <span class="tldate">{{ a._date }}</span>
+    {% if a._stage_disp %}<span class="stage {{ a._stage_disp.tone }}{{ ' filled' if a._stage_disp.filled }}">{{ a._stage_disp.label }}</span>{% endif %}
+    <a class="tltitle" href="{{ root }}article/{{ a.content_hash }}.html">{{ a._title }}</a>
+    <span class="tlsrc">{{ a._outlet }}</span>
+  </div>
+  {% endfor %}
+</div>
+<div class="sechead"><h2>기사</h2></div>
+<div class="daylist plist">
+  {% for a in articles %}<div class="block">{{ card(a, thumb=True) }}</div>{% endfor %}
+</div>
+{% endblock %}

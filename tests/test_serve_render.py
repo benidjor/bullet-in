@@ -830,3 +830,36 @@ def test_section_heads_link_to_all_page():
     html = render_index([_row(), g], {**SOURCES, **FILTER_SOURCES}, NOW)
     assert html.count('class="seclink"') == 2
     assert '전체 기사 보기' in html
+
+
+# ── 선수 페이지 (spec §6) ───────────────────────────────────────────
+
+from bullet_in.serve.render import render_player, player_stats
+
+
+def test_player_page_timeline_newest_first():
+    old = _row(content_hash="t1", title_ko="아스날, 에제 관심",
+               transfer_stage="interest", published_at=datetime(2026, 6, 27, 10, 0))
+    new = _row(content_hash="t2", title_ko="아스날, 에제 영입 합의",
+               transfer_stage="agreed", published_at=datetime(2026, 6, 29, 10, 0))
+    entry = player_stats([old, new], SOURCES)[0]
+    html = render_player(entry, SOURCES, NOW)
+    assert html.index("t2.html") < html.index("t1.html")   # 타임라인 최신 먼저
+    assert "이적 합의" in html and "관심" in html            # 노드 단계 배지
+    assert 'class="tlnode"' in html
+
+
+def test_write_site_emits_player_pages(tmp_path):
+    rows = [_row(content_hash="w1", title_ko="아스날, 에제 영입 합의",
+                 transfer_stage="agreed")]
+    write_site(rows, SOURCES, tmp_path)
+    assert (tmp_path / "players.html").exists()
+    assert (tmp_path / "player" / "eze.html").exists()
+
+
+def test_write_site_sweeps_stale_player_pages(tmp_path):
+    (tmp_path / "player").mkdir(parents=True)
+    (tmp_path / "player" / "ghost.html").write_text("x", encoding="utf-8")
+    write_site([_row(title_ko="아스날, 에제 영입 합의", transfer_stage="agreed")],
+               SOURCES, tmp_path)
+    assert not (tmp_path / "player" / "ghost.html").exists()

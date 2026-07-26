@@ -944,6 +944,18 @@ def render_players(articles: list[dict], sources: dict, now: datetime) -> str:
         stats=stats, active="players", root="", solo=True)
 
 
+def render_player(entry: dict, sources: dict, now: datetime,
+                  directory: dict | None = None,
+                  outlet_dir: dict | None = None) -> str:
+    """선수 페이지 — 머리 · 타임라인 (최신순) · 평면 기사 목록 (spec §6)."""
+    arts = [_decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
+            for a in entry["articles"]]                    # 이미 최신순 (Task 6)
+    return _env().get_template("player.html.j2").render(
+        e=entry, badge=display_stage(entry["stage"]), articles=arts,
+        last=fmt_date(to_kst(entry["last_ts"])),
+        active="players", root="../", solo=True)
+
+
 def load_clubs(path: str = "config/club_map.yaml") -> dict:
     """구단 검출 사전 (결말 · 행선지 칩) — club_map 의 한글 구단명."""
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
@@ -1152,6 +1164,21 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
                    outlet_dir=outlet_dir),
         encoding="utf-8")
     (out / "about.html").write_text(render_about(), encoding="utf-8")
+
+    stats = player_stats(articles, sources)
+    (out / "players.html").write_text(
+        render_players(articles, sources, now), encoding="utf-8")
+    (out / "player").mkdir(parents=True, exist_ok=True)
+    keep = set()
+    for e in stats:
+        keep.add(f"{e['slug']}.html")
+        (out / "player" / f"{e['slug']}.html").write_text(
+            render_player(e, sources, now, directory=directory,
+                          outlet_dir=outlet_dir),
+            encoding="utf-8")
+    for p in (out / "player").glob("*.html"):              # 사전 제외 선수 고아 정리
+        if p.name not in keep:
+            p.unlink()
 
     ordered = _sorted_latest(articles)
     # 패싯은 전체 기사 기준으로 한 번만 계산해 모든 상세 페이지에 전달

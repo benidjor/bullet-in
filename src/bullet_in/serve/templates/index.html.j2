@@ -1,7 +1,7 @@
 {% extends "_layout.html.j2" %}
 {% block title %}Bullet-in · 아스날 이적 뉴스{% endblock %}
 
-{% from "_cards.html.j2" import stage_badge, card, relitem %}
+{% from "_cards.html.j2" import stage_badge, card, relitem with context %}
 
 {% block band %}
 {% if lead %}
