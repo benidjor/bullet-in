@@ -5,12 +5,12 @@ from bullet_in.run import RUN_INSERT_SQL
 from tests.integration.conftest import TEST_URL
 
 
-def _params(rid="bench-run", fetch=7.5):
+def _params(rid="bench-run", fetch=7.5, blocked=0):
     return {"rid": rid, "drid": "test",
             "started": datetime(2026, 7, 14, 3, 0, 0),
             "dur": 42.0, "fetch": fetch,
             "counts": json.dumps({"bbc_sport": 2}),
-            "new": 2, "dup": 0, "err": 0, "sr": 1.0}
+            "new": 2, "dup": 0, "blocked": blocked, "err": 0, "sr": 1.0}
 
 
 def test_insert_records_fetch_duration_and_started_at_roundtrip(engine):
@@ -23,6 +23,15 @@ def test_insert_records_fetch_duration_and_started_at_roundtrip(engine):
     assert row["fetch_duration_sec"] == 7.5          # FLOAT 정확 표현값
     assert row["started_at"] == datetime(2026, 7, 14, 3, 0, 0)  # 바인딩 왕복
     assert abs(row["drift"]) <= 60                   # finished_at ≈ UTC now
+
+
+def test_insert_records_blocked_count(engine):
+    with engine.begin() as c:
+        c.execute(text(RUN_INSERT_SQL), _params(rid="bench-blocked", blocked=15))
+        row = c.execute(text(
+            "SELECT blocked_count FROM pipeline_runs "
+            "WHERE run_id='bench-blocked'")).mappings().one()
+    assert row["blocked_count"] == 15
 
 
 def test_finished_at_stays_utc_under_kst_session(engine):

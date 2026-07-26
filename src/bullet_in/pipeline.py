@@ -47,13 +47,14 @@ def select_journalist(item, src: dict, registry: "Registry | None") -> str | Non
     return authors[0] if authors else None
 
 def to_articles(raw: list[RawItem], sources: dict[str, dict],
-                seen: dict[str, tuple[str, int]],
+                seen: dict[str, tuple[str, int, str, bool]],
                 registry: "Registry | None" = None) -> tuple[list[Article], dict]:
     out: list[Article] = []
     local_seen = dict(seen)
     dup_count = 0
     women_count = 0
     author_drop_count = 0
+    blocked_count = 0
     source_counts: dict[str, int] = {}
     # fmkorea(발견 소스)는 같은 원문 URL 에서 EN/X 보다 후순위 → first-seen 이 EN/X 가 되게 정렬
     raw = sorted(raw, key=lambda it: 1 if it.source_id == "fmkorea" else 0)
@@ -73,11 +74,15 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
             continue
         url = canonical_url(item.url)
         h = content_hash(title, url)
-        decision, rev = classify(url, h, local_seen)
+        has_body = bool(item.raw_payload.get("body"))
+        decision, rev = classify(url, h, local_seen, item.source_id, has_body)
         if decision == "duplicate":
             dup_count += 1
             continue
-        local_seen[url] = (h, rev)
+        if decision == "blocked":
+            blocked_count += 1     # 완전체 보호 · 스텁끼리 충돌 (spec §4)
+            continue
+        local_seen[url] = (h, rev, item.source_id, has_body)
         out.append(Article(
             content_hash=h, url=url, source_id=item.source_id,
             tier=tier, confidence_score=confidence_from_tier(tier),
@@ -95,4 +100,5 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
             revision=rev))
         source_counts[item.source_id] = source_counts.get(item.source_id, 0) + 1
     return out, {"dup_count": dup_count, "source_counts": source_counts,
-                 "women_count": women_count, "author_drop_count": author_drop_count}
+                 "women_count": women_count, "author_drop_count": author_drop_count,
+                 "blocked_count": blocked_count}

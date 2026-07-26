@@ -69,7 +69,7 @@ def build_fmkorea_adapter(cfg: dict, proxy: str | None, *, pages: int = 1,
         exclude_titles=exclude_titles)
 
 
-def persist(raw: list[RawItem], mart: MartStore) -> tuple[int, int]:
+def persist(raw: list[RawItem], mart: MartStore) -> tuple[int, int, int]:
     """수집 결과를 raw (Mongo) · mart (MariaDB) 에 적재한다.
     번역 · 분류 · 렌더는 하지 않는다 — 다음 정기 회차가 흡수한다."""
     for it in raw:
@@ -80,7 +80,7 @@ def persist(raw: list[RawItem], mart: MartStore) -> tuple[int, int]:
     sources = load_sources("config/sources.yaml")
     registry = load_registry("config/credibility.yaml")
     arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
-    return mart.upsert(arts), stats["dup_count"]
+    return mart.upsert(arts), stats["dup_count"], stats["blocked_count"]
 
 
 async def main(force: bool = False) -> None:
@@ -112,9 +112,9 @@ async def main(force: bool = False) -> None:
     if not raw:
         log.info("fmkorea 보충 수집 — 신규 0 (새 글 없음 · 전부 스킵)")
         return
-    n, dup = persist(raw, mart)
-    log.info("fmkorea 보충 수집 완료 — 적재 %d · 중복 %d (번역 · 렌더는 다음 정기 회차)",
-             n, dup)
+    n, dup, blocked = persist(raw, mart)
+    log.info("fmkorea 보충 수집 완료 — 적재 %d · 동일 내용 생략 %d · 기존 기사 유지 %d "
+             "(번역 · 렌더는 다음 정기 회차)", n, dup, blocked)
 
 
 if __name__ == "__main__":

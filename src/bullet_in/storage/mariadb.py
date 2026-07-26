@@ -45,6 +45,7 @@ class MartStore:
              summary_ko=IF(articles.content_hash=VALUES(content_hash), articles.summary_ko, NULL),
              summary3_ko=IF(articles.content_hash=VALUES(content_hash), articles.summary3_ko, NULL),
              body_ko=IF(articles.content_hash=VALUES(content_hash), articles.body_ko, NULL),
+             source_id=VALUES(source_id),
              title_original=VALUES(title_original),
              body_excerpt=VALUES(body_excerpt),
              body_source=VALUES(body_source),
@@ -67,10 +68,14 @@ class MartStore:
     def count(self) -> int:
         with self.engine.connect() as c:
             return c.execute(text("SELECT COUNT(*) FROM articles")).scalar_one()
-    def seen_map(self) -> dict[str, tuple[str, int]]:
+    def seen_map(self) -> dict[str, tuple[str, int, str, bool]]:
+        """url -> (content_hash, revision, source_id, has_body).
+        has_body = body_source 가 비어있지 않음 — 완전체 판정 기준 (spec §3)."""
         with self.engine.connect() as c:
-            rows = c.execute(text("SELECT url,content_hash,revision FROM articles")).all()
-        return {u: (h, rev) for u, h, rev in rows}
+            rows = c.execute(text(
+                "SELECT url,content_hash,revision,source_id,"
+                "COALESCE(body_source,'')<>'' FROM articles")).all()
+        return {u: (h, rev, sid, bool(hb)) for u, h, rev, sid, hb in rows}
     def rows_missing_translation(self) -> list[dict]:
         with self.engine.connect() as c:
             rows = c.execute(text(
