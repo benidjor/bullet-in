@@ -154,6 +154,12 @@ def test_parse_bracket_normalizes_korean_outlet():
 def test_parse_bracket_exclusive_flag():
     assert parse_bracket("[디 애슬레틱-독점] 디오망데 PSG 선택") == ("The Athletic", None, True)
 
+def test_parse_bracket_dandok_is_exclusive_marker_not_journalist():
+    # 표식 어휘 드리프트 실사례 (2026-07-26): "[디 애슬레틱-단독]" 의 "단독" 이
+    # 기자명으로 오파싱돼 기자 = "단독" 으로 서빙됨 (8651f026)
+    assert parse_bracket("[디 애슬레틱-단독]아스날, 비니시우스 주니오르 영입 검토") == \
+        ("The Athletic", None, True)
+
 def test_parse_bracket_outlet_only():
     assert parse_bracket("[텔레그래프] 요케레스 영입 완료") == ("The Telegraph", None, False)
 
