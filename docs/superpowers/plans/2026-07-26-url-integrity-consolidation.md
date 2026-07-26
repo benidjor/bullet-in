@@ -787,10 +787,27 @@ uv run python -m bullet_in.refetch_urls --source-id bbc_sport \
 - [ ] **Step 4: DB 확인** — 3행의 title_original 영문 복원 · revision 3 · title_ko NULL (재번역 큐 진입).
 - [ ] **Step 5: enrich 수렴** — enrich-only 패스 (docs/runbook/2026-07-19-enrich-only-pass.md §4 · SERVING_SELECT_SQL import 규칙).
 - [ ] **Step 6: 재렌더 · 배포** — grep 게이트 (3행 중 1건의 영문 제목 존재 확인) 통과 시에만 deploy-site.sh.
-- [ ] **Step 7: 온스테인 전환기 점검** — 기존 x_ornstein 트윗 URL 행 중 수집 창 (max_tweets 30) 에 남아 있는 트윗은 다음 회차에 기사 URL 키로 재적재되어 중복 행이 될 수 있다.
-회차 후 `SELECT url,title_original FROM articles WHERE source_id='x_ornstein'` 로 중복 여부 확인
-→ 중복 발생 시 구 트윗 URL 행 정리는 사용자 확인 후 진행 (삭제는 임의 실행 금지).
-- [ ] **Step 8:** UI 세션에 머지 사실 한 줄 공유 · 메모리 갱신 (트랙 종료 스냅샷).
+- [ ] **Step 7: 온스테인 전환기 정리 (필수 — 최종 리뷰 Important 1)** — 기존 x_ornstein 행은 트윗 URL 이 키다.
+카드가 붙은 트윗이 다시 수집되면 키가 기사 URL 로 바뀌어 **새 행**이 생기고, 옛 행은 어떤 경로로도 갱신 · 삭제되지 않는다 (content_hash 가 URL 을 포함해 dedup 도 안 걸린다).
+서빙 SELECT 가 전량을 읽으므로 같은 내용 카드 2장이 나란히 노출된다.
+
+```sql
+SELECT url, title_original, source_id, fetched_at FROM articles
+WHERE source_id='x_ornstein' ORDER BY title_original, fetched_at;
+```
+
+같은 `title_original` 이 x.com 키와 기사 URL 키 양쪽에 있으면 **x.com 키 행만** 삭제한다 (사용자 확인 후 · 삭제는 임의 실행 금지).
+카드 없는 트윗 행은 키가 안 바뀌므로 건드리지 않는다 (번역 4필드 재소모).
+정리 후 재렌더.
+- [ ] **Step 8: 검증 기준 확인 (최종 리뷰 Important 2)** — 이 회차의 성공 기준은 **"카드 있는 트윗의 url 이 기사 URL 로 저장됐는가"** 다.
+fmkorea 와 한 행으로 합류하는지는 이번 검증 대상이 아니다
+— fmkorea 는 퍼온 글에 붙어 있던 URL 을 그대로 저장하고 (`theathletic.com/...`) 온스테인은 리다이렉트 종점을 저장해 (`nytimes.com/athletic/...`) 키가 어긋날 수 있고, 현재 fmkorea 페이월 경로는 body 를 저장하지 않아 판정이 upgrade 가 아니라 blocked 다.
+합류 확인은 E안 (금지 글 body 수집) 트랙 이후로 이월한다.
+- [ ] **Step 9: 라이브 관찰 항목** (조치 없이 기록만 · 최종 리뷰 Minor)
+  - 같은 회차에 같은 기사를 가리키는 트윗이 2건이면 뒤엣것이 앞엣것을 `changed` 로 덮어 트윗 하나가 조용히 사라진다.
+  - 인용 트윗에 붙은 카드가 바깥 트윗의 카드로 잡히면 엉뚱한 기사 URL 이 키가 된다 (`querySelector` 가 article 하위 전체를 훑는 구조).
+  - 카드가 이미 본문 보유 행이 있는 기사를 가리켜 blocked 되면 x_ornstein 워터마크가 갱신되지 않아 24h 신선도 알림이 오탐할 수 있다.
+- [ ] **Step 10:** UI 세션에 머지 사실 한 줄 공유 · 메모리 갱신 (트랙 종료 스냅샷).
 
 ---
 
