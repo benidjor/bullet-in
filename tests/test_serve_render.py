@@ -813,4 +813,4 @@ def test_section_heads_link_to_all_page():
              title_ko="아스날, 에제 루머")
     html = render_index([_row(), g], {**SOURCES, **FILTER_SOURCES}, NOW)
     assert html.count('class="seclink"') == 2
-    assert '전체 기사' in html
+    assert '전체 기사 보기' in html
