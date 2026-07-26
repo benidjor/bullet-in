@@ -10,7 +10,7 @@
 <div class="timeline">
   {% for a in articles %}
   <div class="tlnode">
-    <span class="tldate">{{ a._date }}</span>
+    <span class="tldate">{{ a._kdate }}</span>
     {% if a._stage_disp %}<span class="stage {{ a._stage_disp.tone }}{{ ' filled' if a._stage_disp.filled }}">{{ a._stage_disp.label }}</span>{% endif %}
     <a class="tltitle" href="{{ root }}article/{{ a.content_hash }}.html">{{ a._title }}</a>
     <span class="tlsrc">{{ a._outlet }}</span>
@@ -19,6 +19,6 @@
 </div>
 <div class="sechead"><h2>기사</h2></div>
 <div class="daylist plist">
-  {% for a in articles %}<div class="block">{{ card(a, thumb=True) }}</div>{% endfor %}
+  {% for a in articles %}<div class="block">{{ card(a, thumb=True, when=a._kdate, show_all=True) }}</div>{% endfor %}
 </div>
 {% endblock %}

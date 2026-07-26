@@ -877,7 +877,7 @@ def attribution_players(row: dict, sources: dict, players: list[str]) -> list[st
     """선수 페이지 귀속 (spec §7.2) — X 는 전문, 그 외는 제목 대조.
     사건 묶음의 protagonist 와 별개 규칙 (그쪽은 무수정)."""
     src = sources.get(row.get("source_id"), {})
-    if src.get("credibility") == "x_mentions":
+    if src.get("medium") == "x" or src.get("credibility") == "x_mentions":
         text = " ".join(filter(None, [row.get("title_ko"), row.get("summary_ko"),
                                       row.get("body_ko")]))
     else:
@@ -966,6 +966,10 @@ def render_player(entry: dict, sources: dict, now: datetime,
     """선수 페이지 — 머리 · 타임라인 (최신순) · 평면 기사 목록 (spec §6)."""
     arts = [_decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
             for a in entry["articles"]]                    # 이미 최신순 (Task 6)
+    # _decorate 의 _date 는 UTC 라 (F3) 타임라인 · 카드가 헤더와 다른 날짜로
+    # 보일 수 있다 — 선수 페이지 지역 범위로만 KST 로 보정한다.
+    for a in arts:
+        a["_kdate"] = fmt_date(to_kst(_sort_ts(a)[0]))
     return _env().get_template("player.html.j2").render(
         e=entry, badge=display_stage(entry["stage"]), articles=arts,
         last=fmt_date(to_kst(entry["last_ts"])),

@@ -383,7 +383,7 @@ function resetAll() {
 
 if (side) setupAllMore();
 
-if (items.length) {                                       // 인덱스
+if (items.length && side) {                               // 인덱스
   side.addEventListener('change', (e) => {
     const t = e.target;
     if (t.dataset?.group === 'tier') { syncTierAll(t); syncTierLinkage(t); }

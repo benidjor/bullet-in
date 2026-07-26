@@ -1,7 +1,7 @@
 {% macro stage_badge(s) %}{% if s %}<span class="stage {{ s.tone }}{{ ' filled' if s.filled }}">{{ s.label }}</span>{% endif %}{% endmacro %}
-{% macro card(a, dest=None, when=None, cls='', show_cred=True, thumb=False, hidden=False) %}
+{% macro card(a, dest=None, when=None, cls='', show_cred=True, thumb=False, hidden=False, show_all=False) %}
 {% set show_thumb = thumb and a.image_url %}
-<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if hidden or not a._stage_disp %} style="display:none"{% endif %} href="{{ root }}article/{{ a.content_hash }}.html"
+<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if hidden or (not show_all and not a._stage_disp) %} style="display:none"{% endif %} href="{{ root }}article/{{ a.content_hash }}.html"
    data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-tier="{{ a._tier_key }}"
    data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}"
    data-published="{{ a._published_iso }}" data-confidence="{{ a.confidence_score or 0 }}"

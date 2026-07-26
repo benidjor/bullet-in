@@ -263,6 +263,7 @@ def test_players_index_orders_by_stage_then_count():
     assert 'href="player/eze.html"' in html
     assert "이적 후보" in html and "스쿼드 · 기타" in html
 
+
 def test_sidebar_has_other_bucket_checkbox():
     html = render_index([_row(transfer_stage="other")], SOURCES, NOW)
     assert 'data-group="bucket"' in html
@@ -832,6 +833,21 @@ def test_section_heads_link_to_all_page():
     assert '전체 기사 보기' in html
 
 
+# ── 선수 귀속 (spec §7.2) ───────────────────────────────────────────
+
+from bullet_in.serve.render import attribution_players
+
+
+def test_attribution_players_full_text_for_x_medium_without_credibility():
+    """x_ornstein 처럼 medium: x 만 있고 credibility: x_mentions 가 없는 소스도
+    전문 대조로 귀속돼야 한다 (F5) — 제목만으로는 X 본인 트윗 특성상 인명이
+    누락되기 쉽다 (spec §7.2)."""
+    sources = {"x_ornstein": {"display_name": "David Ornstein (X)", "medium": "x"}}
+    row = _row(source_id="x_ornstein", title_ko="오늘의 소식",
+              summary_ko=None, body_ko="아스날이 에제 영입에 근접했다")
+    assert attribution_players(row, sources, ["에제"]) == ["에제"]   # 제목엔 없고 본문에만 있음
+
+
 # ── 선수 페이지 (spec §6) ───────────────────────────────────────────
 
 from bullet_in.serve.render import render_player, player_stats
@@ -847,6 +863,29 @@ def test_player_page_timeline_newest_first():
     assert html.index("t2.html") < html.index("t1.html")   # 타임라인 최신 먼저
     assert "이적 합의" in html and "관심" in html            # 노드 단계 배지
     assert 'class="tlnode"' in html
+    # 선수 페이지는 root="../" — with context 누락 회귀 시 root 가 Undefined 로
+    # 빈 문자열이 되어 링크가 article/... (깊이 0) 로 깨진다 (F6).
+    assert html.count('href="../article/t2.html"') == 2   # 타임라인 링크 + 카드 링크
+
+
+def test_player_page_shows_stage_less_card_while_index_hides_it():
+    agreed = _row(content_hash="p1", title_ko="아스날, 에제 영입 합의",
+                  transfer_stage="agreed")
+    other = _row(content_hash="p2", title_ko="아스날, 에제 다른 소식",
+                 transfer_stage="other")
+    entry = player_stats([agreed, other], SOURCES)[0]
+    player_html = render_player(entry, SOURCES, NOW)
+    p_tag = _re.search(r'<a class="item[^"]*"[^>]*href="\.\./article/p2\.html"',
+                       player_html).group(0)
+    assert "display:none" not in p_tag   # 사이드바가 없는 선수 페이지는 기타도 노출 (F2)
+
+    # 같은 macro 를 쓰는 인덱스는 show_all 기본값(False) 이라 기타 카드를 여전히 숨긴다
+    # (클러스터링 영향을 피하려 선수명이 없는 단독 기사로 확인)
+    solo_other = _row(content_hash="p3", transfer_stage="other")
+    index_html = render_index([solo_other], SOURCES, NOW)
+    o_tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/p3\.html"',
+                       index_html).group(0)
+    assert "display:none" in o_tag       # 인덱스는 기존처럼 기타 카드를 숨김
 
 
 def test_write_site_emits_player_pages(tmp_path):
