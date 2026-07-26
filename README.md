@@ -2,7 +2,7 @@
 
 > 영국 현지 언론 · ITK (X)의 Arsenal FC 소식을 매일 병렬 수집하고, 공신력으로 스코어링 · 중복제거한 뒤 LLM으로 번역 · 요약하여 신뢰도순으로 보여주는 뉴스 수집 파이프라인.
 >
-> **공개 서비스**: https://bullet-in.pages.dev — VM 스케줄이 하루 4회 자동 수집 · 배포.
+> **공개 서비스**: https://bullet-in.pages.dev — VM 스케줄이 하루 8회 자동 수집 · 배포.
 
 *Bullet-in = bulletin (단신) + bullet (병기고 Arsenal)의 언어유희.*
 
@@ -48,7 +48,7 @@
    ▼ (통과 시)
 [Serve]     신뢰도순 정적 HTML
 
-스케줄: systemd timer (VM) 가 전 단계를 하루 4회 실행 · 회차 끝 Cloudflare Pages 자동 배포
+스케줄: systemd timer (VM) 가 전 단계를 하루 8회 실행 · 회차 끝 Cloudflare Pages 자동 배포
         Airflow DAG (2.9 구축 → 3.0 마이그레이션) 는 확장 자산으로 보존
 ```
 
@@ -109,7 +109,7 @@
 | 원본 랜딩 | **MongoDB** | 이종 원문을 손실 없이 schema-on-read로 보존 → 재처리 가능 |
 | 품질/분석 | **dbt + DuckDB** | dbt test가 "이상 점검"과 정면 일치, DuckDB가 MariaDB attach해 zero-infra 분석 |
 | 스크래핑 | **Playwright/httpx** | 소스 난이도 (정적~쿠키 인증 · 안티봇)에 맞는 도구 선택. X는 쿠키 주입 Playwright |
-| 스케줄 · 배포 | **systemd timer + wrangler** | oneshot 회차 하루 4회 · OnFailure Discord 알림 · 회차 끝 Pages 직접 업로드. Airflow DAG (2.9→3.0 [마이그레이션](docs/MIGRATION.md))는 확장 자산으로 보존 |
+| 스케줄 · 배포 | **systemd timer + wrangler** | oneshot 회차 하루 8회 (3시간 간격) · OnFailure Discord 알림 · 회차 끝 Pages 직접 업로드. Airflow DAG (2.9→3.0 [마이그레이션](docs/MIGRATION.md))는 확장 자산으로 보존 |
 | LLM 번역 · 요약 | **Gemini 2.5 Flash-Lite** | 일 수백 건 저용량 · 단순 번역에 최적. [무료 티어](https://ai.google.dev/gemini-api/docs/pricing)로 비용 0, 유료도 1M 토큰당 입력 $0.10 · 출력 $0.40. `response_mime_type`으로 JSON 출력 유도 |
 
 **왜 CDC를 안 썼나** — CDC (Debezium/binlog)는 상류 트랜잭션 DB의 변경을 캡처하는 기술인데, 본 파이프라인의 소스는 웹/API/X라 읽을 binlog가 없다. 일 수백 건 배치에 Kafka+Debezium은 과설계이므로, **앱 레벨 변경 감지 (content_hash 비교 + revision)**로 뉴스 수정 · 삭제에 대응했다.

@@ -14,7 +14,9 @@ def _notify_failure(context) -> None:
 
 with DAG(
     dag_id="bullet_in_daily",
-    schedule="0 */6 * * *",  # 하루 4회(6시간마다): 무료티어 15RPM 안에서 신규만 멱등 누적
+    # 운영 스케줄러는 VM systemd timer 이고 이 DAG 는 확장용 보존 자산이다 (spec 2026-07-20 §2.2).
+    # 되살릴 때 바로 맞도록 실제 운영 주기와 같은 값을 둔다 — 하루 8회(3시간마다) · 신규만 멱등 누적.
+    schedule="0 */3 * * *",
     start_date=pendulum.datetime(2026, 5, 1, tz="UTC"),
     catchup=False,
     tags=["bullet-in"],
