@@ -51,7 +51,7 @@ def build_item(source_id: str, url: str, html: str,
                    fetched_at=now, raw_payload=payload)
 
 
-async def refetch(source_id: str, urls: list[str], dry_run: bool = False) -> tuple[int, int]:
+async def refetch(source_id: str, urls: list[str], dry_run: bool = False) -> tuple[int, int, int]:
     sources = load_sources("config/sources.yaml")
     if source_id not in sources:
         raise SystemExit(f"미등록 소스: {source_id}")
@@ -62,27 +62,36 @@ async def refetch(source_id: str, urls: list[str], dry_run: bool = False) -> tup
                                  headers={"User-Agent": "bullet-in/0.1"}) as c:
         for i, url in enumerate(urls):
             try:
-                r = await c.get(url)
-                r.raise_for_status()
-            except httpx.HTTPError as e:
-                log.warning("fetch 실패 %s: %r", url, e)
-                continue
-            item = build_item(source_id, url, r.text, body_selector, now)
-            if item is None:
-                log.warning("제목 추출 실패 — 스킵 %s", url)
-                continue
-            items.append(item)
-            if i < len(urls) - 1:
-                await asyncio.sleep(REQUEST_GAP_SEC)
+                try:
+                    r = await c.get(url)
+                    r.raise_for_status()
+                except httpx.HTTPError as e:
+                    log.warning("fetch 실패 %s: %r", url, e)
+                    continue
+                item = build_item(source_id, url, r.text, body_selector, now)
+                if item is None:
+                    log.warning("제목 추출 실패 — 스킵 %s", url)
+                    continue
+                items.append(item)
+            finally:
+                if i < len(urls) - 1:
+                    await asyncio.sleep(REQUEST_GAP_SEC)
     if dry_run:
         for it in items:
             log.info("[dry-run] %s → title=%r body=%d자 authors=%s", it.url,
                      it.raw_payload["title"], len(it.raw_payload["body"]),
                      it.raw_payload["authors"])
-        return len(items), 0
+        return len(items), 0, 0
     mart = MartStore(create_engine(os.environ["MARIADB_URL"]))
     mart.ensure_schema()
     return persist(items, mart)
+
+
+def format_result(n: int, dup: int, blocked: int, dry_run: bool) -> str:
+    """CLI 출력 문구 — dry-run 은 미적재임을 명시해 실제 적재와 혼동을 막는다."""
+    if dry_run:
+        return f"[dry-run] 검증 {n}건 (미적재)"
+    return f"적재 {n} · 동일 내용 생략 {dup} · 기존 기사 유지 {blocked}"
 
 
 def main() -> None:
@@ -92,8 +101,8 @@ def main() -> None:
     ap.add_argument("--url", action="append", required=True, help="반복 지정 가능")
     ap.add_argument("--dry-run", action="store_true", help="DB 쓰기 없이 추출 결과만 로깅")
     args = ap.parse_args()
-    n, dup = asyncio.run(refetch(args.source_id, args.url, dry_run=args.dry_run))
-    print(f"적재 {n} · 중복 {dup}")
+    n, dup, blocked = asyncio.run(refetch(args.source_id, args.url, dry_run=args.dry_run))
+    print(format_result(n, dup, blocked, args.dry_run))
 
 
 if __name__ == "__main__":

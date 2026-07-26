@@ -1,8 +1,8 @@
 [Unit]
-Description=bullet-in 4x daily (same cadence as DAG: 0 */6 UTC)
+Description=bullet-in 8x daily (3-hour cadence, VM 실측값)
 
 [Timer]
-OnCalendar=*-*-* 00/6:00:00 UTC
+OnCalendar=*-*-* 00/3:00:00 UTC
 Persistent=true
 RandomizedDelaySec=300
 

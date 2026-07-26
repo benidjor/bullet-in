@@ -37,9 +37,9 @@ SERVING_SELECT_SQL = (
 RUN_INSERT_SQL = (
     "INSERT INTO pipeline_runs (run_id,dag_run_id,started_at,finished_at,"
     "duration_sec,fetch_duration_sec,source_counts,new_count,dup_count,"
-    "error_count,success_rate) "
+    "blocked_count,error_count,success_rate) "
     "VALUES (:rid,:drid,:started,UTC_TIMESTAMP(),:dur,:fetch,:counts,"
-    ":new,:dup,:err,:sr)")
+    ":new,:dup,:blocked,:err,:sr)")
 
 async def main(concurrency: int):
     run_id = str(uuid.uuid4())
@@ -73,7 +73,7 @@ async def main(concurrency: int):
     mart.ensure_schema()
     arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
     logging.getLogger(__name__).info(
-        "drop 집계 — 중복 %d · URL 보호 %d · 여자팀 %d · 기자 allowlist %d",
+        "drop 집계 — 동일 내용 생략 %d · 기존 기사 유지 %d · 여자팀 %d · 기자 allowlist %d",
         stats["dup_count"], stats["blocked_count"], stats["women_count"],
         stats["author_drop_count"])
     mart.upsert(arts)
@@ -168,6 +168,7 @@ async def main(concurrency: int):
              "fetch": fetch_sec,
              "counts": json.dumps(stats["source_counts"]),
              "new": len(arts), "dup": stats["dup_count"],
+             "blocked": stats["blocked_count"],
              "err": len(errors), "sr": summary["success_rate"]})
 
     # 운영 뷰 (ops.html): pipeline_runs 기록 후 DB 한 경로로 집계 · 렌더.

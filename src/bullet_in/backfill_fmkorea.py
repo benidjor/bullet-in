@@ -104,8 +104,9 @@ async def main(pages: int, limit: int | None, dry_run: bool, force: bool,
     if not raw:
         log.info("fmkorea 백필 — 신규 0건 (기존 %d건 배제 후 남은 글 없음)", len(known))
         return
-    n, dup = persist(raw, mart)
-    log.info("fmkorea 백필 완료 — 적재 %d · 중복 %d (번역 · 렌더는 다음 정기 회차)", n, dup)
+    n, dup, blocked = persist(raw, mart)
+    log.info("fmkorea 백필 완료 — 적재 %d · 동일 내용 생략 %d · 기존 기사 유지 %d "
+             "(번역 · 렌더는 다음 정기 회차)", n, dup, blocked)
 
 
 if __name__ == "__main__":
