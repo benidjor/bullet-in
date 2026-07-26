@@ -58,13 +58,14 @@ _OFFICIAL_PREFIX = "공홈"
 _BRACKET_RE = re.compile(r"^\s*\[([^\]]+)\]")
 
 def parse_bracket(title: str) -> tuple[str | None, str | None, bool]:
-    """fmkorea 말머리 [언론사] / [언론사 - 기자] / [언론사-독점] 파싱."""
+    """fmkorea 말머리 [언론사] / [언론사 - 기자] / [언론사-독점·단독] 파싱."""
     m = _BRACKET_RE.match(title)
     if not m:
         return None, None, False
     inner = m.group(1).strip()
-    is_excl = "독점" in inner
-    inner = inner.replace("독점", "")
+    # 단독 보도 표식은 어휘가 흔들린다 ("독점" · "단독" 실측) — 기자명 자리로 새지 않게 전부 제거
+    is_excl = ("독점" in inner) or ("단독" in inner)
+    inner = inner.replace("독점", "").replace("단독", "")
     parts = re.split(r"\s*-\s*", inner, maxsplit=1)
     outlet = parts[0].strip(" -")
     journalist = parts[1].strip(" -") if len(parts) > 1 and parts[1].strip(" -") else None
