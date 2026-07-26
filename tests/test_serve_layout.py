@@ -28,6 +28,19 @@ def test_outlet_display_prefers_outlet_then_source_outlet_then_displayname_then_
     assert outlet_display({"outlet": None, "source_id": "bbc_gossip"}, sources) == "BBC Football Gossip"
     assert outlet_display({"outlet": None, "source_id": "unknown"}, sources) == "unknown"
 
+def test_outlet_display_x_fixed_tier_source_uses_journalist_mapping():
+    # x_ornstein (고정 tier · credibility 미지정) 도 기자 소속 매핑을 탄다 (PR #137 후속)
+    # — display_name 폴백이면 facet 이 The Athletic 과 분열되고 tier 조회도 실패한다
+    sources = {"x_ornstein": {"display_name": "David Ornstein (X)", "medium": "x", "tier": 1}}
+    directory = {"@david_ornstein": {"name": "David Ornstein", "outlet": "The Athletic"}}
+    row = {"outlet": None, "source_id": "x_ornstein", "journalist": "@David_Ornstein"}
+    assert outlet_display(row, sources, directory=directory) == "The Athletic"
+
+def test_outlet_display_x_unregistered_handle_keeps_display_name_fallback():
+    sources = {"x_other": {"display_name": "Some Account (X)", "medium": "x"}}
+    row = {"outlet": None, "source_id": "x_other", "journalist": "@nobody"}
+    assert outlet_display(row, sources, directory={}) == "Some Account (X)"
+
 def test_tier_key_is_shortest_exact_form():
     # data-tier 와 facet data-value 가 문자열로 비교되므로 표기가 한 가지여야 한다
     assert tier_key(0) == "0"

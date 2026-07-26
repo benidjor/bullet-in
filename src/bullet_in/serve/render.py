@@ -163,11 +163,12 @@ def outlet_display(row: dict, sources: dict, directory: dict | None = None,
     소스 outlet 폴백이 없으면 display_name (BBC Sport) 이 키가 되는데
     이 문자열은 credibility.yaml 에 없어 tier 조회가 실패한다 (spec §3.4).
     X 2순위 항목은 인용 기자 소속 (등재) · 조직 계정 정식명으로 표기하고
-    미등재 핸들만 aggregator 폴백을 유지한다 (트랙 ③ 설계 ①-A)."""
+    미등재 핸들만 aggregator 폴백을 유지한다 (트랙 ③ 설계 ①-A).
+    고정 tier X 소스 (x_ornstein · self_source) 도 같은 매핑을 탄다 — medium 조건 (PR #137 후속)."""
     src = sources.get(row.get("source_id"), {})
     if row.get("outlet"):
         return row["outlet"]
-    if src.get("credibility") == "x_mentions":
+    if src.get("credibility") == "x_mentions" or src.get("medium") == "x":
         j = (row.get("journalist") or "").strip()
         entry = (directory or {}).get(j.lower())
         if entry and entry.get("outlet"):
