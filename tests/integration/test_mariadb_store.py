@@ -70,7 +70,7 @@ def test_changed_url_updates_hash_and_resets_translation(engine):
                           title_original="New", revision=2,
                           published_at=datetime(2026,5,27,tzinfo=timezone.utc))])
     assert store.count() == 1
-    assert store.seen_map()["https://x.test/a"] == ("h2", 2)
+    assert store.seen_map()["https://x.test/a"] == ("h2", 2, "g", False)
     missing = {r["content_hash"] for r in store.rows_missing_translation()}
     assert "h2" in missing  # translation reset so enrich re-runs
 
@@ -148,3 +148,32 @@ def test_set_summary_without_s3_preserves_existing(engine):
             "SELECT summary_ko,summary3_ko FROM articles "
             "WHERE content_hash='hp'")).mappings().one())
     assert r["summary_ko"] == "확정했다." and r["summary3_ko"] == "기존3줄"
+
+
+def test_seen_map_carries_source_and_body_flag(engine):
+    # 가드 판정 입력 (spec §5) — has_body 는 body_source 비어있지 않음
+    from bullet_in.models import Article
+    from datetime import datetime, timezone
+    store = MartStore(engine)
+    store.upsert([_art(h="h1", url="https://x.test/a"),
+                  Article(content_hash="h2", url="https://x.test/b", source_id="fmkorea",
+                          title_original="T", body_source="원문",
+                          published_at=datetime(2026, 5, 27, tzinfo=timezone.utc))])
+    seen = store.seen_map()
+    assert seen["https://x.test/a"] == ("h1", 1, "guardian", False)
+    assert seen["https://x.test/b"] == ("h2", 1, "fmkorea", True)
+
+
+def test_upsert_upgrade_replaces_source_id(engine):
+    # 스텁 업그레이드는 전면 채택 — source_id 까지 교체 (spec §3 사용자 확정)
+    from bullet_in.models import Article
+    from datetime import datetime, timezone
+    store = MartStore(engine)
+    store.upsert([Article(content_hash="h1", url="https://x.test/a", source_id="x_ornstein",
+                          title_original="tweet text",
+                          published_at=datetime(2026, 7, 26, tzinfo=timezone.utc))])
+    store.upsert([Article(content_hash="h2", url="https://x.test/a", source_id="fmkorea",
+                          title_original="전문 제목", body_source="전문", revision=2,
+                          published_at=datetime(2026, 7, 26, tzinfo=timezone.utc))])
+    assert store.count() == 1
+    assert store.seen_map()["https://x.test/a"] == ("h2", 2, "fmkorea", True)
