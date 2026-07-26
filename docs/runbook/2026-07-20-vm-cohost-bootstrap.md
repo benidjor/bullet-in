@@ -1,6 +1,6 @@
 # VM 동거 부트스트랩 · 스케줄 운영 (2026-07-20)
 
-bullet-in 을 seoulnow Oracle Free VM 에 함께 올려 (동거) systemd timer 로 하루 4회 무인 실행하는 절차와 일상 운영.
+bullet-in 을 seoulnow Oracle Free VM 에 함께 올려 (동거) systemd timer 로 하루 8회 무인 실행하는 절차와 일상 운영.
 SP-C 트랙 (plan `docs/superpowers/plans/2026-07-20-spc-schedule-cohost.md`) 에서 실제 수행한 명령 · 출력 기준이다.
 
 ## 1. 접속
@@ -73,10 +73,10 @@ docker exec bullet-in-mongo-1 mongorestore --archive=/tmp/raw.gz --gzip --drop
 ```bash
 cd /home/ubuntu/bullet-in && bash infra/systemd/install-units.sh
 sudo systemd-analyze verify /etc/systemd/system/bullet-in.*   # 경고 없어야 함
-systemctl list-timers bullet-in.timer --no-pager              # NEXT 가 UTC 6시간 격자 + 지터
+systemctl list-timers bullet-in.timer --no-pager              # NEXT 가 UTC 3시간 격자 + 지터
 ```
 
-- 주기: UTC 0 · 6 · 12 · 18시 (+ 지터 최대 300초) — 기존 DAG `0 */6 * * *` 와 동일.
+- 주기: UTC 3시간 격자 (0 · 3 · 6 · 9 · 12 · 15 · 18 · 21시 · 지터 최대 300초) — 보존된 DAG `0 */3 * * *` 와 같은 값.
 - `Persistent=true` 라 재부팅으로 놓친 회차는 부팅 후 보정 실행된다.
 - 유닛 수정 시: 저장소에서 파일을 고쳐 머지 → VM 에서 `git pull` → `install-units.sh` 재실행.
 
