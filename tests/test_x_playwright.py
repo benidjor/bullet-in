@@ -121,3 +121,94 @@ def test_adapter_parse_tweets_default_afcstuff_branch():
            _rt(text="News [ @SamiMokbel_BBC ]", status_id="32")]
     items = a._parse_tweets(rts, NOW)
     assert [i.raw_payload["journalist"] for i in items] == ["@SamiMokbel_BBC"]
+
+def test_self_source_passes_card_href():
+    rts = [_rt(text="Exclusive #AFC", status_id="41", card_href="https://t.co/abc")]
+    it = parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW)[0]
+    assert it.raw_payload["card_href"] == "https://t.co/abc"
+
+def test_self_source_card_absent_is_none():
+    rts = [_rt(text="News #AFC", status_id="42")]
+    it = parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW)[0]
+    assert it.raw_payload["card_href"] is None
+
+
+import asyncio
+import logging as _logging
+from bullet_in.adapters import x_playwright
+
+
+def _self_items(card):
+    rts = [_rt(text="News #AFC", status_id="51", card_href=card)]
+    return x_playwright.parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW)
+
+def _fake_resolver(final_url):
+    async def fake(client, url):
+        return (final_url, "ignored body", None, None, [])
+    return fake
+
+def test_resolve_card_rewrites_url_and_keeps_tweet_url(monkeypatch):
+    monkeypatch.setattr("bullet_in.adapters.x_backtrack.resolve_and_fetch",
+                        _fake_resolver("https://www.nytimes.com/athletic/12345/"))
+    out = asyncio.run(x_playwright.resolve_card_urls(
+        _self_items("https://t.co/abc"), _logging.getLogger("t")))
+    assert out[0].url == "https://www.nytimes.com/athletic/12345/"
+    assert out[0].raw_payload["tweet_url"] == "https://x.com/David_Ornstein/status/51"
+    assert "body" not in out[0].raw_payload   # 스텁 유지 — 완전체가 되면 가드의 승격 경로가 뒤집힌다
+    assert "title" not in out[0].raw_payload
+    assert "image" not in out[0].raw_payload
+    assert "images" not in out[0].raw_payload
+
+def test_resolve_card_failure_keeps_tweet_url(monkeypatch):
+    monkeypatch.setattr("bullet_in.adapters.x_backtrack.resolve_and_fetch",
+                        _fake_resolver(None))
+    out = asyncio.run(x_playwright.resolve_card_urls(
+        _self_items("https://t.co/abc"), _logging.getLogger("t")))
+    assert out[0].url == "https://x.com/David_Ornstein/status/51"
+    assert "tweet_url" not in out[0].raw_payload
+
+def test_resolve_card_tweet_domain_falls_back(monkeypatch):
+    # 카드가 다른 트윗 (인용) 을 가리키면 기사 아님 — 현행 트윗 URL 유지 (spec §6)
+    monkeypatch.setattr("bullet_in.adapters.x_backtrack.resolve_and_fetch",
+                        _fake_resolver("https://x.com/other/status/99"))
+    out = asyncio.run(x_playwright.resolve_card_urls(
+        _self_items("https://t.co/abc"), _logging.getLogger("t")))
+    assert out[0].url == "https://x.com/David_Ornstein/status/51"
+
+def test_resolve_card_tco_domain_falls_back(monkeypatch):
+    # 리다이렉트가 끝까지 안 풀려 t.co 로 남으면 기사 아님 — 트윗 URL 유지 (spec §6)
+    monkeypatch.setattr("bullet_in.adapters.x_backtrack.resolve_and_fetch",
+                        _fake_resolver("https://t.co/xyz"))
+    out = asyncio.run(x_playwright.resolve_card_urls(
+        _self_items("https://t.co/abc"), _logging.getLogger("t")))
+    assert out[0].url == "https://x.com/David_Ornstein/status/51"
+
+def test_resolve_card_no_targets_skips_network(monkeypatch):
+    # card 없는 배치는 클라이언트 생성 전에 반환 — 외부 접촉 0회 (httpx.AsyncClient 생성 자체가 없어야 함)
+    class _BoomClient:
+        def __init__(self, *a, **kw):
+            raise AssertionError("card 없는 배치는 httpx.AsyncClient 를 만들면 안 된다")
+    monkeypatch.setattr("httpx.AsyncClient", _BoomClient)
+    out = asyncio.run(x_playwright.resolve_card_urls(
+        _self_items(""), _logging.getLogger("t")))
+    assert out[0].url == "https://x.com/David_Ornstein/status/51"
+
+def test_resolve_card_exception_isolated_keeps_batch(monkeypatch):
+    # 카드 하나의 파싱 예외가 배치 전체를 죽이지 않아야 한다 (소스 격리)
+    rts = [
+        _rt(text="News #AFC", status_id="61", card_href="https://t.co/bad"),
+        _rt(text="More #AFC", status_id="62", card_href="https://t.co/good"),
+    ]
+    items = x_playwright.parse_self_tweets("x_ornstein", "David_Ornstein", rts, NOW)
+
+    async def flaky(client, url):
+        if url == "https://t.co/bad":
+            raise ValueError("malformed html")
+        return ("https://www.nytimes.com/athletic/999/", "ignored body", None, None, [])
+
+    monkeypatch.setattr("bullet_in.adapters.x_backtrack.resolve_and_fetch", flaky)
+    out = asyncio.run(x_playwright.resolve_card_urls(items, _logging.getLogger("t")))
+    assert out[0].url == "https://x.com/David_Ornstein/status/61"
+    assert "tweet_url" not in out[0].raw_payload
+    assert out[1].url == "https://www.nytimes.com/athletic/999/"
+    assert out[1].raw_payload["tweet_url"] == "https://x.com/David_Ornstein/status/62"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import logging
 import os
 import re
 from datetime import datetime
@@ -12,6 +13,8 @@ els => els.map(a => {
   const time = a.querySelector('time');
   const link = a.querySelector('a[href*="/status/"]');
   const img = a.querySelector('[data-testid="tweetPhoto"] img');
+  const card = a.querySelector('[data-testid="card.wrapper"]');
+  const ca = card ? card.querySelector('a[href]') : null;
   const href = link ? link.getAttribute('href') : '';
   const m = href ? href.match(/status\\/(\\d+)/) : null;
   const am = href ? href.match(/^\\/([A-Za-z0-9_]+)\\/status\\//) : null;
@@ -20,7 +23,8 @@ els => els.map(a => {
     created_at: time ? time.getAttribute('datetime') : '',
     status_id: m ? m[1] : '',
     author: am ? am[1] : '',
-    image_url: img ? img.src : null
+    image_url: img ? img.src : null,
+    card_href: ca ? ca.getAttribute('href') : ''
   };
 })
 """
@@ -127,6 +131,8 @@ class XPlaywrightAdapter:
             if bt:
                 timelines = await self._scrape_journalists(ctx, items, bt, log)
             await browser.close()
+        if self.self_source:
+            items = await resolve_card_urls(items, log)
         if bt:
             from bullet_in.adapters.x_backtrack import backtrack_promote
             items = await backtrack_promote(items, timelines, bt)
@@ -209,5 +215,42 @@ def parse_self_tweets(source_id: str, handle: str,
             url=f"https://x.com/{handle}/status/{sid}", fetched_at=now,
             raw_payload={"text": text, "created_at": t.get("created_at"),
                          "journalist": "@" + handle,
-                         "image_url": t.get("image_url")}))
+                         "image_url": t.get("image_url"),
+                         "card_href": t.get("card_href") or None}))
     return out
+
+
+def _is_tweet_host(url: str) -> bool:
+    from urllib.parse import urlparse
+    host = (urlparse(url).hostname or "").lower()
+    return (host in ("x.com", "twitter.com", "t.co")
+            or host.endswith(".x.com") or host.endswith(".twitter.com"))
+
+
+async def resolve_card_urls(items: list[RawItem], log: logging.Logger) -> list[RawItem]:
+    """card_href 있는 트윗의 키를 원문 기사 URL 로 교체 (spec 2026-07-26 §6).
+    같은 기사의 fmkorea 전문 도착 시 dedup upgrade 로 한 행에 합류하기 위한 선행 조건.
+    리졸브 실패 · 트윗 도메인 카드 (인용 트윗) 는 현행 트윗 URL 폴백 — 본문은 저장하지 않는다."""
+    import httpx
+    from bullet_in.adapters import x_backtrack
+    targets = [it for it in items if it.raw_payload.get("card_href")]
+    if not targets:
+        return items
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True,
+                                 headers={"User-Agent": "Mozilla/5.0 bullet-in/0.1"}) as c:
+        for it in targets:
+            try:
+                final_url, _body, _title, _image, _images = await x_backtrack.resolve_and_fetch(
+                    c, it.raw_payload["card_href"])
+            except Exception as e:  # 소스 격리 : 카드 하나 파싱 실패가 배치 전체를 죽이지 않게
+                log.warning("card 리졸브 실패 (트윗 URL 유지) url=%s err=%s", it.url, e)
+                continue
+            if not final_url:
+                log.info("card 리졸브 실패 — 트윗 URL 유지 %s", it.url)
+                continue
+            if _is_tweet_host(final_url):
+                log.info("card 가 트윗 링크 — 트윗 URL 유지 %s", final_url)
+                continue
+            it.raw_payload["tweet_url"] = it.url
+            it.url = final_url
+    return items
