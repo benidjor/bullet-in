@@ -1,4 +1,5 @@
 from __future__ import annotations
+import hashlib
 import json
 import logging
 import re
@@ -864,6 +865,73 @@ def load_player_names(path: str = "config/name_map.yaml") -> list[str]:
     긴 이름을 앞에 둬 부분 매치를 막는다."""
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     return sorted((data.get("names") or {}).keys(), key=len, reverse=True)
+
+
+def load_player_map(path: str = "config/name_map.yaml") -> dict[str, str]:
+    """선수 사전 전체 — 한글 정규형 → 영문 성 (slug 원료)."""
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    return dict((data.get("names") or {}).items())
+
+
+def attribution_players(row: dict, sources: dict, players: list[str]) -> list[str]:
+    """선수 페이지 귀속 (spec §7.2) — X 는 전문, 그 외는 제목 대조.
+    사건 묶음의 protagonist 와 별개 규칙 (그쪽은 무수정)."""
+    src = sources.get(row.get("source_id"), {})
+    if src.get("credibility") == "x_mentions":
+        text = " ".join(filter(None, [row.get("title_ko"), row.get("summary_ko"),
+                                      row.get("body_ko")]))
+    else:
+        text = row.get("title_ko") or ""
+    return [p for p in players if p in text]
+
+
+def player_slug(name: str, surname: str, taken: set) -> str:
+    """소문자 영문 성 slug. 충돌 시 한글키 해시 4자 접미 (렌더 경고는 호출부)."""
+    base = re.sub(r"[^a-z0-9]", "", (surname or "").lower()) or "player"
+    if base not in taken:
+        return base
+    return f"{base}-{hashlib.sha256(name.encode()).hexdigest()[:4]}"
+
+
+# 단계 순위 (spec §5) — 낮을수록 상위. medical 은 협상 중 표시 그룹과 동급.
+_STAGE_RANK = {"official": 0, "agreed": 1, "medical": 2, "negotiating": 2,
+               "personal_terms": 3, "interest": 4, "rumour": 5}
+
+
+def player_stats(articles: list[dict], sources: dict) -> list[dict]:
+    """선수별 귀속 기사 · 확정 단계 · 정렬 (spec §5 · §7). 기사 0건 선수는 제외."""
+    name_map = load_player_map()
+    players = sorted(name_map.keys(), key=len, reverse=True)
+    acc: dict[str, dict] = {}
+    for a in _sorted_latest(articles):               # 최신순 순회 → articles 최신순 적재
+        names = attribution_players(a, sources, players)
+        for n in names:
+            acc.setdefault(n, {"name": n, "articles": [], "stage": None,
+                               "stage_ts": None})
+        for n in names:
+            acc[n]["articles"].append(a)
+        if len(names) == 1:                          # 단독 귀속만 단계 확정 (spec §7.3)
+            st = filter_stage(a)
+            e = acc[names[0]]
+            ts = _sort_ts(a)[0]
+            if st in _STAGE_RANK and (e["stage_ts"] is None or ts > e["stage_ts"]):
+                e["stage"], e["stage_ts"] = st, ts
+    taken: set = set()
+    out = []
+    for n, e in acc.items():
+        slug = player_slug(n, name_map.get(n, ""), taken)
+        if "-" in slug and slug not in taken:
+            log.warning("선수 slug 충돌 — 해시 접미 적용: %s → %s", n, slug)
+        taken.add(slug)
+        e.update(slug=slug, count=len(e["articles"]),
+                 last_ts=_sort_ts(e["articles"][0])[0],
+                 stage_rank=_STAGE_RANK.get(e["stage"], 99),
+                 squad=e["stage"] is None)
+        out.append(e)
+    transfer = sorted([e for e in out if not e["squad"]],
+                      key=lambda e: (e["stage_rank"], -e["count"], -e["last_ts"].timestamp()))
+    squad = sorted([e for e in out if e["squad"]], key=lambda e: -e["count"])
+    return transfer + squad
 
 
 def load_clubs(path: str = "config/club_map.yaml") -> dict:

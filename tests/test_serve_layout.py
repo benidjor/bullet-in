@@ -318,3 +318,61 @@ def test_facet_stage_counts_bbc_gossip_as_rumour():
     assert f["stage"]["rumour"] == 1
     assert f["stage"]["interest"] == 0
     assert f["other"] == 0
+
+
+# ── 선수 귀속 · 집계 (spec 2026-07-26 §7) ───────────────────────────
+
+from datetime import datetime
+from bullet_in.serve.render import attribution_players, player_slug, player_stats
+
+X_SRC = {"x_afcstuff": {"display_name": "afcstuff", "credibility": "x_mentions"}}
+NEWS_SRC = {"skysports": {"display_name": "Sky Sports", "outlet": "Sky Sports"}}
+PLAYERS = ["기마랑이스", "에제", "콘사"]
+
+
+def test_attribution_news_source_title_only():
+    # 언론사 기사는 제목 기준 — 본문에만 나온 선수는 미귀속 (spec §7.2)
+    row = {"source_id": "skysports", "title_ko": "아스날, 에제 영입 합의",
+           "summary_ko": "콘사 언급", "body_ko": "본문에 기마랑이스와 콘사가 나온다"}
+    assert attribution_players(row, NEWS_SRC, PLAYERS) == ["에제"]
+
+
+def test_attribution_x_source_scans_full_text():
+    # X (x_mentions) 는 전문 대조 — 제목이 만들어낸 축약이라 (spec §7.2)
+    row = {"source_id": "x_afcstuff", "title_ko": "아스날, 에제 영입 논의",
+           "summary_ko": "", "body_ko": "본문에 기마랑이스 · 콘사 영입 협상도 언급"}
+    assert set(attribution_players(row, X_SRC, PLAYERS)) == {"에제", "기마랑이스", "콘사"}
+
+
+def test_player_slug_collision_gets_suffix():
+    taken = {"eze"}
+    s = player_slug("에제2", "Eze", taken)
+    assert s != "eze" and s.startswith("eze-")
+
+
+def _art(h, title, stage, ts, src="skysports", body=""):
+    return {"content_hash": h, "source_id": src, "title_ko": title,
+            "summary_ko": "", "body_ko": body, "transfer_stage": stage,
+            "published_at": ts, "published_precision": "time", "fetched_at": ts}
+
+
+def test_player_stats_solo_article_sets_stage():
+    # 귀속 1명 기사만 단계 확정 (spec §7.3)
+    solo = _art("s1", "아스날, 에제 영입 합의", "agreed", datetime(2026, 7, 20, 9, 0))
+    multi = _art("s2", "아스날, 에제 · 콘사 동반 관심", "interest",
+                 datetime(2026, 7, 21, 9, 0))
+    stats = {s["name"]: s for s in player_stats([solo, multi], NEWS_SRC)}
+    assert stats["에제"]["stage"] == "agreed"      # 라운드업 (multi) 은 단계에 미반영
+    assert stats["에제"]["count"] == 2             # 기사 수에는 반영
+    assert stats["콘사"]["stage"] is None          # 단독 기사 없음 → 확정 단계 없음
+    assert stats["콘사"]["squad"] is True
+
+
+def test_player_stats_sorted_stage_then_count():
+    # A안 정렬: 단계 순위 → 기사 수 → 최근 보도일 (spec §5)
+    agreed = _art("a1", "아스날, 에제 영입 합의", "agreed", datetime(2026, 7, 19, 9, 0))
+    rumour1 = _art("r1", "아스날, 콘사 루머", "rumour", datetime(2026, 7, 21, 9, 0))
+    rumour2 = _art("r2", "아스날, 콘사 이적설", "rumour", datetime(2026, 7, 20, 9, 0))
+    order = [s["name"] for s in player_stats([agreed, rumour1, rumour2], NEWS_SRC)
+             if not s["squad"]]
+    assert order == ["에제", "콘사"]               # 합의 (건수 1) 가 루머 (건수 2) 보다 위
