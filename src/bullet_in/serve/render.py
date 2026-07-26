@@ -1176,9 +1176,10 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
             render_player(e, sources, now, directory=directory,
                           outlet_dir=outlet_dir),
             encoding="utf-8")
-    for p in (out / "player").glob("*.html"):              # 사전 제외 선수 고아 정리
-        if p.name not in keep:
-            p.unlink()
+    if articles:                                            # 렌더 대상 0건은 오삭제 방어로 건너뜀 (spec §2.6)
+        for p in (out / "player").glob("*.html"):           # 사전 제외 선수 고아 정리
+            if p.name not in keep:
+                p.unlink()
 
     ordered = _sorted_latest(articles)
     # 패싯은 전체 기사 기준으로 한 번만 계산해 모든 상세 페이지에 전달

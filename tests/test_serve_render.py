@@ -863,3 +863,10 @@ def test_write_site_sweeps_stale_player_pages(tmp_path):
     write_site([_row(title_ko="아스날, 에제 영입 합의", transfer_stage="agreed")],
                SOURCES, tmp_path)
     assert not (tmp_path / "player" / "ghost.html").exists()
+
+
+def test_write_site_skips_player_sweep_when_no_articles(tmp_path):
+    (tmp_path / "player").mkdir(parents=True)
+    (tmp_path / "player" / "eze.html").write_text("stale", encoding="utf-8")
+    write_site([], SOURCES, tmp_path)
+    assert (tmp_path / "player" / "eze.html").exists()   # 렌더 대상 0건 → 오삭제 방어로 건너뜀
