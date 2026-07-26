@@ -269,6 +269,19 @@ def test_stage_prompt_disambiguates_reached_agreement_as_agreed():
     assert "구두 합의" in STAGE_PROMPT
     assert "원칙적 합의" in STAGE_PROMPT
 
+def test_stage_prompt_splits_agreement_by_party():
+    """합의 보도는 당사자로 가른다 — 구단 간이면 agreed, 선수-구단이면 personal_terms
+    (2026-07-27 사용자 확정 기준). 구두 합의만 보고 한쪽으로 몰리던 오분류 방지."""
+    from bullet_in.enrich import STAGE_PROMPT
+    assert "구단과 구단이면 agreed, 선수와 구단이면 personal_terms" in STAGE_PROMPT
+    assert "구두 합의라도 당사자가 선수-구단이면 여기" in STAGE_PROMPT
+
+def test_stage_prompt_covers_non_arsenal_transfers():
+    """타 구단 간 이적 기사도 그 이적의 단계로 분류한다 — 아스날이 주체가 아니라는 이유로
+    other · negotiating 으로 새던 오분류 방지 (79b99b1b · 2f556abe 사례)."""
+    from bullet_in.enrich import STAGE_PROMPT
+    assert "이적 주체가 아스날이 아니어도" in STAGE_PROMPT
+
 from bullet_in.enrich import resummarize_rows
 
 def test_resummarize_returns_summary_fields_only():
