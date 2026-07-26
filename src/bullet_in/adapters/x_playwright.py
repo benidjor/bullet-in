@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import logging
 import os
 import re
 from datetime import datetime
@@ -226,7 +227,7 @@ def _is_tweet_host(url: str) -> bool:
             or host.endswith(".x.com") or host.endswith(".twitter.com"))
 
 
-async def resolve_card_urls(items, log) -> list:
+async def resolve_card_urls(items: list[RawItem], log: logging.Logger) -> list[RawItem]:
     """card_href 있는 트윗의 키를 원문 기사 URL 로 교체 (spec 2026-07-26 §6).
     같은 기사의 fmkorea 전문 도착 시 dedup upgrade 로 한 행에 합류하기 위한 선행 조건.
     리졸브 실패 · 트윗 도메인 카드 (인용 트윗) 는 현행 트윗 URL 폴백 — 본문은 저장하지 않는다."""

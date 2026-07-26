@@ -154,6 +154,10 @@ def test_resolve_card_rewrites_url_and_keeps_tweet_url(monkeypatch):
         _self_items("https://t.co/abc"), _logging.getLogger("t")))
     assert out[0].url == "https://www.nytimes.com/athletic/12345/"
     assert out[0].raw_payload["tweet_url"] == "https://x.com/David_Ornstein/status/51"
+    assert "body" not in out[0].raw_payload   # 스텁 유지 — 완전체가 되면 가드의 승격 경로가 뒤집힌다
+    assert "title" not in out[0].raw_payload
+    assert "image" not in out[0].raw_payload
+    assert "images" not in out[0].raw_payload
 
 def test_resolve_card_failure_keeps_tweet_url(monkeypatch):
     monkeypatch.setattr("bullet_in.adapters.x_backtrack.resolve_and_fetch",
@@ -171,8 +175,20 @@ def test_resolve_card_tweet_domain_falls_back(monkeypatch):
         _self_items("https://t.co/abc"), _logging.getLogger("t")))
     assert out[0].url == "https://x.com/David_Ornstein/status/51"
 
-def test_resolve_card_no_targets_skips_network():
-    # card 없는 배치는 클라이언트 생성 전에 반환 — 외부 접촉 0회
+def test_resolve_card_tco_domain_falls_back(monkeypatch):
+    # 리다이렉트가 끝까지 안 풀려 t.co 로 남으면 기사 아님 — 트윗 URL 유지 (spec §6)
+    monkeypatch.setattr("bullet_in.adapters.x_backtrack.resolve_and_fetch",
+                        _fake_resolver("https://t.co/xyz"))
+    out = asyncio.run(x_playwright.resolve_card_urls(
+        _self_items("https://t.co/abc"), _logging.getLogger("t")))
+    assert out[0].url == "https://x.com/David_Ornstein/status/51"
+
+def test_resolve_card_no_targets_skips_network(monkeypatch):
+    # card 없는 배치는 클라이언트 생성 전에 반환 — 외부 접촉 0회 (httpx.AsyncClient 생성 자체가 없어야 함)
+    class _BoomClient:
+        def __init__(self, *a, **kw):
+            raise AssertionError("card 없는 배치는 httpx.AsyncClient 를 만들면 안 된다")
+    monkeypatch.setattr("httpx.AsyncClient", _BoomClient)
     out = asyncio.run(x_playwright.resolve_card_urls(
         _self_items(""), _logging.getLogger("t")))
     assert out[0].url == "https://x.com/David_Ornstein/status/51"
