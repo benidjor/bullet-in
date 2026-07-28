@@ -40,6 +40,47 @@ gunzip -c <스크래치패드>/articles.sql.gz | docker exec -i bullet-in-mariad
 
 적재 후 두 DB 행 수를 함께 찍어 기존 DB 가 그대로인지 확인한다.
 
+## 3.1. 드리프트 확인 — 로컬이 얼마나 낡았는지 먼저 잰다
+
+받은 사본과 기존 로컬을 대조해 둔다.
+**로컬 수치를 배포판 현황으로 말하기 전에 이 표를 만든다.**
+이 절차 없이 로컬로 판단했다가 이미 수동 정정된 행을 "고쳐야 할 오류" 로 잘못 제시한 사례가 있다
+(`docs/superpowers/2026-07-28-content-trust-audit-handoff.md` 2.2절 · 6.1절).
+
+```sql
+-- 행 대조
+SELECT COUNT(*) FROM bulletin.articles a JOIN bulletin_mock.articles b USING(content_hash);
+SELECT COUNT(*) FROM bulletin_mock.articles b
+  LEFT JOIN bulletin.articles a USING(content_hash) WHERE a.content_hash IS NULL;   -- 배포판에만
+SELECT COUNT(*) FROM bulletin.articles a
+  LEFT JOIN bulletin_mock.articles b USING(content_hash) WHERE b.content_hash IS NULL;  -- 로컬에만
+
+-- 같은 기사인데 값이 다른 것
+SELECT COUNT(*) FROM bulletin.articles a JOIN bulletin_mock.articles b USING(content_hash)
+  WHERE a.title_ko <> b.title_ko;                                    -- 재번역으로 제목 변경
+SELECT a.transfer_stage, b.transfer_stage, b.source_id, LEFT(b.title_ko, 44)
+  FROM bulletin.articles a JOIN bulletin_mock.articles b USING(content_hash)
+  WHERE NOT (a.transfer_stage <=> b.transfer_stage);                 -- 라이브 수동 정정 흔적
+```
+
+**2026-07-28 실측** (로컬 205행 · 7월 19일 수집 대 배포판 467행 · 7월 27일 수집).
+
+| 항목 | 값 |
+| --- | --- |
+| 양쪽 공통 | 198건 |
+| 배포판에만 | 269건 |
+| 로컬에만 | 7건 |
+| 공통 행 중 제목 상이 | **196건** (재번역으로 거의 전부) |
+| 공통 행 중 단계 상이 | 3건 (라이브 수동 정정분) |
+
+**제목은 식별자가 되지 못한다.**
+번역 모델 교체로 전건 재번역이 돌면 같은 기사의 `title_ko` 가 바뀐다.
+기사를 언급할 때는 `content_hash` 기반 배포판 URL (`https://bullet-in.pages.dev/article/<hash>`) 을 함께 적는다.
+제목만 적으면 사용자가 라이브에서 찾지 못한다.
+
+단계가 다른 행은 사람이 직접 고친 흔적이다.
+커밋 메시지의 `Refs:` 에 해시가 남아 있는지 확인하면 어느 작업에서 정정했는지 추적된다.
+
 ## 4. build.py 를 별도 DB 로 실행
 
 `MARIADB_URL` 의 경로만 `/bulletin_mock` 으로 바꿔 목업 생성 스크립트를 돌린다.
