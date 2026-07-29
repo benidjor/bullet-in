@@ -11,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup, escape
 
 from bullet_in import transfer_stage as _stage
+from bullet_in.credibility import norm_alias
 from bullet_in.enrich import attrib_core, roundup_attrib_counts
 
 log = logging.getLogger(__name__)
@@ -170,10 +171,10 @@ def outlet_display(row: dict, sources: dict, directory: dict | None = None,
         return row["outlet"]
     if src.get("credibility") == "x_mentions" or src.get("medium") == "x":
         j = (row.get("journalist") or "").strip()
-        entry = (directory or {}).get(j.lower())
+        entry = (directory or {}).get(norm_alias(j))
         if entry and entry.get("outlet"):
             return entry["outlet"]
-        fold = (outlet_dir or {}).get(j.lstrip("@").lower())
+        fold = (outlet_dir or {}).get(norm_alias(j.lstrip("@")))
         if fold:
             return fold
     return (src.get("outlet")
@@ -351,7 +352,7 @@ def journalist_entry(row: dict, sources: dict, directory: dict | None) -> dict |
     if not j:
         return None
     src = sources.get(row.get("source_id")) or {}
-    entry = (directory or {}).get(j.lower())
+    entry = (directory or {}).get(norm_alias(j))
     if entry is None and directory:
         # 공동 바이라인 ("A and B") — 등재 기자가 포함돼 있으면 그 기자를 대표로.
         # 정식명 단어 경계 매치만 인정, 복수 등재 시 바이라인 등장 순서 앞선 기자.
@@ -380,7 +381,7 @@ def journalist_entry(row: dict, sources: dict, directory: dict | None) -> dict |
 def _outlet_tier(key: str, row: dict, sources: dict, registry) -> float | None:
     """등재 tier 우선, 없으면 소스 설정 tier (spec §3.4)."""
     if registry is not None:
-        t = registry.outlets.get(key.lower())
+        t = registry.outlets.get(norm_alias(key))
         if t is not None:
             return float(t)
     t = sources.get(row.get("source_id"), {}).get("tier")
@@ -389,10 +390,10 @@ def _outlet_tier(key: str, row: dict, sources: dict, registry) -> float | None:
 
 def _journalist_tier(row: dict, entry: dict, registry) -> float | None:
     if entry["registered"] and registry is not None:
-        j = (row.get("journalist") or "").strip().lower()
+        j = norm_alias(row.get("journalist") or "")
         t = registry.journalists.get(j)
         if t is None:
-            t = registry.journalists.get(entry["name"].lower())
+            t = registry.journalists.get(norm_alias(entry["name"]))
         if t is not None:
             return float(t)
     # 비전담 · 조직 · 통칭 → 기사 저장 tier (비전담 기준선) 그룹으로 분류

@@ -1,4 +1,5 @@
 from datetime import datetime
+from bullet_in.credibility import _with_norm_keys
 from bullet_in.serve.render import (
     humanize_when, fmt_date, outlet_display, tier_label, tier_key,
     neighbor_window, facet_counts, TIER_ORDER, TIER_HEADINGS,
@@ -72,10 +73,11 @@ def test_neighbor_window_centers_and_clamps():
     assert neighbor_window(5, 2) == (0, 5)
 
 class _Reg:
-    """facet_counts 가 쓰는 최소 레지스트리 (Registry 의 .outlets · .journalists 만)."""
+    """facet_counts 가 쓰는 최소 레지스트리 (Registry 의 .outlets · .journalists 만).
+    조회가 공백 무시 키를 쓰므로 Registry 와 같게 정규화한다."""
     def __init__(self, outlets=None, journalists=None):
-        self.outlets = outlets or {}
-        self.journalists = journalists or {}
+        self.outlets = _with_norm_keys(outlets or {})
+        self.journalists = _with_norm_keys(journalists or {})
 
 def test_facet_counts_groups_outlets_by_tier_then_name():
     arts = [
@@ -180,9 +182,9 @@ def test_facet_counts_other_bucket_counts_offmission():
 
 from bullet_in.serve.render import journalist_entry
 
-DIR = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"},
-       "david ornstein": {"name": "David Ornstein", "outlet": "The Athletic"},
-       "charles watts": {"name": "Charles Watts", "outlet": None}}
+DIR = _with_norm_keys({"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"},
+                       "david ornstein": {"name": "David Ornstein", "outlet": "The Athletic"},
+                       "charles watts": {"name": "Charles Watts", "outlet": None}})
 JSOURCES = {"bbc_sport": {"display_name": "BBC Sport", "outlet": "BBC"},
             "goal": {"display_name": "Goal.com", "outlet": "Goal.com"},
             "arsenal_official": {"display_name": "Arsenal.com", "outlet": "Arsenal.com",
@@ -318,3 +320,12 @@ def test_facet_stage_counts_bbc_gossip_as_rumour():
     assert f["stage"]["rumour"] == 1
     assert f["stage"]["interest"] == 0
     assert f["other"] == 0
+
+
+def test_journalist_entry_folds_spaced_korean_alias():
+    # fmkorea 말머리는 "데이비드 온스테인" 처럼 띄어 쓴다 — 등재 판정 · 표기가 통해야 한다
+    e = journalist_entry({"journalist": "데이비드 온스테인", "source_id": "bbc_sport"},
+                         JSOURCES, {"데이비드온스테인": {"name": "David Ornstein",
+                                                  "outlet": "The Athletic"}})
+    assert e == {"name": "David Ornstein", "label": "David Ornstein (The Athletic)",
+                 "registered": True}

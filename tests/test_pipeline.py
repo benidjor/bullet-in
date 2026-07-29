@@ -274,9 +274,10 @@ def test_cross_run_complete_row_blocks_fmkorea():
     now = datetime.now(timezone.utc)
     url = "https://www.bbc.com/sport/football/articles/x1"
     raw = [RawItem(source_id="fmkorea", source_type="html", url=url, fetched_at=now,
-                   raw_payload={"title": "한국어 퍼온 제목", "body": "퍼온 본문"})]
+                   raw_payload={"title": "한국어 퍼온 제목", "body": "퍼온 본문",
+                                "body_level": 1})]
     sources = {"fmkorea": {"source_id": "fmkorea", "tier": 4}}
-    seen = {canonical_url(url): ("h_en", 1, "bbc_sport", True)}
+    seen = {canonical_url(url): ("h_en", 1, "bbc_sport", 2)}
     arts, stats = to_articles(raw, sources, seen=seen)
     assert arts == []
     assert stats["blocked_count"] == 1
@@ -287,9 +288,10 @@ def test_cross_run_stub_upgraded_by_complete_item():
     now = datetime.now(timezone.utc)
     url = "https://www.nytimes.com/athletic/12345/"
     raw = [RawItem(source_id="fmkorea", source_type="html", url=url, fetched_at=now,
-                   raw_payload={"title": "전문 제목", "body": "전문 본문"})]
+                   raw_payload={"title": "전문 제목", "body": "전문 본문",
+                                "body_level": 1})]
     sources = {"fmkorea": {"source_id": "fmkorea", "tier": 4}}
-    seen = {canonical_url(url): ("h_tweet", 1, "x_ornstein", False)}
+    seen = {canonical_url(url): ("h_tweet", 1, "x_ornstein", 0)}
     arts, stats = to_articles(raw, sources, seen=seen)
     assert len(arts) == 1
     assert arts[0].revision == 2
@@ -303,7 +305,7 @@ def test_cross_run_stub_not_replaced_by_stub():
     raw = [RawItem(source_id="fmkorea", source_type="html", url=url, fetched_at=now,
                    raw_payload={"title": "헤드라인만"})]
     sources = {"fmkorea": {"source_id": "fmkorea", "tier": 4}}
-    seen = {canonical_url(url): ("h_tweet", 1, "x_ornstein", False)}
+    seen = {canonical_url(url): ("h_tweet", 1, "x_ornstein", 0)}
     arts, stats = to_articles(raw, sources, seen=seen)
     assert arts == []
     assert stats["blocked_count"] == 1
@@ -315,7 +317,8 @@ def test_in_batch_complete_en_beats_complete_fmkorea():
     url = "https://www.bbc.com/sport/football/articles/x2"
     raw = [
         RawItem(source_id="fmkorea", source_type="html", url=url, fetched_at=now,
-                raw_payload={"title": "한국어 퍼온 제목", "body": "퍼온 본문"}),
+                raw_payload={"title": "한국어 퍼온 제목", "body": "퍼온 본문",
+                             "body_level": 1}),
         RawItem(source_id="bbc_sport", source_type="html", url=url, fetched_at=now,
                 raw_payload={"title": "Arsenal sign X", "body": "full body"}),
     ]
@@ -334,8 +337,60 @@ def test_same_source_revision_still_allowed():
     raw = [RawItem(source_id="bbc_sport", source_type="html", url=url, fetched_at=now,
                    raw_payload={"title": "Arsenal sign X (updated)", "body": "full"})]
     sources = {"bbc_sport": {"source_id": "bbc_sport", "tier": 2}}
-    seen = {canonical_url(url): ("h_old", 1, "bbc_sport", True)}
+    seen = {canonical_url(url): ("h_old", 1, "bbc_sport", 2)}
     arts, stats = to_articles(raw, sources, seen=seen)
     assert len(arts) == 1
     assert arts[0].revision == 2
     assert stats["blocked_count"] == 0
+
+
+# --- 본문 출처 등급 (body_level) 3단 사다리 ---
+
+def test_to_articles_carries_adapter_declared_body_level():
+    # 어댑터가 재료 기준으로 명시한 값을 그대로 싣는다 (경로로 추론하지 않는다)
+    now = datetime.now(timezone.utc)
+    raw = [RawItem(source_id="fmkorea", source_type="html",
+                   url="https://www.nytimes.com/athletic/1/", fetched_at=now,
+                   raw_payload={"title": "제목", "body": "게시글이 옮긴 본문",
+                                "body_level": 1})]
+    sources = {"fmkorea": {"source_id": "fmkorea", "tier": 4}}
+    arts, _ = to_articles(raw, sources, seen={})
+    assert arts[0].body_level == 1
+
+def test_to_articles_defaults_body_level_from_body_presence():
+    # 미명시 소스 (fmkorea 외) — 본문 있으면 언론사 본문 2 · 없으면 0
+    now = datetime.now(timezone.utc)
+    raw = [RawItem(source_id="bbc_sport", source_type="html", url="https://x.test/b1",
+                   fetched_at=now, raw_payload={"title": "Arsenal sign X", "body": "full"}),
+           RawItem(source_id="bbc_sport", source_type="html", url="https://x.test/b2",
+                   fetched_at=now, raw_payload={"title": "Headline only"})]
+    sources = {"bbc_sport": {"source_id": "bbc_sport", "tier": 2}}
+    arts, _ = to_articles(raw, sources, seen={})
+    assert [a.body_level for a in arts] == [2, 0]
+
+def test_cross_run_post_body_upgraded_by_outlet_body():
+    # 커뮤니티가 옮긴 본문 행에 언론사 원문이 도착하면 교체된다 (1 → 2 · 이번 PR 의 새 경로)
+    from bullet_in.canonical import canonical_url
+    now = datetime.now(timezone.utc)
+    url = "https://www.bbc.com/sport/football/articles/x9"
+    raw = [RawItem(source_id="bbc_sport", source_type="html", url=url, fetched_at=now,
+                   raw_payload={"title": "Arsenal sign X", "body": "full body"})]
+    sources = {"bbc_sport": {"source_id": "bbc_sport", "tier": 2}}
+    seen = {canonical_url(url): ("h_ko", 1, "fmkorea", 1)}
+    arts, stats = to_articles(raw, sources, seen=seen)
+    assert len(arts) == 1
+    assert arts[0].revision == 2 and arts[0].body_level == 2
+    assert stats["blocked_count"] == 0
+
+def test_cross_run_outlet_body_not_replaced_by_post_body():
+    # 반대 방향은 차단 — 커뮤니티 번역본이 언론사 원문을 밀어내지 못한다 (2 → 1)
+    from bullet_in.canonical import canonical_url
+    now = datetime.now(timezone.utc)
+    url = "https://www.bbc.com/sport/football/articles/x10"
+    raw = [RawItem(source_id="fmkorea", source_type="html", url=url, fetched_at=now,
+                   raw_payload={"title": "퍼온 제목", "body": "옮긴 본문", "body_level": 1})]
+    sources = {"fmkorea": {"source_id": "fmkorea", "tier": 4}}
+    seen = {canonical_url(url): ("h_en", 1, "bbc_sport", 2)}
+    arts, stats = to_articles(raw, sources, seen=seen)
+    assert arts == []
+    assert stats["blocked_count"] == 1

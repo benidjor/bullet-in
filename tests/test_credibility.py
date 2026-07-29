@@ -289,3 +289,70 @@ def test_live_config_x_ornstein_fixed_tier_one():
                  fetched_at=datetime(2026, 7, 26, tzinfo=timezone.utc),
                  raw_payload={"text": "Arsenal deal #AFC", "journalist": "@David_Ornstein"})
     assert resolve_tier(it, sources, registry, journalist="@David_Ornstein") == 1.0
+
+
+# --- 별칭 조회의 공백 정규화 ---
+# fmkorea 말머리 · 본문은 같은 이름을 붙여 쓰기도 하고 띄어 쓰기도 한다
+# ("데이비드온스테인" · "데이비드 온스테인"). 등록된 쪽 표기만 맞으면 조회가 통해야 한다.
+
+def _reg_with_spaced_variants(tmp_path):
+    p = tmp_path / "reg.yaml"
+    p.write_text(
+        "journalists:\n"
+        '  - {name: David Ornstein, tier: 1, outlet: The Athletic, '
+        'aliases: ["데이비드온스테인"]}\n'
+        '  - {name: Art de Roché, tier: 1.5, aliases: ["드 로셰", "드로셰"]}\n'
+        "outlets:\n"
+        '  - {name: Foot Mercato, tier: 4, aliases: ["Foot Mercato", "footmercato"]}\n',
+        encoding="utf-8")
+    return p
+
+
+def test_norm_alias_ignores_whitespace_and_case():
+    from bullet_in.credibility import norm_alias
+    assert norm_alias("데이비드 온스테인") == norm_alias("데이비드온스테인")
+    assert norm_alias("Art  de Roché") == norm_alias("art de roché")
+
+
+def test_registry_resolves_alias_written_with_spaces(tmp_path):
+    from bullet_in.credibility import norm_alias
+    r = load_registry(_reg_with_spaced_variants(tmp_path))
+    assert r.journalists[norm_alias("데이비드 온스테인")] == 1.0
+    assert r.journalist_outlets[norm_alias("데이비드 온스테인")] == "The Athletic"
+
+
+def test_registry_keeps_original_alias_keys(tmp_path):
+    # 정규화 키는 덧붙이는 것 — 기존 조회 (풀네임 · 소문자) 는 그대로 통한다
+    r = load_registry(_reg_with_spaced_variants(tmp_path))
+    assert r.journalists["데이비드온스테인"] == 1.0
+    assert r.journalists["david ornstein"] == 1.0
+
+
+def test_load_registry_tolerates_whitespace_variants_in_one_entry(tmp_path):
+    # "드 로셰" · "드로셰" 는 정규화하면 한 키가 된다 — 같은 항목이라 중복 오류가 아니다
+    r = load_registry(_reg_with_spaced_variants(tmp_path))
+    assert r.journalists["드로셰"] == 1.5
+    assert r.outlets["footmercato"] == 4.0
+
+
+def test_resolve_tier_fmkorea_matches_spaced_body_mention(tmp_path):
+    # 본문이 "데이비드 온스테인" 이면 등록 별칭 (붙여 쓴 형태) 과 매칭돼 tier 1 이 나와야 한다
+    r = load_registry(_reg_with_spaced_variants(tmp_path))
+    sources = {"fmkorea": {"credibility": "fmkorea"}}
+    item = RawItem(source_id="fmkorea", source_type="html", url="u",
+                   fetched_at=datetime.now(timezone.utc),
+                   raw_payload={"title": "[무명] 아스날 소식",
+                                "body": "데이비드 온스테인 기자에 따르면 협상이 진행 중이다."})
+    assert resolve_tier(item, sources, r) == 1.0
+
+
+def test_journalist_directory_resolves_spaced_alias(tmp_path):
+    from bullet_in.credibility import norm_alias
+    d = journalist_directory(_reg_with_spaced_variants(tmp_path))
+    assert d[norm_alias("데이비드 온스테인")]["name"] == "David Ornstein"
+
+
+def test_outlet_directory_resolves_spaced_alias(tmp_path):
+    from bullet_in.credibility import norm_alias, outlet_directory
+    d = outlet_directory(_reg_with_spaced_variants(tmp_path))
+    assert d[norm_alias("footmercato")] == "Foot Mercato"
