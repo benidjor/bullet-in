@@ -38,6 +38,32 @@ curl -sI -L "https://bullet-in.pages.dev/article/<hash>" | grep -i "cf-cache-sta
 Pages 는 확장자 없는 경로를 리다이렉트로 처리하는데, 그 응답이 엣지에 캐시돼 **배포본에서 사라진 페이지를 계속 내어준다**.
 캐시를 우회하면 곧바로 인덱스 폴백이 나온다.
 
+## 2.1. 갱신 검증에서도 같은 함정을 밟는다 (2026-07-30 보강)
+
+삭제뿐 아니라 **내용이 바뀐 것을 확인할 때도** 걸린다.
+지어낸 본문 29건을 비우고 재렌더 · 배포한 뒤 라이브를 확인했더니 옛 본문이 그대로 보였다.
+VM 로컬 파일은 이미 새 내용이었다 (파일 시각 · 안내문 교체 확인).
+
+```bash
+# 확장자 경로는 308 이고 본문이 비어 나온다
+curl -s -o /dev/null -w "%{http_code}\n" https://bullet-in.pages.dev/ops.html   # 308
+curl -s https://bullet-in.pages.dev/ops.html | grep -c "<h2>"                   # 0
+```
+
+`-L` 없이 grep 하면 **찾는 문자열이 0건으로 나온다**.
+"사라졌다" 로도 "아직 남아 있다" 로도 오판할 수 있다.
+실제로 새로 넣은 ops ⑥ 절이 배포됐는데 없다고 오판했고, 지어낸 본문이 아직 있다고 오판했다.
+
+무확장 경로에 `-L` 을 붙여도 엣지 캐시가 옛 응답을 준다.
+**쿼리스트링 캐시버스터** 나 **배포 고유 URL** 로 재확인한다.
+
+```bash
+curl -sL "https://bullet-in.pages.dev/ops?cb=$(date +%s)" | grep -o "<h2>[^<]*"
+curl -sL "https://<배포해시>.bullet-in.pages.dev/ops" | grep -o "<h2>[^<]*"
+```
+
+`deploy-site.sh` 가 출력하는 `https://<해시>.bullet-in.pages.dev` 가 그 배포본을 직접 가리키므로 가장 확실하다.
+
 ## 3. 삭제 검증 절차
 
 세 층을 순서대로 본다.
