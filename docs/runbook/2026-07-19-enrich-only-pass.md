@@ -26,13 +26,16 @@ from sqlalchemy import create_engine, text
 eng = create_engine(os.environ["MARIADB_URL"])
 with eng.connect() as c:
     rows = c.execute(text(
-        "SELECT source_id, COUNT(*) FROM articles "
-        "WHERE title_ko IS NULL AND source_id != 'fmkorea' GROUP BY source_id")).all()
+        "SELECT source_id, body_level, COUNT(*) FROM articles "
+        "WHERE title_ko IS NULL GROUP BY source_id, body_level")).all()
 print("미번역 잔존:", rows or 0)
 EOF
 ```
 
-fmkorea (ko 소스) 는 번역 대상이 아니라 제외한다.
+fmkorea 도 세어야 한다 (2026-07-30 개정).
+전에는 ko 소스라 번역 대상이 아니라고 보고 제외했지만, 지금은 등급 1 (게시글 본문) 행이 재작성 경로로 처리된다.
+`body_level` 을 함께 세면 그 회차가 어느 경로로 갈지 미리 보인다
+— 등급 1 은 재작성 · 그 밖은 번역 · 재료가 아예 없으면 제목만 생성.
 
 ## 3. 수렴 패스 (최대 3회 반복)
 
@@ -47,7 +50,9 @@ from pathlib import Path
 from google import genai
 from sqlalchemy import create_engine
 from bullet_in.enrich import (classify_stage_rows, enrich_rows,
-                              finalize_translation, partition_by_paywall)
+                              finalize_translation, partition_by_body_level,
+                              partition_generatable, rewrite_rows_guarded,
+                              title_only_rows)
 from bullet_in.run import GEMINI_MODEL
 from bullet_in.storage.mariadb import MartStore
 
@@ -64,14 +69,20 @@ for attempt in range(3):
     if not missing:
         break
     by_hash = {r["content_hash"]: r for r in missing}
-    para, trans = partition_by_paywall(missing)
+    generatable, title_only = partition_generatable(missing)
+    rewrite_rows, translate_rows = partition_by_body_level(generatable)
     results = {}
-    results.update(enrich_rows(trans, client, GEMINI_MODEL, mode="translate"))
-    results.update(enrich_rows(para, client, GEMINI_MODEL, mode="paraphrase"))
+    results.update(enrich_rows(translate_rows, client, GEMINI_MODEL, mode="translate"))
+    rewritten, gate_reports = rewrite_rows_guarded(rewrite_rows, client, GEMINI_MODEL)
+    results.update(rewritten)
+    results.update(title_only_rows(title_only, client, GEMINI_MODEL))
     for h, v in results.items():
         mart.set_translation(h, *finalize_translation(
             v, by_hash.get(h, {}), glossary, name_map, club_map))
-    print(f"패스 {attempt + 1}: {len(results)} / {len(missing)} 성공")
+    for h, rep in gate_reports.items():
+        mart.set_rewrite_retention(h, rep["retention"])
+    print(f"패스 {attempt + 1}: {len(results)} / {len(missing)} 성공 "
+          f"· 재작성 {len(rewritten)} · 제목만 {len(title_only)}")
 print("최종 미번역 잔존:", len(mart.rows_missing_translation()))
 staged = mart.rows_missing_stage()
 if staged:
