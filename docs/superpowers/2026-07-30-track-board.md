@@ -12,17 +12,20 @@
 
 | 트랙 | 상태 | 다음 액션 | 착수 입력 |
 | --- | --- | --- | --- |
-| **재번역 큐 무한 루프** | 실측 완료 · 미착수 | 재시도 상한 또는 관용구 예외 | `troubleshooting/2026-07-30-silent-drops-and-blind-alerts.md` §3 |
-| **fmkorea 22건 회수** | 코드 머지 (#162) · 라이브 미검증 | `--by-title --limit 1 --dry-run` 으로 적중률 측정 | 같은 문서 · `2026-07-30-fmkorea-contact-budget-and-search-reach.md` |
+| **fmkorea 22건 회수** | 코드 머지 (#162) · 라이브 미검증 | `--by-title --limit 1 --dry-run` 으로 적중률 측정 | `troubleshooting/2026-07-30-silent-drops-and-blind-alerts.md` · `2026-07-30-fmkorea-contact-budget-and-search-reach.md` |
 | **신선도 알림 오진** | 실측 완료 · 별도 세션 | 소스별 후보 건수 기록 → 후보 0건일 때만 알림 | 세션 메모리 `slo5-freshness-alert-track` |
+| **링크 선수 명단 DB** | 컬럼 초안 있음 · 착수 시점 미정 | 설계 브레인스토밍 | 세션 메모리 `player-roster-db-decision` · `linked-player-watchlist-track` |
 
 번역 신뢰성 트랙은 2026-07-30 에 라이브 반영까지 끝났다.
 계획서 Task 1~10 을 소화하고 복제 게이트 임계값을 `0.75` 로 확정했다 (실측 8건 중앙값 약 0.495).
-실행 기록은 `runbook/2026-07-30-translation-trust-live-pass.md` 이고, 검증 기준 5개 중 3개 충족 · 2개 부분 충족이다
-— 부분 충족분이 위 표의 첫 두 줄로 이어진다.
+실행 기록은 `runbook/2026-07-30-translation-trust-live-pass.md` 이고, 검증 기준 5개 중 3개 충족 · 2개 부분 충족이다.
 
-**재번역 큐 무한 루프가 가장 급하다.**
-같은 행이 하루 8회 재큐되며 매번 Gemini 를 헛되게 부르고 있고, 지금도 진행 중이다.
+재번역 큐 무한 루프도 2026-07-31 에 닫혔다 (PR #166).
+인명 축에 풀네임 근거 조건을 붙이고 재시도 1회 후 채택으로 종착시켰다.
+설계는 `specs/2026-07-30-retranslation-queue-terminal-state-design.md` 이고, 측정 절차는 `runbook/2026-07-31-gate-change-offline-measurement.md` 에 재사용 가능하게 남겼다.
+
+**머지 후 VM 반영이 아직이라면 그것이 먼저다.**
+정기 회차는 자동으로 `git pull` 하지 않으므로 반영 전까지 루프가 계속 돈다.
 
 ### 1.2. 설계는 끝났으나 선행 조건을 기다리는 것
 
