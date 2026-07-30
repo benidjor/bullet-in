@@ -41,3 +41,4 @@ CREATE TABLE IF NOT EXISTS source_freshness (
   PRIMARY KEY (run_id, source_id));
 ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS fetch_duration_sec FLOAT;
 ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS blocked_count INT;
+ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS candidate_counts JSON;

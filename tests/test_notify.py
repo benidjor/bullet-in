@@ -231,6 +231,49 @@ def test_build_anomaly_alert_sequence_counts_absent_rounds_as_zero():
     assert "- 최근: 14 → 14 → 14 → 14 → 0 → (오늘) 0" in alert["fields"][0]["value"]
 
 
+def _stale_bbc():
+    checked = datetime(2026, 7, 30, 6, 0, 0)
+    records = [SourceFreshness("bbc_sport", checked - timedelta(hours=69), 48.0,
+                               69.0, True)]
+    return checked, records
+
+
+def test_build_freshness_alert_zero_candidates_keeps_hint():
+    # 후보 0건 = 수집 끊김 의심 — 이때만 어댑터 힌트가 근거를 얻는다.
+    # Counter 는 0건 소스를 키로 안 만들므로 키 부재 = 0건으로 읽어야 한다.
+    checked, records = _stale_bbc()
+    alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
+                                         run_id="3f2a9c12abcd", checked_at=checked,
+                                         candidates={}, fetch_errors={})
+    field = alert["fields"][0]
+    assert "- 이번 회차 후보 0건 — 수집 끊김 의심" in field["value"]
+    assert "- 원인 후보: 셀렉터 드리프트 · 사이트 개편" in field["value"]
+
+
+def test_build_freshness_alert_candidates_present_drops_hint():
+    # 후보는 있으나 전부 기존 기사 = 수집 경로 정상 — 추측성 힌트를 붙이지 않는다
+    checked, records = _stale_bbc()
+    alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
+                                         run_id="3f2a9c12abcd", checked_at=checked,
+                                         candidates={"bbc_sport": 4}, fetch_errors={})
+    field = alert["fields"][0]
+    assert "- 이번 회차 후보 4건 — 수집 경로 정상 · 신규 없음" in field["value"]
+    assert "원인 후보" not in field["value"]
+
+
+def test_build_freshness_alert_fetch_error_shows_error_not_hint():
+    # 회차 fetch 가 예외로 끝난 소스 — 실제 오류 문구가 원인이고 힌트는 추측이다
+    checked, records = _stale_bbc()
+    alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
+                                         run_id="3f2a9c12abcd", checked_at=checked,
+                                         candidates={},
+                                         fetch_errors={"bbc_sport": "HTTP 503"})
+    field = alert["fields"][0]
+    assert "- 이번 회차 fetch 오류: HTTP 503" in field["value"]
+    assert "원인 후보" not in field["value"]
+    assert "후보 0건" not in field["value"]  # 오류면 후보 수는 미지 — 0 으로 단정 금지
+
+
 from bullet_in.notify import build_coverage_alert, COLOR_ANOMALY
 
 def test_build_coverage_alert_embed_shape():

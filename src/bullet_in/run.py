@@ -1,5 +1,6 @@
 from __future__ import annotations
 import argparse, asyncio, json, logging, os, time, uuid, yaml
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from pymongo import MongoClient
@@ -36,9 +37,9 @@ SERVING_SELECT_SQL = (
 # started_at 은 Python UTC 바인딩 · finished_at 은 UTC_TIMESTAMP() — 세션 TZ 무관 (spec §5)
 RUN_INSERT_SQL = (
     "INSERT INTO pipeline_runs (run_id,dag_run_id,started_at,finished_at,"
-    "duration_sec,fetch_duration_sec,source_counts,new_count,dup_count,"
-    "blocked_count,error_count,success_rate) "
-    "VALUES (:rid,:drid,:started,UTC_TIMESTAMP(),:dur,:fetch,:counts,"
+    "duration_sec,fetch_duration_sec,source_counts,candidate_counts,new_count,"
+    "dup_count,blocked_count,error_count,success_rate) "
+    "VALUES (:rid,:drid,:started,UTC_TIMESTAMP(),:dur,:fetch,:counts,:cands,"
     ":new,:dup,:blocked,:err,:sr)")
 
 async def main(concurrency: int):
@@ -52,6 +53,12 @@ async def main(concurrency: int):
     started_at_utc = datetime.now(timezone.utc).replace(tzinfo=None)
     raw, errors = await gather_all(adapters, concurrency=concurrency)
     fetch_sec = round(time.perf_counter() - t0, 2)
+
+    # 소스별 후보 계수 (dedup 전) — 신규 적재만 세는 source_counts 와 달리
+    # 수집 끊김 (후보 0) 과 전부 기존 기사 (후보 N · 신규 0) 를 가른다 (SLO-5 오진 수정)
+    candidate_counts = dict(Counter(it.source_id for it in raw))
+    logging.getLogger(__name__).info(
+        "소스별 후보 계수: %s", json.dumps(candidate_counts, ensure_ascii=False))
 
     # 공홈 커버리지 감시: 창 후보 · Men 퍼널 불변식 위반 시 알림 (spec 2026-07-24 §5)
     for a in adapters:
@@ -164,7 +171,8 @@ async def main(concurrency: int):
     if breaches:
         notify.send_alert(**notify.build_freshness_alert(
             records, default_hours, sources=sources, run_id=run_id,
-            checked_at=checked_at))
+            checked_at=checked_at, candidates=candidate_counts,
+            fetch_errors=errors))
 
     summary = {"new_or_changed": len(arts), "errors": errors,
                "success_rate": success_rate(len(adapters), len(errors)),
@@ -176,6 +184,7 @@ async def main(concurrency: int):
              "started": started_at_utc, "dur": summary["elapsed_sec"],
              "fetch": fetch_sec,
              "counts": json.dumps(stats["source_counts"]),
+             "cands": json.dumps(candidate_counts),
              "new": len(arts), "dup": stats["dup_count"],
              "blocked": stats["blocked_count"],
              "err": len(errors), "sr": summary["success_rate"]})
