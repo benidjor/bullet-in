@@ -77,8 +77,9 @@ for attempt in range(3):
     results.update(rewritten)
     results.update(title_only_rows(title_only, client, GEMINI_MODEL))
     for h, v in results.items():
-        mart.set_translation(h, *finalize_translation(
-            v, by_hash.get(h, {}), glossary, name_map, club_map))
+        title_ko, s_ko, s3_ko, body_ko, _ = finalize_translation(
+            v, by_hash.get(h, {}), glossary, name_map, club_map)
+        mart.set_translation(h, title_ko, s_ko, s3_ko, body_ko)
     for h, rep in gate_reports.items():
         mart.set_rewrite_retention(h, rep["retention"])
     print(f"패스 {attempt + 1}: {len(results)} / {len(missing)} 성공 "
