@@ -1,5 +1,6 @@
 from sqlalchemy import text
 from bullet_in.roster_seed import ROSTER
+from bullet_in.roster import normalize_pairs, record_article_players
 from bullet_in.storage.players import PlayerStore
 
 
@@ -77,3 +78,25 @@ def test_link_article_upsert_is_idempotent(engine):
             "SELECT stage FROM article_players WHERE content_hash=:h"), {"h": h}).all()
     assert rows == [("agreed",)]
     assert store.articles_for(pid) == [h]
+
+
+def test_record_article_players_candidate_idempotent(engine):
+    store = PlayerStore(engine)
+    store.seed(ROSTER)
+    pairs = normalize_pairs([{"full_name": "Nico Williams", "ko": "니코 윌리엄스",
+                              "stage": "rumour"}])
+    h1, h2 = "b" * 64, "c" * 64
+    created1 = record_article_players(store, h1, pairs)
+    created2 = record_article_players(store, h2, pairs)   # 같은 선수 재등장
+    assert len(created1) == 1 and created2 == []          # 중복 후보 없음
+    pid = created1[0]["player_id"]
+    assert sorted(store.articles_for(pid)) == sorted([h1, h2])
+
+
+def test_record_article_players_links_existing_by_surname(engine):
+    store = PlayerStore(engine)
+    store.seed(ROSTER)
+    pairs = normalize_pairs([{"full_name": "Gyokeres", "ko": "요케레스",
+                              "stage": "agreed"}])       # 성만 온 출력
+    created = record_article_players(store, "d" * 64, pairs)
+    assert created == []                                  # 기존 요케레스에 링크, 후보 미생성
