@@ -41,3 +41,39 @@ def test_serving_names_matches_gate_keys(engine):
     store = PlayerStore(engine)
     store.seed(ROSTER)
     assert set(store.serving_names()) == set(store.gate_name_map())
+
+
+def test_insert_candidate_and_match(engine):
+    store = PlayerStore(engine)
+    store.seed(ROSTER)
+    pid = store.insert_candidate(full_name="Nico Williams", first_name="Nico",
+                                 surname="Williams", ko_candidate="니코 윌리엄스",
+                                 first_seen="h" * 64)
+    by_full, by_surname = store.match_maps()
+    assert by_full["nico williams"] == pid
+    assert by_surname["williams"] == pid
+
+
+def test_match_maps_drop_ambiguous_surname(engine):
+    store = PlayerStore(engine)
+    store.seed(ROSTER)
+    store.insert_candidate(full_name="Brennan Johnson", first_name="Brennan",
+                           surname="Johnson", ko_candidate=None, first_seen=None)
+    store.insert_candidate(full_name="Ben Johnson", first_name="Ben",
+                           surname="Johnson", ko_candidate=None, first_seen=None)
+    _, by_surname = store.match_maps()
+    assert "johnson" not in by_surname       # 동성 2명 — 성 단독 매칭은 모호해 제외
+
+
+def test_link_article_upsert_is_idempotent(engine):
+    store = PlayerStore(engine)
+    store.seed(ROSTER)
+    pid = store.gate_player_id("기마랑이스")
+    h = "a" * 64
+    store.link_article(h, pid, "interest")
+    store.link_article(h, pid, "agreed")     # 재추출 — 단계만 갱신
+    with engine.connect() as c:
+        rows = c.execute(text(
+            "SELECT stage FROM article_players WHERE content_hash=:h"), {"h": h}).all()
+    assert rows == [("agreed",)]
+    assert store.articles_for(pid) == [h]
