@@ -14,7 +14,7 @@
 | 원문에 없는 구단명 | `detect_club_injection` | 번역 4필드 (제목 · 요약 · 3줄 · 본문) 에 생긴 원문 근거 없는 구단명 (학습 지식 주입) | `9956234a` 미들즈브러 (로저스 전 소속 주입) |
 
 - **사전 3종**: `config/glossary.yaml` (오표기 → 통용 치환, 저장 직전 적용)
-  · `config/name_map.yaml` (한글 통용 표기 → 영문 성, 검출 전용 — 치환 안 함)
+  · players 테이블 (`PlayerStore.gate_name_map()`, 한글 통용 표기 → 영문 성, 검출 전용 — 치환 안 함)
   · `config/club_map.yaml` (한글 통용 표기 → 영문 별칭 목록, 검출 전용 — 치환 안 함).
 - 적용 지점: `run.py` 번역 저장 루프 — glossary 치환 → 검출 → `paragraphize` → 저장.
 
@@ -79,9 +79,10 @@ import os, yaml
 from sqlalchemy import create_engine, text
 from bullet_in.enrich import (detect_title_hallucination, detect_title_mistranslation,
                               detect_roundup_omission, detect_club_injection)
-name_map = yaml.safe_load(open("config/name_map.yaml"))["names"]
-club_map = yaml.safe_load(open("config/club_map.yaml"))["clubs"]
+from bullet_in.storage.players import PlayerStore  # players 테이블 (PlayerStore.gate_name_map())
 e = create_engine(os.environ["MARIADB_URL"])
+name_map = PlayerStore(e).gate_name_map()
+club_map = yaml.safe_load(open("config/club_map.yaml"))["clubs"]
 with e.connect() as c:
     rows = [dict(r) for r in c.execute(text(
         "SELECT id, source_id, title_original, title_ko, body_source, body_ko, "
@@ -123,6 +124,6 @@ PY
 ## 7. 롤백
 
 - 게이트 비활성: `git revert` (코드) — 검출이 전부 no-op 이 되고 저장 경로는 기존과 동일.
-- 사전만 무력화: `name_map.yaml` 의 `names` 를 비우면 인명 축 전체 no-op (임대 축은 코드 revert 필요).
+- 사전만 무력화: players 테이블 (`PlayerStore.gate_name_map()`) 을 비우면 인명 축 전체 no-op (임대 축은 코드 revert 필요).
 - 구단명 축만 무력화: `club_map.yaml` 의 `clubs` 를 비우면 no-op (코드 revert 불필요).
 - 데이터: 큐 투입 (title NULL) 은 다음 사이클 번역으로 자연 복원 — 별도 롤백 불필요.

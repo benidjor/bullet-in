@@ -1,5 +1,3 @@
-import yaml
-from pathlib import Path
 from sqlalchemy import text
 from bullet_in.roster_seed import ROSTER
 from bullet_in.storage.players import PlayerStore
@@ -18,12 +16,11 @@ def test_seed_is_idempotent(engine):
     assert store.seed(ROSTER) == 0          # 재실행 시 신규 0 (INSERT IGNORE)
 
 
-def test_gate_name_map_equals_yaml_name_map(engine):
-    # 로더 동등성 (스펙 §9): 마이그레이션 결과 dict = 기존 YAML dict
+def test_gate_name_map_equals_seed_roster(engine):
+    # YAML 폐지 후의 회귀 가드 — 술어 (후보 배제) 가 이관분을 깎지 않는지 고정
     store = PlayerStore(engine)
     store.seed(ROSTER)
-    expected = yaml.safe_load(Path("config/name_map.yaml").read_text())["names"]
-    assert store.gate_name_map() == expected
+    assert store.gate_name_map() == {r["ko_name"]: r["surname"] for r in ROSTER}
 
 
 def test_gate_name_map_excludes_candidate_and_blank_ko(engine):

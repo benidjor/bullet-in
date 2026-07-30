@@ -71,9 +71,11 @@ awk -F'\t' '{c[NF]++} END {for (k in c) print "필드수", k, "→", c[k] "행"}
 
 ```bash
 uv run python - <<'PY'
-import re, yaml
+import os, re
+from sqlalchemy import create_engine
 from bullet_in.enrich import _has_name_context     # 배포된 규칙 그대로
-sur = sorted(set(yaml.safe_load(open('config/name_map.yaml'))['names'].values()))
+from bullet_in.storage.players import PlayerStore  # players 테이블 (PlayerStore.gate_name_map())
+sur = sorted(set(PlayerStore(create_engine(os.environ["MARIADB_URL"])).gate_name_map().values()))
 rows = [l.rstrip('\n').split('\t') for l in open('full.tsv')]
 tot, sup = 0, []
 for s in sur:

@@ -134,7 +134,7 @@ def _has_name_context(source: str, surname: str) -> bool:
     앞 단어가 기능어면 근거로 치지 않는다 (With Arteta's Backing… 오탐 차단).
     실측 (2026-07-30 · 라이브 412행): 제목에 등재 성이 나온 132건 중 128건이 이 근거를 가지고,
     근거가 없는 4건 중 2건이 확인된 오탐이다 (스펙 4.3절).
-    name_map 값이 단일 단어 성이라는 전제의 패턴이다 (2026-07-31 현재 40개 전부 충족)
+    name_map 값이 단일 단어 성이라는 전제의 패턴이다 (2026-07-31 현재 39개 전부 충족)
     — 두 단어 값 (Van Dijk 류) 은 대소문자 보존 매칭이 근거를 못 찾아 축이 조용히 꺼진다."""
     marked = _strip_marks(source)
     pat = rf"\b([A-Z][a-z]+)[\s-]+{re.escape(_strip_marks(surname))}\b"
