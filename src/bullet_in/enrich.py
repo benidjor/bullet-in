@@ -461,6 +461,65 @@ def rewrite_rows_guarded(rows: list[dict], client, model: str,
                         h, best["retention"], best["missing"], len(attempts))
     return results, reports
 
+TITLE_ONLY_PROMPT = (
+    "다음 축구 뉴스 제목을 한국어로 옮긴다. 규칙:\n"
+    "- 한국 스포츠 기사 제목체로 간결하게 (명사형 위주).\n"
+    "- 제목에 없는 내용을 덧붙이지 않는다.\n"
+    "- 원문 제목의 선수 · 감독 이름을 최소 하나는 그대로 남긴다.\n"
+    "- 고유명사는 통용 한글 표기(Arsenal=아스날).\n"
+    'ONLY JSON: {{"title_ko":"..."}}'
+    "\n\nTitle: {title}")
+
+
+def partition_generatable(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(생성 대상, 제목만 대상) — 재료가 없으면 본문 · 요약을 만들지 않는다.
+
+    원인은 재료 없는 행에 완역을 지시한 것이다 — 번역할 원문이 없으니 모델이
+    빈칸을 채워 넣었다 (스펙 §1). 트윗 소스는 title_original 에 전문이 있어
+    재료가 갖춰져 있으므로 빠지지 않는다."""
+    gen, title_only = [], []
+    for r in rows:
+        has_material = bool((r.get("body_source") or "").strip()
+                            or (r.get("body_excerpt") or "").strip())
+        if has_material or r.get("source_id") in BODY_AS_TITLE_SOURCES:
+            gen.append(r)
+        else:
+            title_only.append(r)
+    return gen, title_only
+
+
+def title_only_rows(rows: list[dict], client, model: str) -> dict[str, dict]:
+    """제목만 생성 — 본문 · 요약 필드는 None 으로 둔다.
+    행을 아예 건너뛰면 title_ko 가 NULL 로 남아 매 회차 재선별되고 '번역 대기'
+    배지가 영구히 붙는다."""
+    out: dict[str, dict] = {}
+    for r in rows:
+        h = r["content_hash"]
+        try:
+            msg = client.models.generate_content(
+                model=model,
+                contents=TITLE_ONLY_PROMPT.format(title=r["title_original"]),
+                config={"max_output_tokens": 512,
+                        "response_mime_type": "application/json"})
+        except Exception as e:
+            if _is_rate_limit(e):
+                log.warning("Gemini rate limit(429), 제목 생성 중단 — 남은 행 다음 사이클")
+                break
+            log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
+            continue
+        m = re.search(r"\{.*\}", msg.text, re.DOTALL)
+        try:
+            title_ko = json.loads(m.group(0))["title_ko"] if m else None
+        except (json.JSONDecodeError, KeyError, TypeError):
+            title_ko = None
+        if not title_ko:
+            log.warning("제목 생성 파싱 실패, 스킵 content_hash=%s", h)
+            continue
+        out[h] = {"title_ko": title_ko, "summary_ko": None,
+                  "summary3_ko": None, "body_ko": None}
+    return out
+
+
 def partition_translation_rows(rows: list[dict], sources: dict[str, dict]
                                ) -> tuple[list[dict], list[dict]]:
     """소스 lang 기준으로 (ko_rows, en_rows) 로 분리. lang 미지정은 en 취급."""

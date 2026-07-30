@@ -930,3 +930,60 @@ def test_rewrite_rows_guarded_breaks_on_rate_limit():
     c.models = c
     results, reports = rewrite_rows_guarded([_row(), _row("h9")], c, "m")
     assert results == {} and reports == {}
+
+
+def test_partition_generatable_drops_row_without_material():
+    from bullet_in.enrich import partition_generatable
+    rows = [{"content_hash": "h1", "source_id": "fmkorea",
+             "body_source": "", "body_excerpt": None},
+            {"content_hash": "h2", "source_id": "fmkorea",
+             "body_source": "본문 있음", "body_excerpt": None}]
+    gen, title_only = partition_generatable(rows)
+    assert [r["content_hash"] for r in gen] == ["h2"]
+    assert [r["content_hash"] for r in title_only] == ["h1"]
+
+
+def test_partition_generatable_keeps_tweet_sources():
+    """트윗은 title_original 에 전문이 있어 재료가 갖춰져 있다 (스펙 §3.1 · §4.5)."""
+    from bullet_in.enrich import partition_generatable
+    rows = [{"content_hash": "t1", "source_id": "x_afcstuff",
+             "body_source": "", "body_excerpt": None},
+            {"content_hash": "t2", "source_id": "x_ornstein",
+             "body_source": None, "body_excerpt": ""}]
+    gen, title_only = partition_generatable(rows)
+    assert len(gen) == 2 and title_only == []
+
+
+def test_partition_generatable_accepts_excerpt_only_row():
+    from bullet_in.enrich import partition_generatable
+    gen, title_only = partition_generatable(
+        [{"content_hash": "h3", "source_id": "goal",
+          "body_source": None, "body_excerpt": "발췌 있음"}])
+    assert len(gen) == 1 and title_only == []
+
+
+def test_title_only_rows_returns_title_and_null_body_fields():
+    from bullet_in.enrich import title_only_rows
+    class _C:
+        models = None
+        def generate_content(self, model, contents, config):
+            return type("R", (), {"text": '{"title_ko": "아스날 소식"}'})()
+    c = _C(); c.models = c
+    out = title_only_rows([{"content_hash": "h1", "title_original": "Arsenal news"}],
+                          c, "m")
+    assert out["h1"]["title_ko"] == "아스날 소식"
+    assert out["h1"]["summary_ko"] is None
+    assert out["h1"]["summary3_ko"] is None
+    assert out["h1"]["body_ko"] is None
+
+
+def test_finalize_translation_survives_title_only_result():
+    """title_only_rows 산출물 (본문 · 요약 None) 이 회차 저장 경로를 통과해야 한다.
+    죽으면 run.py 의 enrich 단계가 통째로 중단된다 (스펙 §4.5 배선)."""
+    from bullet_in.enrich import finalize_translation
+    v = {"title_ko": "아스날 소식", "summary_ko": None,
+         "summary3_ko": None, "body_ko": None}
+    row = {"content_hash": "h1", "title_original": "Arsenal news",
+           "body_source": None, "body_excerpt": None,
+           "source_id": "fmkorea", "summary_ko": None}
+    assert finalize_translation(v, row, {}, {}, {}) == ("아스날 소식", None, None, None)

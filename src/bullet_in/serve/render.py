@@ -1055,6 +1055,7 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
     article = dict(article)
     paras = [p for p in (article.get("body_ko") or "").split("\n") if p.strip()]
     article["_excerpt"] = serving_mode(article.get("source_id"), sources) == "excerpt"
+    article["_meta_only"] = not (article.get("body_ko") or "").strip()
     images = article.get("_images") or []
     if article["_excerpt"]:
         paras, images = excerpt_paras(paras), []

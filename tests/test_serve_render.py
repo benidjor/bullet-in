@@ -814,3 +814,19 @@ def test_section_heads_link_to_all_page():
     html = render_index([_row(), g], {**SOURCES, **FILTER_SOURCES}, NOW)
     assert html.count('class="seclink"') == 2
     assert '전체 기사 보기' in html
+
+
+def test_detail_note_says_meta_only_when_body_missing():
+    """본문을 확보하지 못한 행은 자동 번역 안내문 대신 사유를 보여 준다 (스펙 §4.5)."""
+    row = _row(body_ko=None, summary_ko=None, summary3_ko=None)
+    html = render_article(_decorated(row), [], row["content_hash"], SOURCES, NOW)
+    assert "원문 본문을 확보하지 못해" in html
+    assert "자동 번역한 것입니다" not in html
+
+
+def test_detail_note_stays_for_translated_body():
+    # _row() 기본값에는 body_ko 가 없으므로 명시적으로 본문을 넣는다
+    row = _row(body_ko="아스날이 센터백 영입을 추진한다.")
+    html = render_article(_decorated(row), [], row["content_hash"], SOURCES, NOW)
+    assert "자동 번역한 것입니다" in html
+    assert "원문 본문을 확보하지 못해" not in html
