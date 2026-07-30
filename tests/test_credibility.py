@@ -356,3 +356,32 @@ def test_outlet_directory_resolves_spaced_alias(tmp_path):
     from bullet_in.credibility import norm_alias, outlet_directory
     d = outlet_directory(_reg_with_spaced_variants(tmp_path))
     assert d[norm_alias("footmercato")] == "Foot Mercato"
+
+
+def test_espn_brasil_handle_resolves_to_bruno_andrade():
+    """Bruno Andrade 는 트위터 계정이 없어 afcstuff 가 소속사 계정으로 인용한다
+    ('Bruno Andrade (@ESPNBrasil)' · '[ @ESPNBrasil ]'). 등재 전에는 fallback_tier 4
+    로 떨어져, 같은 기사가 fmkorea 경로 (tier 2) 와 X 경로 (tier 4) 로 갈렸다."""
+    r = load_registry(REG)
+    assert r.journalists["@espnbrasil"] == 2.0
+    assert r.journalists["브루노안드라데"] == 2.0
+    assert r.journalist_outlets["@espnbrasil"] == "ESPN"
+
+
+def test_espn_brasil_display_name_carries_outlet():
+    d = journalist_directory(REG)
+    assert d["@espnbrasil"]["name"] == "Bruno Andrade (ESPN)"
+    assert d["@espnbrasil"]["outlet"] == "ESPN"
+
+
+def test_espn_outlet_is_medium_credibility():
+    # 공신력 중 = tier 2.0 (render._READER_TIER)
+    assert load_registry(REG).outlets["espn"] == 2.0
+
+
+def test_x_mention_of_espn_brasil_gets_medium_tier():
+    """등재 전에는 fallback_tier 4 였다 — 이 경로가 실제로 tier 를 올리는지 고정."""
+    r = load_registry(REG)
+    sources = {"x_afcstuff": {"credibility": "x_mentions", "fallback_tier": 4}}
+    it = _item("x_afcstuff", {"text": "Bruno Guimarães latest. [ @ESPNBrasil ]"})
+    assert resolve_tier(it, sources, r, journalist="@ESPNBrasil") == 2.0
