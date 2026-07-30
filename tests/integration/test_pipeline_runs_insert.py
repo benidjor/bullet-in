@@ -10,6 +10,7 @@ def _params(rid="bench-run", fetch=7.5, blocked=0):
             "started": datetime(2026, 7, 14, 3, 0, 0),
             "dur": 42.0, "fetch": fetch,
             "counts": json.dumps({"bbc_sport": 2}),
+            "cands": json.dumps({"bbc_sport": 4}),
             "new": 2, "dup": 0, "blocked": blocked, "err": 0, "sr": 1.0}
 
 
@@ -32,6 +33,16 @@ def test_insert_records_blocked_count(engine):
             "SELECT blocked_count FROM pipeline_runs "
             "WHERE run_id='bench-blocked'")).mappings().one()
     assert row["blocked_count"] == 15
+
+
+def test_insert_records_candidate_counts(engine):
+    # 소스별 후보 계수 (dedup 전) — 신선도 알림이 수집 끊김과 전부 중복을 가르는 근거
+    with engine.begin() as c:
+        c.execute(text(RUN_INSERT_SQL), _params(rid="bench-cand"))
+        raw = c.execute(text(
+            "SELECT candidate_counts FROM pipeline_runs "
+            "WHERE run_id='bench-cand'")).scalar_one()
+    assert json.loads(raw) == {"bbc_sport": 4}
 
 
 def test_finished_at_stays_utc_under_kst_session(engine):

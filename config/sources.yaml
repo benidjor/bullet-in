@@ -16,6 +16,7 @@ sources:
     # 2026-07 리스트 피드 동결 → sitemap 발견 (48h 창) + GetArticle 전환 (spec 2026-07-24).
     # 필터는 어댑터 내 taxonomy 판별 (Transfer news · Contract news + Men)
     config: {}
+    freshness_hours: 168   # 저빈도 소스 (총 6행 · 2026-07-30 실측) — 48h 는 소음
     enabled: true
   - source_id: bbc_sport
     display_name: BBC Sport
@@ -84,6 +85,7 @@ sources:
     config:
       tag: "football/arsenal"
       title_contains: *transfer_kw
+    freshness_hours: 168   # 저빈도 소스 (총 5행 · 프리 티어 고사 — guardian-api-tier-track)
     enabled: true
   - source_id: skysports
     display_name: Sky Sports
