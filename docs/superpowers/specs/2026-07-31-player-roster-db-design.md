@@ -84,13 +84,13 @@ category 는 현재 신분, transfer_status 는 표시용 이적 축이다.
 - ko_candidate: enrich 가 추출한 한글 표기 후보.
 알림 표시 · 확정 참고용으로만 쓰고 게이트에 공급하지 않는다.
 - ko_name: 사람이 확정할 때 기입하는 검출용 표기 (후보가 맞으면 복사, 틀리면 교정).
-- 게이트 검출 사전 = `status = 'confirmed' AND ko_name IS NOT NULL` 행만.
+- 게이트 검출 사전 = `status IN ('confirmed','archived') AND ko_name IS NOT NULL` 행만 (archived 잔류는 §6 · §8).
 - 근거 실사례: Tzolis 기사 제목의 "조르제" 창작 · Mateta 를 "앙리필리프" 로 옮긴 게시자 오역.
 자동 등재를 그대로 사전에 넣으면 게이트가 그 오역을 정상으로 보호하게 된다.
 
 ### 3.3. surname 단일 단어 전제
 
-풀네임 근거 가드 (`_has_name_context`) 는 성이 한 단어라는 전제의 패턴이다 (enrich.py 주석 명문화 · 현 40명 전부 충족).
+풀네임 근거 가드 (`_has_name_context`) 는 성이 한 단어라는 전제의 패턴이다 (enrich.py 주석 명문화 · 현 39명 전부 충족).
 두 단어 성 (Van Dijk 류) 을 등재하면 이 가드 축이 조용히 꺼지므로, 확정 CLI 가 두 단어 surname 에 경고를 낸다.
 가드 자체의 두 단어 성 지원은 범위 밖이다.
 
@@ -175,7 +175,7 @@ category · transfer_status 분류는 사람이 확정하며, 완료 딜 (트로
 ## 9. 검증 (구현 트랙 계약)
 
 - TDD: 추출 쌍 파싱 · candidate INSERT 멱등성 (같은 선수 재등장 시 중복 없음) ·
-로더 동등성 (마이그레이션 결과 dict = 기존 YAML 40명 dict) · 확정 CLI 상태 전이 · 두 단어 surname 경고.
+로더 동등성 (마이그레이션 결과 dict = 기존 YAML 39명 dict) · 확정 CLI 상태 전이 · 두 단어 surname 경고.
 - 라이브: VM 회차 1회에서 후보 알림 발송 · article_players 적재 · 확정 CLI 종단 (승격 → 재검사 → 재렌더) 확인.
 
 ## 10. 범위 밖
