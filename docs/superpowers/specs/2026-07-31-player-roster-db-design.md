@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS players (
   club VARCHAR(50),                         -- 현 소속팀
   category VARCHAR(16) NOT NULL,            -- squad | manager | external
   status VARCHAR(16) NOT NULL,              -- candidate | confirmed | archived
-  transfer_status VARCHAR(16) NOT NULL,     -- none | in_link | in_done | out_link | out_done | link_dropped
+  transfer_status VARCHAR(16) NOT NULL,     -- none | in_link | in_done | out_link | out_done | link_dropped | other_club | loan_in | loan_out
   origin VARCHAR(16) NOT NULL,              -- curated | extracted
   first_seen CHAR(64),                      -- 최초 근거 기사 content_hash (자동 등재 시)
   added_at DATETIME NOT NULL,
@@ -67,7 +67,10 @@ category 는 현재 신분, transfer_status 는 표시용 이적 축이다.
 | 아르테타 | manager | none | 없음 |
 | 마두에케 · 에제 · 요케레스 | squad | in_done | 영입 완료 |
 | 영입 링크 선수 | external | in_link | 영입 링크 |
-| 타 클럽행 · 링크 소멸 | external | link_dropped | 링크 소멸 |
+| 타 클럽행 이적 성사 | external | other_club | 타 클럽행 |
+| 성사 없는 링크 소멸 | external | link_dropped | 링크 소멸 |
+| 임대 영입 성사 | squad | loan_in | 임대 영입 |
+| 임대 이탈 성사 | squad | loan_out | 임대 이적 |
 | 스쿼드 선수 방출설 | squad | out_link | 방출 링크 |
 | 방출 성사 | external | out_done | 방출 완료 |
 
@@ -81,13 +84,13 @@ category 는 현재 신분, transfer_status 는 표시용 이적 축이다.
 - ko_candidate: enrich 가 추출한 한글 표기 후보.
 알림 표시 · 확정 참고용으로만 쓰고 게이트에 공급하지 않는다.
 - ko_name: 사람이 확정할 때 기입하는 검출용 표기 (후보가 맞으면 복사, 틀리면 교정).
-- 게이트 검출 사전 = `status = 'confirmed' AND ko_name IS NOT NULL` 행만.
+- 게이트 검출 사전 = `status IN ('confirmed','archived') AND ko_name IS NOT NULL` 행만 (archived 잔류는 §6 · §8).
 - 근거 실사례: Tzolis 기사 제목의 "조르제" 창작 · Mateta 를 "앙리필리프" 로 옮긴 게시자 오역.
 자동 등재를 그대로 사전에 넣으면 게이트가 그 오역을 정상으로 보호하게 된다.
 
 ### 3.3. surname 단일 단어 전제
 
-풀네임 근거 가드 (`_has_name_context`) 는 성이 한 단어라는 전제의 패턴이다 (enrich.py 주석 명문화 · 현 40명 전부 충족).
+풀네임 근거 가드 (`_has_name_context`) 는 성이 한 단어라는 전제의 패턴이다 (enrich.py 주석 명문화 · 현 39명 전부 충족).
 두 단어 성 (Van Dijk 류) 을 등재하면 이 가드 축이 조용히 꺼지므로, 확정 CLI 가 두 단어 surname 에 경고를 낸다.
 가드 자체의 두 단어 성 지원은 범위 밖이다.
 
@@ -142,8 +145,11 @@ DB 가 사전의 단일 원천이어야 확정 명령 한 줄로 게이트에 �
 ## 6. 생애주기 · 노후 정리
 
 - 영입 성사: category external → squad · transfer_status in_link → in_done.
+- 임대 영입 성사: category squad · transfer_status loan_in (링크 단계 = in_link).
+- 임대 복귀: transfer_status loan_out → none (스쿼드 복귀) 또는 loan_out → out_link (처분 재검토).
 - 방출 성사: category squad → external · transfer_status out_link → out_done.
-- 타 클럽행 · 링크 소멸: transfer_status → link_dropped · status → archived.
+- 타 클럽행 이적 성사: category external · transfer_status other_club · status → archived.
+- 성사 없는 링크 소멸: transfer_status → link_dropped · status → archived.
 - 이적 시장 종료: 남은 링크 선수를 사람이 일괄 archived 처리한다 (수동 트리거 · 자동 만료 없음).
 - archived 는 보존이다 — 물리 삭제 없음.
 게이트 사전에는 잔류해 (표기 대조는 많을수록 보호가 넓고 비용이 없음) 과거 기사 재번역 시에도 보호가 유지되고,
@@ -151,7 +157,7 @@ DB 가 사전의 단일 원천이어야 확정 명령 한 줄로 게이트에 �
 
 ## 7. 마이그레이션 · 백필
 
-- name_map 40명 → players 이관: 전원 status=confirmed · origin=curated.
+- name_map 39명 → players 이관: 전원 status=confirmed · origin=curated.
 category · transfer_status 분류는 사람이 확정하며, 완료 딜 (트로사르 · 촐리스 · 로저스 등) 정리를 겸한다.
 - 기존 기사 약 500행 백필: enrich 추출을 재실행해 article_players 를 채운다.
 일회성 Gemini 호출 약 500건 (15 RPM 한도로 약 35분 + 소액 과금 — 무료 티어 아님 · Tier 1 선불).
@@ -169,7 +175,7 @@ category · transfer_status 분류는 사람이 확정하며, 완료 딜 (트로
 ## 9. 검증 (구현 트랙 계약)
 
 - TDD: 추출 쌍 파싱 · candidate INSERT 멱등성 (같은 선수 재등장 시 중복 없음) ·
-로더 동등성 (마이그레이션 결과 dict = 기존 YAML 40명 dict) · 확정 CLI 상태 전이 · 두 단어 surname 경고.
+로더 동등성 (마이그레이션 결과 dict = 기존 YAML 39명 dict) · 확정 CLI 상태 전이 · 두 단어 surname 경고.
 - 라이브: VM 회차 1회에서 후보 알림 발송 · article_players 적재 · 확정 CLI 종단 (승격 → 재검사 → 재렌더) 확인.
 
 ## 10. 범위 밖

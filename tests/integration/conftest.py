@@ -24,6 +24,8 @@ def engine():
 @pytest.fixture(autouse=True)
 def clean(engine):
     with engine.begin() as c:
+        c.execute(text("DELETE FROM article_players"))
+        c.execute(text("DELETE FROM players"))
         c.execute(text("DELETE FROM articles"))
         c.execute(text("DELETE FROM source_freshness"))
         c.execute(text("DELETE FROM pipeline_runs"))
