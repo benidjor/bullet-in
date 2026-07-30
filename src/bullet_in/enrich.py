@@ -53,7 +53,12 @@ TRANSLATE_PROMPT = (
     "- title_ko 는 원문 제목에 등장하는 선수 · 감독 이름을 최소 하나는 그대로 남긴다. "
     "여러 명이면 기사 핵심 인물을 우선한다.\n"
     "- 고유명사는 통용 한글 표기(Arsenal=아스날).\n"
-    'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],"body_ko":"..."}}'
+    "- players: 이 기사가 이적 · 거취 · 계약을 다룬 선수 · 감독 목록. 각 항목은 "
+    '{{\"full_name\":\"영문 풀네임\",\"ko\":\"이 기사에서 쓴 한글 표기\",\"stage\":\"단계\"}}.\n'
+    "- stage 는 rumour · interest · negotiating · personal_terms · medical · agreed · "
+    "other 중 하나. 경기 · 근황만 다뤄진 인물은 other, 기사에 없는 인물은 넣지 않는다.\n"
+    'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],'
+    '"body_ko":"...","players":[{{"full_name":"...","ko":"...","stage":"..."}}]}}'
     "\n\nTitle: {title}\nBody: {body}")
 
 PARAPHRASE_PROMPT = (
@@ -84,7 +89,12 @@ PARAPHRASE_PROMPT = (
     "넣지 않는다.\n"
     "- 숫자는 원문 표기를 그대로 쓴다 (£50m 을 5,000만 파운드로 바꾸지 않는다).\n"
     "- 원문이 단정한 것을 추측으로, 추측한 것을 단정으로 바꾸지 않는다.\n"
-    'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],"body_ko":"..."}}'
+    "- players: 이 기사가 이적 · 거취 · 계약을 다룬 선수 · 감독 목록. 각 항목은 "
+    '{{\"full_name\":\"영문 풀네임\",\"ko\":\"이 기사에서 쓴 한글 표기\",\"stage\":\"단계\"}}.\n'
+    "- stage 는 rumour · interest · negotiating · personal_terms · medical · agreed · "
+    "other 중 하나. 경기 · 근황만 다뤄진 인물은 other, 기사에 없는 인물은 넣지 않는다.\n"
+    'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],'
+    '"body_ko":"...","players":[{{"full_name":"...","ko":"...","stage":"..."}}]}}'
     "\n\nTitle: {title}\nBody: {body}")
 
 def apply_glossary(parsed: dict, mapping: dict[str, str]) -> dict:
@@ -400,8 +410,10 @@ def _extract_full(text: str) -> dict | None:
         d = json.loads(m.group(0))
         s3 = d["summary3_ko"]
         s3 = "\n".join(s3) if isinstance(s3, list) else str(s3)
+        pairs = d.get("players")
         return {"title_ko": d["title_ko"], "summary_ko": d["summary_ko"],
-                "summary3_ko": s3, "body_ko": d["body_ko"]}
+                "summary3_ko": s3, "body_ko": d["body_ko"],
+                "players": pairs if isinstance(pairs, list) else []}
     except (json.JSONDecodeError, KeyError, TypeError):
         return None
 

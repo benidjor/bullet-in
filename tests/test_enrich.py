@@ -1053,3 +1053,31 @@ def test_finalize_translation_survives_title_only_result():
            "body_source": None, "body_excerpt": None,
            "source_id": "fmkorea", "summary_ko": None}
     assert finalize_translation(v, row, {}, {}, {}) == ("아스날 소식", None, None, None, [])
+
+
+def test_enrich_returns_players_pairs():
+    payload = {"title_ko": "T", "summary_ko": "S", "summary3_ko": ["a", "b", "c"],
+               "body_ko": "B",
+               "players": [{"full_name": "Bruno Guimaraes", "ko": "기마랑이스",
+                            "stage": "personal_terms"}]}
+    rows = [{"content_hash": "h1", "title_original": "T", "body_source": "Body"}]
+    out = enrich_rows(rows, FullClient(payload), "m")
+    assert out["h1"]["players"] == payload["players"]
+
+
+def test_enrich_players_field_defaults_to_empty_list():
+    payload = {"title_ko": "T", "summary_ko": "S", "summary3_ko": ["a"], "body_ko": "B"}
+    out = enrich_rows([{"content_hash": "h", "title_original": "T", "body_source": "B"}],
+                      FullClient(payload), "m")
+    assert out["h"]["players"] == []
+
+
+def test_translate_prompts_list_player_stages():
+    # 단계 값 세트가 프롬프트와 동기 (STAGE_PROMPT 동기 테스트와 같은 취지)
+    from bullet_in.enrich import TRANSLATE_PROMPT, PARAPHRASE_PROMPT
+    for prompt in (TRANSLATE_PROMPT, PARAPHRASE_PROMPT):
+        assert '"players"' in prompt
+        for stage in ("rumour", "interest", "negotiating", "personal_terms",
+                      "medical", "agreed", "other"):
+            assert stage in prompt
+        assert "official" not in prompt
