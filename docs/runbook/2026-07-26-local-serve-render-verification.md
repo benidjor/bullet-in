@@ -15,11 +15,14 @@ serve/ (render.py · 템플릿 · app.js · style.css) 변경을 VM 접촉 없�
 임시 폴더에 아래를 저장한다 (예: `/tmp/render_local.py`).
 **앱의 로더 · 상수를 import 하는 것이 핵심** — 옮겨 적으면 하네스가 프로덕션과 어긋나 가짜 원인을 만든다
 (`docs/troubleshooting/2026-07-26-repro-harness-loader-mismatch.md`).
+players 이관 (`migrate_roster`) 이 안 된 DB 로 렌더하면 사건 묶음이 조용히 꺼진다 — 먼저 이관 여부를 확인한다.
 
 ```python
 """로컬 bulletin DB → write_site 재현 렌더 (run.py 렌더 블록과 동일 인자)."""
 import os
 import sys
+
+os.environ.setdefault("MARIADB_URL", "mysql+pymysql://root:bulletin@localhost:3306/bulletin")
 
 REPO = "<저장소 루트 절대 경로>"
 sys.path.insert(0, f"{REPO}/src")

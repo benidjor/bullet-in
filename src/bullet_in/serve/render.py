@@ -878,7 +878,12 @@ def load_player_names(engine=None) -> list[str]:
     from sqlalchemy import create_engine
     from bullet_in.storage.players import PlayerStore
     engine = engine or create_engine(os.environ["MARIADB_URL"])
-    return sorted(PlayerStore(engine).serving_names(), key=len, reverse=True)
+    names = PlayerStore(engine).serving_names()
+    if not names:
+        import logging
+        logging.getLogger(__name__).warning(
+            "players 서빙 사전이 비어 있음 — migrate_roster 미실행이면 사건 묶음이 꺼진 채 렌더된다")
+    return sorted(names, key=len, reverse=True)
 
 
 def load_clubs(path: str = "config/club_map.yaml") -> dict:
