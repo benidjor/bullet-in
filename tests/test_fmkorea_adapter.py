@@ -676,12 +676,13 @@ def test_fmkorea_declares_outlet_body_level_on_free_path():
 
 
 @respx.mock
-def test_fmkorea_declares_zero_level_when_original_fetch_fails():
-    # 원문 fetch 실패 → 본문 없음 → 등급 0 (다음 회차에 원문이 들어올 길을 남긴다)
+def test_fmkorea_keeps_original_url_when_falling_back_to_post_body():
+    # 게시글 본문을 채택해도 (등급 1) url 은 원문 기사 URL 로 남겨 둔다 — 등급 2 로
+    # 올려 줄 재수집 경로가 계속 열려 있어야 한다 (스펙 §4.1 · §4.7 사다리)
     respx.get("https://ex.test/a").mock(return_value=httpx.Response(500))
     items = asyncio.run(_one_post(FREE_BODY, title="[BBC] 아스날 소식").fetch())
-    assert items[0].raw_payload["body"] == ""
-    assert items[0].raw_payload["body_level"] == 0
+    assert items[0].url == "https://ex.test/a"
+    assert items[0].raw_payload["body_level"] == 1
 
 
 @respx.mock
@@ -714,3 +715,24 @@ def test_fmkorea_keeps_bracket_journalist_over_body_byline():
     respx.get("https://www.nytimes.com/athletic/9/b").mock(return_value=httpx.Response(200, text=""))
     items = asyncio.run(_one_post(PAY_BYLINE_BODY, title="[디 애슬레틱 - 온스테인] 아스날").fetch())
     assert items[0].raw_payload["journalist"] == "온스테인"
+
+
+@respx.mock
+def test_fmkorea_falls_back_to_post_body_when_original_fetch_fails():
+    # 원문 재수집은 26건 중 1건만 성공했다 (스펙 §6.2) — 게시글 본문을 재료로 채택
+    respx.get("https://ex.test/a").mock(return_value=httpx.Response(403))
+    items = asyncio.run(_one_post(FREE_BODY, title="[텔레그래프] 아스날 소식").fetch())
+    assert items[0].raw_payload["body"] == "아스날 본문. https://ex.test/a"
+    assert items[0].raw_payload["body_level"] == 1
+    assert items[0].raw_payload["lang"] == "ko"
+
+
+@respx.mock
+def test_fmkorea_fallback_skipped_when_repost_blocked():
+    # 퍼가기 금지 글은 폴백에서도 본문을 복제하지 않는다 (스펙 §4.1)
+    blocked = BLOCKED_PAY_POST.replace("https://www.nytimes.com/athletic/9/b",
+                                       "https://ex.test/a")
+    respx.get("https://ex.test/a").mock(return_value=httpx.Response(403))
+    items = asyncio.run(_one_post(blocked, title="[텔레그래프] 아스날 소식").fetch())
+    assert items[0].raw_payload["body"] == ""
+    assert items[0].raw_payload["body_level"] == 0

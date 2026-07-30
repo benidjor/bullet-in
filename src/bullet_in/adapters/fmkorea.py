@@ -276,10 +276,18 @@ class FmkoreaAdapter:
                     image = extract_og_image(ro.text)
                     images = extract_body_images(ro.text, base_url=orig)
                     pub = extract_published_at(ro.text)
+                    lang = "en"
+                    material_level = 2    # 채택한 재료 = 원문 URL 에서 받은 언론사 본문
                 except httpx.HTTPError:
-                    body, image, images = "", None, []
-                lang = "en"
-                material_level = 2        # 채택한 재료 = 원문 URL 에서 받은 언론사 본문
+                    # 원문 차단 (실측 26건 중 25건이 406 · 403 · 페이월) — 게시글 본문으로 폴백.
+                    # 퍼가기 금지 글은 지금처럼 본문 없이 진행한다 (스펙 §4.1).
+                    image, images = None, []
+                    if _is_repost_blocked(html):
+                        body, lang, material_level = "", "en", 2
+                    else:
+                        log.info("fmkorea 원문 접속 실패 — 게시글 본문 채택 url=%s", orig)
+                        body = _body_text(html, self.body_selector)
+                        lang, material_level = "ko", 1
             body = strip_publish_datetime(body)
             journalist = journalist or extract_body_journalist(body)
             body_level = material_level if body else 0
