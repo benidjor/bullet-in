@@ -531,6 +531,49 @@ def test_detect_title_mistranslation_passes_partial_name_condensation():
         "talkSPORT understands that Mikel Arteta met Morgan Rogers for talks",
         name_map) == []
 
+def test_detect_title_mistranslation_ignores_surname_without_fullname_context():
+    from bullet_in.enrich import detect_title_mistranslation
+    name_map = {"화이트": "White"}
+    # 실사례 3740329594: 'white flag' 관용구를 벤 화이트로 오인해 하루 8회 재큐됐다.
+    # 원문 어디에도 '이름 + 성' 형태가 없으므로 인명으로 세지 않는다.
+    assert detect_title_mistranslation(
+        "백기: 아스날, 비니시우스 주니오르 영입 포기",
+        "White flag: Arsenal give up on Vinicius Junior deal",
+        name_map) == []
+
+def test_detect_title_mistranslation_ignores_stopword_before_surname():
+    from bullet_in.enrich import detect_title_mistranslation
+    name_map = {"아르테타": "Arteta"}
+    # 실사례 7341690b: 문장 첫머리 'With' 를 이름의 일부로 세던 오탐.
+    # 2026-07-23 재번역 5회 진단에서 좋은 제목이 거부되는 것이 확인됐다.
+    assert detect_title_mistranslation(
+        "아스날 · 첼시 · 맨유 노리는 알렉스 스콧, 리버풀 영입전 가세",
+        "With Arteta's Backing: Liverpool Compete Strongly to Snatch "
+        "Target of Chelsea, Arsenal and United",
+        name_map) == []
+
+def test_detect_title_mistranslation_flags_when_fullname_in_body():
+    from bullet_in.enrich import detect_title_mistranslation
+    name_map = {"화이트": "White"}
+    # 본문에 'Ben White' 가 있으면 인명 근거가 서므로 축이 그대로 작동해야 한다.
+    out = detect_title_mistranslation(
+        "아스날, 수비수 계약 임박",
+        "White nears new Arsenal deal",
+        name_map,
+        "Ben White is closing in on fresh terms at the Emirates.")
+    assert out == ["인명 누락:White"]
+
+def test_detect_title_mistranslation_name_context_ignores_diacritics():
+    from bullet_in.enrich import detect_title_mistranslation
+    name_map = {"기마랑이스": "Guimaraes"}
+    # 원문이 발음 부호로 쓰더라도 'Bruno Guimarães' 는 인명 근거로 인정한다
+    # (_fold_latin 은 casefold 까지 해서 앞 단어의 대문자 여부를 못 가린다).
+    out = detect_title_mistranslation(
+        "아스날, 뉴캐슬 미드필더 영입 근접",
+        "Arsenal close on Bruno Guimarães deal",
+        name_map)
+    assert out == ["인명 누락:Guimaraes"]
+
 def test_detect_club_injection_flags_unfounded_club():
     from bullet_in.enrich import detect_club_injection
     club_map = {"미들즈브러": ["Middlesbrough", "Boro"],
@@ -799,6 +842,20 @@ def test_finalize_translation_keeps_name_omission_axis_for_normal_sources():
                      title_original="Arsenal step up interest in Bruno Guimaraes")
     title_ko, _, _, _ = finalize_translation(v, row, {}, _TWEET_NAMES, {})
     assert title_ko is None
+
+
+def test_finalize_translation_guard_uses_body_as_name_context():
+    # 배선 확인: 제목에만 성이 있고 본문에 풀네임이 있으면 축이 그대로 작동한다.
+    # detect_title_mistranslation 에 src_text 를 안 넘기면 이 테스트가 깨진다.
+    from bullet_in.enrich import finalize_translation
+    v = {"title_ko": "아스날, 수비수 계약 임박", "summary_ko": "요약",
+         "summary3_ko": "①\n②\n③", "body_ko": "본문이다."}
+    row = {"content_hash": "h1", "source_id": "goal",
+           "title_original": "White nears new Arsenal deal",
+           "body_source": "Ben White is closing in on fresh terms.",
+           "body_excerpt": ""}
+    title_ko, _, _, _ = finalize_translation(v, row, {}, {"화이트": "White"}, {})
+    assert title_ko is None      # 1차 검출 → 재번역 큐
 
 
 def test_partition_by_body_level_routes_post_body_to_rewrite():

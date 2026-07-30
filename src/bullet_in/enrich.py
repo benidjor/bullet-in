@@ -106,25 +106,61 @@ def _fold_latin(text: str) -> str:
     folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
     return folded.replace("ø", "o").replace("æ", "ae").replace("ß", "ss")
 
+def _strip_marks(text: str) -> str:
+    """결합 분음부호만 제거하고 대소문자는 보존 (Guimarães → Guimaraes).
+    _fold_latin 은 casefold 까지 하므로 '성 앞 단어가 대문자인가' 판정에 쓸 수 없다."""
+    import unicodedata
+    out = unicodedata.normalize("NFD", text)
+    out = "".join(ch for ch in out if not unicodedata.combining(ch))
+    return (out.replace("ø", "o").replace("Ø", "O")
+               .replace("æ", "ae").replace("Æ", "AE").replace("ß", "ss"))
+
+# 성 앞 대문자 단어가 이름이 아니라 문장 첫머리 기능어인 경우를 걸러낸다
+# (With Arteta's Backing… 의 With). 영어 기능어는 고정 집합이라 도메인 사전처럼 늘지 않는다.
+_NAME_CONTEXT_STOPWORDS = frozenset({
+    "a", "after", "an", "and", "as", "at", "before", "breaking", "but", "by",
+    "can", "could", "deal", "exclusive", "for", "from", "had", "has", "have",
+    "he", "her", "his", "how", "if", "in", "is", "it", "its", "latest", "new",
+    "news", "not", "now", "of", "official", "on", "over", "report", "she",
+    "that", "the", "their", "they", "this", "to", "under", "was", "we", "were",
+    "what", "when", "where", "who", "why", "will", "with", "would", "you",
+})
+
+def _has_name_context(source: str, surname: str) -> bool:
+    """원문에 '이름 + 성' 형태가 있는지 — 성 단독 출현을 인명 근거로 인정하지 않는다.
+    앞 단어가 기능어면 근거로 치지 않는다 (With Arteta's Backing… 오탐 차단).
+    실측 (2026-07-30 · 라이브 412행): 제목에 등재 성이 나온 132건 중 128건이 이 근거를 가지고,
+    근거가 없는 4건 중 2건이 확인된 오탐이다 (스펙 4.3절)."""
+    marked = _strip_marks(source)
+    pat = rf"\b([A-Z][a-z]+)[- ]{re.escape(_strip_marks(surname))}\b"
+    return any(m.group(1).lower() not in _NAME_CONTEXT_STOPWORDS
+               for m in re.finditer(pat, marked))
+
 _LOAN_RE = re.compile(r"\bloan", re.IGNORECASE)
 # 사유 접두어 — 호출측이 축별로 걸러낼 때 쓴다 (문자열을 옮겨 적으면 조용히 어긋난다).
 NAME_MISSING_PREFIX = "인명 누락:"
 
 def detect_title_mistranslation(title_ko: str | None, title_original: str | None,
-                                name_map: dict[str, str]) -> list[str]:
+                                name_map: dict[str, str],
+                                source_text: str = "") -> list[str]:
     """원문 제목 대비 번역 제목의 결정적 불일치 사유 목록 (환각 검출기의 역방향 축).
     ①원문 제목의 등재 인명 (단어 경계) 이 번역 제목에 **전부** 누락
     — '조르제' (Tzolis) 창작 · 무관 제목 전면 환각 실사례를 잡는다.
     일부만 유지된 경우는 다절 제목 (트윗 · 리스트클) 의 정당한 축약이라 통과.
     ②'임대' 가 원문 근거 (loan · 한국어 원문의 임대) 없이 생성 — permanent 반전 실사례.
+    성 단독 출현은 인명으로 세지 않는다 — 원문 (제목 + source_text) 에 '이름 + 성' 형태가
+    있어야 인정한다 (white flag 관용구 · With Arteta's Backing 프레이밍 오탐 차단).
     라운드업 (제목 재초점이 정상) 은 호출측에서 제외한다."""
     if not title_ko or not title_original:
         return []
     reasons = []
     folded = _fold_latin(title_original)
+    context = f"{title_original} {source_text}"
     missing, present = [], 0
     for en in dict.fromkeys(name_map.values()):
         if re.search(rf"\b{re.escape(_fold_latin(en))}\b", folded):
+            if not _has_name_context(context, en):
+                continue
             if any(ko in title_ko for ko, v in name_map.items() if v == en):
                 present += 1
             else:
@@ -293,7 +329,7 @@ def finalize_translation(v: dict, row: dict, glossary: dict[str, str],
     # 역방향 축: 원문 제목 인명 누락 · 무근거 '임대' — 라운드업 (gossip) 은 제목 재초점이 정상이라 제외
     if row.get("source_id") != "bbc_gossip":
         reasons = detect_title_mistranslation(
-            v["title_ko"], row.get("title_original"), name_map)
+            v["title_ko"], row.get("title_original"), name_map, src_text)
         if row.get("source_id") in BODY_AS_TITLE_SOURCES:
             reasons = [r for r in reasons if not r.startswith(NAME_MISSING_PREFIX)]
         suspects = suspects + reasons
