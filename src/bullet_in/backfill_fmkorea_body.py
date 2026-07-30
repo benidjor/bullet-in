@@ -66,8 +66,22 @@ def _outlet_of(title: str) -> str:
     return re.split(r"\s*-\s*", m.group(1))[0].strip() if m else ""
 
 
+def _tokens(title: str) -> list[str]:
+    return [t for t in _TOKEN_SPLIT_RE.split(_debracket(title)) if len(t) >= 2]
+
+
+def _first_token(title: str) -> str:
+    """첫 토큰 — 사람이 실제로 성공시킨 검색어가 대부분 이 형태였다 ('노팅엄' · '첼시')."""
+    toks = _tokens(title)
+    return _PARTICLE_RE.sub("", toks[0]) if toks else ""
+
+
 def _longest_token(title: str) -> str:
-    toks = [t for t in _TOKEN_SPLIT_RE.split(_debracket(title)) if len(t) >= 2]
+    """최장 토큰 — 첫 토큰이 흔한 말일 때의 보완책 ('에미레이츠').
+
+    이것만 쓰면 안 된다: 게시자가 띄어쓰기를 붙여 쓰면 ('어떻게아스날을' ·
+    '우스만디오망데영입') 최장 토큰이 검색되지 않는 덩어리를 고른다."""
+    toks = _tokens(title)
     return _PARTICLE_RE.sub("", max(toks, key=len)) if toks else ""
 
 
@@ -77,15 +91,18 @@ def search_candidates(title: str) -> list[tuple[str, str]]:
     수집용 고정 키워드 (아스날 · 온스테인 등) 로는 오래 전에 올라간 글이 첫 페이지에
     없어 못 찾는다. 백필은 찾을 제목을 이미 알고 있으므로 제목에서 검색어를 만든다.
 
-    fmkorea 검색의 매칭 의미론 (부분 문자열인지 토큰 AND 인지) 을 아직 실측하지
-    못했다 — 430 으로 예행이 막혔다. 그래서 한 규칙에 걸지 않고 특정적인 것부터
-    차례로 시도하고 제목이 정확히 일치하면 멈춘다."""
+    후보 순서는 사람이 브라우저로 성공시킨 검색어 4건과 대조해 정했다
+    (tests 의 BROWSER_VERIFIED). 매체명 + 첫 토큰이 3/4 를 덮고 최장 토큰이 남은
+    1건을 덮는다. fmkorea 검색의 매칭 의미론 (부분 문자열인지 토큰 AND 인지) 은
+    아직 실측하지 못했으므로 한 규칙에 걸지 않고 차례로 시도한다."""
     out: list[tuple[str, str]] = []
-    body, outlet, tok = _debracket(title), _outlet_of(title), _longest_token(title)
+    body, outlet = _debracket(title), _outlet_of(title)
+    first, longest = _first_token(title), _longest_token(title)
     for cand in ((("title", body) if body else None),
-                 ((("title_content", f"{outlet} {tok}")) if outlet and tok else None),
-                 (("title", tok) if tok else None),
-                 (("title_content", outlet) if outlet else None)):
+                 (("title_content", f"{outlet} {first}") if outlet and first else None),
+                 (("title", first) if first else None),
+                 (("title_content", f"{outlet} {longest}") if outlet and longest else None),
+                 (("title", longest) if longest else None)):
         if cand and cand[1].strip() and cand not in out:
             out.append(cand)
     return out

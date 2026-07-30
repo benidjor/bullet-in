@@ -135,3 +135,28 @@ async def _find(title: str):
     async with httpx.AsyncClient() as c:
         return await bf.find_post_url(c, title, SEARCH_TMPL, "a.hx",
                                       "https://www.fmkorea.com", gap_sec=0.0)
+
+
+# 사용자가 브라우저로 직접 글을 찾아낸 (제목, 성공한 검색어) — 실측 계약
+BROWSER_VERIFIED = [
+    ("[텔레그래프]아스날, 에미레이츠와 계약 연장/연 £45M에서 대폭 인상", "에미레이츠"),
+    ("[텔레그래프] 노팅엄 포레스트, 우스만디오망데영입 위해 £32m 공식 오퍼", "노팅엄"),
+    ("[타임즈] 기마랑이스를 두고 협상 중인아스날", "타임즈 기마랑이스"),
+    ("[비사커] 첼시가 어떻게아스날을 제치고 £117m에 모건 로저스를 영입했나", "비사커 첼시"),
+]
+
+
+def test_search_candidates_reproduce_browser_verified_keywords():
+    """사람이 실제로 성공시킨 검색어를 도출 규칙이 만들어내야 한다.
+
+    최장 토큰만 쓰면 2/4 다 — 게시자가 띄어쓰기를 붙여 써서 ('어떻게아스날을' ·
+    '우스만디오망데영입') 최장 토큰이 쓰레기를 고른다. 첫 토큰 계열이 필요하다."""
+    for title, proven in BROWSER_VERIFIED:
+        kws = [kw for _, kw in bf.search_candidates(title)]
+        assert proven in kws, f"{proven!r} 없음 · 도출={kws}"
+
+
+def test_search_candidates_stay_bounded():
+    # 후보가 늘면 대상당 접촉이 그만큼 늘어난다 — 상한을 계약으로 고정
+    for title, _ in BROWSER_VERIFIED:
+        assert len(bf.search_candidates(title)) <= 5
