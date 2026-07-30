@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS players (
   club VARCHAR(50),                         -- 현 소속팀
   category VARCHAR(16) NOT NULL,            -- squad | manager | external
   status VARCHAR(16) NOT NULL,              -- candidate | confirmed | archived
-  transfer_status VARCHAR(16) NOT NULL,     -- none | in_link | in_done | out_link | out_done | link_dropped
+  transfer_status VARCHAR(16) NOT NULL,     -- none | in_link | in_done | out_link | out_done | link_dropped | other_club | loan_in | loan_out
   origin VARCHAR(16) NOT NULL,              -- curated | extracted
   first_seen CHAR(64),                      -- 최초 근거 기사 content_hash (자동 등재 시)
   added_at DATETIME NOT NULL,
@@ -67,7 +67,10 @@ category 는 현재 신분, transfer_status 는 표시용 이적 축이다.
 | 아르테타 | manager | none | 없음 |
 | 마두에케 · 에제 · 요케레스 | squad | in_done | 영입 완료 |
 | 영입 링크 선수 | external | in_link | 영입 링크 |
-| 타 클럽행 · 링크 소멸 | external | link_dropped | 링크 소멸 |
+| 타 클럽행 이적 성사 | external | other_club | 타 클럽행 |
+| 성사 없는 링크 소멸 | external | link_dropped | 링크 소멸 |
+| 임대 영입 성사 | squad | loan_in | 임대 영입 |
+| 임대 이탈 성사 | squad | loan_out | 임대 이적 |
 | 스쿼드 선수 방출설 | squad | out_link | 방출 링크 |
 | 방출 성사 | external | out_done | 방출 완료 |
 
@@ -142,8 +145,11 @@ DB 가 사전의 단일 원천이어야 확정 명령 한 줄로 게이트에 �
 ## 6. 생애주기 · 노후 정리
 
 - 영입 성사: category external → squad · transfer_status in_link → in_done.
+- 임대 영입 성사: category squad · transfer_status loan_in (링크 단계 = in_link).
+- 임대 복귀: transfer_status loan_out → none (스쿼드 복귀) 또는 loan_out → out_link (처분 재검토).
 - 방출 성사: category squad → external · transfer_status out_link → out_done.
-- 타 클럽행 · 링크 소멸: transfer_status → link_dropped · status → archived.
+- 타 클럽행 이적 성사: category external · transfer_status other_club · status → archived.
+- 성사 없는 링크 소멸: transfer_status → link_dropped · status → archived.
 - 이적 시장 종료: 남은 링크 선수를 사람이 일괄 archived 처리한다 (수동 트리거 · 자동 만료 없음).
 - archived 는 보존이다 — 물리 삭제 없음.
 게이트 사전에는 잔류해 (표기 대조는 많을수록 보호가 넓고 비용이 없음) 과거 기사 재번역 시에도 보호가 유지되고,
@@ -151,7 +157,7 @@ DB 가 사전의 단일 원천이어야 확정 명령 한 줄로 게이트에 �
 
 ## 7. 마이그레이션 · 백필
 
-- name_map 40명 → players 이관: 전원 status=confirmed · origin=curated.
+- name_map 39명 → players 이관: 전원 status=confirmed · origin=curated.
 category · transfer_status 분류는 사람이 확정하며, 완료 딜 (트로사르 · 촐리스 · 로저스 등) 정리를 겸한다.
 - 기존 기사 약 500행 백필: enrich 추출을 재실행해 article_players 를 채운다.
 일회성 Gemini 호출 약 500건 (15 RPM 한도로 약 35분 + 소액 과금 — 무료 티어 아님 · Tier 1 선불).

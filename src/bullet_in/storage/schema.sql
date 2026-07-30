@@ -42,3 +42,25 @@ CREATE TABLE IF NOT EXISTS source_freshness (
 ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS fetch_duration_sec FLOAT;
 ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS blocked_count INT;
 ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS candidate_counts JSON;
+CREATE TABLE IF NOT EXISTS players (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  full_name VARCHAR(100) NOT NULL UNIQUE,
+  first_name VARCHAR(50),
+  surname VARCHAR(50) NOT NULL,
+  ko_name VARCHAR(50),
+  ko_candidate VARCHAR(50),
+  club VARCHAR(50),
+  category VARCHAR(16) NOT NULL,
+  status VARCHAR(16) NOT NULL,
+  transfer_status VARCHAR(16) NOT NULL,
+  origin VARCHAR(16) NOT NULL,
+  first_seen CHAR(64),
+  added_at DATETIME NOT NULL,
+  confirmed_at DATETIME,
+  archived_at DATETIME);
+CREATE TABLE IF NOT EXISTS article_players (
+  content_hash CHAR(64) NOT NULL,
+  player_id INT NOT NULL,
+  stage VARCHAR(32),
+  extracted_at DATETIME NOT NULL,
+  PRIMARY KEY (content_hash, player_id));
