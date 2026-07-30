@@ -841,3 +841,92 @@ def test_paraphrase_prompt_carries_completeness_and_no_injection_rules():
                    "원문 표기를 그대로",
                    "추측으로"]:
         assert clause in PARAPHRASE_PROMPT, clause
+
+
+class _FakeGemini:
+    """정해진 응답을 순서대로 돌려주는 가짜 클라이언트 — 호출 프롬프트를 기록한다."""
+    def __init__(self, bodies):
+        self._bodies = list(bodies)
+        self.prompts = []
+        self.models = self
+
+    def generate_content(self, model, contents, config):
+        self.prompts.append(contents)
+        body = self._bodies.pop(0)
+        payload = {"title_ko": "제목", "summary_ko": "요약",
+                   "summary3_ko": ["1", "2", "3"], "body_ko": body}
+        return type("R", (), {"text": _json.dumps(payload, ensure_ascii=False)})()
+
+
+_SRC = "아스날이 £50m 을 제안했다. 계약 기간은 2031년까지로 알려졌다."
+
+
+def _row(h="h1"):
+    return {"content_hash": h, "title_original": "제목", "body_source": _SRC,
+            "body_level": 1}
+
+
+def test_rewrite_rows_guarded_adopts_first_attempt_when_gate_passes():
+    from bullet_in.enrich import rewrite_rows_guarded
+    clean = "아스날은 £50m 규모 제안을 건넸으며, 계약은 2031년까지로 전해진다."
+    client = _FakeGemini([clean])
+    results, reports = rewrite_rows_guarded([_row()], client, "m", threshold=0.9)
+    assert results["h1"]["body_ko"] == clean
+    assert reports["h1"]["attempts"] == 1
+    assert len(client.prompts) == 1
+
+
+def test_rewrite_rows_guarded_retries_with_missing_number_reason():
+    from bullet_in.enrich import rewrite_rows_guarded
+    dropped = "아스날이 제안을 건넸다."
+    fixed = "아스날은 £50m 제안을 건넸고 계약은 2031년까지로 전해진다."
+    client = _FakeGemini([dropped, fixed])
+    results, reports = rewrite_rows_guarded([_row()], client, "m", threshold=0.9)
+    assert results["h1"]["body_ko"] == fixed
+    assert reports["h1"]["attempts"] == 2
+    assert "누락" in client.prompts[1]
+    assert "2031" in client.prompts[1]
+
+
+def test_rewrite_rows_guarded_retries_with_duplication_reason():
+    from bullet_in.enrich import rewrite_rows_guarded
+    fixed = "아스날은 £50m 제안을 건넸고 계약은 2031년까지로 전해진다."
+    client = _FakeGemini([_SRC, fixed])          # 1회차는 원문 그대로 복제
+    results, reports = rewrite_rows_guarded([_row()], client, "m", threshold=0.75)
+    assert results["h1"]["body_ko"] == fixed
+    assert "복제" in client.prompts[1]
+    assert "새로 넣지 않는다" in client.prompts[1]   # 주입 금지 동반 (스펙 §4.4)
+
+
+def test_rewrite_rows_guarded_stops_at_max_attempts_and_keeps_best():
+    from bullet_in.enrich import rewrite_rows_guarded
+    # 세 시도 모두 게이트에 걸려도 본문을 버리지 않는다 (스펙 §4.4)
+    client = _FakeGemini([_SRC, _SRC, "아스날이 £50m 을 제안했고 2031년까지 계약한다."])
+    results, reports = rewrite_rows_guarded([_row()], client, "m", threshold=0.10)
+    assert len(client.prompts) == 3
+    assert results["h1"]["body_ko"] == "아스날이 £50m 을 제안했고 2031년까지 계약한다."
+    assert reports["h1"]["attempts"] == 3
+    assert reports["h1"]["retention"] < 1.0
+
+
+def test_rewrite_rows_guarded_uses_body_excerpt_when_body_source_empty():
+    from bullet_in.enrich import rewrite_rows_guarded
+    row = {"content_hash": "h2", "title_original": "제목", "body_source": "",
+           "body_excerpt": _SRC, "body_level": 1}
+    client = _FakeGemini(["아스날은 £50m 제안을 건넸고 계약은 2031년까지다."])
+    results, _ = rewrite_rows_guarded([row], client, "m", threshold=0.9)
+    assert "h2" in results
+
+
+def test_rewrite_rows_guarded_breaks_on_rate_limit():
+    from bullet_in.enrich import rewrite_rows_guarded
+
+    class _Boom:
+        models = None
+        def generate_content(self, model, contents, config):
+            raise RuntimeError("429 RESOURCE_EXHAUSTED")
+
+    c = _Boom()
+    c.models = c
+    results, reports = rewrite_rows_guarded([_row(), _row("h9")], c, "m")
+    assert results == {} and reports == {}

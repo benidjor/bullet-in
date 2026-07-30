@@ -4,6 +4,7 @@ import json, logging, re
 log = logging.getLogger(__name__)
 
 from bullet_in import transfer_stage as _stage
+from bullet_in.fidelity import RETENTION_THRESHOLD, gate_verdict, select_best
 
 def _is_rate_limit(exc: Exception) -> bool:
     if getattr(exc, "code", None) == 429:
@@ -393,6 +394,72 @@ def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate"
             continue
         result[h] = parsed
     return result
+
+MISSING_RETRY = (
+    "\n\n[누락] 직전 시도에서 다음 숫자가 누락됐다 — {tokens}.\n"
+    "이 수치들을 원문 맥락 그대로 반드시 포함한다.")
+DUPLICATE_RETRY = (
+    "\n\n[복제] 직전 시도는 원문 표현을 지나치게 그대로 옮겼다.\n"
+    "사실 · 수치 · 인용은 그대로 두되 문장 구성과 표현을 크게 바꿔 다시 쓴다.\n"
+    "단 원문에 없는 내용 · 수식어 · 소제목을 새로 넣지 않는다.")
+
+def rewrite_rows_guarded(rows: list[dict], client, model: str,
+                         threshold: float = RETENTION_THRESHOLD,
+                         max_attempts: int = 3
+                         ) -> tuple[dict[str, dict], dict[str, dict]]:
+    """게시글 본문 재작성 — 게이트에 걸리면 사유를 붙여 재생성하고 최선을 채택한다.
+
+    게이트는 재생성 트리거이지 폐기 조건이 아니다 (스펙 §4.4).
+    반환: (결과, 리포트) — 리포트는 잔존율 기록 · ops 노출용."""
+    results: dict[str, dict] = {}
+    reports: dict[str, dict] = {}
+    for r in rows:
+        h = r["content_hash"]
+        source = r.get("body_source") or r.get("body_excerpt") or ""
+        base = PARAPHRASE_PROMPT.format(title=r["title_original"], body=source)
+        attempts: list[dict] = []
+        rate_limited = False
+        for i in range(max_attempts):
+            note = ""
+            if attempts:
+                last = attempts[-1]
+                if last["missing"]:
+                    note += MISSING_RETRY.format(tokens=", ".join(last["missing"]))
+                if last["retention"] > threshold:
+                    note += DUPLICATE_RETRY
+            try:
+                msg = client.models.generate_content(
+                    model=model, contents=base + note,
+                    config={"max_output_tokens": 8192,
+                            "response_mime_type": "application/json"})
+            except Exception as e:
+                if _is_rate_limit(e):
+                    log.warning("Gemini rate limit(429), 재작성 중단 — 남은 행 다음 사이클")
+                    rate_limited = True
+                    break
+                log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
+                break
+            parsed = _extract_full(msg.text)
+            if parsed is None:
+                log.warning("Gemini 응답 파싱 실패, 스킵 content_hash=%s", h)
+                break
+            v = gate_verdict(source, parsed["body_ko"] or "", threshold)
+            attempts.append({"parsed": parsed, "missing": v["missing"],
+                             "retention": v["retention"]})
+            if v["ok"]:
+                break
+        if rate_limited:
+            break
+        if not attempts:
+            continue
+        best = select_best(attempts)
+        results[h] = best["parsed"]
+        reports[h] = {"retention": best["retention"], "missing": best["missing"],
+                      "attempts": len(attempts)}
+        if best["retention"] > threshold or best["missing"]:
+            log.warning("재작성 게이트 잔존 content_hash=%s 잔존율=%.3f 누락=%s 시도=%d",
+                        h, best["retention"], best["missing"], len(attempts))
+    return results, reports
 
 def partition_translation_rows(rows: list[dict], sources: dict[str, dict]
                                ) -> tuple[list[dict], list[dict]]:

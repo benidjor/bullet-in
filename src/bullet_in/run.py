@@ -79,12 +79,13 @@ async def main(concurrency: int):
     mart.upsert(arts)
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    from bullet_in.enrich import partition_by_body_level
+    from bullet_in.enrich import partition_by_body_level, rewrite_rows_guarded
     missing = mart.rows_missing_translation()
     rewrite_rows, translate_rows = partition_by_body_level(missing)
     results: dict[str, dict] = {}
     results.update(enrich_rows(translate_rows, client, GEMINI_MODEL, mode="translate"))
-    results.update(enrich_rows(rewrite_rows, client, GEMINI_MODEL, mode="paraphrase"))
+    rewritten, gate_reports = rewrite_rows_guarded(rewrite_rows, client, GEMINI_MODEL)
+    results.update(rewritten)
     glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
                 or {}).get("replacements", {})
     name_map = (yaml.safe_load(Path("config/name_map.yaml").read_text())
