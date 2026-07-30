@@ -84,7 +84,7 @@ class MartStore:
         with self.engine.connect() as c:
             rows = c.execute(text(
                 "SELECT content_hash,source_id,title_original,body_excerpt,"
-                "body_source,outlet,summary_ko "
+                "body_source,body_level,outlet,summary_ko "
                 "FROM articles WHERE title_ko IS NULL")).mappings().all()
         return [dict(r) for r in rows]
     def set_translation(self, content_hash: str, title_ko: str, summary_ko: str,

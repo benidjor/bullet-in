@@ -138,7 +138,6 @@ def test_summarize_ko_rows_skips_bad_row_without_aborting_batch():
     assert "bad" not in out and out["ok"] == "요약"
 
 import json as _json
-from bullet_in.enrich import partition_by_paywall
 
 class FullModels:
     def __init__(self, payload): self._p = payload; self.n = 0
@@ -171,13 +170,6 @@ def test_enrich_paraphrase_mode_uses_paraphrase_prompt():
     rows = [{"content_hash": "h", "title_original": "[디 애슬레틱] 제목", "body_source": "한국어 본문"}]
     out = enrich_rows(rows, client, "m", mode="paraphrase")
     assert out["h"]["body_ko"] == "B"  # 정상 처리됨
-
-def test_partition_by_paywall_splits_by_outlet():
-    rows = [{"content_hash": "a", "outlet": "The Athletic"},
-            {"content_hash": "b", "outlet": "BBC"}]
-    para, trans = partition_by_paywall(rows)
-    assert [r["content_hash"] for r in para] == ["a"]
-    assert [r["content_hash"] for r in trans] == ["b"]
 
 from bullet_in.enrich import classify_stage_rows
 
@@ -807,3 +799,31 @@ def test_finalize_translation_keeps_name_omission_axis_for_normal_sources():
                      title_original="Arsenal step up interest in Bruno Guimaraes")
     title_ko, _, _, _ = finalize_translation(v, row, {}, _TWEET_NAMES, {})
     assert title_ko is None
+
+
+def test_partition_by_body_level_routes_post_body_to_rewrite():
+    from bullet_in.enrich import partition_by_body_level
+    rows = [
+        {"content_hash": "h1", "body_level": 1, "outlet": "The Telegraph"},
+        {"content_hash": "h2", "body_level": 2, "outlet": "BBC"},
+        {"content_hash": "h3", "body_level": 0, "outlet": None},
+    ]
+    rewrite, translate = partition_by_body_level(rows)
+    assert [r["content_hash"] for r in rewrite] == ["h1"]
+    assert [r["content_hash"] for r in translate] == ["h2", "h3"]
+
+
+def test_partition_by_body_level_ignores_outlet_string():
+    """매체명으로 가르면 표기 변종 (더 선 · 더선 · 더썬) 마다 갈린다 (스펙 §4.2)."""
+    from bullet_in.enrich import partition_by_body_level
+    rows = [{"content_hash": "h1", "body_level": 2, "outlet": "The Athletic"}]
+    rewrite, translate = partition_by_body_level(rows)
+    assert rewrite == []
+    assert len(translate) == 1
+
+
+def test_partition_by_body_level_treats_null_level_as_translate():
+    """백필 전 레거시 행 (NULL) 은 재작성 모드로 보내지 않는다 — 한국어 여부를 모른다."""
+    from bullet_in.enrich import partition_by_body_level
+    rewrite, translate = partition_by_body_level([{"content_hash": "h1", "body_level": None}])
+    assert rewrite == [] and len(translate) == 1

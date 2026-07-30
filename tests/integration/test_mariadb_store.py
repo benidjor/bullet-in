@@ -204,3 +204,15 @@ def test_upsert_upgrade_raises_body_level(engine):
                           body_level=2, revision=2,
                           published_at=datetime(2026, 7, 26, tzinfo=timezone.utc))])
     assert store.seen_map()["https://x.test/u"] == ("h2", 2, "bbc_sport", 2)
+
+
+def test_rows_missing_translation_includes_body_level(engine):
+    # 라우팅 입력 (스펙 §4.2) — 등급이 없으면 재작성 · 번역을 가를 수 없다
+    from bullet_in.models import Article
+    from datetime import datetime, timezone
+    store = MartStore(engine)
+    store.upsert([Article(content_hash="hb", url="https://x.test/bl", source_id="fmkorea",
+                          title_original="퍼온 제목", body_source="옮긴 본문", body_level=1,
+                          published_at=datetime(2026, 7, 27, tzinfo=timezone.utc))])
+    row = next(r for r in store.rows_missing_translation() if r["content_hash"] == "hb")
+    assert row["body_level"] == 1

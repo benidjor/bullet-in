@@ -3,8 +3,6 @@ import json, logging, re
 
 log = logging.getLogger(__name__)
 
-PAYWALLED_OUTLETS = {"The Athletic"}
-
 from bullet_in import transfer_stage as _stage
 
 def _is_rate_limit(exc: Exception) -> bool:
@@ -345,11 +343,18 @@ def _extract_full(text: str) -> dict | None:
     except (json.JSONDecodeError, KeyError, TypeError):
         return None
 
-def partition_by_paywall(rows: list[dict]) -> tuple[list[dict], list[dict]]:
-    para, trans = [], []
+POST_BODY_LEVEL = 1     # 게시글 본문 — 커뮤니티가 옮긴 것 (수집 라인 트랙 계약)
+
+def partition_by_body_level(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(재작성 행, 번역 행) — 본문 출처 등급으로 가른다.
+
+    등급 1 은 이미 한국어라 번역이 아니라 재작성 대상이다.
+    매체명 문자열로 가르면 표기 변종마다 갈린다 (배포판에 '더 선' · '더선' · '더썬'
+    이 따로 존재한다 — 스펙 §4.2). 등급이 없는 레거시 행은 번역 쪽으로 보낸다."""
+    rewrite, trans = [], []
     for r in rows:
-        (para if r.get("outlet") in PAYWALLED_OUTLETS else trans).append(r)
-    return para, trans
+        (rewrite if r.get("body_level") == POST_BODY_LEVEL else trans).append(r)
+    return rewrite, trans
 
 def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate"
                 ) -> dict[str, dict]:
