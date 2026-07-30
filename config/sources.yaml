@@ -73,7 +73,7 @@ sources:
       item_selector: "a.headline"
       title_contains: *transfer_kw
       body_selector: "article"
-    enabled: true
+    enabled: false      # 저품질 기사 비중 · 상위 티어 중복 (스펙 2026-07-29 §4.6)
   - source_id: guardian
     display_name: The Guardian
     serving: full      # 상세 페이지 서빙 범위 (spec §2.3 개정 2026-07-20) — 전 소스 전문 서빙
