@@ -133,7 +133,9 @@ def _has_name_context(source: str, surname: str) -> bool:
     """원문에 '이름 + 성' 형태가 있는지 — 성 단독 출현을 인명 근거로 인정하지 않는다.
     앞 단어가 기능어면 근거로 치지 않는다 (With Arteta's Backing… 오탐 차단).
     실측 (2026-07-30 · 라이브 412행): 제목에 등재 성이 나온 132건 중 128건이 이 근거를 가지고,
-    근거가 없는 4건 중 2건이 확인된 오탐이다 (스펙 4.3절)."""
+    근거가 없는 4건 중 2건이 확인된 오탐이다 (스펙 4.3절).
+    name_map 값이 단일 단어 성이라는 전제의 패턴이다 (2026-07-31 현재 40개 전부 충족)
+    — 두 단어 값 (Van Dijk 류) 은 대소문자 보존 매칭이 근거를 못 찾아 축이 조용히 꺼진다."""
     marked = _strip_marks(source)
     pat = rf"\b([A-Z][a-z]+)[\s-]+{re.escape(_strip_marks(surname))}\b"
     return any(m.group(1).lower() not in _NAME_CONTEXT_STOPWORDS
@@ -328,7 +330,7 @@ def finalize_translation(v: dict, row: dict, glossary: dict[str, str],
                                       row.get("body_source"),
                                       row.get("body_excerpt")]))
     # 제목 환각 검출 (설계 ②-A): 1차 검출 = 재번역 큐 (title NULL 저장 → 다음
-    # 사이클 재선별), 재검출 (summary_ko 기저장 = 재시도 행) = 원문 제목 폴백.
+    # 사이클 재선별), 재검출 (summary_ko 기저장 = 재시도 행) = 번역 제목 채택 + 경고 (설계 5.2).
     suspects = detect_title_hallucination(v["title_ko"], src_text, name_map)
     # 역방향 축: 원문 제목 인명 누락 · 무근거 '임대' — 라운드업 (gossip) 은 제목 재초점이 정상이라 제외
     if row.get("source_id") != "bbc_gossip":
@@ -375,6 +377,8 @@ def retranslation_summary(finals: dict[str, tuple], by_hash: dict[str, dict]
     채택 = 재시도 행이 의심을 남긴 채 제목을 확정 (운영자 수동 확인 대상),
     해소 = 재시도 행이 의심 없이 제목 확보.
     정상 신규 성공 (NULL 아님 · 재시도 아님) 은 집계 밖.
+    채택 · 해소 판정은 제목 축 (flagged) 만 본다 — 구단명 · 단신 누락 축의 잔존은
+    행별 '수동 확인' 경고로만 관측되고 여기서는 해소로 잡힌다.
     관측 ② — 호출측 (run.py) 이 사이클 요약 한 줄로 로깅한다."""
     new_q = adopted = resolved = 0
     for h, final in finals.items():
