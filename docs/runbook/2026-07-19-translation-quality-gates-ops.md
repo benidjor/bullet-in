@@ -29,9 +29,9 @@
 2026-07-30 에 채택 종착으로 되돌렸다 (`specs/2026-07-30-retranslation-queue-terminal-state-design.md`).
 - 실측: id 385 는 1차 재번역도 실패했으나 2차에서 "크리스토스 촐리스" 로 자가 복구 — 큐 설계가 실전 검증됨.
 
-## 3. 로그 해석 (WARNING, `bullet_in.run`)
+## 3. 로그 해석 (WARNING, `bullet_in.enrich`)
 
-- **`재번역 큐 content_hash=… 환각의심=… 단신누락=… 원문에 없는 구단명=…`** — 1차 검출. 다음 사이클에 자동 재시도되므로 즉시 조치 불필요.
+- **`재번역 큐(1차) content_hash=… 환각의심=… 단신누락=… 원문에 없는 구단명=…`** — 1차 검출. 다음 사이클에 자동 재시도되므로 즉시 조치 불필요.
   (이 필드는 2026-07-20 표기 정리 전 로그에 `구단주입=` 으로 남아 있음 — 과거 로그 grep 시 두 표기 모두 확인.)
 - **`제목 의심 잔존 — 수동 확인`** — 재시도까지 의심이 남아 번역 제목을 그대로 채택했다.
 서빙은 한국어 제목이므로 화면은 정상이고, 사유 목록을 보고 오탐인지 진짜 오역인지 판단한다.
@@ -77,8 +77,8 @@ set -a; source .env; set +a
 uv run python - <<'PY'
 import os, yaml
 from sqlalchemy import create_engine, text
-from bullet_in.enrich import (detect_title_mistranslation, detect_roundup_omission,
-                              detect_club_injection)
+from bullet_in.enrich import (detect_title_hallucination, detect_title_mistranslation,
+                              detect_roundup_omission, detect_club_injection)
 name_map = yaml.safe_load(open("config/name_map.yaml"))["names"]
 club_map = yaml.safe_load(open("config/club_map.yaml"))["clubs"]
 e = create_engine(os.environ["MARIADB_URL"])
@@ -87,12 +87,14 @@ with e.connect() as c:
         "SELECT id, source_id, title_original, title_ko, body_source, body_ko, "
         "summary_ko, summary3_ko, body_excerpt FROM articles WHERE title_ko IS NOT NULL")).mappings().all()]
 for r in rows:
+    src = " ".join(filter(None, [r["title_original"], r["body_source"], r["body_excerpt"]]))
     if r["source_id"] != "bbc_gossip":   # 라운드업 제목 재초점은 정상 (run.py 와 동일 제외)
-        m = detect_title_mistranslation(r["title_ko"], r["title_original"], name_map)
+        m = detect_title_mistranslation(r["title_ko"], r["title_original"], name_map, src)
         if m: print("제목:", r["id"], r["source_id"], m)
+    hn = detect_title_hallucination(r["title_ko"], src, name_map)
+    if hn: print("환각:", r["id"], r["source_id"], hn)
     o = detect_roundup_omission(r["body_source"], r["body_ko"])
     if o: print("단신:", r["id"], o)
-    src = " ".join(filter(None, [r["title_original"], r["body_source"], r["body_excerpt"]]))
     c2 = detect_club_injection(r, src, club_map)
     if c2: print("구단:", r["id"], c2)
 PY
@@ -113,6 +115,10 @@ PY
   `docs/troubleshooting/2026-07-19-parallel-pr-session-integrity-traps.md` 부록 참조.
 - **일반어 별칭의 미검출 방향 열림** — `Forest` · `Palace` · `Villa` 류 통칭 별칭은 casefold 매치라
   원문의 일반 명사 용례도 근거로 인정된다. 오탐 안전 우선 설계상 의도된 방향 (미검출로만 열림) — 결함 아님.
+- **본문 없는 행은 역방향 인명 축이 사실상 꺼진다** — `title_only_rows` 경로 (본문 없이 제목만 번역) 는
+  `_has_name_context` 의 원문 컨텍스트가 제목뿐이다.
+  영어 헤드라인은 성만 쓰는 것이 관례라 '이름 + 성' 근거를 못 찾아 인명 누락이 잘 안 걸린다.
+  → 이 집단에서 인명 축이 조용한 것은 구조적 미검출이지 오탐 판정이 아니다 (재조사 불필요).
 
 ## 7. 롤백
 

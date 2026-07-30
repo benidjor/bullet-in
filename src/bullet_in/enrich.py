@@ -116,7 +116,10 @@ def _strip_marks(text: str) -> str:
                .replace("æ", "ae").replace("Æ", "AE").replace("ß", "ss"))
 
 # 성 앞 대문자 단어가 이름이 아니라 문장 첫머리 기능어인 경우를 걸러낸다
-# (With Arteta's Backing… 의 With). 영어 기능어는 고정 집합이라 도메인 사전처럼 늘지 않는다.
+# (With Arteta's Backing… 의 With). 목록은 영어 기능어뿐 아니라 deal · news · report ·
+# latest · official · exclusive · breaking 같은 헤드라인 상용어도 섞여 있어, 기능어 사전과
+# 달리 앞으로 늘어날 수 있다. 목록을 바꾸면 스펙 4.3절 실측치 (라이브 412행 기준 검사 면제
+# 4건 · 3%) 를 다시 재야 한다 — 바꾸기 전에 그 재측정을 감안할 것.
 _NAME_CONTEXT_STOPWORDS = frozenset({
     "a", "after", "an", "and", "as", "at", "before", "breaking", "but", "by",
     "can", "could", "deal", "exclusive", "for", "from", "had", "has", "have",
@@ -132,7 +135,7 @@ def _has_name_context(source: str, surname: str) -> bool:
     실측 (2026-07-30 · 라이브 412행): 제목에 등재 성이 나온 132건 중 128건이 이 근거를 가지고,
     근거가 없는 4건 중 2건이 확인된 오탐이다 (스펙 4.3절)."""
     marked = _strip_marks(source)
-    pat = rf"\b([A-Z][a-z]+)[- ]{re.escape(_strip_marks(surname))}\b"
+    pat = rf"\b([A-Z][a-z]+)[\s-]+{re.escape(_strip_marks(surname))}\b"
     return any(m.group(1).lower() not in _NAME_CONTEXT_STOPWORDS
                for m in re.finditer(pat, marked))
 
