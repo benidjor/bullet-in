@@ -212,3 +212,54 @@ def test_resolve_card_exception_isolated_keeps_batch(monkeypatch):
     assert "tweet_url" not in out[0].raw_payload
     assert out[1].url == "https://www.nytimes.com/athletic/999/"
     assert out[1].raw_payload["tweet_url"] == "https://x.com/David_Ornstein/status/62"
+
+
+# --- 콜론형 인용 회수 (2026-07-30 실측) ---
+# afcstuff 는 인용을 대괄호로만 쓰지 않는다. 아래는 라이브 타임라인 30건에서 그대로
+# 옮긴 형태다 — 멘션이 줄 단위로 서고 콜론이 따르거나, 이름 뒤 괄호에 핸들이 온다.
+# 이 4건이 버려지고 있었다 (통과 8/30 → 12/30).
+LIVE_COLON_CITED = [
+    (' \n@MatteMoretto\n: “Ethan Nwaneri is the type of profile that interest AC Milan.”',
+     "@MatteMoretto"),
+    (' \n@JacobsBen\n: “I think Arsenal have grown in optimism over a deal for Bruno Guimarães.”',
+     "@JacobsBen"),
+    (' \n@Rodra10_97\n: “There has been no meeting between Vinicius & Real Madrid yet.”',
+     "@Rodra10_97"),
+    ('Bruno Andrade (\n@ESPNBrasil\n): “Speaking to someone involved in the deal…”',
+     "@ESPNBrasil"),
+]
+
+# 인용 주체가 없어 제외가 맞는 형태 — 회수 대상이 아니다 (같은 30건에서 발췌)
+LIVE_UNCITED = [
+    'Mikel Arteta: “This has to be the start & it has to be the standard.”',
+    'Happy Birthday to Arsenal owner Stan Kroenke, who turns 79 today!',
+    'Ben White in Arsenal training today.',
+    'Bukayo Saka on Instagram, showing off his new look.',
+    'Talks between Vinicius Junior & Real Madrid over a new contract will resume.',
+    'Reminder: Arsenal’s 2026 pre-season fixtures, which begin on Saturday.',
+]
+
+
+def test_keeps_colon_form_citation():
+    """멘션 + 콜론 형태도 인용으로 인정해야 한다 (2026-07-30 실측 4건 유실)."""
+    for i, (text, who) in enumerate(LIVE_COLON_CITED):
+        items = parse_afcstuff_tweets("x_afcstuff", "afcstuff",
+                                      [_rt(text=text, status_id=str(i))], NOW)
+        assert len(items) == 1, f"버려짐: {text[:50]!r}"
+        assert items[0].raw_payload["journalist"] == who
+
+
+def test_still_drops_uncited_tweets():
+    """인용 주체 없는 트윗은 그대로 제외 — 기자 tier 를 매길 근거가 없다."""
+    for i, text in enumerate(LIVE_UNCITED):
+        items = parse_afcstuff_tweets("x_afcstuff", "afcstuff",
+                                      [_rt(text=text, status_id=str(i))], NOW)
+        assert items == [], f"통과하면 안 됨: {text[:50]!r}"
+
+
+def test_bracket_citation_wins_over_colon_form():
+    """대괄호 인용이 있으면 그것을 쓴다 — 기존 동작 무변경 보장."""
+    text = 'Report [ @David_Ornstein ] — quoting Mikel Arteta: “we are ready”'
+    it = parse_afcstuff_tweets("x_afcstuff", "afcstuff",
+                               [_rt(text=text, status_id="7")], NOW)[0]
+    assert it.raw_payload["journalist"] == "@David_Ornstein"
