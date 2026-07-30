@@ -20,3 +20,11 @@ def test_every_source_declares_valid_serving_mode():
 def test_full_mode_matches_spec_mapping():
     modes = _modes()
     assert {sid for sid, m in modes.items() if m == "full"} == FULL_SOURCES
+
+def test_football_london_collection_disabled():
+    """저품질 기사 비중이 높아 소스를 내렸다 (스펙 2026-07-29 §4.6).
+    항목 자체는 남긴다 — 지우면 serving 모드 계약 검사에서도 사라져 되살아난 것을 못 잡는다."""
+    data = yaml.safe_load((Path(__file__).parent.parent / "config" / "sources.yaml")
+                          .read_text(encoding="utf-8"))
+    fl = next(s for s in data["sources"] if s["source_id"] == "football_london")
+    assert fl.get("enabled") is False
