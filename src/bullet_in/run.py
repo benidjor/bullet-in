@@ -14,6 +14,7 @@ from bullet_in.score import load_sources
 from bullet_in.credibility import load_registry, journalist_directory, outlet_directory
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
+from bullet_in.storage.players import PlayerStore
 from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows,
                               apply_glossary, finalize_translation,
                               retranslation_summary)
@@ -101,8 +102,10 @@ async def main(concurrency: int):
     results.update(title_only_rows(title_only, client, GEMINI_MODEL))
     glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
                 or {}).get("replacements", {})
-    name_map = (yaml.safe_load(Path("config/name_map.yaml").read_text())
-                or {}).get("names", {})
+    name_map = PlayerStore(engine).gate_name_map()
+    if not name_map:
+        logging.getLogger(__name__).warning(
+            "players 사전이 비어 있음 — migrate_roster 미실행이면 인명 게이트가 꺼진 채 돈다")
     club_map = (yaml.safe_load(Path("config/club_map.yaml").read_text())
                 or {}).get("clubs", {})
     by_hash = {r["content_hash"]: r for r in missing}
