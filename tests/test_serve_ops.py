@@ -60,3 +60,16 @@ def test_render_ops_stale_badge_renders():
     snap["freshness"][0]["stale"] = 1                 # PR #39 이월 ③ — 미검증 경로
     html = render_ops(build_ops_view(snap, SOURCES, 0, NOW))
     assert "✕ 초과" in html and "b-stale" in html
+
+
+def test_ops_view_lists_high_retention_rows():
+    from bullet_in.serve.render import build_ops_view
+    snap = {"runs": [], "freshness": [], "tier_counts": {}, "pending": {},
+            "high_retention": [{"content_hash": "a" * 64, "outlet": "The Athletic",
+                                "retention": 0.934}]}
+    view = build_ops_view(snap, {}, anomaly_count=0,
+                          now=datetime(2026, 7, 30, 12, 0, 0))
+    assert view["high_retention_count"] == 1
+    row = view["high_retention"][0]
+    assert row["retention"] == "0.93"
+    assert row["href"].endswith(f"article/{'a' * 64}.html")

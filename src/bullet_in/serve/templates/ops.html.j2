@@ -118,6 +118,17 @@
 </table>
 {% else %}<p class="mut">이력 없음</p>{% endif %}
 
+<h2>⑥ 재작성 잔존율 확인 대상 ({{ view.high_retention_count }}건)</h2>
+{% if view.high_retention %}
+<table>
+  <tr><th>기사</th><th>언론사</th><th>잔존율</th></tr>
+  {% for r in view.high_retention %}
+  <tr><td><a href="{{ r.href }}">{{ r.content_hash[:8] }}</a></td>
+      <td>{{ r.outlet }}</td><td>{{ r.retention }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}<p class="mut">임계값 초과 없음</p>{% endif %}
+
 <footer><a href="index.html">← 기사 페이지로</a></footer>
 </body>
 </html>

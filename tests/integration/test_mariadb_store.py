@@ -216,3 +216,24 @@ def test_rows_missing_translation_includes_body_level(engine):
                           published_at=datetime(2026, 7, 27, tzinfo=timezone.utc))])
     row = next(r for r in store.rows_missing_translation() if r["content_hash"] == "hb")
     assert row["body_level"] == 1
+
+
+def test_set_rewrite_retention_and_high_retention_list(engine):
+    # 게이트를 넘긴 채 채택된 행은 ops 로 올려 사람이 확인한다 (스펙 §7)
+    from bullet_in.models import Article
+    from datetime import datetime, timezone
+    store = MartStore(engine)
+    store.upsert([
+        Article(content_hash="hr1", url="https://x.test/r1", source_id="fmkorea",
+                title_original="T1", outlet="The Athletic", body_source="본문",
+                body_level=1, published_at=datetime(2026, 7, 27, tzinfo=timezone.utc)),
+        Article(content_hash="hr2", url="https://x.test/r2", source_id="fmkorea",
+                title_original="T2", outlet="The Times", body_source="본문",
+                body_level=1, published_at=datetime(2026, 7, 27, tzinfo=timezone.utc)),
+    ])
+    store.set_rewrite_retention("hr1", 0.93)
+    store.set_rewrite_retention("hr2", 0.41)
+    high = store.ops_snapshot()["high_retention"]
+    assert [r["content_hash"] for r in high] == ["hr1"]
+    assert high[0]["outlet"] == "The Athletic"
+    assert round(high[0]["retention"], 2) == 0.93

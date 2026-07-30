@@ -27,6 +27,7 @@ ALTER TABLE articles ADD COLUMN IF NOT EXISTS transfer_stage VARCHAR(32);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS images_json TEXT;
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS published_precision VARCHAR(4);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS body_level TINYINT;
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS rewrite_retention FLOAT;
 CREATE TABLE IF NOT EXISTS pipeline_runs (
   run_id VARCHAR(64) PRIMARY KEY, dag_run_id VARCHAR(128),
   started_at DATETIME, finished_at DATETIME, duration_sec FLOAT,

@@ -619,10 +619,19 @@ def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int,
     else:
         slo = []
 
+    # snapshot.get — 옛 스냅샷 (키 없음) 으로도 렌더가 죽지 않게 한다
+    high = snapshot.get("high_retention") or []
+
     return {"generated_at": f"{now:%Y-%m-%d %H:%M} UTC",
             "kpi": _kpi(runs, stale_count, pending_total),
             "runs_chart": runs_chart, "freshness": freshness,
-            "volume": volume, "tiers": tiers, "slo": slo}
+            "volume": volume, "tiers": tiers, "slo": slo,
+            "high_retention": [{"content_hash": r["content_hash"],
+                                "outlet": r["outlet"] or "—",
+                                "retention": f"{r['retention']:.2f}",
+                                "href": f"article/{r['content_hash']}.html"}
+                               for r in high],
+            "high_retention_count": len(high)}
 
 def _env() -> Environment:
     env = Environment(

@@ -97,6 +97,8 @@ async def main(concurrency: int):
               for h, v in results.items()}
     for h, final in finals.items():
         mart.set_translation(h, *final)
+    for h, rep in gate_reports.items():
+        mart.set_rewrite_retention(h, rep["retention"])
     if finals:  # 관측 ②: 재번역 큐 추이 한 줄 (신규 진입 · 잔존 · 해소)
         logging.getLogger(__name__).warning(
             "재번역 큐 요약: 신규 %d · 잔존 %d · 해소 %d",
