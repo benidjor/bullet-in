@@ -75,7 +75,8 @@ def parse_bracket(title: str) -> tuple[str | None, str | None, bool]:
 _BYLINE_HEAD_CHARS = 200
 _MONTHS = ("January|February|March|April|May|June|July|August|September|"
            "October|November|December")
-_PUBLISH_DT_RE = re.compile(
+# 충실도 게이트도 같은 규칙으로 숫자 집계에서 발행 표기를 뺀다 (fidelity.py 가 import).
+PUBLISH_DT_RE = re.compile(
     rf"(?:{_MONTHS})\s+\d{{1,2}}\s*,?\s*\d{{4}}|(?:Updated\s+)?\d{{1,2}}:\d{{2}}\s*[ap]m",
     re.I)
 _SPACES_RE = re.compile(r"[ \t]{2,}")
@@ -97,7 +98,7 @@ def strip_publish_datetime(body: str) -> str:
     if not body:
         return body
     head, tail = body[:_BYLINE_HEAD_CHARS], body[_BYLINE_HEAD_CHARS:]
-    cleaned, removed = _PUBLISH_DT_RE.subn("", head)
+    cleaned, removed = PUBLISH_DT_RE.subn("", head)
     if not removed:
         return body
     return (_SPACES_RE.sub(" ", cleaned) + tail).strip() or body
