@@ -132,6 +132,9 @@ sources:
         - {keyword: "아스날", target: "title"}
         - {keyword: '"de roche"', target: "title_content"}
         - {keyword: "온스테인", target: "title_content"}
+        # 아스날 감독 인터뷰는 제목에 '아스날' 이 없어 위 키워드에 안 걸린다 (2026-07-30 실측 유실).
+        # title_content 검색은 본문만 스친 글도 잡으므로 제목 필수어로 좁힌다.
+        - {keyword: "아르테타 이적 시장", target: "title_content", title_must_contain: "아르테타"}
       item_selector: "a.hx"
       base_url: "https://www.fmkorea.com"
       body_selector: ".xe_content"
