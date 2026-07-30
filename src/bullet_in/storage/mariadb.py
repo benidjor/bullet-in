@@ -32,12 +32,12 @@ class MartStore:
           INSERT INTO articles
             (content_hash,url,source_id,author,tier,confidence_score,
              title_original,title_ko,summary_ko,body_excerpt,
-             summary3_ko,body_ko,body_source,image_url,images_json,outlet,journalist,team,
+             summary3_ko,body_ko,body_source,body_level,image_url,images_json,outlet,journalist,team,
              transfer_stage,
              published_at,published_precision,fetched_at,revision)
           VALUES (:content_hash,:url,:source_id,:author,:tier,:confidence_score,
              :title_original,:title_ko,:summary_ko,:body_excerpt,
-             :summary3_ko,:body_ko,:body_source,:image_url,:images_json,:outlet,:journalist,:team,
+             :summary3_ko,:body_ko,:body_source,:body_level,:image_url,:images_json,:outlet,:journalist,:team,
              :transfer_stage,
              :published_at,:published_precision,:fetched_at,:revision)
           ON DUPLICATE KEY UPDATE
@@ -49,6 +49,7 @@ class MartStore:
              title_original=VALUES(title_original),
              body_excerpt=VALUES(body_excerpt),
              body_source=VALUES(body_source),
+             body_level=VALUES(body_level),
              image_url=VALUES(image_url),
              images_json=VALUES(images_json),
              outlet=VALUES(outlet),
@@ -68,14 +69,17 @@ class MartStore:
     def count(self) -> int:
         with self.engine.connect() as c:
             return c.execute(text("SELECT COUNT(*) FROM articles")).scalar_one()
-    def seen_map(self) -> dict[str, tuple[str, int, str, bool]]:
-        """url -> (content_hash, revision, source_id, has_body).
-        has_body = body_source 가 비어있지 않음 — 완전체 판정 기준 (spec §3)."""
+    def seen_map(self) -> dict[str, tuple[str, int, str, int]]:
+        """url -> (content_hash, revision, source_id, body_level).
+        body_level = 본문 출처 등급 (0 없음 · 1 게시글 · 2 언론사) — 가드 판정 입력.
+        백필 전 레거시 행 (NULL) 은 본문이 있으면 2 로 본다 — 등급을 낮게 잡으면
+        커뮤니티가 옮긴 본문이 언론사 원문을 덮을 수 있어 보수적인 쪽을 택했다."""
         with self.engine.connect() as c:
             rows = c.execute(text(
                 "SELECT url,content_hash,revision,source_id,"
-                "COALESCE(body_source,'')<>'' FROM articles")).all()
-        return {u: (h, rev, sid, bool(hb)) for u, h, rev, sid, hb in rows}
+                "COALESCE(body_level, IF(COALESCE(body_source,'')<>'',2,0)) "
+                "FROM articles")).all()
+        return {u: (h, rev, sid, int(lv)) for u, h, rev, sid, lv in rows}
     def rows_missing_translation(self) -> list[dict]:
         with self.engine.connect() as c:
             rows = c.execute(text(

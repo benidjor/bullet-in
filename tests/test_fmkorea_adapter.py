@@ -557,3 +557,160 @@ def test_fmkorea_no_sleep_when_gap_zero(monkeypatch):
                        base_url="https://www.fmkorea.com")
     asyncio.run(a.fetch())
     assert slept == []
+
+
+# --- 바이라인 처리 (순수 함수 둘 · 호출 순서 무관) ---
+# 시험 사례는 실측에서 뽑았다 (bulletin_mock 2026-07-27 사본 · fmkorea 본문 98건).
+
+from bullet_in.adapters.fmkorea import strip_publish_datetime, extract_body_journalist
+
+
+def test_strip_publish_datetime_removes_byline_date_and_time():
+    body = "By David Ornstein June 19, 2026 3:19 am 리버풀이 RB 라이프치히와 협상 중이다."
+    assert strip_publish_datetime(body) == "By David Ornstein 리버풀이 RB 라이프치히와 협상 중이다."
+
+
+def test_strip_publish_datetime_removes_updated_time_form():
+    body = ("By James McNicholas and Art de Roché July 3, 2026 Updated 2:46 am "
+            "아스날이 파스칼 드 마샬크를 선임했다.")
+    assert strip_publish_datetime(body) == (
+        "By James McNicholas and Art de Roché 아스날이 파스칼 드 마샬크를 선임했다.")
+
+
+def test_strip_publish_datetime_keeps_journalist_name():
+    # 기자명을 지우면 fmkorea tier 가 본문 스캔을 잃는다 (합의 2026-07-29)
+    body = "By Art de Roché May 18, 2026 1:20 pm 미켈 아르테타 감독은 팬들과의 관계를 강조해왔다."
+    out = strip_publish_datetime(body)
+    assert "Art de Roché" in out
+    assert "May 18, 2026" not in out and "1:20 pm" not in out
+
+
+def test_strip_publish_datetime_keeps_quoted_tweet_timestamp():
+    # 실측 7c2a0a1e — 200자 밖 인용 트윗 작성 시각 3건이 전부 여기 있었다
+    lead = "아스날의 2014년 여름을 돌아본다. " * 12          # 200자 넘기기
+    body = lead + "— UEFA Champions League (@ChampionsLeague) March 4, 2019 벵거 시절."
+    assert strip_publish_datetime(body) == body
+
+
+def test_strip_publish_datetime_keeps_korean_date_notation():
+    body = "디 애슬레틱은 지난 6월 24일, 브라힘 디아스가 아스날행을 원한다고 보도했다."
+    assert strip_publish_datetime(body) == body
+
+
+def test_strip_publish_datetime_keeps_year_inside_sentence():
+    body = "2030년까지 계약이 남아 있는 디오망데는 이번 여름 이적을 고려하지 않는다."
+    assert strip_publish_datetime(body) == body
+
+
+def test_strip_publish_datetime_keeps_article_years_after_byline():
+    body = "By Art de Roché 미켈 아르테타 감독은 2019 년 12 월 지휘봉을 잡았다."
+    assert strip_publish_datetime(body) == body
+
+
+def test_extract_body_journalist_reads_leading_byline():
+    body = "By David Ornstein June 19, 2026 3:19 am 리버풀이 협상 중이다."
+    assert extract_body_journalist(body) == "David Ornstein"
+
+
+def test_extract_body_journalist_takes_first_of_coauthors():
+    # journalist 컬럼은 단일 문자열 — 대표 1명 (공저자 다중 귀속은 별도 트랙)
+    body = "By James McNicholas and Art de Roché July 3, 2026 Updated 2:46 am 아스날이"
+    assert extract_body_journalist(body) == "James McNicholas"
+
+
+def test_extract_body_journalist_reads_byline_after_caption():
+    # 실측 19건 중 11건은 게시글 캡션 뒤에 바이라인이 온다 (본문 첫 글자 아님)
+    body = ("훌리안 알바레스(왼쪽)와 엘리 주니오르 크루피 By Art de Roché July 17, 2026 "
+            "1:16 pm 작년 이맘때 센터포워드는 아스날의 고민거리였다.")
+    assert extract_body_journalist(body) == "Art de Roché"
+
+
+def test_extract_body_journalist_stops_at_line_break():
+    # 실측 3건 (데일리 메일) — 개행 뒤 'Published' 가 이름에 붙으면 안 된다
+    body = "By SIMON JONES\n\nPublished: 17:30 GMT, 20 July 2026 아스날이"
+    assert extract_body_journalist(body) == "SIMON JONES"
+
+
+def test_extract_body_journalist_returns_none_without_byline():
+    assert extract_body_journalist("아스날이 비니시우스 주니오르 영입을 추진한다.") is None
+
+
+def test_extract_body_journalist_does_not_change_body():
+    # 추출 전용 — 본문 변경은 strip_publish_datetime 의 일 (순서 무관 계약)
+    body = "By David Ornstein June 19, 2026 3:19 am 본문."
+    extract_body_journalist(body)
+    assert body == "By David Ornstein June 19, 2026 3:19 am 본문."
+
+
+# --- 본문 출처 등급 명시 · 바이라인 적용 (어댑터) ---
+
+PAY_BYLINE_BODY = (
+    '<div class="xe_content"><p>비니시우스는 레알에서 8시즌 활약했다 '
+    'By David Ornstein June 19, 2026 3:19 am 아스날이 영입을 추진한다.</p>'
+    '<p>https://www.nytimes.com/athletic/9/b</p></div>')
+
+
+def _one_post(post_html: str, title: str = "[디 애슬레틱] 아스날 소식"):
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(
+        200, text=f'<a class="hx" href="/index.php?document_srl=1">{title}</a>'))
+    respx.get("https://www.fmkorea.com/1").mock(return_value=httpx.Response(200, text=post_html))
+    return FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                          search_keywords=[{"keyword": "kw1", "target": "title"}],
+                          base_url="https://www.fmkorea.com")
+
+
+@respx.mock
+def test_fmkorea_declares_post_body_level_on_paywalled_path():
+    # 페이월 경로가 채택하는 재료는 게시글 본문 (_body_text) → 등급 1
+    respx.get("https://www.nytimes.com/athletic/9/b").mock(return_value=httpx.Response(200, text=""))
+    items = asyncio.run(_one_post(PAY_BODY).fetch())
+    assert items[0].raw_payload["body_level"] == 1
+
+
+@respx.mock
+def test_fmkorea_declares_outlet_body_level_on_free_path():
+    # 원문 URL 에서 받은 본문 (extract_article_body) → 등급 2
+    respx.get("https://ex.test/a").mock(return_value=httpx.Response(200, text=FREE_ART))
+    items = asyncio.run(_one_post(FREE_BODY, title="[BBC] 아스날 소식").fetch())
+    assert items[0].raw_payload["body_level"] == 2
+
+
+@respx.mock
+def test_fmkorea_declares_zero_level_when_original_fetch_fails():
+    # 원문 fetch 실패 → 본문 없음 → 등급 0 (다음 회차에 원문이 들어올 길을 남긴다)
+    respx.get("https://ex.test/a").mock(return_value=httpx.Response(500))
+    items = asyncio.run(_one_post(FREE_BODY, title="[BBC] 아스날 소식").fetch())
+    assert items[0].raw_payload["body"] == ""
+    assert items[0].raw_payload["body_level"] == 0
+
+
+@respx.mock
+def test_fmkorea_declares_zero_level_when_repost_blocked():
+    respx.get("https://www.nytimes.com/athletic/9/b").mock(
+        return_value=httpx.Response(200, text=""))
+    items = asyncio.run(_one_post(BLOCKED_PAY_POST).fetch())
+    assert items[0].raw_payload["body"] == ""
+    assert items[0].raw_payload["body_level"] == 0
+
+
+@respx.mock
+def test_fmkorea_strips_publish_datetime_from_collected_body():
+    respx.get("https://www.nytimes.com/athletic/9/b").mock(return_value=httpx.Response(200, text=""))
+    body = asyncio.run(_one_post(PAY_BYLINE_BODY).fetch())[0].raw_payload["body"]
+    assert "June 19, 2026" not in body and "3:19 am" not in body
+    assert "By David Ornstein" in body
+
+
+@respx.mock
+def test_fmkorea_fills_journalist_from_body_when_bracket_has_none():
+    respx.get("https://www.nytimes.com/athletic/9/b").mock(return_value=httpx.Response(200, text=""))
+    items = asyncio.run(_one_post(PAY_BYLINE_BODY).fetch())
+    assert items[0].raw_payload["journalist"] == "David Ornstein"
+
+
+@respx.mock
+def test_fmkorea_keeps_bracket_journalist_over_body_byline():
+    # 말머리 값 우선 — 본문 추출값은 비어 있을 때만 채운다
+    respx.get("https://www.nytimes.com/athletic/9/b").mock(return_value=httpx.Response(200, text=""))
+    items = asyncio.run(_one_post(PAY_BYLINE_BODY, title="[디 애슬레틱 - 온스테인] 아스날").fetch())
+    assert items[0].raw_payload["journalist"] == "온스테인"

@@ -121,18 +121,20 @@ def test_persist_returns_load_dup_blocked_3tuple(monkeypatch):
     new_url = "https://fm.test/new"
 
     seen = {
-        dup_url: (content_hash(dup_title, dup_url), 1, "fmkorea", True),
-        blocked_url: (content_hash("완전체 원문", blocked_url), 1, "bbc_sport", True),
+        dup_url: (content_hash(dup_title, dup_url), 1, "fmkorea", 1),
+        blocked_url: (content_hash("완전체 원문", blocked_url), 1, "bbc_sport", 2),
     }
     mart = _FakeMart(seen)
     now = datetime.now(timezone.utc)
     raw = [
         RawItem(source_id="fmkorea", source_type="html", url=dup_url,
-                fetched_at=now, raw_payload={"title": dup_title, "body": "본문"}),
+                fetched_at=now, raw_payload={"title": dup_title, "body": "본문", "body_level": 1}),
         RawItem(source_id="fmkorea", source_type="html", url=blocked_url,
-                fetched_at=now, raw_payload={"title": "다른 소스 스텁", "body": "본문"}),
+                fetched_at=now, raw_payload={"title": "다른 소스 스텁", "body": "본문",
+                                            "body_level": 1}),
         RawItem(source_id="fmkorea", source_type="html", url=new_url,
-                fetched_at=now, raw_payload={"title": "신규 글", "body": "본문"}),
+                fetched_at=now, raw_payload={"title": "신규 글", "body": "본문",
+                                            "body_level": 1}),
     ]
 
     result = persist(raw, mart)

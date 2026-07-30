@@ -5,7 +5,7 @@ from dateutil import parser as dtparser
 from bullet_in.models import RawItem, Article
 from bullet_in.canonical import canonical_url, content_hash
 from bullet_in.dedup import classify
-from bullet_in.credibility import resolve_tier, Registry
+from bullet_in.credibility import resolve_tier, norm_alias, Registry
 from bullet_in.score import confidence_from_tier
 
 _WOMEN_RE = re.compile(r"women|wsl|여자", re.I)
@@ -16,6 +16,15 @@ def _is_womens_football(title: str, body: str | None) -> bool:
     if _WOMEN_RE.search(title or ""):
         return True
     return bool(_WOMEN_RE.search((body or "")[:400]))
+
+def _body_level(payload: dict) -> int:
+    """본문 출처 등급 — 어댑터가 실은 값이 있으면 그대로 쓴다.
+    미명시 소스는 언론사 페이지에서 직접 본문을 받으므로 있으면 2 · 없으면 0.
+    (커뮤니티가 옮긴 본문 1 은 그 재료를 아는 어댑터만 명시할 수 있다.)"""
+    declared = payload.get("body_level")
+    if declared is not None:
+        return int(declared)
+    return 2 if payload.get("body") else 0
 
 def _published(payload: dict, fetched_at: datetime) -> datetime:
     """발행 시각 — payload 추출값 우선, 실패 시 수집 시각 폴백 (처리 시각 now() 아님).
@@ -42,12 +51,12 @@ def select_journalist(item, src: dict, registry: "Registry | None") -> str | Non
     authors = item.raw_payload.get("authors") or []
     if registry is not None:
         for a in authors:
-            if a.lower() in registry.journalists:
+            if norm_alias(a) in registry.journalists:
                 return a
     return authors[0] if authors else None
 
 def to_articles(raw: list[RawItem], sources: dict[str, dict],
-                seen: dict[str, tuple[str, int, str, bool]],
+                seen: dict[str, tuple[str, int, str, int]],
                 registry: "Registry | None" = None) -> tuple[list[Article], dict]:
     out: list[Article] = []
     local_seen = dict(seen)
@@ -74,21 +83,22 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
             continue
         url = canonical_url(item.url)
         h = content_hash(title, url)
-        has_body = bool(item.raw_payload.get("body"))
-        decision, rev = classify(url, h, local_seen, item.source_id, has_body)
+        body_level = _body_level(item.raw_payload)
+        decision, rev = classify(url, h, local_seen, item.source_id, body_level)
         if decision == "duplicate":
             dup_count += 1
             continue
         if decision == "blocked":
             blocked_count += 1     # 완전체 보호 · 스텁끼리 충돌 (spec §4)
             continue
-        local_seen[url] = (h, rev, item.source_id, has_body)
+        local_seen[url] = (h, rev, item.source_id, body_level)
         out.append(Article(
             content_hash=h, url=url, source_id=item.source_id,
             tier=tier, confidence_score=confidence_from_tier(tier),
             title_original=title,
             body_excerpt=item.raw_payload.get("summary") or item.raw_payload.get("body"),
             body_source=item.raw_payload.get("body"),
+            body_level=body_level,
             image_url=item.raw_payload.get("image_url"),
             images=item.raw_payload.get("images") or [],
             outlet=item.raw_payload.get("outlet"),

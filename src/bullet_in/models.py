@@ -27,6 +27,7 @@ class Article(BaseModel):
     summary3_ko: str | None = None
     body_ko: str | None = None
     body_source: str | None = None
+    body_level: int = 0        # 0 본문 없음 · 1 게시글 본문 · 2 언론사 본문
     image_url: str | None = None
     images: list[str] = []
     outlet: str | None = None

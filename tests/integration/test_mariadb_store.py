@@ -70,7 +70,7 @@ def test_changed_url_updates_hash_and_resets_translation(engine):
                           title_original="New", revision=2,
                           published_at=datetime(2026,5,27,tzinfo=timezone.utc))])
     assert store.count() == 1
-    assert store.seen_map()["https://x.test/a"] == ("h2", 2, "g", False)
+    assert store.seen_map()["https://x.test/a"] == ("h2", 2, "g", 0)
     missing = {r["content_hash"] for r in store.rows_missing_translation()}
     assert "h2" in missing  # translation reset so enrich re-runs
 
@@ -150,18 +150,18 @@ def test_set_summary_without_s3_preserves_existing(engine):
     assert r["summary_ko"] == "확정했다." and r["summary3_ko"] == "기존3줄"
 
 
-def test_seen_map_carries_source_and_body_flag(engine):
-    # 가드 판정 입력 (spec §5) — has_body 는 body_source 비어있지 않음
+def test_seen_map_carries_source_and_body_level(engine):
+    # 가드 판정 입력 (spec §5) — body_level 3단 사다리 (0 없음 · 1 게시글 · 2 언론사)
     from bullet_in.models import Article
     from datetime import datetime, timezone
     store = MartStore(engine)
     store.upsert([_art(h="h1", url="https://x.test/a"),
                   Article(content_hash="h2", url="https://x.test/b", source_id="fmkorea",
-                          title_original="T", body_source="원문",
+                          title_original="T", body_source="옮긴 본문", body_level=1,
                           published_at=datetime(2026, 5, 27, tzinfo=timezone.utc))])
     seen = store.seen_map()
-    assert seen["https://x.test/a"] == ("h1", 1, "guardian", False)
-    assert seen["https://x.test/b"] == ("h2", 1, "fmkorea", True)
+    assert seen["https://x.test/a"] == ("h1", 1, "guardian", 0)
+    assert seen["https://x.test/b"] == ("h2", 1, "fmkorea", 1)
 
 
 def test_upsert_upgrade_replaces_source_id(engine):
@@ -173,7 +173,34 @@ def test_upsert_upgrade_replaces_source_id(engine):
                           title_original="tweet text",
                           published_at=datetime(2026, 7, 26, tzinfo=timezone.utc))])
     store.upsert([Article(content_hash="h2", url="https://x.test/a", source_id="fmkorea",
-                          title_original="전문 제목", body_source="전문", revision=2,
+                          title_original="전문 제목", body_source="전문", body_level=1,
+                          revision=2,
                           published_at=datetime(2026, 7, 26, tzinfo=timezone.utc))])
     assert store.count() == 1
-    assert store.seen_map()["https://x.test/a"] == ("h2", 2, "fmkorea", True)
+    assert store.seen_map()["https://x.test/a"] == ("h2", 2, "fmkorea", 1)
+
+
+def test_seen_map_reads_legacy_null_level_as_outlet_body(engine):
+    # ALTER 직후 · 백필 전 창 — 등급을 낮게 잡으면 게시글 본문이 언론사 원문을 덮는다
+    from sqlalchemy import text
+    store = MartStore(engine)
+    store.upsert([_art(h="hl", url="https://x.test/legacy")])
+    with engine.begin() as c:
+        c.execute(text("UPDATE articles SET body_source='원문 본문', body_level=NULL "
+                       "WHERE content_hash='hl'"))
+    assert store.seen_map()["https://x.test/legacy"][3] == 2
+
+
+def test_upsert_upgrade_raises_body_level(engine):
+    # 1 → 2 승격은 body_level 도 함께 올라야 한다 (안 오르면 다음 회차가 다시 열린다)
+    from bullet_in.models import Article
+    from datetime import datetime, timezone
+    store = MartStore(engine)
+    store.upsert([Article(content_hash="h1", url="https://x.test/u", source_id="fmkorea",
+                          title_original="퍼온 제목", body_source="옮긴 본문", body_level=1,
+                          published_at=datetime(2026, 7, 26, tzinfo=timezone.utc))])
+    store.upsert([Article(content_hash="h2", url="https://x.test/u", source_id="bbc_sport",
+                          title_original="Arsenal sign X", body_source="full body",
+                          body_level=2, revision=2,
+                          published_at=datetime(2026, 7, 26, tzinfo=timezone.utc))])
+    assert store.seen_map()["https://x.test/u"] == ("h2", 2, "bbc_sport", 2)

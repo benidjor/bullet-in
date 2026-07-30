@@ -4,13 +4,31 @@ from pathlib import Path
 import yaml
 
 _HANDLE_RE = re.compile(r"@(\w+)")  # used by resolve_tier in Task 2
+_WS_RE = re.compile(r"\s+")
+
+
+def norm_alias(s: str) -> str:
+    """별칭 조회 키 — 소문자 + 공백 제거.
+    같은 이름을 fmkorea 말머리 · 본문이 붙여 쓰기도 하고 띄어 쓰기도 해서
+    ("데이비드온스테인" · "데이비드 온스테인") 공백을 무시해야 등급 · 표기가 통한다."""
+    return _WS_RE.sub("", s).lower()
+
+
+def _with_norm_keys(m: dict) -> dict:
+    """공백 무시 키를 덧붙인 사본 — 기존 키 (소문자 원형) 조회는 그대로 통한다.
+    표기 변종 ("드 로셰" · "드로셰") 은 한 키가 되므로 먼저 들어온 값을 남긴다."""
+    out = dict(m)
+    for k, v in m.items():
+        out.setdefault(norm_alias(k), v)
+    return out
 
 class Registry:
     def __init__(self, journalists: dict[str, float], outlets: dict[str, float],
                  journalist_outlets: dict[str, str] | None = None):
-        self.journalists = journalists  # alias·정식명(lower) -> tier
-        self.outlets = outlets
-        self.journalist_outlets = journalist_outlets or {}  # 소속 지정 기자만 (프리랜서 부재)
+        self.journalists = _with_norm_keys(journalists)  # alias·정식명(lower) -> tier
+        self.outlets = _with_norm_keys(outlets)
+        # 소속 지정 기자만 (프리랜서 부재)
+        self.journalist_outlets = _with_norm_keys(journalist_outlets or {})
 
 def _build(entries: list[dict], dest: dict[str, float]) -> None:
     for e in entries or []:
@@ -46,6 +64,7 @@ def journalist_directory(path) -> dict[str, dict]:
         entry = {"name": e["name"], "outlet": e.get("outlet")}
         for key in [e["name"], *e["aliases"]]:
             out.setdefault(key.lower(), entry)
+            out.setdefault(norm_alias(key), entry)
     return out
 
 def outlet_directory(path) -> dict[str, str]:
@@ -56,6 +75,7 @@ def outlet_directory(path) -> dict[str, str]:
     for e in data.get("outlets", []) or []:
         for key in [e["name"], *e["aliases"]]:
             out.setdefault(key.lower(), e["name"])
+            out.setdefault(norm_alias(key), e["name"])
     return out
 
 def resolve_tier(item, sources: dict, registry: "Registry | None",
@@ -68,11 +88,11 @@ def resolve_tier(item, sources: dict, registry: "Registry | None",
         if registry is None:
             return None
         text = item.raw_payload.get("text", "")
-        handles = {("@" + h).lower() for h in _HANDLE_RE.findall(text)}
+        handles = {norm_alias("@" + h) for h in _HANDLE_RE.findall(text)}
         tiers = [registry.journalists[k] for k in handles if k in registry.journalists]
         if tiers:
             return min(tiers)
-        outlet = (item.raw_payload.get("outlet") or "").lower()
+        outlet = norm_alias(item.raw_payload.get("outlet") or "")
         if outlet and outlet in registry.outlets:   # 승격 항목 : 아웃렛 폴백
             return registry.outlets[outlet]
         fb = src.get("fallback_tier")
@@ -81,8 +101,9 @@ def resolve_tier(item, sources: dict, registry: "Registry | None",
     if mode == "fmkorea":
         if registry is None:
             return 4.0
-        title = (item.raw_payload.get("title") or "").lower()
-        body = (item.raw_payload.get("body") or "").lower()
+        # 공백 무시로 훑는다 — 같은 이름의 붙여 쓴 표기 · 띄어 쓴 표기를 함께 잡는다
+        title = norm_alias(item.raw_payload.get("title") or "")
+        body = norm_alias(item.raw_payload.get("body") or "")
         text = title + " " + body
         jt = [t for a, t in registry.journalists.items() if a in text]
         if jt:
@@ -100,7 +121,7 @@ def resolve_tier(item, sources: dict, registry: "Registry | None",
     # 소속이 기사 소스와 일치하는 등재 기자만 min 가드로 승격 (spec §2).
     # 프리랜서 (outlet 미지정) · 미등재 기자는 표시 전용 — tier 무조정.
     if journalist and registry is not None:
-        key = journalist.lower()
+        key = norm_alias(journalist)
         j_tier = registry.journalists.get(key)
         j_outlet = registry.journalist_outlets.get(key)
         if j_tier is not None and j_outlet and j_outlet == src.get("outlet"):

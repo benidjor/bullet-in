@@ -72,6 +72,48 @@ def parse_bracket(title: str) -> tuple[str | None, str | None, bool]:
     outlet = OUTLET_MAP.get(outlet, outlet)
     return (outlet or None), journalist, is_excl
 
+_BYLINE_HEAD_CHARS = 200
+_MONTHS = ("January|February|March|April|May|June|July|August|September|"
+           "October|November|December")
+_PUBLISH_DT_RE = re.compile(
+    rf"(?:{_MONTHS})\s+\d{{1,2}}\s*,?\s*\d{{4}}|(?:Updated\s+)?\d{{1,2}}:\d{{2}}\s*[ap]m",
+    re.I)
+_SPACES_RE = re.compile(r"[ \t]{2,}")
+# 이름 토큰은 대문자로 시작 · 월 이름과 'Updated' 는 제외 (바이라인 뒤 날짜에서 끊기 위함).
+# 토큰 사이 구분자는 공백만 — 개행을 넘으면 다음 줄의 'Published' 가 이름에 붙는다 (실측 3건).
+_NAME_TOKEN = rf"(?!(?:{_MONTHS}|Updated)\b)[A-Z][\w'’\-]*"
+_NAME_PARTICLE = r"(?:de|van|von|der|del|di|da|le|la)"
+_BYLINE_RE = re.compile(
+    rf"\bBy +({_NAME_TOKEN}(?: +(?:{_NAME_PARTICLE} +)?{_NAME_TOKEN})*)")
+
+
+def strip_publish_datetime(body: str) -> str:
+    """본문 앞머리 (200자) 의 발행 날짜 · 시각 표기만 지운다 — 기자명은 남긴다.
+
+    같은 정보가 published_at 컬럼에 있어 본문의 표기는 중복이다.
+    범위를 앞머리로 한정하는 이유는 뒤쪽 인용 트윗의 작성 시각 보존
+    (실측 98건: 앞머리 10건 · 그 밖 3건이 전부 한 행의 인용 트윗).
+    제거가 없었으면 원본을 글자 그대로 돌려준다."""
+    if not body:
+        return body
+    head, tail = body[:_BYLINE_HEAD_CHARS], body[_BYLINE_HEAD_CHARS:]
+    cleaned, removed = _PUBLISH_DT_RE.subn("", head)
+    if not removed:
+        return body
+    return (_SPACES_RE.sub(" ", cleaned) + tail).strip() or body
+
+
+def extract_body_journalist(body: str) -> str | None:
+    """본문 앞머리 바이라인의 기자명 — 본문은 건드리지 않는다.
+
+    journalist 컬럼은 단일 문자열이라 공저는 첫 저자만 남긴다.
+    정규식은 넓히지 않는다 — 엉뚱한 이름이 들어가면 tier 가 잘못 오른다."""
+    if not body:
+        return None
+    m = _BYLINE_RE.search(body[:_BYLINE_HEAD_CHARS])
+    return m.group(1) if m else None
+
+
 _REPOST_BLOCK_TEXT = "퍼가기가 금지된"
 
 def _is_repost_blocked(html: str) -> bool:
@@ -225,6 +267,7 @@ class FmkoreaAdapter:
                     images = extract_body_images(html, self.body_selector, base_url=url)
                 image = await _fetch_og_image(c, orig)
                 lang = "ko"
+                material_level = 1        # 채택한 재료 = 커뮤니티가 옮긴 게시글 본문
             else:
                 try:
                     ro = await c.get(orig)
@@ -236,6 +279,10 @@ class FmkoreaAdapter:
                 except httpx.HTTPError:
                     body, image, images = "", None, []
                 lang = "en"
+                material_level = 2        # 채택한 재료 = 원문 URL 에서 받은 언론사 본문
+            body = strip_publish_datetime(body)
+            journalist = journalist or extract_body_journalist(body)
+            body_level = material_level if body else 0
             if pub is None:
                 post_dt = _post_published(html)
                 pub = (post_dt, "time") if post_dt else None
@@ -244,7 +291,8 @@ class FmkoreaAdapter:
             out.append(RawItem(
                 source_id=self.source_id, source_type="html", url=orig,
                 fetched_at=now,
-                raw_payload={"title": title, "body": body, "lang": lang,
+                raw_payload={"title": title, "body": body, "body_level": body_level,
+                             "lang": lang,
                              "outlet": outlet, "journalist": journalist,
                              "image_url": image, "images": images, **extra}))
         return out
