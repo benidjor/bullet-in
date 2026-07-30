@@ -26,6 +26,11 @@ def _post_url_from_href(href: str, base_url: str) -> str | None:
     m = _SRL_RE.search(href or "") or re.match(r"/(\d{6,})", href or "")
     return f"{base_url.rstrip('/')}/{m.group(1)}" if m else None
 
+def _squash(s: str) -> str:
+    """공백 무시 비교용 — 게시자가 같은 말을 붙여 쓰기도 하고 띄어 쓰기도 한다."""
+    return re.sub(r"\s+", "", s or "").lower()
+
+
 def _round_robin(per_kw: list[list[tuple[str, str]]], limit: int) -> list[tuple[str, str]]:
     """키워드별 결과 리스트를 라운드로빈으로 최대 limit개 뽑는다 (앞 키워드 독식 방지)."""
     out, i = [], 0
@@ -229,6 +234,11 @@ class FmkoreaAdapter:
                     seen.add(post_url)
                     if title in self.exclude_titles:
                         continue            # 이미 적재된 글 — 본문 접촉 없이 건너뛴다
+                    must = kw.get("title_must_contain")
+                    # title_content 검색은 본문만 스친 글도 잡는다 — 제목 필수어로 좁힌다.
+                    # 공백을 무시해 비교한다 (게시자가 '아르테타의' 처럼 붙여 쓴다).
+                    if must and _squash(must) not in _squash(title):
+                        continue
                     results.append((title, post_url))
             per_kw.append(results)
         return _round_robin(per_kw, self.max_posts)

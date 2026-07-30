@@ -736,3 +736,61 @@ def test_fmkorea_fallback_skipped_when_repost_blocked():
     items = asyncio.run(_one_post(blocked, title="[텔레그래프] 아스날 소식").fetch())
     assert items[0].raw_payload["body"] == ""
     assert items[0].raw_payload["body_level"] == 0
+
+
+# --- 키워드별 제목 필수어 (아르테타 인터뷰 유입 · 2026-07-30 사용자 지시) ---
+
+def _search_adapter(results_html: str, keywords: list[dict]):
+    respx.get(url__startswith="https://fm.test/s").mock(
+        return_value=httpx.Response(200, text=results_html))
+    return FmkoreaAdapter(source_id="fmkorea",
+                          search_url="https://fm.test/s?t={target}&kw={keyword}",
+                          search_keywords=keywords,
+                          base_url="https://www.fmkorea.com")
+
+
+_TWO_HITS = (
+    '<a class="hx" href="/index.php?document_srl=11">[디 애슬레틱] 아르테타 이적 시장 인터뷰</a>'
+    '<a class="hx" href="/index.php?document_srl=12">[디 애슬레틱] 첼시 이적 시장 정리</a>')
+
+
+@respx.mock
+def test_fmkorea_title_must_contain_filters_candidates():
+    """title_content 검색은 본문만 걸려도 잡히므로 제목 필수어로 좁힌다.
+    아르테타 인터뷰는 제목에 '아르테타' 가 있고, 무관한 글은 없다."""
+    a = _search_adapter(_TWO_HITS, [{"keyword": "아르테타 이적 시장",
+                                     "target": "title_content",
+                                     "title_must_contain": "아르테타"}])
+    found = asyncio.run(a.discover())
+    assert [t for t, _ in found] == ["[디 애슬레틱] 아르테타 이적 시장 인터뷰"]
+
+
+@respx.mock
+def test_fmkorea_title_must_contain_ignores_spacing():
+    # fmkorea 게시자는 띄어쓰기를 붙여 쓴다 ('중인아스날') — 공백 무시 비교가 필요하다
+    html = ('<a class="hx" href="/index.php?document_srl=21">'
+            '[텔레그래프]아르테타의 이적 시장 발언</a>')
+    a = _search_adapter(html, [{"keyword": "아르 테타", "target": "title_content",
+                                "title_must_contain": "아르 테타"}])
+    assert len(asyncio.run(a.discover())) == 1
+
+
+@respx.mock
+def test_fmkorea_keyword_without_title_must_contain_is_unfiltered():
+    # 기존 키워드는 계약이 바뀌지 않는다
+    a = _search_adapter(_TWO_HITS, [{"keyword": "아스날", "target": "title"}])
+    assert len(asyncio.run(a.discover())) == 2
+
+
+def test_sources_yaml_has_arteta_keyword_with_title_guard():
+    """아르테타 인터뷰가 '아스날' 키워드에 안 걸려 유실됐다 (2026-07-30 실측).
+    제목 필수어를 함께 두지 않으면 본문만 스친 무관한 글이 대량 유입된다."""
+    import yaml as _yaml
+    from pathlib import Path as _Path
+    data = _yaml.safe_load((_Path(__file__).parent.parent / "config" / "sources.yaml")
+                           .read_text(encoding="utf-8"))
+    fm = next(s for s in data["sources"] if s["source_id"] == "fmkorea")
+    kws = fm["config"]["search_keywords"]
+    arteta = next(k for k in kws if "아르테타" in k["keyword"])
+    assert arteta["target"] == "title_content"
+    assert arteta["title_must_contain"] == "아르테타"
