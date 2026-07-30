@@ -827,3 +827,17 @@ def test_partition_by_body_level_treats_null_level_as_translate():
     from bullet_in.enrich import partition_by_body_level
     rewrite, translate = partition_by_body_level([{"content_hash": "h1", "body_level": None}])
     assert rewrite == [] and len(translate) == 1
+
+
+def test_paraphrase_prompt_carries_completeness_and_no_injection_rules():
+    """다섯 판본 비교에서 이 조합이 주입 4개 → 1개 · 없던 소제목 33개 → 9개로
+    줄인 판본이다 (스펙 §6.3). 조항이 빠지면 측정 근거가 무효가 된다."""
+    from bullet_in.enrich import PARAPHRASE_PROMPT
+    for clause in ["모든 문단을 순서대로 빠짐없이",
+                   "모든 숫자",
+                   "원문에 없는 소제목을 만들지 않는다",
+                   "역할 명칭",
+                   "시간 · 정도 표현",
+                   "원문 표기를 그대로",
+                   "추측으로"]:
+        assert clause in PARAPHRASE_PROMPT, clause
