@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import logging
+import os
 import re
 import shutil
 import yaml
@@ -864,16 +865,25 @@ def render_all(articles: list[dict], sources: dict, now: datetime,
         days=days, facets=facets, active="all", root="")
 
 
-# ── 사건 묶음 (spec2 §4-7) — 선수 사전 (name_map 정규형) 으로 묶는다 ──────
+# ── 사건 묶음 (spec2 §4-7) — 선수 사전 (players 확정 표기) 으로 묶는다 ──────
 # 전환어 (spec2 §4.3) — 뒤에 나온 선수가 주인공. 3.1 모델 실측 표현 '불발' 을 포함한다.
 _TRANSITION_WORDS = ["놓친", "대신", "대체", "무산", "불발", "결렬", "실패", "포기", "떠난"]
 
 
-def load_player_names(path: str = "config/name_map.yaml") -> list[str]:
-    """서빙 사건 사전 — name_map 의 정규형 인명 키 (spec2 §4.2.2 · 변형은 glossary 담당).
-    긴 이름을 앞에 둬 부분 매치를 막는다."""
-    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
-    return sorted((data.get("names") or {}).keys(), key=len, reverse=True)
+def load_player_names(engine=None) -> list[str]:
+    """서빙 사건 사전 — players 확정 ko_name (DB 단일 원천 · 스펙 §5 · §8).
+    긴 이름을 앞에 둬 부분 매치를 막는다 (기존 규칙 유지).
+    engine 미지정 시 MARIADB_URL 로 생성한다 — write_site 호출부 (run.py · 런북) 는
+    이미 그 env 로 돌므로 시그니처 연쇄 변경 없이 전환된다."""
+    from sqlalchemy import create_engine
+    from bullet_in.storage.players import PlayerStore
+    engine = engine or create_engine(os.environ["MARIADB_URL"])
+    names = PlayerStore(engine).serving_names()
+    if not names:
+        import logging
+        logging.getLogger(__name__).warning(
+            "players 서빙 사전이 비어 있음 — migrate_roster 미실행이면 사건 묶음이 꺼진 채 렌더된다")
+    return sorted(names, key=len, reverse=True)
 
 
 def load_clubs(path: str = "config/club_map.yaml") -> dict:

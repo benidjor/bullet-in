@@ -68,12 +68,15 @@ awk -F'\t' '{c[NF]++} END {for (k in c) print "필드수", k, "→", c[k] "행"}
 
 파이프라인을 돌리지 않고 검출기 함수만 import 한다.
 **같은 함수를 써야 한다** — 규칙을 스크립트에 옮겨 적으면 실물과 어긋난다.
+스니펫은 이제 `MARIADB_URL` 을 읽으므로 실행 전 `set -a; source .env; set +a` 로 셸에 로드해 둔다.
 
 ```bash
 uv run python - <<'PY'
-import re, yaml
+import os, re
+from sqlalchemy import create_engine
 from bullet_in.enrich import _has_name_context     # 배포된 규칙 그대로
-sur = sorted(set(yaml.safe_load(open('config/name_map.yaml'))['names'].values()))
+from bullet_in.storage.players import PlayerStore  # players 테이블 (PlayerStore.gate_name_map())
+sur = sorted(set(PlayerStore(create_engine(os.environ["MARIADB_URL"])).gate_name_map().values()))
 rows = [l.rstrip('\n').split('\t') for l in open('full.tsv')]
 tot, sup = 0, []
 for s in sur:
@@ -91,6 +94,7 @@ PY
 ```
 
 `uv run` 을 쓴다 — 시스템 `python3` 는 3.9 라 이 코드가 임포트 단계에서 죽는다.
+`len(sur)` 가 VM 배포 사전 수 (39명 기준) 와 다르면 측정 모집단이 조용히 좁아진 것이다 — 대조 후 진행한다.
 
 후보 규칙이 여럿이면 같은 모집단에 차례로 적용해 표로 만든다.
 2026-07-30 측정 결과가 이 형태였다.

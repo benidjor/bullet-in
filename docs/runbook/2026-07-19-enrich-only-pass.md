@@ -55,6 +55,7 @@ from bullet_in.enrich import (classify_stage_rows, enrich_rows,
                               title_only_rows)
 from bullet_in.run import GEMINI_MODEL
 from bullet_in.storage.mariadb import MartStore
+from bullet_in.storage.players import PlayerStore
 
 def _cfg(path, key):
     return (yaml.safe_load(Path(path).read_text()) or {}).get(key, {})
@@ -62,7 +63,7 @@ def _cfg(path, key):
 mart = MartStore(create_engine(os.environ["MARIADB_URL"]))
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 glossary = _cfg("config/glossary.yaml", "replacements")
-name_map = _cfg("config/name_map.yaml", "names")
+name_map = PlayerStore(mart.engine).gate_name_map()
 club_map = _cfg("config/club_map.yaml", "clubs")
 for attempt in range(3):
     missing = mart.rows_missing_translation()
