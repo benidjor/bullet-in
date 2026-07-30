@@ -313,9 +313,10 @@ BODY_AS_TITLE_SOURCES = {"x_afcstuff", "x_ornstein"}
 def finalize_translation(v: dict, row: dict, glossary: dict[str, str],
                          name_map: dict[str, str],
                          club_map: dict[str, list[str]]
-                         ) -> tuple[str | None, str, str, str | None]:
+                         ) -> tuple[str | None, str, str, str | None, list[str]]:
     """번역 결과에 표기 사전 · 환각 게이트 4축 · 문단 보정을 적용해
-    set_translation 인자 4필드를 만든다. row 는 rows_missing_translation 의 원본 행.
+    set_translation 인자 4필드 + 재시도 잔존 의심 사유 목록 (flagged) 을 만든다.
+    row 는 rows_missing_translation 의 원본 행.
     회차 경로 (run.py) 와 enrich 전용 백필 패스가 같은 규칙을 쓰도록 여기 한 벌만 둔다
     — 런북 스니펫에 옮겨 적으면 게이트 · 문단 보정이 빠진 채 백필이 돈다."""
     v = apply_glossary(v, glossary)
@@ -339,12 +340,14 @@ def finalize_translation(v: dict, row: dict, glossary: dict[str, str],
     # (합치면 body 만 오염된 케이스에 불필요한 원문 제목 폴백이 걸린다)
     club_suspects = detect_club_injection(v, src_text, club_map)
     title_ko = v["title_ko"]
+    flagged: list[str] = []
     retry = bool(row.get("summary_ko"))
     if suspects and retry:
-        # B5 방안 1: 영어 원문 고정 대신 NULL 재큐 (다음 사이클 재선별 · title_pending 배지).
-        # 영어 제목이 배지 없이 조용히 노출되던 종착 상태를 제거한다.
-        log.warning("재번역 재시도 잔존 → 재큐 content_hash=%s 의심=%s", h, suspects)
-        title_ko = None
+        # 종착 상태 (설계 5.2): 재시도 1회로 끝내고 번역 제목을 채택 + 경고.
+        # NULL 재큐는 게이트가 충족 불가능한 요구를 하면 회차마다 무한 반복됐다
+        # (white flag 관용구를 벤 화이트로 오인 · 2026-07-30 실측 하루 8회).
+        flagged = suspects
+        log.warning("제목 의심 잔존 — 수동 확인 content_hash=%s 의심=%s", h, suspects)
     elif (suspects or omissions or club_suspects) and not retry:
         log.warning(
             "재번역 큐(1차) content_hash=%s 환각의심=%s 단신누락=%s 원문에 없는 구단명=%s",
@@ -358,26 +361,29 @@ def finalize_translation(v: dict, row: dict, glossary: dict[str, str],
     if club_suspects and retry:
         log.warning(
             "원문에 없는 구단명 잔존 — 수동 확인 content_hash=%s 구단=%s", h, club_suspects)
-    return title_ko, v["summary_ko"], v["summary3_ko"], paragraphize(v["body_ko"])
+    return (title_ko, v["summary_ko"], v["summary3_ko"],
+            paragraphize(v["body_ko"]), flagged)
 
 def retranslation_summary(finals: dict[str, tuple], by_hash: dict[str, dict]
                           ) -> tuple[int, int, int]:
-    """finalize_translation 결과로 재번역 큐 추이를 집계 → (신규, 잔존, 해소).
+    """finalize_translation 결과로 재번역 큐 추이를 집계 → (신규, 채택, 해소).
 
-    신규 = 신규 행 (summary_ko 없음) 이 NULL 로 큐 진입, 잔존 = 재시도 행이 여전히 NULL,
-    해소 = 재시도 행이 제목 확보. 정상 신규 성공 (NULL 아님 · 재시도 아님) 은 집계 밖.
+    신규 = 신규 행 (summary_ko 없음) 이 NULL 로 큐 진입,
+    채택 = 재시도 행이 의심을 남긴 채 제목을 확정 (운영자 수동 확인 대상),
+    해소 = 재시도 행이 의심 없이 제목 확보.
+    정상 신규 성공 (NULL 아님 · 재시도 아님) 은 집계 밖.
     관측 ② — 호출측 (run.py) 이 사이클 요약 한 줄로 로깅한다."""
-    new_q = stuck = resolved = 0
+    new_q = adopted = resolved = 0
     for h, final in finals.items():
-        title_ko = final[0]
+        title_ko, flagged = final[0], final[4]
         retry = bool(by_hash.get(h, {}).get("summary_ko"))
         if title_ko is None and not retry:
             new_q += 1
-        elif title_ko is None and retry:
-            stuck += 1
-        elif title_ko is not None and retry:
+        elif retry and flagged:
+            adopted += 1
+        elif retry and title_ko is not None:
             resolved += 1
-    return new_q, stuck, resolved
+    return new_q, adopted, resolved
 
 def _extract_full(text: str) -> dict | None:
     m = re.search(r"\{.*\}", text, re.DOTALL)

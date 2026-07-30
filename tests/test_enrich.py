@@ -722,30 +722,39 @@ def test_finalize_translation_queues_retranslation_on_first_detection():
     from bullet_in.enrich import finalize_translation
     v = {"title_ko": "펠레그리니 영입", "summary_ko": "요약", "summary3_ko": "①\n②\n③",
          "body_ko": "본문이다."}
-    title_ko, _, _, _ = finalize_translation(
+    title_ko, _, _, _, _ = finalize_translation(
         v, _fin_row(), {}, {"펠레그리니": "Pellegrini"}, {})
     assert title_ko is None
 
-def test_finalize_translation_requeues_on_retry_instead_of_english_fallback():
-    # B5 방안 1: 재검출 (summary_ko 기저장 = 재시도 행) → 영어 원문 고정이 아니라
-    # NULL 재큐 (다음 사이클 재선별 · title_pending 배지). 영어 침묵 노출 방지.
+def test_finalize_translation_adopts_title_on_retry_instead_of_requeue():
+    # 종착 상태 (설계 5.2): 재시도 행에 의심이 남아도 번역 제목을 채택하고 경고만 남긴다.
+    # NULL 재큐는 게이트가 충족 불가능한 요구를 하면 회차마다 무한 반복됐다.
     from bullet_in.enrich import finalize_translation
     v = {"title_ko": "펠레그리니 영입", "summary_ko": "요약", "summary3_ko": "①\n②\n③",
          "body_ko": "본문이다."}
-    title_ko, _, _, _ = finalize_translation(
+    title_ko, _, _, _, flagged = finalize_translation(
         v, _fin_row(summary_ko="기존 요약"), {}, {"펠레그리니": "Pellegrini"}, {})
-    assert title_ko is None
+    assert title_ko == "펠레그리니 영입"
+    assert flagged == ["펠레그리니"]
 
-def test_retranslation_summary_counts_new_stuck_resolved():
-    # B5 관측 ②: finalize 결과(hash→title_ko)와 원본 행으로 큐 추이를 집계한다.
-    # 신규 = 신규 행(summary_ko 없음)이 NULL, 잔존 = 재시도 행이 여전히 NULL,
-    # 해소 = 재시도 행이 제목 확보, 정상 신규 성공은 미집계.
+def test_finalize_translation_leaves_flagged_empty_on_clean_rows():
+    # 게이트에 안 걸린 행은 flagged 가 비어 있어야 한다 (집계가 채택으로 세지 않도록).
+    from bullet_in.enrich import finalize_translation
+    v = {"title_ko": "아스날 협상", "summary_ko": "요약", "summary3_ko": "①\n②\n③",
+         "body_ko": "본문이다."}
+    _, _, _, _, flagged = finalize_translation(
+        v, _fin_row(summary_ko="기존 요약"), {}, {}, {})
+    assert flagged == []
+
+def test_retranslation_summary_counts_new_adopted_resolved():
+    # 관측 ②: 가운데 값은 '재시도 행이 의심을 남긴 채 제목을 확정' 한 건수 (수동 확인 대상).
+    # 종착이 채택으로 바뀌어 '재시도 행이 NULL 로 남는' 상태가 구조적으로 사라졌다.
     from bullet_in.enrich import retranslation_summary
-    finals = {"n": (None, "s", None, None),      # 신규 행 → NULL
-              "j": (None, "s", None, None),      # 재시도 행 → 여전히 NULL
-              "r": ("해소된 제목", "s", None, None),  # 재시도 행 → 해소
-              "ok": ("정상 제목", "s", None, None)}   # 신규 성공 (미집계)
-    by_hash = {"n": {"summary_ko": ""}, "j": {"summary_ko": "기존"},
+    finals = {"n": (None, "s", None, None, []),            # 신규 행 → NULL 큐 진입
+              "a": ("채택된 제목", "s", None, None, ["펠레그리니"]),  # 재시도 → 채택
+              "r": ("해소된 제목", "s", None, None, []),     # 재시도 → 해소
+              "ok": ("정상 제목", "s", None, None, [])}      # 신규 성공 (미집계)
+    by_hash = {"n": {"summary_ko": ""}, "a": {"summary_ko": "기존"},
                "r": {"summary_ko": "기존"}, "ok": {"summary_ko": ""}}
     assert retranslation_summary(finals, by_hash) == (1, 1, 1)
 
@@ -755,7 +764,7 @@ def test_finalize_translation_applies_glossary_and_paragraphize():
     body = " ".join(["아스널이 협상을 이어갔다."] * 40)
     v = {"title_ko": "아스널 협상", "summary_ko": "아스널이 협상했다.",
          "summary3_ko": "①\n②\n③", "body_ko": body}
-    title_ko, summary_ko, _, body_ko = finalize_translation(
+    title_ko, summary_ko, _, body_ko, _ = finalize_translation(
         v, _fin_row(), {"아스널": "아스날"}, {}, {})
     assert title_ko == "아스날 협상"
     assert summary_ko == "아스날이 협상했다."
@@ -812,7 +821,7 @@ def test_finalize_translation_keeps_tweet_title_despite_name_omission():
     from bullet_in.enrich import finalize_translation
     v = {"title_ko": "아스날, 알렉스 스콧 · 아유브 부아디 영입 논의", "summary_ko": "요약",
          "summary3_ko": "①\n②\n③", "body_ko": "본문이다."}
-    title_ko, _, _, _ = finalize_translation(v, _tweet_row(), {}, _TWEET_NAMES, {})
+    title_ko, _, _, _, _ = finalize_translation(v, _tweet_row(), {}, _TWEET_NAMES, {})
     assert title_ko == "아스날, 알렉스 스콧 · 아유브 부아디 영입 논의"
 
 def test_finalize_translation_keeps_ornstein_tweet_title_despite_name_omission():
@@ -822,7 +831,7 @@ def test_finalize_translation_keeps_ornstein_tweet_title_despite_name_omission()
     v = {"title_ko": "아스날, 알렉스 스콧 · 아유브 부아디 영입 논의", "summary_ko": "요약",
          "summary3_ko": "①\n②\n③", "body_ko": "본문이다."}
     row = _tweet_row(source_id="x_ornstein")
-    title_ko, _, _, _ = finalize_translation(v, row, {}, _TWEET_NAMES, {})
+    title_ko, _, _, _, _ = finalize_translation(v, row, {}, _TWEET_NAMES, {})
     assert title_ko == "아스날, 알렉스 스콧 · 아유브 부아디 영입 논의"
 
 def test_finalize_translation_still_flags_unfounded_loan_on_tweets():
@@ -830,7 +839,7 @@ def test_finalize_translation_still_flags_unfounded_loan_on_tweets():
     from bullet_in.enrich import finalize_translation
     v = {"title_ko": "아스날, 콘사 임대 영입 추진", "summary_ko": "요약",
          "summary3_ko": "①\n②\n③", "body_ko": "본문이다."}
-    title_ko, _, _, _ = finalize_translation(v, _tweet_row(), {}, _TWEET_NAMES, {})
+    title_ko, _, _, _, _ = finalize_translation(v, _tweet_row(), {}, _TWEET_NAMES, {})
     assert title_ko is None      # 1차 검출 → 재번역 큐
 
 def test_finalize_translation_keeps_name_omission_axis_for_normal_sources():
@@ -840,7 +849,7 @@ def test_finalize_translation_keeps_name_omission_axis_for_normal_sources():
          "summary3_ko": "①\n②\n③", "body_ko": "본문이다."}
     row = _tweet_row(source_id="football_london",
                      title_original="Arsenal step up interest in Bruno Guimaraes")
-    title_ko, _, _, _ = finalize_translation(v, row, {}, _TWEET_NAMES, {})
+    title_ko, _, _, _, _ = finalize_translation(v, row, {}, _TWEET_NAMES, {})
     assert title_ko is None
 
 
@@ -854,7 +863,7 @@ def test_finalize_translation_guard_uses_body_as_name_context():
            "title_original": "White nears new Arsenal deal",
            "body_source": "Ben White is closing in on fresh terms.",
            "body_excerpt": ""}
-    title_ko, _, _, _ = finalize_translation(v, row, {}, {"화이트": "White"}, {})
+    title_ko, _, _, _, _ = finalize_translation(v, row, {}, {"화이트": "White"}, {})
     assert title_ko is None      # 1차 검출 → 재번역 큐
 
 
@@ -1043,4 +1052,4 @@ def test_finalize_translation_survives_title_only_result():
     row = {"content_hash": "h1", "title_original": "Arsenal news",
            "body_source": None, "body_excerpt": None,
            "source_id": "fmkorea", "summary_ko": None}
-    assert finalize_translation(v, row, {}, {}, {}) == ("아스날 소식", None, None, None)
+    assert finalize_translation(v, row, {}, {}, {}) == ("아스날 소식", None, None, None, [])

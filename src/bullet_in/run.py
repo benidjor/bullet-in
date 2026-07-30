@@ -101,13 +101,13 @@ async def main(concurrency: int):
     by_hash = {r["content_hash"]: r for r in missing}
     finals = {h: finalize_translation(v, by_hash.get(h, {}), glossary, name_map, club_map)
               for h, v in results.items()}
-    for h, final in finals.items():
-        mart.set_translation(h, *final)
+    for h, (title_ko, s_ko, s3_ko, body_ko, _) in finals.items():
+        mart.set_translation(h, title_ko, s_ko, s3_ko, body_ko)
     for h, rep in gate_reports.items():
         mart.set_rewrite_retention(h, rep["retention"])
-    if finals:  # 관측 ②: 재번역 큐 추이 한 줄 (신규 진입 · 잔존 · 해소)
+    if finals:  # 관측 ②: 재번역 큐 추이 한 줄 (신규 진입 · 채택 · 해소)
         logging.getLogger(__name__).warning(
-            "재번역 큐 요약: 신규 %d · 잔존 %d · 해소 %d",
+            "재번역 큐 요약: 신규 %d · 채택 %d · 해소 %d",
             *retranslation_summary(finals, by_hash))
 
     # 분류 패스: 공홈은 소스 규칙으로 직접 태깅 (official 은 규칙 경로 전용), 나머지만 LLM 분류
