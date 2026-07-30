@@ -17,7 +17,11 @@
     <div><dt>발행 날짜</dt><dd>{{ a._datetime or a._date or a._when }}</dd></div>
   </dl>
 
+  {% if a._meta_only %}
+  <p class="tnote">원문 본문을 확보하지 못해 제목과 기본 정보만 제공합니다. 내용은 원문에서 확인해 주세요.</p>
+  {% else %}
   <p class="tnote">이 글은 원문을 자동 번역한 것입니다. 표현이 어색하거나 뜻이 모호하면 원문을 확인해 주세요.</p>
+  {% endif %}
 
   {% if a.image_url %}<figure class="hero"><img src="{{ a.image_url }}" alt="" loading="eager" referrerpolicy="no-referrer" onerror="this.closest('.hero').style.display='none'"></figure>{% endif %}
 

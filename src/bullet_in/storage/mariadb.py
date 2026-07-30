@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from bullet_in.models import Article
 from bullet_in.quality import SourceFreshness
+from bullet_in.fidelity import RETENTION_THRESHOLD
 
 _SCHEMA = Path(__file__).with_name("schema.sql")
 
@@ -84,9 +85,15 @@ class MartStore:
         with self.engine.connect() as c:
             rows = c.execute(text(
                 "SELECT content_hash,source_id,title_original,body_excerpt,"
-                "body_source,outlet,summary_ko "
+                "body_source,body_level,outlet,summary_ko "
                 "FROM articles WHERE title_ko IS NULL")).mappings().all()
         return [dict(r) for r in rows]
+    def set_rewrite_retention(self, content_hash: str, retention: float) -> None:
+        """재작성 잔존율 기록 — ops 확인 목록의 근거 (스펙 §7)."""
+        with self.engine.begin() as c:
+            c.execute(text("UPDATE articles SET rewrite_retention=:r "
+                           "WHERE content_hash=:h"),
+                      {"r": float(retention), "h": content_hash})
     def set_translation(self, content_hash: str, title_ko: str, summary_ko: str,
                         summary3_ko: str | None = None, body_ko: str | None = None):
         with self.engine.begin() as c:
@@ -178,10 +185,18 @@ class MartStore:
                 "SELECT source_id, SUM(title_ko IS NULL), "
                 "SUM(transfer_stage IS NULL) FROM articles "
                 "GROUP BY source_id")).all()
+            high_rows = c.execute(text(
+                "SELECT content_hash, outlet, rewrite_retention FROM articles "
+                "WHERE rewrite_retention > :thr ORDER BY rewrite_retention DESC"),
+                {"thr": RETENTION_THRESHOLD}).mappings().all()
         for r in runs:
             r["source_counts"] = (json.loads(r["source_counts"])
                                   if r["source_counts"] else {})
         return {"runs": runs, "freshness": freshness,
                 "tier_counts": {t: int(n) for t, n in tier_rows},
                 "pending": {sid: {"translate": int(tr), "stage": int(st)}
-                            for sid, tr, st in pending_rows}}
+                            for sid, tr, st in pending_rows},
+                "high_retention": [{"content_hash": r["content_hash"],
+                                    "outlet": r["outlet"],
+                                    "retention": float(r["rewrite_retention"])}
+                                   for r in high_rows]}

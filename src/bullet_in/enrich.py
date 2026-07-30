@@ -3,9 +3,8 @@ import json, logging, re
 
 log = logging.getLogger(__name__)
 
-PAYWALLED_OUTLETS = {"The Athletic"}
-
 from bullet_in import transfer_stage as _stage
+from bullet_in.fidelity import RETENTION_THRESHOLD, gate_verdict, select_best
 
 def _is_rate_limit(exc: Exception) -> bool:
     if getattr(exc, "code", None) == 429:
@@ -73,6 +72,18 @@ PARAPHRASE_PROMPT = (
     "기사 내용과 무관한 문구는 body_ko에서 제외.\n"
     "- body_ko 경량 마크다운: 원문의 소제목은 '### ', 원문이 강조한 구절만 '**굵게**', "
     "인용 블록은 '> '. 원문에 없는 장식은 새로 만들지 않는다.\n"
+    "- body_ko 는 요약이 아니라 전문 재작성이다: 원문의 모든 문단을 순서대로 "
+    "빠짐없이 옮기고, 수치 · 인용 · 세부 사실을 임의로 줄이거나 합치지 않는다.\n"
+    "- 원문에 나오는 모든 숫자 (금액 · 나이 · 연도 · 경기 수 · 기록) 를 하나도 "
+    "빠뜨리지 않는다.\n"
+    "- 원문에 없는 소제목을 만들지 않는다. 원문에 소제목이 없으면 산출물에도 "
+    "소제목이 없다.\n"
+    "- 원문에 없는 수식어 · 부사 · 역할 명칭 (미드필더 · 공격수 · 감독 등) 을 "
+    "붙이지 않는다.\n"
+    "- 원문에 없는 시간 · 정도 표현 (즉시 · 이미 · 크게 · 확고히 · 전격 등) 을 "
+    "넣지 않는다.\n"
+    "- 숫자는 원문 표기를 그대로 쓴다 (£50m 을 5,000만 파운드로 바꾸지 않는다).\n"
+    "- 원문이 단정한 것을 추측으로, 추측한 것을 단정으로 바꾸지 않는다.\n"
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],"body_ko":"..."}}'
     "\n\nTitle: {title}\nBody: {body}")
 
@@ -345,11 +356,18 @@ def _extract_full(text: str) -> dict | None:
     except (json.JSONDecodeError, KeyError, TypeError):
         return None
 
-def partition_by_paywall(rows: list[dict]) -> tuple[list[dict], list[dict]]:
-    para, trans = [], []
+POST_BODY_LEVEL = 1     # 게시글 본문 — 커뮤니티가 옮긴 것 (수집 라인 트랙 계약)
+
+def partition_by_body_level(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(재작성 행, 번역 행) — 본문 출처 등급으로 가른다.
+
+    등급 1 은 이미 한국어라 번역이 아니라 재작성 대상이다.
+    매체명 문자열로 가르면 표기 변종마다 갈린다 (배포판에 '더 선' · '더선' · '더썬'
+    이 따로 존재한다 — 스펙 §4.2). 등급이 없는 레거시 행은 번역 쪽으로 보낸다."""
+    rewrite, trans = [], []
     for r in rows:
-        (para if r.get("outlet") in PAYWALLED_OUTLETS else trans).append(r)
-    return para, trans
+        (rewrite if r.get("body_level") == POST_BODY_LEVEL else trans).append(r)
+    return rewrite, trans
 
 def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate"
                 ) -> dict[str, dict]:
@@ -376,6 +394,131 @@ def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate"
             continue
         result[h] = parsed
     return result
+
+MISSING_RETRY = (
+    "\n\n[누락] 직전 시도에서 다음 숫자가 누락됐다 — {tokens}.\n"
+    "이 수치들을 원문 맥락 그대로 반드시 포함한다.")
+DUPLICATE_RETRY = (
+    "\n\n[복제] 직전 시도는 원문 표현을 지나치게 그대로 옮겼다.\n"
+    "사실 · 수치 · 인용은 그대로 두되 문장 구성과 표현을 크게 바꿔 다시 쓴다.\n"
+    "단 원문에 없는 내용 · 수식어 · 소제목을 새로 넣지 않는다.")
+
+def rewrite_rows_guarded(rows: list[dict], client, model: str,
+                         threshold: float = RETENTION_THRESHOLD,
+                         max_attempts: int = 3
+                         ) -> tuple[dict[str, dict], dict[str, dict]]:
+    """게시글 본문 재작성 — 게이트에 걸리면 사유를 붙여 재생성하고 최선을 채택한다.
+
+    게이트는 재생성 트리거이지 폐기 조건이 아니다 (스펙 §4.4).
+    반환: (결과, 리포트) — 리포트는 잔존율 기록 · ops 노출용."""
+    results: dict[str, dict] = {}
+    reports: dict[str, dict] = {}
+    for r in rows:
+        h = r["content_hash"]
+        source = r.get("body_source") or r.get("body_excerpt") or ""
+        base = PARAPHRASE_PROMPT.format(title=r["title_original"], body=source)
+        attempts: list[dict] = []
+        rate_limited = False
+        for i in range(max_attempts):
+            note = ""
+            if attempts:
+                last = attempts[-1]
+                if last["missing"]:
+                    note += MISSING_RETRY.format(tokens=", ".join(last["missing"]))
+                if last["retention"] > threshold:
+                    note += DUPLICATE_RETRY
+            try:
+                msg = client.models.generate_content(
+                    model=model, contents=base + note,
+                    config={"max_output_tokens": 8192,
+                            "response_mime_type": "application/json"})
+            except Exception as e:
+                if _is_rate_limit(e):
+                    log.warning("Gemini rate limit(429), 재작성 중단 — 남은 행 다음 사이클")
+                    rate_limited = True
+                    break
+                log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
+                break
+            parsed = _extract_full(msg.text)
+            if parsed is None:
+                log.warning("Gemini 응답 파싱 실패, 스킵 content_hash=%s", h)
+                break
+            v = gate_verdict(source, parsed["body_ko"] or "", threshold)
+            attempts.append({"parsed": parsed, "missing": v["missing"],
+                             "retention": v["retention"]})
+            if v["ok"]:
+                break
+        if rate_limited:
+            break
+        if not attempts:
+            continue
+        best = select_best(attempts)
+        results[h] = best["parsed"]
+        reports[h] = {"retention": best["retention"], "missing": best["missing"],
+                      "attempts": len(attempts)}
+        if best["retention"] > threshold or best["missing"]:
+            log.warning("재작성 게이트 잔존 content_hash=%s 잔존율=%.3f 누락=%s 시도=%d",
+                        h, best["retention"], best["missing"], len(attempts))
+    return results, reports
+
+TITLE_ONLY_PROMPT = (
+    "다음 축구 뉴스 제목을 한국어로 옮긴다. 규칙:\n"
+    "- 한국 스포츠 기사 제목체로 간결하게 (명사형 위주).\n"
+    "- 제목에 없는 내용을 덧붙이지 않는다.\n"
+    "- 원문 제목의 선수 · 감독 이름을 최소 하나는 그대로 남긴다.\n"
+    "- 고유명사는 통용 한글 표기(Arsenal=아스날).\n"
+    'ONLY JSON: {{"title_ko":"..."}}'
+    "\n\nTitle: {title}")
+
+
+def partition_generatable(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(생성 대상, 제목만 대상) — 재료가 없으면 본문 · 요약을 만들지 않는다.
+
+    원인은 재료 없는 행에 완역을 지시한 것이다 — 번역할 원문이 없으니 모델이
+    빈칸을 채워 넣었다 (스펙 §1). 트윗 소스는 title_original 에 전문이 있어
+    재료가 갖춰져 있으므로 빠지지 않는다."""
+    gen, title_only = [], []
+    for r in rows:
+        has_material = bool((r.get("body_source") or "").strip()
+                            or (r.get("body_excerpt") or "").strip())
+        if has_material or r.get("source_id") in BODY_AS_TITLE_SOURCES:
+            gen.append(r)
+        else:
+            title_only.append(r)
+    return gen, title_only
+
+
+def title_only_rows(rows: list[dict], client, model: str) -> dict[str, dict]:
+    """제목만 생성 — 본문 · 요약 필드는 None 으로 둔다.
+    행을 아예 건너뛰면 title_ko 가 NULL 로 남아 매 회차 재선별되고 '번역 대기'
+    배지가 영구히 붙는다."""
+    out: dict[str, dict] = {}
+    for r in rows:
+        h = r["content_hash"]
+        try:
+            msg = client.models.generate_content(
+                model=model,
+                contents=TITLE_ONLY_PROMPT.format(title=r["title_original"]),
+                config={"max_output_tokens": 512,
+                        "response_mime_type": "application/json"})
+        except Exception as e:
+            if _is_rate_limit(e):
+                log.warning("Gemini rate limit(429), 제목 생성 중단 — 남은 행 다음 사이클")
+                break
+            log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
+            continue
+        m = re.search(r"\{.*\}", msg.text, re.DOTALL)
+        try:
+            title_ko = json.loads(m.group(0))["title_ko"] if m else None
+        except (json.JSONDecodeError, KeyError, TypeError):
+            title_ko = None
+        if not title_ko:
+            log.warning("제목 생성 파싱 실패, 스킵 content_hash=%s", h)
+            continue
+        out[h] = {"title_ko": title_ko, "summary_ko": None,
+                  "summary3_ko": None, "body_ko": None}
+    return out
+
 
 def partition_translation_rows(rows: list[dict], sources: dict[str, dict]
                                ) -> tuple[list[dict], list[dict]]:

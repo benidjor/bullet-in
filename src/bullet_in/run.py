@@ -79,12 +79,19 @@ async def main(concurrency: int):
     mart.upsert(arts)
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    from bullet_in.enrich import partition_by_paywall
+    from bullet_in.enrich import (partition_by_body_level, partition_generatable,
+                                  rewrite_rows_guarded, title_only_rows)
     missing = mart.rows_missing_translation()
-    paraphrase_rows, translate_rows = partition_by_paywall(missing)
+    generatable, title_only = partition_generatable(missing)
+    if title_only:
+        logging.getLogger(__name__).warning(
+            "재료 없음 — 제목만 생성 %d건 (본문 · 요약 미생성)", len(title_only))
+    rewrite_rows, translate_rows = partition_by_body_level(generatable)
     results: dict[str, dict] = {}
     results.update(enrich_rows(translate_rows, client, GEMINI_MODEL, mode="translate"))
-    results.update(enrich_rows(paraphrase_rows, client, GEMINI_MODEL, mode="paraphrase"))
+    rewritten, gate_reports = rewrite_rows_guarded(rewrite_rows, client, GEMINI_MODEL)
+    results.update(rewritten)
+    results.update(title_only_rows(title_only, client, GEMINI_MODEL))
     glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
                 or {}).get("replacements", {})
     name_map = (yaml.safe_load(Path("config/name_map.yaml").read_text())
@@ -96,6 +103,8 @@ async def main(concurrency: int):
               for h, v in results.items()}
     for h, final in finals.items():
         mart.set_translation(h, *final)
+    for h, rep in gate_reports.items():
+        mart.set_rewrite_retention(h, rep["retention"])
     if finals:  # 관측 ②: 재번역 큐 추이 한 줄 (신규 진입 · 잔존 · 해소)
         logging.getLogger(__name__).warning(
             "재번역 큐 요약: 신규 %d · 잔존 %d · 해소 %d",

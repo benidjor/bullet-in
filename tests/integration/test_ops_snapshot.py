@@ -78,7 +78,8 @@ def test_ops_snapshot_tier_counts_and_pending(engine):
 
 def test_ops_snapshot_cold_start_returns_empty_shapes(engine):
     snap = MartStore(engine).ops_snapshot()
-    assert snap == {"runs": [], "freshness": [], "tier_counts": {}, "pending": {}}
+    assert snap == {"runs": [], "freshness": [], "tier_counts": {}, "pending": {},
+                    "high_retention": []}
 
 
 def test_ops_snapshot_includes_fetch_duration_with_nulls(engine):

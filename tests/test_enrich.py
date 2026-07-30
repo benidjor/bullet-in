@@ -138,7 +138,6 @@ def test_summarize_ko_rows_skips_bad_row_without_aborting_batch():
     assert "bad" not in out and out["ok"] == "요약"
 
 import json as _json
-from bullet_in.enrich import partition_by_paywall
 
 class FullModels:
     def __init__(self, payload): self._p = payload; self.n = 0
@@ -171,13 +170,6 @@ def test_enrich_paraphrase_mode_uses_paraphrase_prompt():
     rows = [{"content_hash": "h", "title_original": "[디 애슬레틱] 제목", "body_source": "한국어 본문"}]
     out = enrich_rows(rows, client, "m", mode="paraphrase")
     assert out["h"]["body_ko"] == "B"  # 정상 처리됨
-
-def test_partition_by_paywall_splits_by_outlet():
-    rows = [{"content_hash": "a", "outlet": "The Athletic"},
-            {"content_hash": "b", "outlet": "BBC"}]
-    para, trans = partition_by_paywall(rows)
-    assert [r["content_hash"] for r in para] == ["a"]
-    assert [r["content_hash"] for r in trans] == ["b"]
 
 from bullet_in.enrich import classify_stage_rows
 
@@ -807,3 +799,191 @@ def test_finalize_translation_keeps_name_omission_axis_for_normal_sources():
                      title_original="Arsenal step up interest in Bruno Guimaraes")
     title_ko, _, _, _ = finalize_translation(v, row, {}, _TWEET_NAMES, {})
     assert title_ko is None
+
+
+def test_partition_by_body_level_routes_post_body_to_rewrite():
+    from bullet_in.enrich import partition_by_body_level
+    rows = [
+        {"content_hash": "h1", "body_level": 1, "outlet": "The Telegraph"},
+        {"content_hash": "h2", "body_level": 2, "outlet": "BBC"},
+        {"content_hash": "h3", "body_level": 0, "outlet": None},
+    ]
+    rewrite, translate = partition_by_body_level(rows)
+    assert [r["content_hash"] for r in rewrite] == ["h1"]
+    assert [r["content_hash"] for r in translate] == ["h2", "h3"]
+
+
+def test_partition_by_body_level_ignores_outlet_string():
+    """매체명으로 가르면 표기 변종 (더 선 · 더선 · 더썬) 마다 갈린다 (스펙 §4.2)."""
+    from bullet_in.enrich import partition_by_body_level
+    rows = [{"content_hash": "h1", "body_level": 2, "outlet": "The Athletic"}]
+    rewrite, translate = partition_by_body_level(rows)
+    assert rewrite == []
+    assert len(translate) == 1
+
+
+def test_partition_by_body_level_treats_null_level_as_translate():
+    """백필 전 레거시 행 (NULL) 은 재작성 모드로 보내지 않는다 — 한국어 여부를 모른다."""
+    from bullet_in.enrich import partition_by_body_level
+    rewrite, translate = partition_by_body_level([{"content_hash": "h1", "body_level": None}])
+    assert rewrite == [] and len(translate) == 1
+
+
+def test_paraphrase_prompt_carries_completeness_and_no_injection_rules():
+    """다섯 판본 비교에서 이 조합이 주입 4개 → 1개 · 없던 소제목 33개 → 9개로
+    줄인 판본이다 (스펙 §6.3). 조항이 빠지면 측정 근거가 무효가 된다."""
+    from bullet_in.enrich import PARAPHRASE_PROMPT
+    for clause in ["모든 문단을 순서대로 빠짐없이",
+                   "모든 숫자",
+                   "원문에 없는 소제목을 만들지 않는다",
+                   "역할 명칭",
+                   "시간 · 정도 표현",
+                   "원문 표기를 그대로",
+                   "추측으로"]:
+        assert clause in PARAPHRASE_PROMPT, clause
+
+
+class _FakeGemini:
+    """정해진 응답을 순서대로 돌려주는 가짜 클라이언트 — 호출 프롬프트를 기록한다."""
+    def __init__(self, bodies):
+        self._bodies = list(bodies)
+        self.prompts = []
+        self.models = self
+
+    def generate_content(self, model, contents, config):
+        self.prompts.append(contents)
+        body = self._bodies.pop(0)
+        payload = {"title_ko": "제목", "summary_ko": "요약",
+                   "summary3_ko": ["1", "2", "3"], "body_ko": body}
+        return type("R", (), {"text": _json.dumps(payload, ensure_ascii=False)})()
+
+
+_SRC = "아스날이 £50m 을 제안했다. 계약 기간은 2031년까지로 알려졌다."
+
+
+def _row(h="h1"):
+    return {"content_hash": h, "title_original": "제목", "body_source": _SRC,
+            "body_level": 1}
+
+
+def test_rewrite_rows_guarded_adopts_first_attempt_when_gate_passes():
+    from bullet_in.enrich import rewrite_rows_guarded
+    clean = "아스날은 £50m 규모 제안을 건넸으며, 계약은 2031년까지로 전해진다."
+    client = _FakeGemini([clean])
+    results, reports = rewrite_rows_guarded([_row()], client, "m", threshold=0.9)
+    assert results["h1"]["body_ko"] == clean
+    assert reports["h1"]["attempts"] == 1
+    assert len(client.prompts) == 1
+
+
+def test_rewrite_rows_guarded_retries_with_missing_number_reason():
+    from bullet_in.enrich import rewrite_rows_guarded
+    dropped = "아스날이 제안을 건넸다."
+    fixed = "아스날은 £50m 제안을 건넸고 계약은 2031년까지로 전해진다."
+    client = _FakeGemini([dropped, fixed])
+    results, reports = rewrite_rows_guarded([_row()], client, "m", threshold=0.9)
+    assert results["h1"]["body_ko"] == fixed
+    assert reports["h1"]["attempts"] == 2
+    assert "누락" in client.prompts[1]
+    assert "2031" in client.prompts[1]
+
+
+def test_rewrite_rows_guarded_retries_with_duplication_reason():
+    from bullet_in.enrich import rewrite_rows_guarded
+    fixed = "아스날은 £50m 제안을 건넸고 계약은 2031년까지로 전해진다."
+    client = _FakeGemini([_SRC, fixed])          # 1회차는 원문 그대로 복제
+    results, reports = rewrite_rows_guarded([_row()], client, "m", threshold=0.75)
+    assert results["h1"]["body_ko"] == fixed
+    assert "복제" in client.prompts[1]
+    assert "새로 넣지 않는다" in client.prompts[1]   # 주입 금지 동반 (스펙 §4.4)
+
+
+def test_rewrite_rows_guarded_stops_at_max_attempts_and_keeps_best():
+    from bullet_in.enrich import rewrite_rows_guarded
+    # 세 시도 모두 게이트에 걸려도 본문을 버리지 않는다 (스펙 §4.4)
+    client = _FakeGemini([_SRC, _SRC, "아스날이 £50m 을 제안했고 2031년까지 계약한다."])
+    results, reports = rewrite_rows_guarded([_row()], client, "m", threshold=0.10)
+    assert len(client.prompts) == 3
+    assert results["h1"]["body_ko"] == "아스날이 £50m 을 제안했고 2031년까지 계약한다."
+    assert reports["h1"]["attempts"] == 3
+    assert reports["h1"]["retention"] < 1.0
+
+
+def test_rewrite_rows_guarded_uses_body_excerpt_when_body_source_empty():
+    from bullet_in.enrich import rewrite_rows_guarded
+    row = {"content_hash": "h2", "title_original": "제목", "body_source": "",
+           "body_excerpt": _SRC, "body_level": 1}
+    client = _FakeGemini(["아스날은 £50m 제안을 건넸고 계약은 2031년까지다."])
+    results, _ = rewrite_rows_guarded([row], client, "m", threshold=0.9)
+    assert "h2" in results
+
+
+def test_rewrite_rows_guarded_breaks_on_rate_limit():
+    from bullet_in.enrich import rewrite_rows_guarded
+
+    class _Boom:
+        models = None
+        def generate_content(self, model, contents, config):
+            raise RuntimeError("429 RESOURCE_EXHAUSTED")
+
+    c = _Boom()
+    c.models = c
+    results, reports = rewrite_rows_guarded([_row(), _row("h9")], c, "m")
+    assert results == {} and reports == {}
+
+
+def test_partition_generatable_drops_row_without_material():
+    from bullet_in.enrich import partition_generatable
+    rows = [{"content_hash": "h1", "source_id": "fmkorea",
+             "body_source": "", "body_excerpt": None},
+            {"content_hash": "h2", "source_id": "fmkorea",
+             "body_source": "본문 있음", "body_excerpt": None}]
+    gen, title_only = partition_generatable(rows)
+    assert [r["content_hash"] for r in gen] == ["h2"]
+    assert [r["content_hash"] for r in title_only] == ["h1"]
+
+
+def test_partition_generatable_keeps_tweet_sources():
+    """트윗은 title_original 에 전문이 있어 재료가 갖춰져 있다 (스펙 §3.1 · §4.5)."""
+    from bullet_in.enrich import partition_generatable
+    rows = [{"content_hash": "t1", "source_id": "x_afcstuff",
+             "body_source": "", "body_excerpt": None},
+            {"content_hash": "t2", "source_id": "x_ornstein",
+             "body_source": None, "body_excerpt": ""}]
+    gen, title_only = partition_generatable(rows)
+    assert len(gen) == 2 and title_only == []
+
+
+def test_partition_generatable_accepts_excerpt_only_row():
+    from bullet_in.enrich import partition_generatable
+    gen, title_only = partition_generatable(
+        [{"content_hash": "h3", "source_id": "goal",
+          "body_source": None, "body_excerpt": "발췌 있음"}])
+    assert len(gen) == 1 and title_only == []
+
+
+def test_title_only_rows_returns_title_and_null_body_fields():
+    from bullet_in.enrich import title_only_rows
+    class _C:
+        models = None
+        def generate_content(self, model, contents, config):
+            return type("R", (), {"text": '{"title_ko": "아스날 소식"}'})()
+    c = _C(); c.models = c
+    out = title_only_rows([{"content_hash": "h1", "title_original": "Arsenal news"}],
+                          c, "m")
+    assert out["h1"]["title_ko"] == "아스날 소식"
+    assert out["h1"]["summary_ko"] is None
+    assert out["h1"]["summary3_ko"] is None
+    assert out["h1"]["body_ko"] is None
+
+
+def test_finalize_translation_survives_title_only_result():
+    """title_only_rows 산출물 (본문 · 요약 None) 이 회차 저장 경로를 통과해야 한다.
+    죽으면 run.py 의 enrich 단계가 통째로 중단된다 (스펙 §4.5 배선)."""
+    from bullet_in.enrich import finalize_translation
+    v = {"title_ko": "아스날 소식", "summary_ko": None,
+         "summary3_ko": None, "body_ko": None}
+    row = {"content_hash": "h1", "title_original": "Arsenal news",
+           "body_source": None, "body_excerpt": None,
+           "source_id": "fmkorea", "summary_ko": None}
+    assert finalize_translation(v, row, {}, {}, {}) == ("아스날 소식", None, None, None)

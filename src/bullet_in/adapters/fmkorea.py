@@ -75,7 +75,8 @@ def parse_bracket(title: str) -> tuple[str | None, str | None, bool]:
 _BYLINE_HEAD_CHARS = 200
 _MONTHS = ("January|February|March|April|May|June|July|August|September|"
            "October|November|December")
-_PUBLISH_DT_RE = re.compile(
+# 충실도 게이트도 같은 규칙으로 숫자 집계에서 발행 표기를 뺀다 (fidelity.py 가 import).
+PUBLISH_DT_RE = re.compile(
     rf"(?:{_MONTHS})\s+\d{{1,2}}\s*,?\s*\d{{4}}|(?:Updated\s+)?\d{{1,2}}:\d{{2}}\s*[ap]m",
     re.I)
 _SPACES_RE = re.compile(r"[ \t]{2,}")
@@ -97,7 +98,7 @@ def strip_publish_datetime(body: str) -> str:
     if not body:
         return body
     head, tail = body[:_BYLINE_HEAD_CHARS], body[_BYLINE_HEAD_CHARS:]
-    cleaned, removed = _PUBLISH_DT_RE.subn("", head)
+    cleaned, removed = PUBLISH_DT_RE.subn("", head)
     if not removed:
         return body
     return (_SPACES_RE.sub(" ", cleaned) + tail).strip() or body
@@ -276,10 +277,18 @@ class FmkoreaAdapter:
                     image = extract_og_image(ro.text)
                     images = extract_body_images(ro.text, base_url=orig)
                     pub = extract_published_at(ro.text)
+                    lang = "en"
+                    material_level = 2    # 채택한 재료 = 원문 URL 에서 받은 언론사 본문
                 except httpx.HTTPError:
-                    body, image, images = "", None, []
-                lang = "en"
-                material_level = 2        # 채택한 재료 = 원문 URL 에서 받은 언론사 본문
+                    # 원문 차단 (실측 26건 중 25건이 406 · 403 · 페이월) — 게시글 본문으로 폴백.
+                    # 퍼가기 금지 글은 지금처럼 본문 없이 진행한다 (스펙 §4.1).
+                    image, images = None, []
+                    if _is_repost_blocked(html):
+                        body, lang, material_level = "", "en", 2
+                    else:
+                        log.info("fmkorea 원문 접속 실패 — 게시글 본문 채택 url=%s", orig)
+                        body = _body_text(html, self.body_selector)
+                        lang, material_level = "ko", 1
             body = strip_publish_datetime(body)
             journalist = journalist or extract_body_journalist(body)
             body_level = material_level if body else 0
