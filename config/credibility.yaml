@@ -21,6 +21,10 @@ journalists:
   - {name: Tom Canton,       tier: 4,   outlet: football.london, aliases: ["톰 캔턴"]}
   - {name: Luke Edwards,     tier: 2,   outlet: The Telegraph,   aliases: ["@LukeEdwardsTele", "루크 에드워즈", "Luke Edwards"]}
   - {name: Sacha Tavolieri,  tier: 2,   outlet: Sky Sports,      aliases: ["@sachatavolieri", "타볼리에리", "Tavolieri"]}
+  # 트위터 계정이 없어 afcstuff 가 소속사 계정으로 인용한다 ("Bruno Andrade (@ESPNBrasil)" · "[ @ESPNBrasil ]").
+  # 등재 전에는 fallback_tier 4 로 떨어져, 같은 기사가 fmkorea 경로 (2) 와 X 경로 (4) 로 갈렸다 (2026-07-30 실측).
+  # 표시명에 소속을 넣는 이유 — 핸들이 개인이 아니라 매체 계정이라 독자가 누구 말인지 알 수 없다.
+  - {name: Bruno Andrade (ESPN), tier: 2, outlet: ESPN,          aliases: ["@ESPNBrasil", "Bruno Andrade", "브루노 안드라데", "안드라데"]}
 outlets:
   - {name: The Athletic,    tier: 1,   aliases: ["디 애슬레틱", "애슬레틱", "The Athletic"]}
   - {name: BBC,             tier: 1.5, aliases: ["BBC"]}   # 비전담 기준선 — 전담 (Mokbel) 은 기자 tier 1 로 승격

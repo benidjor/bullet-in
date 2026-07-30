@@ -48,6 +48,23 @@ els => els.map(a => {
 """
 
 _CITE_RE = re.compile(r"\[\s*@([A-Za-z0-9_]{1,15})\s*\]")
+# afcstuff 는 인용을 대괄호로만 쓰지 않는다 (2026-07-30 실측: 라이브 30건 중 4건 유실).
+# 기자 발언 relay 는 멘션이 줄 단위로 서고 콜론이 따르거나 이름 뒤 괄호에 핸들이 온다
+#   '@JacobsBen\n: "…"' · 'Bruno Andrade (\n@ESPNBrasil\n): "…"'
+# 콜론 바로 앞까지 공백 · 개행 · 닫는 괄호만 허용해 문장 중간 멘션을 오탐하지 않는다.
+_COLON_CITE_RE = re.compile(r"@([A-Za-z0-9_]{1,15})\s*\)?\s*:")
+
+
+def cited_handles(text: str) -> list[str]:
+    """트윗 본문에서 인용된 핸들 — 대괄호 형태 우선, 없으면 콜론 형태.
+
+    대괄호가 있으면 그것만 쓴다 (기존 동작 무변경). 둘을 합치면 같은 트윗에서
+    본문 중간 멘션이 대표 기자를 밀어내 tier 가 오귀속될 수 있다."""
+    for rule in (_CITE_RE, _COLON_CITE_RE):
+        found = rule.findall(text or "")
+        if found:
+            return ["@" + h for h in found]
+    return []
 
 
 def _accumulate_tweets(acc: dict[str, dict], batch: list[dict]) -> None:
@@ -176,11 +193,15 @@ class XPlaywrightAdapter:
 
 def parse_afcstuff_tweets(source_id: str, handle: str,
                           raw_tweets: list[dict], now: datetime) -> list[RawItem]:
-    """DOM에서 뽑은 트윗 dict → 인용(`[ @handle ]`) 있는 것만 RawItem."""
+    """DOM에서 뽑은 트윗 dict → 인용 있는 것만 RawItem.
+
+    인용 형태는 둘이다 — 대괄호 (`[ @handle ]`) 와 콜론 (`@handle : "…"`).
+    인용 주체가 없는 트윗 (생일 축하 · 훈련 사진 · 기자회견 발언) 은 기자 tier 를
+    매길 근거가 없어 제외한다."""
     out: list[RawItem] = []
     for t in raw_tweets:
         text = t.get("text") or ""
-        cited = ["@" + h for h in _CITE_RE.findall(text)]
+        cited = cited_handles(text)
         if not cited:
             continue
         sid = t.get("status_id") or ""
