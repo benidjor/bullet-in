@@ -53,6 +53,20 @@ Discord 웹훅 발송 실패, 또는 `backfill_article_players` 의 `record_arti
 이 조회는 알림 채널과 무관하게 DB 를 직접 보므로, 알림이 안 왔더라도 후보를 놓치지 않는 안전망이다.
 회차 관측을 할 때마다 습관적으로 함께 돌린다.
 
+VM 에 접속한 상태에서 아래 한 줄을 그대로 붙여넣으면 된다.
+위 SQL 에 선수별 등장 기사 수를 붙여, 어느 후보부터 볼지 우선순위가 바로 보이게 한 형태다.
+
+```bash
+docker exec -i bullet-in-mariadb-1 mariadb -uroot -pbulletin bulletin -e "SELECT p.id, p.ko_candidate AS 표기, p.full_name AS 영문명, p.transfer_status AS 이적축, COUNT(ap.content_hash) AS 기사수 FROM players p LEFT JOIN article_players ap ON ap.player_id = p.id WHERE p.status = 'candidate' GROUP BY p.id ORDER BY 기사수 DESC, p.added_at DESC;"
+```
+
+`-p` 뒤 비밀번호는 `docker-compose.yml` 의 `MARIADB_ROOT_PASSWORD` 값이다.
+출력의 `id` 는 생애주기 전이 (§5) 에서 대상 선수를 지정할 때 쓰는 번호다.
+
+한 줄로 둔 이유가 있다.
+여러 줄 Python 스크립트를 셸에 붙여넣으면 마지막 `EOF` 앞에 공백이 섞이는 순간 종료 표시로 인식되지 않아, 셸이 입력을 계속 기다린 채 멈춘다 (2026-07-31 실제로 겪음).
+여러 줄 스크립트를 꼭 써야 하면 `cat > /tmp/q.py` 로 파일을 먼저 만든 뒤 `uv run python /tmp/q.py` 로 실행한다.
+
 ## 3. 확정
 
 ### 3.1. 백필 선행 의존 — 먼저 확인할 것
