@@ -85,48 +85,63 @@ def _source_field_name(source_id: str, sources: dict) -> str:
     return f"{name} ({source_id})" if name else source_id
 
 
+def freshness_alert_targets(records, candidates: dict | None,
+                            fetch_errors: dict | None) -> list:
+    """stale 중 조치 신호만 추린다 — 후보 0건 (수집 끊김 의심) 또는 fetch 오류.
+
+    후보가 있는 stale 은 경로 정상 · 신규 없음이라 조치할 것이 없고, 매 회차
+    반복 발화가 알림 피로만 만든다 (2026-07-31 guardian 실사례 — 진단 문서 §4.1 의
+    "후보는 있으나 전부 중복 = 알릴 필요 없음" 을 발송 조건으로 반영).
+    candidates=None 이면 계수 없이 종전대로 stale 전부를 돌려준다."""
+    breaches = [r for r in records if r.stale]
+    if candidates is None:
+        return breaches
+    fe = fetch_errors or {}
+    return [b for b in breaches
+            if fe.get(b.source_id) or candidates.get(b.source_id, 0) == 0]
+
+
 def build_freshness_alert(records, default_hours: float, *,
                           sources: dict, run_id: str,
                           checked_at: datetime,
                           candidates: dict | None = None,
                           fetch_errors: dict | None = None) -> dict:
-    """전체 판정 레코드를 받아 stale 소스만 필드로 펼친다 (stale=True 는 age_hours 존재).
+    """전체 판정 레코드를 받아 조치 신호 소스만 필드로 펼친다.
 
     candidates 는 이번 회차에 어댑터가 찾은 소스별 후보 건수 (dedup 전) — 키 부재 = 0건.
-    후보 0건일 때만 어댑터 힌트를 붙인다: 후보가 있으면 수집 경로는 정상이고
-    전부 기존 기사라 신규가 없는 것이라 셀렉터 드리프트 추측은 오진이다
-    (2026-07-30 실측, docs/troubleshooting/2026-07-30-silent-drops-and-blind-alerts.md §4).
-    candidates=None 이면 계수 없이 종전대로 힌트만 붙인다."""
+    필드 대상은 freshness_alert_targets 와 동일: 후보 0건 또는 fetch 오류.
+    경로 정상 stale 은 설명의 생략 계수로만 남긴다. 어댑터 힌트 (셀렉터 드리프트 등) 는
+    후보 0건일 때만 근거가 있다 (2026-07-30 실측, docs/troubleshooting/
+    2026-07-30-silent-drops-and-blind-alerts.md §4).
+    candidates=None 이면 계수 없이 종전대로 stale 전부 + 힌트."""
     breaches = [r for r in records if r.stale]
+    targets = freshness_alert_targets(records, candidates, fetch_errors)
+    skipped = len(breaches) - len(targets)
     no_wm = sum(1 for r in records if r.last_fetched_at is None)
     ok = len(records) - len(breaches) - no_wm
     fields = []
-    for b in breaches:
+    for b in targets:
         lines = [f"⏳ {b.age_hours:.1f}h 경과 (임계 {b.threshold_hours:g}h)",
                  f"마지막 수집: {_discord_ts(b.last_fetched_at, 'R')} "
                  f"({_discord_ts(b.last_fetched_at, 'f')})"]
         hint = ADAPTER_HINTS.get((sources.get(b.source_id) or {}).get("adapter"))
         if (fetch_errors or {}).get(b.source_id):
             lines.append(f"이번 회차 fetch 오류: {fetch_errors[b.source_id][:120]}")
-        elif candidates is not None:
-            n = candidates.get(b.source_id, 0)
-            if n == 0:
+        else:
+            if candidates is not None:
                 lines.append("이번 회차 후보 0건 — 수집 끊김 의심")
-                if hint:
-                    lines.append(f"원인 후보: {hint}")
-            else:
-                lines.append(f"이번 회차 후보 {n}건 — 수집 경로 정상 · 신규 없음")
-        elif hint:
-            lines.append(f"원인 후보: {hint}")
+            if hint:
+                lines.append(f"원인 후보: {hint}")
         fields.append({"name": _source_field_name(b.source_id, sources),
                        "value": "\n".join(f"- {ln}" for ln in lines),
                        "inline": False})
     fields.append({"name": "기본 임계", "value": f"전역 {default_hours:g}h",
                    "inline": True})
     fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
-    return {"title": f"🕰️ 신선도 경고 — 오래된 소스 {len(breaches)}건",
+    return {"title": f"🕰️ 신선도 경고 — 오래된 소스 {len(targets)}건",
             "description": (f"감시 {len(records)}소스: stale {len(breaches)} · "
-                            f"정상 {ok} · 워터마크 없음 {no_wm}"),
+                            f"정상 {ok} · 워터마크 없음 {no_wm}"
+                            + (f" · 경로 정상 생략 {skipped}" if skipped else "")),
             "color": COLOR_ANOMALY, "fields": fields,
             "url": RUNBOOK_FRESHNESS,
             "timestamp": checked_at.replace(tzinfo=timezone.utc).isoformat(),
