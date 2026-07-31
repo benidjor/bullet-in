@@ -99,6 +99,17 @@ PARAPHRASE_PROMPT = (
     '"body_ko":"...","players":[{{"full_name":"...","ko":"...","stage":"..."}}]}}'
     "\n\nTitle: {title}\nBody: {body}")
 
+EXTRACT_PLAYERS_PROMPT = (
+    "다음 아스날 FC 관련 기사에서 이 기사에서 아스날의 이적 · 거취 · 계약과 관련해 "
+    "다뤄진 선수 · 감독을 추출한다.\n"
+    '각 항목은 {{"full_name":"영문 풀네임","ko":"이 기사에서 쓴 한글 표기",'
+    '"stage":"단계"}}.\n'
+    "- stage 는 rumour · interest · negotiating · personal_terms · medical · agreed · "
+    "other 중 하나. 경기 · 근황만 다뤄진 인물은 other, 기사에 없는 인물은 넣지 않는다.\n"
+    "- 아스날과 무관한 타 구단 간 소식의 인물은 넣지 않는다.\n"
+    'ONLY JSON: {{"players":[...]}}'
+    "\n\nTitle: {title}\nBody: {body}")
+
 def apply_glossary(parsed: dict, mapping: dict[str, str]) -> dict:
     """번역 결과의 한국어 필드에 통용 표기 사전 (오표기 → 통용) 을 치환 적용한다."""
     if not mapping:
@@ -431,6 +442,38 @@ def partition_by_body_level(rows: list[dict]) -> tuple[list[dict], list[dict]]:
     for r in rows:
         (rewrite if r.get("body_level") == POST_BODY_LEVEL else trans).append(r)
     return rewrite, trans
+
+def extract_players_rows(rows: list[dict], client, model: str) -> dict[str, list]:
+    """백필 전용 (선수, 단계) 쌍 추출 — 번역 없이 players 필드만 (스펙 §7).
+    429 는 그 회차 즉시 중단, 파싱 실패는 행 스킵 (기존 enrich 루프와 동일 규칙)."""
+    result: dict[str, list] = {}
+    for r in rows:
+        h = r["content_hash"]
+        try:
+            msg = client.models.generate_content(
+                model=model,
+                contents=EXTRACT_PLAYERS_PROMPT.format(
+                    title=r["title_original"],
+                    body=r.get("body_source") or r.get("body_excerpt") or ""),
+                config={"max_output_tokens": 1024,
+                        "response_mime_type": "application/json"})
+        except Exception as e:
+            if _is_rate_limit(e):
+                log.warning("Gemini rate limit(429), 추출 중단 — 남은 행 재실행 시 이어짐")
+                break
+            log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
+            continue
+        m = re.search(r"\{.*\}", msg.text, re.DOTALL)
+        try:
+            pairs = json.loads(m.group(0))["players"] if m else None
+        except (json.JSONDecodeError, KeyError, TypeError):
+            pairs = None
+        if not isinstance(pairs, list):
+            log.warning("Gemini 응답 파싱 실패, 스킵 content_hash=%s", h)
+            continue
+        result[h] = pairs
+    return result
+
 
 def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate"
                 ) -> dict[str, dict]:
