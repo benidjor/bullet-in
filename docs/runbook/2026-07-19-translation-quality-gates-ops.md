@@ -52,7 +52,7 @@
 ### 4.2. name_map (검출 사전 — 치환 아님)
 
 **등재 절차는 players 테이블 · 확정 CLI 로 대체됐다** (이 절의 1번 항목 — YAML `name_map.yaml` 시절 서술).
-운영 절차 전체는 `docs/runbook/2026-08-01-player-roster-ops.md` 를 참조한다.
+운영 절차 전체는 `docs/runbook/2026-07-31-player-roster-ops.md` 를 참조한다.
 
 1. (갱신) 과거엔 `names` 에 `한글 통용 표기: 영문 성` 을 직접 추가했다. 지금은 확정 CLI (`confirm_player --ko`) 가 `players.ko_name` 에 기입한다. 값은 성 단독 (풀네임 · 성 표기 변형을 포함 매치) 원칙은 동일하다.
 2. 같은 인물의 복수 한글 표기는 각각 등재 (검출기가 영문 값 기준으로 동일 인물 처리)

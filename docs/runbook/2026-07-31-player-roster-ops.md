@@ -1,4 +1,4 @@
-# 선수 명단 DB 운영 절차 — 등재 · 확정 · 백필 (2026-08-01)
+# 선수 명단 DB 운영 절차 — 등재 · 확정 · 백필 (2026-07-31)
 
 링크 선수 명단이 YAML (`name_map.yaml`) 에서 DB (`players` · `article_players`) 로 옮겨진 뒤의 운영 동선.
 후보 인지 (알림 · 대기 목록 조회) 부터 확정 명령, 소급 백필, 생애주기 수동 전이까지를 다룬다.
@@ -170,10 +170,20 @@ UPDATE players SET category='external', transfer_status='other_club',
 UPDATE players SET transfer_status='link_dropped',
                     status='archived', archived_at=UTC_TIMESTAMP() WHERE id=?;
 
--- 이적 시장 종료 — 남은 링크 선수 일괄 archived (스쿼드 제외)
+-- 이적 시장 종료 — 남은 영입 링크 선수 일괄 archived
 UPDATE players SET status='archived', archived_at=UTC_TIMESTAMP()
-  WHERE category='external' AND transfer_status IN ('in_link','out_link')
+  WHERE category='external' AND transfer_status='in_link'
     AND status != 'archived';
+```
+
+일괄 archived 대상은 영입 링크 (`category='external' AND transfer_status='in_link'`) 뿐이다.
+방출 링크 (`category='squad' AND transfer_status='out_link'`) 는 스쿼드 소속 선수라 archived 대상이 아니다 — 시장이 닫혀도 그 선수는 여전히 아스날 소속이므로 명단에서 빼는 게 아니라 방출 이야기가 없던 일이 됐을 뿐이다.
+시장 종료로 방출 링크가 소멸하면 선수마다 아래처럼 `none` 으로 개별 복귀시킨다 (이적 성사 여부가 선수마다 달라 일괄 처리를 하지 않는다).
+
+```sql
+-- 방출 링크 소멸 — 스쿼드 복귀 (선수별로 확인 후 개별 실행)
+UPDATE players SET transfer_status='none'
+  WHERE category='squad' AND transfer_status='out_link' AND id=?;
 ```
 
 `archived` 는 물리 삭제가 아니라 보존이다.
