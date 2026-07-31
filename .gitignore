@@ -13,3 +13,4 @@ dbt/.user.yml
 site/
 .worktrees/
 .superpowers/
+backfill_players_state.txt
