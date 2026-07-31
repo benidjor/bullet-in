@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 COLOR_ANOMALY = 0xF2A600
 COLOR_FAILURE = 0xE01E5A
+COLOR_CANDIDATE = 0x3BA55D
 
 ADAPTER_HINTS = {
     "x_playwright": "X 쿠키 만료 · 핸들 변경",
@@ -170,3 +171,24 @@ def build_coverage_alert(breaches: list[str], coverage: dict, *, run_id: str) ->
     return {"title": "🏟️ 공홈 커버리지 경고 — arsenal_official",
             "description": "수집 창 퍼널 불변식 위반 — 조용한 기아 신호",
             "color": COLOR_ANOMALY, "fields": fields}
+
+
+def build_candidate_alert(candidates: list[dict], *, run_id: str) -> dict:
+    """enrich 자동 발굴 후보 등재 알림 (스펙 §4.2) — 후속 액션은 확정 CLI.
+    Discord embed 필드 상한 (25) 안에서 10명까지 펼치고 나머지는 건수로 접는다."""
+    fields = []
+    for c in candidates[:10]:
+        name = f"{c.get('ko') or '?'} ({c['full_name']})"
+        lines = [f"단계: {c['stage']}", f"근거: {c.get('title') or '-'}"]
+        if c.get("url"):
+            lines.append(f"[기사]({c['url']})")
+        fields.append({"name": name,
+                       "value": "\n".join(f"- {ln}" for ln in lines), "inline": False})
+    if len(candidates) > 10:
+        fields.append({"name": "그 외",
+                       "value": f"- 후보 {len(candidates) - 10}명 추가 — DB 확인",
+                       "inline": False})
+    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    return {"title": f"🆕 링크 선수 후보 {len(candidates)}명 등재",
+            "description": "확정 전에는 게이트 · 서빙 사전에 실리지 않는다 — 확정 CLI 로 승격",
+            "color": COLOR_CANDIDATE, "fields": fields}

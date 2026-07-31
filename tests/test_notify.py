@@ -286,3 +286,23 @@ def test_build_coverage_alert_embed_shape():
     assert "Men 태그 소멸" in names
     funnel = next(f for f in kwargs["fields"] if f["name"] == "퍼널")
     assert funnel["value"] == "후보 12 · Men 0 · accept 0"
+
+
+from bullet_in.notify import build_candidate_alert
+
+
+def test_build_candidate_alert_lists_each_candidate():
+    cands = [{"full_name": "Nico Williams", "ko": "니코 윌리엄스", "stage": "rumour",
+              "title": "Arsenal eye Williams", "url": "https://x.test/a", "player_id": 41}]
+    alert = build_candidate_alert(cands, run_id="abcd1234-0000")
+    assert "1명" in alert["title"]
+    body = str(alert["fields"])
+    assert "니코 윌리엄스" in body and "rumour" in body and "https://x.test/a" in body
+
+
+def test_build_candidate_alert_caps_fields():
+    cands = [{"full_name": f"P {i}", "ko": None, "stage": "rumour",
+              "title": "t", "url": None, "player_id": i} for i in range(15)]
+    alert = build_candidate_alert(cands, run_id="abcd1234-0000")
+    assert "15명" in alert["title"]
+    assert len(alert["fields"]) <= 12        # 후보 10 + 넘침 요약 + 회차
