@@ -181,3 +181,36 @@ def test_apply_exclude_noop_when_empty():
     targets = {"a" * 64: "t"}
     assert bf.apply_exclude(targets, []) == targets
     assert bf.apply_exclude(targets, None) == targets
+
+
+def test_normalize_post_url_accepts_search_and_direct_forms():
+    # 운영자가 검색 결과 주소 (document_srl 포함) 를 그대로 붙여넣어도 글 주소로 정규화
+    assert bf.normalize_post_url(
+        "https://www.fmkorea.com/search.php?mid=football_news&document_srl=10134405644"
+        "&search_keyword=%ED%85%94&search_target=title_content&page=1"
+    ) == "https://www.fmkorea.com/10134405644"
+    assert bf.normalize_post_url("https://www.fmkorea.com/10115112323") == \
+        "https://www.fmkorea.com/10115112323"
+
+
+def test_normalize_post_url_rejects_non_post():
+    import pytest
+    with pytest.raises(ValueError):
+        bf.normalize_post_url("https://www.fmkorea.com/football_news")
+
+
+def test_load_post_urls_maps_hash_prefix_lines():
+    # 파일 형식: "<해시 접두사 8자 이상> <주소>" · 빈 줄과 # 주석 허용
+    text = ("# 수동 확인분 2026-07-31\n"
+            "16059a40 https://www.fmkorea.com/search.php?mid=football_news&document_srl=10134405644&page=1\n"
+            "\n"
+            "2e3cd00f https://www.fmkorea.com/10116206357\n")
+    assert bf.load_post_urls(text) == {
+        "16059a40": "https://www.fmkorea.com/10134405644",
+        "2e3cd00f": "https://www.fmkorea.com/10116206357"}
+
+
+def test_load_post_urls_rejects_short_prefix():
+    import pytest
+    with pytest.raises(ValueError):
+        bf.load_post_urls("3146 https://www.fmkorea.com/10152481709\n")
