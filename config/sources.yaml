@@ -81,11 +81,18 @@ sources:
     tier: 3
     outlet: The Guardian
     medium: newspaper
-    adapter: guardian_api
+    # 2026-07-31 API → HTML 전환: 프리 티어가 독점 기사를 배제해 6/20 이후 19건 중 7건
+    # (비니시우스 단독 포함) 미반환 실측. HTML 목록이 완전한 상위집합.
+    # dcr-* 클래스는 배포마다 바뀌는 난독화 클래스라 의미 속성만 쓴다 — 제목은 aria-label.
+    adapter: html
     config:
-      tag: "football/arsenal"
+      list_url: "https://www.theguardian.com/football/arsenal"
+      item_selector: "#maincontent a[aria-label]"
+      title_attr: "aria-label"
+      body_selector: "div[data-gu-name='body']"
+      base_url: "https://www.theguardian.com"
       title_contains: *transfer_kw
-    freshness_hours: 168   # 저빈도 소스 (총 5행 · 프리 티어 고사 — guardian-api-tier-track)
+    freshness_hours: 168   # 저빈도 소스 (아스날 태그 주 2~3건) — 48h 는 소음
     enabled: true
   - source_id: skysports
     display_name: Sky Sports

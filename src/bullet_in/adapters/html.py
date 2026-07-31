@@ -10,13 +10,14 @@ class HtmlAdapter:
     def __init__(self, source_id: str, list_url: str, item_selector: str,
                  base_url: str | None = None, title_contains: str | list[str] | None = None,
                  body_selector: str | None = None, title_selector: str | None = None,
-                 thumbnail_only: bool = False):
+                 thumbnail_only: bool = False, title_attr: str | None = None):
         self.source_id = source_id
         self.list_url = list_url
         self.item_selector = item_selector
         self.base_url = base_url or list_url
         self.body_selector = body_selector
         self.title_selector = title_selector
+        self.title_attr = title_attr
         self.thumbnail_only = thumbnail_only
         if title_contains is None:
             self.title_keywords: list[str] | None = None
@@ -41,7 +42,11 @@ class HtmlAdapter:
                 if url in seen:
                     continue
                 seen.add(url)
-                if self.title_selector:
+                if self.title_attr:
+                    title = (a.get(self.title_attr) or "").strip()
+                    if not title:
+                        continue  # 속성 없음 → 제목 없는 항목 적재 방지 (guardian 은 aria-label 이 제목)
+                elif self.title_selector:
                     el = a.select_one(self.title_selector)
                     if el is None:
                         continue  # 헤드라인 sub-요소 없음 → 제목 없는 항목 적재 방지
