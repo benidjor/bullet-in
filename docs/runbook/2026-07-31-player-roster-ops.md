@@ -100,6 +100,41 @@ uv run python -m bullet_in.confirm_player --name "Nico Williams" --ko "니코 �
 실행 순서는 승격 (status → confirmed · ko_name 기입) → 등장 기사 게이트 재검사 → 의심 행 재번역 → site 재생성이다.
 site 재생성은 로컬 산출물만 갱신한다 — 실제 배포까지 하려면 이어서 `./infra/deploy-site.sh` 를 실행한다.
 
+**`--ko` 에 무엇을 넣을 것인가**
+
+기준은 한국 기사가 실제로 쓰는 짧은 호칭이다.
+원칙은 성 단독이다 — 확정된 41명이 전부 그렇다.
+예외도 있다 — 브라질 선수처럼 이름으로 불리면 그 형태 (비니시우스) 를 쓰고, 일본 선수처럼 성이 앞에 오면 그 순서를 따른다.
+
+짧게 넣는 이유가 있다.
+소비처 세 곳 — 인명 환각 검출 (`detect_title_hallucination`) · 인명 누락 검출 (`detect_title_mistranslation`) · 서빙 사건 묶음 (`load_player_names`) — 이 모두 한글 표기를 부분 문자열로 대조한다.
+짧은 표기는 긴 표기가 쓰인 제목까지 함께 잡지만, 긴 표기로 확정하면 짧게 쓴 제목을 놓친다.
+
+너무 짧으면 다른 이름 · 일반 단어 안에 들어간다.
+실측 겹침 2건이 있다 — `사카` 가 `아론 완-비사카` 안에, `화이트` 가 `모건 깁스-화이트` 안에 들어간다.
+이 둘은 게이트가 원문의 영문 철자도 함께 보기 때문에 오탐으로 이어지지는 않지만, 검출 관점에서 두 선수가 구분되지 않는다는 뜻이다.
+
+영문명이 `Jr` 로 끝나면 한글에도 주니어를 붙인다 (예: Charles Sagoe Jr → `세이고 주니어`).
+
+**확정 전 영문 성 확인**
+
+사전은 `{한글 표기 → 영문 성}` 쌍이고, 영문 쪽은 `players.surname` 컬럼에서 온다.
+이 컬럼은 후보 등재 때 영문명의 마지막 토막으로 자동 추출되므로 (`roster.record_article_players`), 접미어가 붙은 이름에서 어긋난다.
+
+실사례 2건이 있다 (2026-07-31).
+`Charles Sagoe Jr` 의 성이 `Jr` 로, `Vinicius Junior` 의 성이 `Junior` 로 잡혀 있었다.
+후자는 확정된 상태라, `Eli Junior Kroupi` 처럼 Junior 가 들어간 다른 선수의 기사 제목을 "비니시우스가 원문에 있는데 번역에서 빠졌다" 로 잘못 판정해 불필요한 재번역을 유발했다 (실측 1건).
+
+확정 전에 아래로 확인하고, 어긋나면 먼저 고친다.
+
+```bash
+docker exec -i bullet-in-mariadb-1 mariadb -uroot -pbulletin bulletin -e "SELECT id, full_name, first_name, surname FROM players WHERE id=?;"
+```
+
+```sql
+UPDATE players SET first_name='Charles', surname='Sagoe' WHERE id=186;
+```
+
 ### 3.3. 두 단어 성 경고
 
 성이 두 단어인 선수 (예: Van Dijk 류) 를 확정하면 CLI 가 아래 경고를 낸다.
