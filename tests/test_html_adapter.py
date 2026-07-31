@@ -247,3 +247,33 @@ def test_html_no_published_leaves_payload_clean():
                     item_selector="a.i", body_selector="article")
     items = asyncio.run(a.fetch())
     assert "published" not in items[0].raw_payload
+
+
+@respx.mock
+def test_html_adapter_reads_title_from_attribute():
+    # guardian 목록: 앵커 내부 텍스트가 비어 있고 제목은 aria-label 에만 있다 (2026-07-31 실측)
+    html = ('<main id="maincontent">'
+            '<a aria-label="Arsenal make shock approach to sign Vinicius" '
+            'href="/football/2026/jul/25/arsenal-inquiry"></a>'
+            '<a aria-label="Match preview vs Spurs" href="/football/2026/jul/26/preview"></a>'
+            '</main>')
+    respx.get("https://g.test/football/arsenal").mock(return_value=httpx.Response(200, text=html))
+    a = HtmlAdapter(source_id="guardian", list_url="https://g.test/football/arsenal",
+                    item_selector="#maincontent a[aria-label]", base_url="https://g.test",
+                    title_attr="aria-label", title_contains=["sign"])
+    items = asyncio.run(a.fetch())
+    assert [i.raw_payload["title"] for i in items] == [
+        "Arsenal make shock approach to sign Vinicius"]
+
+
+@respx.mock
+def test_html_adapter_title_attr_missing_skips_item():
+    # 속성이 없는 앵커는 제목 없는 항목 적재를 막기 위해 건너뛴다 (title_selector 미발견과 동일)
+    html = ('<a aria-label="Arsenal sign Gyokeres" href="/a"></a>'
+            '<a href="/b">sign this too</a>')
+    respx.get("https://g.test/list").mock(return_value=httpx.Response(200, text=html))
+    a = HtmlAdapter(source_id="guardian", list_url="https://g.test/list",
+                    item_selector="a", base_url="https://g.test",
+                    title_attr="aria-label", title_contains=["sign"])
+    items = asyncio.run(a.fetch())
+    assert [i.url for i in items] == ["https://g.test/a"]
