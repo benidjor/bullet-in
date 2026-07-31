@@ -100,3 +100,17 @@ def test_record_article_players_links_existing_by_surname(engine):
                               "stage": "agreed"}])       # 성만 온 출력
     created = record_article_players(store, "d" * 64, pairs)
     assert created == []                                  # 기존 요케레스에 링크, 후보 미생성
+
+
+def test_record_article_players_two_word_unmatched_gets_no_surname_fallback(engine):
+    # ROSTER 에 성 White (Ben White) 가 있어도, 풀네임 두 단어 출력이 by_full 미스면
+    # 성 폴백 없이 신규 후보로 등재돼야 한다 (동성 타인의 조용한 오연결 방지).
+    store = PlayerStore(engine)
+    store.seed(ROSTER)
+    pairs = normalize_pairs([{"full_name": "Harvey White", "ko": "하비 화이트",
+                              "stage": "rumour"}])
+    created = record_article_players(store, "e" * 64, pairs)
+    assert len(created) == 1                              # 신규 후보 생성
+    ben_white_id = store.gate_player_id("화이트")
+    assert created[0]["player_id"] != ben_white_id         # 기존 화이트와 다른 id
+    assert store.articles_for(ben_white_id) == []          # 기존 화이트엔 링크 안 됨

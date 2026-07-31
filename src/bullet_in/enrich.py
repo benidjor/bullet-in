@@ -53,8 +53,9 @@ TRANSLATE_PROMPT = (
     "- title_ko 는 원문 제목에 등장하는 선수 · 감독 이름을 최소 하나는 그대로 남긴다. "
     "여러 명이면 기사 핵심 인물을 우선한다.\n"
     "- 고유명사는 통용 한글 표기(Arsenal=아스날).\n"
-    "- players: 이 기사가 이적 · 거취 · 계약을 다룬 선수 · 감독 목록. 각 항목은 "
-    '{{\"full_name\":\"영문 풀네임\",\"ko\":\"이 기사에서 쓴 한글 표기\",\"stage\":\"단계\"}}.\n'
+    "- players: 이 기사에서 아스날의 이적 · 거취 · 계약과 관련해 다뤄진 선수 · 감독 "
+    "목록. 아스날과 무관한 타 구단 간 소식의 인물은 넣지 않는다. 각 항목은 "
+    '{{"full_name":"영문 풀네임","ko":"이 기사에서 쓴 한글 표기","stage":"단계"}}.\n'
     "- stage 는 rumour · interest · negotiating · personal_terms · medical · agreed · "
     "other 중 하나. 경기 · 근황만 다뤄진 인물은 other, 기사에 없는 인물은 넣지 않는다.\n"
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],'
@@ -89,8 +90,9 @@ PARAPHRASE_PROMPT = (
     "넣지 않는다.\n"
     "- 숫자는 원문 표기를 그대로 쓴다 (£50m 을 5,000만 파운드로 바꾸지 않는다).\n"
     "- 원문이 단정한 것을 추측으로, 추측한 것을 단정으로 바꾸지 않는다.\n"
-    "- players: 이 기사가 이적 · 거취 · 계약을 다룬 선수 · 감독 목록. 각 항목은 "
-    '{{\"full_name\":\"영문 풀네임\",\"ko\":\"이 기사에서 쓴 한글 표기\",\"stage\":\"단계\"}}.\n'
+    "- players: 이 기사에서 아스날의 이적 · 거취 · 계약과 관련해 다뤄진 선수 · 감독 "
+    "목록. 아스날과 무관한 타 구단 간 소식의 인물은 넣지 않는다. 각 항목은 "
+    '{{"full_name":"영문 풀네임","ko":"이 기사에서 쓴 한글 표기","stage":"단계"}}.\n'
     "- stage 는 rumour · interest · negotiating · personal_terms · medical · agreed · "
     "other 중 하나. 경기 · 근황만 다뤄진 인물은 other, 기사에 없는 인물은 넣지 않는다.\n"
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],'

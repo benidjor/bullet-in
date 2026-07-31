@@ -179,7 +179,7 @@ def build_candidate_alert(candidates: list[dict], *, run_id: str) -> dict:
     fields = []
     for c in candidates[:10]:
         name = f"{c.get('ko') or '?'} ({c['full_name']})"
-        lines = [f"단계: {c['stage']}", f"근거: {c.get('title') or '-'}"]
+        lines = [f"단계: {c['stage']}", f"근거: {(c.get('title') or '-')[:200]}"]
         if c.get("url"):
             lines.append(f"[기사]({c['url']})")
         fields.append({"name": name,

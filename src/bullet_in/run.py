@@ -104,17 +104,21 @@ async def main(concurrency: int):
 
     # 추출 쌍 반영 (스펙 §4.1 · §4.2): 저장은 번역 채택 여부와 무관 — 원문 근거 추출이고
     # 재시도 회차의 재추출은 upsert 멱등이다
-    by_hash = {r["content_hash"]: r for r in missing}
     pstore = PlayerStore(engine)
-    new_candidates: list[dict] = []
-    for h, v in results.items():
-        pairs = roster.normalize_pairs(v.get("players"))
-        for cand in roster.record_article_players(pstore, h, pairs):
-            row = by_hash.get(h, {})
-            new_candidates.append({**cand, "title": row.get("title_original"),
-                                   "url": row.get("url")})
-    if new_candidates:
-        notify.send_alert(**notify.build_candidate_alert(new_candidates, run_id=run_id))
+    try:
+        by_hash = {r["content_hash"]: r for r in missing}
+        new_candidates: list[dict] = []
+        for h, v in results.items():
+            pairs = roster.normalize_pairs(v.get("players"))
+            for cand in roster.record_article_players(pstore, h, pairs):
+                row = by_hash.get(h, {})
+                new_candidates.append({**cand, "title": row.get("title_original"),
+                                       "url": row.get("url")})
+        if new_candidates:
+            notify.send_alert(**notify.build_candidate_alert(new_candidates, run_id=run_id))
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "추출 쌍 저장 실패 — 이번 회차 건너뜀 (번역 저장에는 영향 없음)", exc_info=True)
 
     glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
                 or {}).get("replacements", {})
