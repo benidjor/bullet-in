@@ -61,7 +61,7 @@ docker exec -i bullet-in-mariadb-1 mariadb -uroot -pbulletin bulletin -e "SELECT
 ```
 
 `-p` 뒤 비밀번호는 `docker-compose.yml` 의 `MARIADB_ROOT_PASSWORD` 값이다.
-출력의 `id` 는 생애주기 전이 (§5) 에서 대상 선수를 지정할 때 쓰는 번호다.
+출력의 `id` 는 생애주기 전이 (§6) 에서 대상 선수를 지정할 때 쓰는 번호다.
 
 한 줄로 둔 이유가 있다.
 여러 줄 Python 스크립트를 셸에 붙여넣으면 마지막 `EOF` 앞에 공백이 섞이는 순간 종료 표시로 인식되지 않아, 셸이 입력을 계속 기다린 채 멈춘다 (2026-07-31 실제로 겪음).
@@ -173,7 +173,63 @@ uv run python -m bullet_in.backfill_article_players --limit 5             # 소�
 그대로 재실행하면 `filter_targets` 가 state 에 있는 행을 걸러내고 남은 것만 이어서 처리한다.
 같은 `--state` 경로를 유지해야 이어서 처리된다 — 경로를 바꾸면 처음부터 다시 과금된다.
 
-## 5. 생애주기 수동 전이
+## 5. 값 정정 — 잘못 넣었을 때
+
+운영 중 표기 오류나 잘못된 연결이 나오면 아래 절차로 되돌린다.
+원인마다 손대는 지점이 다르니 증상에 맞는 항목을 먼저 찾는다.
+
+**후보 (`status='candidate'`) 의 표기가 이상할 때** — 고칠 필요가 없다.
+모델이 채워 넣은 `ko_candidate` 는 사람이 대기 목록을 볼 때 참고하는 값일 뿐이다.
+게이트 사전 (`PlayerStore.gate_name_map`) 은 조회 조건에서 후보 상태를 아예 빼므로 이 값이 실제 검출에 쓰이는 일은 없다 (`_DICT_WHERE = "status IN ('confirmed','archived')"`).
+실제로 쓰이는 표기는 확정할 때 `--ko` 로 주는 값 (`ko_name`) 이다.
+표기가 틀린 후보는 올바른 `--ko` 로 확정하거나, 확정할 생각이 없으면 아래 (같은 사람이 두 행으로 갈렸을 때) 항목의 방식으로 보관 처리한다.
+다만 §2.3 대기 목록을 사람이 검토하기 좋게 하려고 `ko_candidate` 를 미리 손봐 두는 것은 가능하다.
+
+```sql
+UPDATE players SET ko_candidate='...' WHERE id=?;
+```
+
+**이미 확정한 선수의 표기가 잘못됐을 때** — 확정 명령을 올바른 `--ko` 로 다시 실행한다.
+같은 선수를 다시 확정해도 충돌 검사에 걸리지 않는다 — `ko_name_holder` 가 찾은 보유자가 자기 자신이면 통과한다 (`confirm_player.main` 의 `holder != player["id"]` 분기).
+재실행하면 표기 교체 → 그 선수가 등장한 기사 재검사 → 필요한 기사만 재번역 → site 재생성까지 한 번에 다시 돈다.
+`--dry-run` 을 먼저 붙여 재번역이 몇 건 걸릴지 확인한다.
+
+**신분 · 이적 상태가 틀렸을 때** — 고치는 방법이 두 가지인데 뒤따라 도는 작업이 서로 다르다.
+확정 명령의 `--category` · `--transfer-status` · `--club` 로 주면 그 값만 갱신되고, 등장 기사 재검사 · site 재렌더가 함께 돈다.
+DB 를 직접 `UPDATE` 하면 site 는 자동으로 다시 만들어지지 않으므로, 필요하면 재렌더 절차를 따로 밟는다 (§6 생애주기 절 참조).
+
+**영문 이름 (`full_name`) 이 오타일 때** — 확정 명령은 `full_name` 으로 선수를 찾으므로 (`PlayerStore.get_player`), 먼저 DB 에서 고친 뒤 확정한다.
+
+```sql
+UPDATE players SET full_name='...' WHERE id=?;
+```
+
+`full_name` 은 `UNIQUE` 제약이라 이미 있는 이름으로는 바꿀 수 없다 — 그 경우는 아래 항목 (같은 사람이 두 행으로 갈린 경우) 으로 처리한다.
+기사 연결 (`article_players`) 은 `player_id` 기준이라 이름을 고쳐도 그대로 유지된다.
+
+**같은 사람이 두 행으로 갈렸을 때 (표기 · 철자 변형)** — 남길 행 하나를 정하고, 없앨 행의 기사 연결을 옮긴 뒤 보관 처리한다.
+연결 이동은 같은 기사에 두 행이 모두 붙어 있을 수 있으므로 중복을 무시하는 형태로 한다.
+
+```sql
+-- 남길 id = KEEP · 없앨 id = DROP
+UPDATE IGNORE article_players SET player_id=KEEP WHERE player_id=DROP;
+DELETE FROM article_players WHERE player_id=DROP;
+UPDATE players SET status='archived', archived_at=UTC_TIMESTAMP() WHERE id=DROP;
+```
+
+`article_players` 의 기본 키는 `(content_hash, player_id)` 조합이라, 같은 기사에 두 행이 모두 붙어 있으면 옮기는 과정에서 키가 충돌한다.
+`UPDATE IGNORE` 는 그 충돌을 건너뛰고, 남은 중복 연결은 그다음 `DELETE` 가 치운다.
+
+**기사 · 선수 연결이 잘못됐을 때** — 그 연결만 지운다.
+
+```sql
+DELETE FROM article_players WHERE content_hash='...' AND player_id=?;
+```
+
+주의할 점이 있다 — 그 기사의 연결이 하나도 남지 않으면 백필 대상 조건 (`NOT EXISTS (article_players)`) 에 다시 걸려 그 기사를 다시 추출하고 그만큼 다시 과금된다.
+지우기 전에 그 기사에 남은 연결이 있는지 먼저 확인한다.
+
+## 6. 생애주기 수동 전이
 
 자동 만료는 없다 (스펙 §6).
 시장 상황이 바뀌면 사람이 아래 `UPDATE` 를 직접 돌린다.
@@ -223,13 +279,13 @@ UPDATE players SET transfer_status='none'
 게이트 검출 사전 (`PlayerStore.gate_name_map`) 의 조회 조건은 `status IN ('confirmed','archived')` 라서, archived 행도 계속 잡힌다 — 과거 기사를 나중에 재번역해도 인명 보호가 유지된다.
 전이 후에는 §3.2 방식대로 site 를 다시 만들고 배포한다 (`_render` 를 직접 부르거나, `docs/runbook/2026-07-19-enrich-only-pass.md` §4 스니펫 재사용).
 
-## 6. 게이트 런북 §4.2 갱신
+## 7. 게이트 런북 §4.2 갱신
 
 `docs/runbook/2026-07-19-translation-quality-gates-ops.md` §4.2 (name_map 검출 사전 등재 절차) 는 YAML `name_map.yaml` 시절 서술이 그대로 남아 있었다.
 이 런북 도입에 맞춰, 등재 방법을 설명하는 1번 항목만 확정 CLI 참조로 갱신했다.
 판정 원칙 (시드 표기가 판정 기준 · 영문 값은 단어 경계로 매치) 은 DB 로 옮긴 뒤에도 동일해 나머지 항목은 그대로 뒀다.
 
-## 7. 참고
+## 8. 참고
 
 - 설계 스펙: `docs/superpowers/specs/2026-07-31-player-roster-db-design.md`
 - 구현 계획: `docs/superpowers/plans/2026-07-31-player-roster-db-impl.md`
