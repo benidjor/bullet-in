@@ -160,3 +160,24 @@ def test_search_candidates_stay_bounded():
     # 후보가 늘면 대상당 접촉이 그만큼 늘어난다 — 상한을 계약으로 고정
     for title, _ in BROWSER_VERIFIED:
         assert len(bf.search_candidates(title)) <= 5
+
+
+def test_apply_exclude_filters_by_hash_prefix():
+    # 도달 불가 확정 행을 접두사로 제외 — 미적중 행이 상한 슬롯을 점거해
+    # 뒤 대상에 못 가는 문제의 우회로 (2026-07-31 배치 1 실측)
+    targets = {"3146dc6a" + "0" * 56: "찾은 글", "9f00aa11" + "0" * 56: "못 찾는 글"}
+    out = bf.apply_exclude(targets, ["9f00aa11"])
+    assert list(out.values()) == ["찾은 글"]
+
+
+def test_apply_exclude_rejects_short_prefix():
+    # 8자 미만 접두사는 과잉 제외 위험 — 거부한다
+    import pytest
+    with pytest.raises(ValueError):
+        bf.apply_exclude({"a" * 64: "t"}, ["3146"])
+
+
+def test_apply_exclude_noop_when_empty():
+    targets = {"a" * 64: "t"}
+    assert bf.apply_exclude(targets, []) == targets
+    assert bf.apply_exclude(targets, None) == targets

@@ -171,9 +171,27 @@ def row_update(html: str, body_selector: str) -> dict | None:
             "journalist": extract_body_journalist(body)}
 
 
+def apply_exclude(targets: dict[str, str],
+                  exclude: list[str] | None) -> dict[str, str]:
+    """도달 불가 확정 행 제외 — content_hash 접두사 (8자 이상) 목록.
+
+    대상 선정이 published_at DESC 고정 정렬이라 검색 미적중 행이 --limit
+    슬롯을 계속 점거하고 검색어 후보 (최대 5회) 를 배치마다 재소모한다
+    (2026-07-31 배치 1 실측: 미적중 3건이 검색 13회 소모 → fetch 예산 소진).
+    2회 연속 미적중으로 확정된 행을 빼서 뒤 대상에 도달하게 한다."""
+    if not exclude:
+        return targets
+    for p in exclude:
+        if len(p) < 8:
+            raise ValueError(f"제외 접두사는 8자 이상: {p!r}")
+    return {h: t for h, t in targets.items()
+            if not any(h.startswith(p) for p in exclude)}
+
+
 async def backfill(pages: int = 3, limit: int | None = None,
                    dry_run: bool = False, force: bool = False,
-                   by_title: bool = False) -> dict[str, int]:
+                   by_title: bool = False,
+                   exclude: list[str] | None = None) -> dict[str, int]:
     stats = {"target": 0, "matched": 0, "filled": 0, "blocked": 0, "failed": 0}
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
     src = next(s for s in cfg["sources"] if s["source_id"] == "fmkorea")
@@ -196,6 +214,7 @@ async def backfill(pages: int = 3, limit: int | None = None,
     with engine.connect() as c:
         targets = {r["content_hash"]: r["title_original"]
                    for r in c.execute(_SELECT_SQL).mappings().all()}
+    targets = apply_exclude(targets, exclude)
     if limit:
         targets = dict(list(targets.items())[:limit])
     stats["target"] = len(targets)
@@ -270,10 +289,15 @@ def main() -> None:
     ap.add_argument("--by-title", action="store_true",
                     help="대상 제목에서 만든 검색어로 글 주소를 찾는다 "
                          "(고정 키워드 첫 페이지에 없는 오래된 글용 · 대상당 검색 1~4회)")
+    ap.add_argument("--exclude-hashes", default=None,
+                    help="제외할 content_hash 접두사 (8자 이상 · 쉼표 구분) — "
+                         "검색 도달 불가로 확정된 행이 --limit 슬롯을 점거하지 않게")
     args = ap.parse_args()
     s = asyncio.run(backfill(pages=args.pages, limit=args.limit,
                              dry_run=args.dry_run, force=args.force,
-                             by_title=args.by_title))
+                             by_title=args.by_title,
+                             exclude=(args.exclude_hashes.split(",")
+                                      if args.exclude_hashes else None)))
     print(f"대상 {s['target']} · 일치 {s['matched']} · 채움 {s['filled']} "
           f"· 금지·본문없음 {s['blocked']} · 실패 {s['failed']}")
 
