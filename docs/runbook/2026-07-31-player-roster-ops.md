@@ -79,7 +79,7 @@ uv run python -m bullet_in.confirm_player --name "Nico Williams" --ko "니코 �
   --category external --transfer-status in_link
 ```
 
-`--category` (squad · manager · external) 와 `--transfer-status` (none · in_link · in_done · out_link · out_done · link_dropped · other_club · loan_in · loan_out) 는 생략하면 기존 값을 유지한다.
+`--category` (squad · manager · director · external) 와 `--transfer-status` (none · in_link · in_done · out_link · out_done · link_dropped · other_club · loan_in · loan_out) 는 생략하면 기존 값을 유지한다.
 신규 후보는 자동 등재 시점에 이미 category=external · transfer_status=in_link 로 채워져 있으니, 그 값이 맞으면 두 옵션 다 생략해도 된다.
 이미 다른 선수가 확정한 `--ko` 값을 다시 쓰면 `ko_name 충돌: '...' 는 이미 다른 선수 (id=…) 의 확정 표기` 를 출력하고 중단한다 — 표기를 바꾸거나 대상 선수를 다시 확인한다.
 
