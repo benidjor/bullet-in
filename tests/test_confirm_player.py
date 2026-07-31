@@ -37,3 +37,11 @@ def test_recheck_excludes_roundup_reverse_axis():
                  title_original="Nico Williams to Arsenal gossip",
                  body_source="Nico Williams ...")]
     assert recheck_titles(rows, {"윌리엄스": "Williams"}) == []
+
+
+def test_recheck_excludes_loan_groundless():
+    # 원문에 loan 근거 없는 "임대" 제목 — 사전 인명은 근거 있으나 임대 무근거는 사전과 무관
+    # 확정 시 새 선수와 무관한 행이 재번역되지 않아야 함 (불필요한 과금 방지)
+    rows = [_row(title_ko="아스날, 윌리엄스 임대 검토",
+                 title_original="Arsenal consider Williams permanent deal")]
+    assert recheck_titles(rows, {"윌리엄스": "Williams"}) == []

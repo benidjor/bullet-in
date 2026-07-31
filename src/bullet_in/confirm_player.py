@@ -6,7 +6,7 @@
     uv run python -m bullet_in.confirm_player --name "Nico Williams" --ko "니코 윌리엄스" --dry-run
 """
 from __future__ import annotations
-import argparse, logging, os
+import logging
 from bullet_in.enrich import (BODY_AS_TITLE_SOURCES, NAME_MISSING_PREFIX,
                               detect_title_hallucination, detect_title_mistranslation)
 
@@ -24,7 +24,7 @@ def surname_warning(surname: str) -> str | None:
 def recheck_titles(rows: list[dict], name_map: dict[str, str]) -> list[str]:
     """저장된 번역 제목을 확장된 사전으로 재검사 — 의심 행 content_hash 목록 (스펙 §4.3).
     축 구성은 finalize_translation 1차 검출과 같다 (환각 + 역방향 · 라운드업 제외 · 트윗 예외).
-    임대 무근거 축은 사전과 무관해 이미 1차에서 걸렀으므로 여기서 다시 보지 않는다."""
+    임대 무근거 축은 사전과 무관해 여기서 제외한다 (확정 시 새 선수 무관 행이 재번역되지 않도록)."""
     suspects = []
     for row in rows:
         if not row.get("title_ko"):
@@ -36,7 +36,10 @@ def recheck_titles(rows: list[dict], name_map: dict[str, str]) -> list[str]:
         if row.get("source_id") != "bbc_gossip":
             rev = detect_title_mistranslation(row["title_ko"], row.get("title_original"),
                                               name_map, src_text)
+            # 임대 무근거 제외: 인명 누락 사유만 유지 (사전과 무관한 축 제거)
+            rev = [r for r in rev if r.startswith(NAME_MISSING_PREFIX)]
             if row.get("source_id") in BODY_AS_TITLE_SOURCES:
+                # BODY_AS_TITLE_SOURCES에서는 인명 누락도 제외
                 rev = [r for r in rev if not r.startswith(NAME_MISSING_PREFIX)]
             reasons += rev
         if reasons:
