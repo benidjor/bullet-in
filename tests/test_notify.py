@@ -250,15 +250,34 @@ def test_build_freshness_alert_zero_candidates_keeps_hint():
     assert "- 원인 후보: 셀렉터 드리프트 · 사이트 개편" in field["value"]
 
 
-def test_build_freshness_alert_candidates_present_drops_hint():
-    # 후보는 있으나 전부 기존 기사 = 수집 경로 정상 — 추측성 힌트를 붙이지 않는다
+def test_build_freshness_alert_candidates_present_omits_field():
+    # 후보는 있으나 전부 기존 기사 = 경로 정상 — 조치 신호가 아니라 필드에서 뺀다
+    # (2026-07-31 guardian 사례: 문구만 바꾸니 같은 알림이 하루 8회 반복됐다)
     checked, records = _stale_bbc()
     alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={"bbc_sport": 4}, fetch_errors={})
-    field = alert["fields"][0]
-    assert "- 이번 회차 후보 4건 — 수집 경로 정상 · 신규 없음" in field["value"]
-    assert "원인 후보" not in field["value"]
+    assert alert["title"] == "🕰️ 신선도 경고 — 오래된 소스 0건"
+    assert "경로 정상 생략 1" in alert["description"]
+    assert not [f for f in alert["fields"] if f["name"].startswith("BBC")]
+
+
+def test_freshness_alert_targets_only_actionable():
+    # 알림 발송 판단용 — 후보 0건 · fetch 오류만 대상, 경로 정상 stale 은 제외
+    checked, records = _stale_bbc()
+    assert notify.freshness_alert_targets(records, {"bbc_sport": 4}, {}) == []
+    assert [b.source_id for b in
+            notify.freshness_alert_targets(records, {}, {})] == ["bbc_sport"]
+    assert [b.source_id for b in
+            notify.freshness_alert_targets(records, {"bbc_sport": 4},
+                                           {"bbc_sport": "HTTP 503"})] == ["bbc_sport"]
+
+
+def test_freshness_alert_targets_legacy_returns_all_stale():
+    # candidates 미전달 (종전 호출) — stale 전부가 대상
+    checked, records = _freshness_inputs()
+    assert [b.source_id for b in
+            notify.freshness_alert_targets(records, None, None)] == ["x_afcstuff"]
 
 
 def test_build_freshness_alert_fetch_error_shows_error_not_hint():

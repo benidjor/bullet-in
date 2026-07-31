@@ -170,8 +170,7 @@ async def main(concurrency: int):
     records = evaluate_freshness({sid: wm.get(sid) for sid in sources},
                                  checked_at, default_hours, overrides)
     mart.record_freshness(run_id, checked_at, records)
-    breaches = [r for r in records if r.stale]
-    if breaches:
+    if notify.freshness_alert_targets(records, candidate_counts, errors):
         notify.send_alert(**notify.build_freshness_alert(
             records, default_hours, sources=sources, run_id=run_id,
             checked_at=checked_at, candidates=candidate_counts,
