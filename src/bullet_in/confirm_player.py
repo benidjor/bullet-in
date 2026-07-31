@@ -25,7 +25,7 @@ def surname_warning(surname: str) -> str | None:
 
 def recheck_titles(rows: list[dict], name_map: dict[str, str]) -> list[str]:
     """저장된 번역 제목을 확장된 사전으로 재검사 — 의심 행 content_hash 목록 (스펙 §4.3).
-    축 구성은 finalize_translation 1차 검출과 같다 (환각 + 역방향 · 라운드업 제외 · 트윗 예외).
+    축 구성은 finalize_translation 1차 검출에서 사전 무관 축을 뺀 조합이다 (환각 + 역방향 인명 누락 · 라운드업 제외 · 트윗 예외).
     임대 무근거 축은 사전과 무관해 여기서 제외한다 (확정 시 새 선수 무관 행이 재번역되지 않도록)."""
     suspects = []
     for row in rows:
@@ -142,11 +142,18 @@ def main(argv=None) -> int:
                    transfer_status=args.transfer_status, club=args.club)
     suspects = recheck_titles(mart.rows_for_hashes(hashes),
                               pstore.gate_name_map())
+    remaining = 0
     if suspects:
         mart.clear_translation(suspects)
         _converge(mart, pstore, engine, set(suspects))
+        targets = set(suspects)
+        remaining = sum(1 for r in mart.rows_missing_translation()
+                        if r["content_hash"] in targets)
+        if remaining:
+            log.warning("재번역 잔존 %d건 — 429 등으로 중단, 다음 회차가 수렴 (원문 제목 폴백으로 렌더됨)",
+                        remaining)
     _render(engine)
-    print(f"확정: {args.name} → {args.ko} · 등장 기사 {len(hashes)} · 재번역 {len(suspects)}")
+    print(f"확정: {args.name} → {args.ko} · 등장 기사 {len(hashes)} · 재번역 {len(suspects)} (잔존 {remaining})")
     return 0
 
 
