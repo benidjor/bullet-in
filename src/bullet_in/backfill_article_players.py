@@ -65,18 +65,25 @@ def main(argv=None) -> None:
     new_candidates: list[dict] = []
 
     extracted = extract_players_rows(targets, client, GEMINI_MODEL)
+    done = 0
     for h, raw in extracted.items():
-        pairs = roster.normalize_pairs(raw)
-        for cand in roster.record_article_players(pstore, h, pairs):
-            row = by_hash[h]
-            new_candidates.append({**cand, "title": row.get("title_original"),
-                                   "url": row.get("url")})
-        append_state(args.state, h)
+        try:
+            pairs = roster.normalize_pairs(raw)
+            for cand in roster.record_article_players(pstore, h, pairs):
+                row = by_hash[h]
+                new_candidates.append({**cand, "title": row.get("title_original"),
+                                       "url": row.get("url")})
+            append_state(args.state, h)
+            done += 1
+        except Exception:
+            log.warning(
+                "등재 실패 — 건너뜀 content_hash=%s (부분 커밋 시 재실행 대상에서 "
+                "빠질 수 있음 — 로그로 추적)", h, exc_info=True)
 
     if new_candidates:
         notify.send_alert(**notify.build_candidate_alert(
             new_candidates, run_id="backfill"))
-    print(f"처리 {len(extracted)} / {len(targets)} · 신규 후보 {len(new_candidates)}")
+    print(f"처리 {done} / {len(targets)} · 신규 후보 {len(new_candidates)}")
 
 
 if __name__ == "__main__":
