@@ -100,7 +100,7 @@ PARAPHRASE_PROMPT = (
     "\n\nTitle: {title}\nBody: {body}")
 
 EXTRACT_PLAYERS_PROMPT = (
-    "다음 아스날 FC 관련 기사에서 이 기사에서 아스날의 이적 · 거취 · 계약과 관련해 "
+    "다음 아스날 FC 관련 기사에서 아스날의 이적 · 거취 · 계약과 관련해 "
     "다뤄진 선수 · 감독을 추출한다.\n"
     '각 항목은 {{"full_name":"영문 풀네임","ko":"이 기사에서 쓴 한글 표기",'
     '"stage":"단계"}}.\n'
@@ -463,7 +463,7 @@ def extract_players_rows(rows: list[dict], client, model: str) -> dict[str, list
                 break
             log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
             continue
-        m = re.search(r"\{.*\}", msg.text, re.DOTALL)
+        m = re.search(r"\{.*\}", msg.text or "", re.DOTALL)
         try:
             pairs = json.loads(m.group(0))["players"] if m else None
         except (json.JSONDecodeError, KeyError, TypeError):

@@ -49,7 +49,7 @@ FROM players WHERE status='candidate' ORDER BY added_at DESC;
 ```
 
 알림은 유실될 수 있다.
-Discord 웹훅 발송 실패, 또는 `backfill_article_players` 의 `record_article_players` 가 여러 쌍을 처리하는 도중 일부만 커밋한 채 예외로 끊기는 경우 (드문 케이스지만 코드 리뷰에서 지목됨) 등이 실사례로 남아 있다.
+Discord 웹훅 발송 실패, 또는 `backfill_article_players` 의 `record_article_players` 가 여러 쌍을 처리하는 도중 일부만 커밋한 채 예외로 끊기는 경우 등이 가능 경로로 알려져 있다 (부분 커밋은 실제 발생 사례가 아니라 코드 리뷰가 지목한 경로다).
 이 조회는 알림 채널과 무관하게 DB 를 직접 보므로, 알림이 안 왔더라도 후보를 놓치지 않는 안전망이다.
 회차 관측을 할 때마다 습관적으로 함께 돌린다.
 
@@ -118,23 +118,42 @@ surname '...' 이 두 단어 — _has_name_context 가드가 근거를 못 찾�
 15 RPM 속도 한도 기준으로 대상 200~500행이면 20~35분 걸린다.
 **사용자 확인 없이 인자 없는 전체 실행을 하지 않는다** — 먼저 dry-run 으로 대상 건수를 보여주고, 진행 여부를 물은 뒤에만 본 실행으로 넘어간다.
 
-### 4.2. 실행
+### 4.2. 무인 실행 안전 — tmux · tee · 분할 실행
+
+`extract_players_rows` 는 대상 행 전체를 한 루프로 순회하며 Gemini 를 호출하고, 반환값을 다 모은 뒤에야 `backfill_article_players` 가 등재 (`record_article_players`) 와 state 기록을 시작한다.
+그래서 SSH 접속 끊김 · Ctrl-C 같은 하드 중단이 이 루프 도중 일어나면, 그때까지 호출해 받은 응답이 전량 유실된다.
+state 에는 아무것도 안 남아 있으니 재실행하면 이미 호출했던 행을 처음부터 다시 부르게 되고, 그만큼 다시 과금된다.
+대응은 두 가지다.
+
+- tmux (또는 nohup) 안에서 실행한다 — 터미널 · SSH 세션이 끊겨도 프로세스는 살아남는다.
+  출력은 다른 외부 접촉 명령과 동일하게 `tee` 로 파일에 남긴다.
+- 한 번에 전량을 부르는 대신 `--limit 100` 씩 나눠 실행한다.
+  중단이 나도 유실 폭이 그 배치 (최대 100행) 로 한정된다.
+
+```bash
+tmux new -s roster-backfill
+set -a; source .env; set +a
+uv run python -m bullet_in.backfill_article_players --limit 100 2>&1 | tee backfill_run1.log
+```
+
+### 4.3. 실행
 
 ```bash
 set -a; source .env; set +a
-uv run python -m bullet_in.backfill_article_players --limit 5 --dry-run   # 대상 건수만 확인
-uv run python -m bullet_in.backfill_article_players                      # 본 실행 (사용자 확인 후)
+uv run python -m bullet_in.backfill_article_players --dry-run             # 대상 건수만 확인
+uv run python -m bullet_in.backfill_article_players --limit 5             # 소량 실행 (본 실행 전 점검)
 ```
 
 회차 시각은 §3.4 와 같은 이유로 피한다.
+본 실행은 §4.2 방식 (tmux · tee · `--limit 100` 분할) 을 따른다.
 
-### 4.3. state 파일
+### 4.4. state 파일
 
 진행 상태는 기본 경로 `backfill_players_state.txt` (`.gitignore` 등재 · 커밋 대상 아님) 에 처리 완료 `content_hash` 를 한 줄씩 쌓는다.
 추출 결과가 0명인 행도 state 에 남아야 재실행 시 다시 과금되지 않는다 — 대상 판별이 `article_players` 존재 여부만으로는, 처리했지만 0명이었던 행과 아직 처리 안 한 행을 구분하지 못하기 때문이다.
 파싱 실패 행은 state 에 안 남아 다음 실행에서 자동 재시도된다.
 
-### 4.4. 429 재실행
+### 4.5. 429 재실행
 
 429 로 중단돼도 이미 처리된 행은 state 에 남아 있어 안전하다.
 그대로 재실행하면 `filter_targets` 가 state 에 있는 행을 걸러내고 남은 것만 이어서 처리한다.
