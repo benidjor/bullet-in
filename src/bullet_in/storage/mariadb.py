@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Engine
 from bullet_in.models import Article
 from bullet_in.quality import SourceFreshness
@@ -200,3 +200,26 @@ class MartStore:
                                     "outlet": r["outlet"],
                                     "retention": float(r["rewrite_retention"])}
                                    for r in high_rows]}
+
+    def rows_for_hashes(self, hashes: list[str]) -> list[dict]:
+        """확정 CLI 재검사 입력 — 대상 기사만 게이트 입력 컬럼으로 조회."""
+        if not hashes:
+            return []
+        sql = text(
+            "SELECT content_hash,source_id,title_original,title_ko,"
+            "body_source,body_excerpt,summary_ko FROM articles "
+            "WHERE content_hash IN :hs").bindparams(bindparam("hs", expanding=True))
+        with self.engine.connect() as c:
+            return [dict(r) for r in c.execute(sql, {"hs": hashes}).mappings().all()]
+
+    def clear_translation(self, hashes: list[str]) -> int:
+        """번역 4필드 초기화 — 재번역 큐 투입 (title_ko 만 지우면 재시도 판정이 어긋난다,
+        런북 2026-07-19 §5.2 와 같은 이유로 4필드 전부)."""
+        if not hashes:
+            return 0
+        sql = text(
+            "UPDATE articles SET title_ko=NULL, summary_ko=NULL, "
+            "summary3_ko=NULL, body_ko=NULL WHERE content_hash IN :hs"
+        ).bindparams(bindparam("hs", expanding=True))
+        with self.engine.begin() as c:
+            return c.execute(sql, {"hs": hashes}).rowcount

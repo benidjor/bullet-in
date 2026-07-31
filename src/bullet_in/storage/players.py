@@ -92,3 +92,22 @@ class PlayerStore:
         with self.engine.connect() as c:
             return c.execute(text("SELECT id FROM players WHERE ko_name=:ko"),
                              {"ko": ko_name}).scalar_one()
+
+    def get_player(self, full_name: str) -> dict | None:
+        with self.engine.connect() as c:
+            row = c.execute(text("SELECT * FROM players WHERE full_name=:fn"),
+                            {"fn": full_name}).mappings().first()
+        return dict(row) if row else None
+
+    def confirm(self, player_id: int, *, ko_name: str,
+                category: str | None = None, transfer_status: str | None = None,
+                club: str | None = None) -> None:
+        """후보 승격 (스펙 §4.3 1단계) — ko_name 기입 · 분류는 지정한 것만 갱신."""
+        with self.engine.begin() as c:
+            c.execute(text(
+                "UPDATE players SET status='confirmed', ko_name=:ko, "
+                "confirmed_at=:now, category=COALESCE(:cat, category), "
+                "transfer_status=COALESCE(:ts, transfer_status), "
+                "club=COALESCE(:club, club) WHERE id=:id"),
+                {"ko": ko_name, "now": _utcnow(), "cat": category,
+                 "ts": transfer_status, "club": club, "id": player_id})

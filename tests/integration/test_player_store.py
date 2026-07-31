@@ -114,3 +114,15 @@ def test_record_article_players_two_word_unmatched_gets_no_surname_fallback(engi
     ben_white_id = store.gate_player_id("화이트")
     assert created[0]["player_id"] != ben_white_id         # 기존 화이트와 다른 id
     assert store.articles_for(ben_white_id) == []          # 기존 화이트엔 링크 안 됨
+
+
+def test_confirm_promotes_candidate(engine):
+    store = PlayerStore(engine)
+    pid = store.insert_candidate(full_name="Nico Williams", first_name="Nico",
+                                 surname="Williams", ko_candidate="니코 윌리엄스",
+                                 first_seen=None)
+    store.confirm(pid, ko_name="니코 윌리엄스", category="external",
+                  transfer_status="in_link", club="Athletic Club")
+    p = store.get_player("Nico Williams")
+    assert p["status"] == "confirmed" and p["confirmed_at"] is not None
+    assert store.gate_name_map()["니코 윌리엄스"] == "Williams"   # 확정 즉시 사전 편입

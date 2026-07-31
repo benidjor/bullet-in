@@ -237,3 +237,14 @@ def test_set_rewrite_retention_and_high_retention_list(engine):
     assert [r["content_hash"] for r in high] == ["hr1"]
     assert high[0]["outlet"] == "The Athletic"
     assert round(high[0]["retention"], 2) == 0.93
+
+
+def test_rows_for_hashes_and_clear_translation(engine):
+    store = MartStore(engine)
+    store.upsert([_art(h="h1", url="https://x.test/1"), _art(h="h2", url="https://x.test/2")])
+    store.set_translation("h1", "제목", "요약", "3줄", "본문")
+    rows = store.rows_for_hashes(["h1"])
+    assert [r["content_hash"] for r in rows] == ["h1"]
+    assert rows[0]["title_ko"] == "제목"
+    assert store.clear_translation(["h1"]) == 1
+    assert {r["content_hash"] for r in store.rows_missing_translation()} >= {"h1", "h2"}
