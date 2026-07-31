@@ -171,9 +171,64 @@ def row_update(html: str, body_selector: str) -> dict | None:
             "journalist": extract_body_journalist(body)}
 
 
+_POST_ID_RE = re.compile(r"^\d{6,}$")
+
+
+def normalize_post_url(url: str) -> str:
+    """운영자가 붙여넣은 주소 → 글 주소.
+
+    검색 결과 주소 (search.php?…document_srl=NNN…) 와 글 직링크 둘 다 받는다."""
+    from urllib.parse import urlparse, parse_qs
+    parsed = urlparse(url)
+    srl = (parse_qs(parsed.query).get("document_srl") or [None])[0]
+    if srl and _POST_ID_RE.match(srl):
+        return f"https://www.fmkorea.com/{srl}"
+    tail = parsed.path.strip("/")
+    if _POST_ID_RE.match(tail):
+        return f"https://www.fmkorea.com/{tail}"
+    raise ValueError(f"fmkorea 글 주소가 아님: {url!r}")
+
+
+def load_post_urls(text: str) -> dict[str, str]:
+    """수동 주소 파일 → {해시 접두사: 글 주소}.
+
+    행 형식 "<content_hash 접두사 8자 이상> <주소>" · 빈 줄과 # 주석 허용.
+    검색이 못 찾는 글을 사람이 브라우저로 찾아 넘기는 경로라, 검색 단계 없이
+    글당 fetch 1회로 채운다 (2026-07-31 수동 회수 합의)."""
+    out: dict[str, str] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        prefix, url = line.split(None, 1)
+        if len(prefix) < 8:
+            raise ValueError(f"해시 접두사는 8자 이상: {prefix!r}")
+        out[prefix] = normalize_post_url(url.strip())
+    return out
+
+
+def apply_exclude(targets: dict[str, str],
+                  exclude: list[str] | None) -> dict[str, str]:
+    """도달 불가 확정 행 제외 — content_hash 접두사 (8자 이상) 목록.
+
+    대상 선정이 published_at DESC 고정 정렬이라 검색 미적중 행이 --limit
+    슬롯을 계속 점거하고 검색어 후보 (최대 5회) 를 배치마다 재소모한다
+    (2026-07-31 배치 1 실측: 미적중 3건이 검색 13회 소모 → fetch 예산 소진).
+    2회 연속 미적중으로 확정된 행을 빼서 뒤 대상에 도달하게 한다."""
+    if not exclude:
+        return targets
+    for p in exclude:
+        if len(p) < 8:
+            raise ValueError(f"제외 접두사는 8자 이상: {p!r}")
+    return {h: t for h, t in targets.items()
+            if not any(h.startswith(p) for p in exclude)}
+
+
 async def backfill(pages: int = 3, limit: int | None = None,
                    dry_run: bool = False, force: bool = False,
-                   by_title: bool = False) -> dict[str, int]:
+                   by_title: bool = False,
+                   exclude: list[str] | None = None,
+                   post_urls: dict[str, str] | None = None) -> dict[str, int]:
     stats = {"target": 0, "matched": 0, "filled": 0, "blocked": 0, "failed": 0}
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
     src = next(s for s in cfg["sources"] if s["source_id"] == "fmkorea")
@@ -196,7 +251,8 @@ async def backfill(pages: int = 3, limit: int | None = None,
     with engine.connect() as c:
         targets = {r["content_hash"]: r["title_original"]
                    for r in c.execute(_SELECT_SQL).mappings().all()}
-    if limit:
+    targets = apply_exclude(targets, exclude)
+    if not post_urls and limit:
         targets = dict(list(targets.items())[:limit])
     stats["target"] = len(targets)
     log.info("본문 빈 fmkorea 행 %d건", len(targets))
@@ -208,7 +264,21 @@ async def backfill(pages: int = 3, limit: int | None = None,
                                     request_gap_sec=REQUEST_GAP_SEC,
                                     exclude_titles=set(),
                                     max_posts=MAX_POSTS)
-    if by_title:
+    if post_urls:
+        # 수동 주소 채움 — 검색 없이 글당 fetch 1회. --limit 은 fetch 건수를 자른다.
+        matched = {}
+        for prefix, url in post_urls.items():
+            hits = [h for h in targets if h.startswith(prefix)]
+            if hits:
+                matched[hits[0]] = url
+            else:
+                log.warning("수동 주소 대상 아님 (이미 채워졌거나 접두사 불일치) — %s", prefix)
+        if limit:
+            matched = dict(list(matched.items())[:limit])
+        stats["target"] = len(matched)
+        write_last_contact(STATE_PATH, now)
+        log.info("수동 주소 채움 대상 %d/%d건", len(matched), len(post_urls))
+    elif by_title:
         matched, searches = {}, 0
         async with adapter._client() as c:
             for i, (h, title) in enumerate(targets.items()):
@@ -270,10 +340,21 @@ def main() -> None:
     ap.add_argument("--by-title", action="store_true",
                     help="대상 제목에서 만든 검색어로 글 주소를 찾는다 "
                          "(고정 키워드 첫 페이지에 없는 오래된 글용 · 대상당 검색 1~4회)")
+    ap.add_argument("--exclude-hashes", default=None,
+                    help="제외할 content_hash 접두사 (8자 이상 · 쉼표 구분) — "
+                         "검색 도달 불가로 확정된 행이 --limit 슬롯을 점거하지 않게")
+    ap.add_argument("--post-urls-file", default=None,
+                    help="수동 확인 글 주소 파일 (행: '<해시 접두사 8자+> <주소>') — "
+                         "지정 시 검색 없이 해당 행만 글당 fetch 1회로 채움")
     args = ap.parse_args()
+    post_urls = (load_post_urls(Path(args.post_urls_file).read_text())
+                 if args.post_urls_file else None)
     s = asyncio.run(backfill(pages=args.pages, limit=args.limit,
                              dry_run=args.dry_run, force=args.force,
-                             by_title=args.by_title))
+                             by_title=args.by_title,
+                             exclude=(args.exclude_hashes.split(",")
+                                      if args.exclude_hashes else None),
+                             post_urls=post_urls))
     print(f"대상 {s['target']} · 일치 {s['matched']} · 채움 {s['filled']} "
           f"· 금지·본문없음 {s['blocked']} · 실패 {s['failed']}")
 
