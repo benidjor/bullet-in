@@ -1,4 +1,16 @@
-from bullet_in.enrich import enrich_rows
+from bullet_in.enrich import enrich_rows, extract_players_rows
+
+class FullClient:
+    """백필 테스트용 — 사전 payload 반환 클라이언트."""
+    def __init__(self, payload):
+        self.models = self
+        self.payload = payload
+
+    def generate_content(self, **kw):
+        class R: pass
+        r = R()
+        r.text = __import__('json').dumps(self.payload)
+        return r
 
 class FakeModels:
     def generate_content(self, **kw):
@@ -1081,3 +1093,29 @@ def test_translate_prompts_list_player_stages():
                       "medical", "agreed", "other"):
             assert stage in prompt
         assert "official" not in prompt
+
+
+def test_extract_players_rows_returns_pairs_and_stops_on_429(caplog):
+    import logging as _logging
+    payload = {"players": [{"full_name": "Nico Williams", "ko": "니코 윌리엄스",
+                            "stage": "rumour"}]}
+    rows = [{"content_hash": "h1", "title_original": "T", "body_source": "B"}]
+    out = extract_players_rows(rows, FullClient(payload), "m")
+    assert out["h1"] == payload["players"]
+
+    class _Boom:
+        class models:
+            @staticmethod
+            def generate_content(**kw):
+                raise RuntimeError("429 RESOURCE_EXHAUSTED")
+    with caplog.at_level(_logging.WARNING):
+        out = extract_players_rows(rows, _Boom, "m")
+    assert out == {} and "429" in caplog.text
+
+
+def test_extract_players_prompt_lists_stages():
+    from bullet_in.enrich import EXTRACT_PLAYERS_PROMPT
+    for stage in ("rumour", "interest", "negotiating", "personal_terms",
+                  "medical", "agreed", "other"):
+        assert stage in EXTRACT_PLAYERS_PROMPT
+    assert "official" not in EXTRACT_PLAYERS_PROMPT
