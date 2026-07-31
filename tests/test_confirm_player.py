@@ -45,3 +45,11 @@ def test_recheck_excludes_loan_groundless():
     rows = [_row(title_ko="아스날, 윌리엄스 임대 검토",
                  title_original="Arsenal consider Williams permanent deal")]
     assert recheck_titles(rows, {"윌리엄스": "Williams"}) == []
+
+
+def test_category_choices_include_director():
+    # 단장 (sporting director) 등재용 값 — VARCHAR(16) 제약으로 director 표기
+    import inspect
+    from bullet_in import confirm_player
+    source = inspect.getsource(confirm_player.main)
+    assert '"director"' in source, "confirm_player.main 에 director choice 가 없음"

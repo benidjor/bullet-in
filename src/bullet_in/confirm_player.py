@@ -106,7 +106,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", required=True, help="players.full_name")
     ap.add_argument("--ko", required=True, help="검출용 한글 표기 (사람 확정 값)")
-    ap.add_argument("--category", choices=["squad", "manager", "external"])
+    ap.add_argument("--category", choices=["squad", "manager", "external", "director"])
     ap.add_argument("--transfer-status", dest="transfer_status",
                     choices=["none", "in_link", "in_done", "out_link", "out_done",
                              "link_dropped", "other_club", "loan_in", "loan_out"])

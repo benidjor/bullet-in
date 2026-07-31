@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS players (
   ko_name VARCHAR(50),                      -- 검출용 한글 표기 (사람 확정만 기록)
   ko_candidate VARCHAR(50),                 -- 발굴용 표기 (모델 추출 후보, 게이트 미공급)
   club VARCHAR(50),                         -- 현 소속팀
-  category VARCHAR(16) NOT NULL,            -- squad | manager | external
+  category VARCHAR(16) NOT NULL,            -- squad | manager | director | external
   status VARCHAR(16) NOT NULL,              -- candidate | confirmed | archived
   transfer_status VARCHAR(16) NOT NULL,     -- none | in_link | in_done | out_link | out_done | link_dropped | other_club | loan_in | loan_out
   origin VARCHAR(16) NOT NULL,              -- curated | extracted
@@ -73,6 +73,8 @@ category 는 현재 신분, transfer_status 는 표시용 이적 축이다.
 | 임대 이탈 성사 | squad | loan_out | 임대 이적 |
 | 스쿼드 선수 방출설 | squad | out_link | 방출 링크 |
 | 방출 성사 | external | out_done | 방출 완료 |
+
+단장 등 보드진은 director (예: 안드레아 베르타) — 이적 축은 none, 게이트 보호 목적의 등재다 (2026-07-31 추가).
 
 선수 단위 방출 축은 이 컬럼이 처음 담는다.
 기사 단위 방출 단계 분류는 별도 트랙이다 (§10 범위 밖).
