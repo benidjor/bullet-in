@@ -6,7 +6,9 @@
     uv run python -m bullet_in.confirm_player --name "Nico Williams" --ko "니코 윌리엄스" --dry-run
 """
 from __future__ import annotations
+import argparse
 import logging
+import os
 from bullet_in.enrich import (BODY_AS_TITLE_SOURCES, NAME_MISSING_PREFIX,
                               detect_title_hallucination, detect_title_mistranslation)
 
@@ -46,3 +48,108 @@ def recheck_titles(rows: list[dict], name_map: dict[str, str]) -> list[str]:
             log.warning("재검사 의심 content_hash=%s 사유=%s", row["content_hash"], reasons)
             suspects.append(row["content_hash"])
     return suspects
+
+
+def _converge(mart, pstore, engine, targets: set[str]) -> None:
+    """대상 행만 재번역 수렴 — 런북 2026-07-19 §3 의 함수 조합을 대상 축소로 재사용."""
+    import yaml
+    from pathlib import Path
+    from google import genai
+    from bullet_in.enrich import (enrich_rows, finalize_translation,
+                                  partition_by_body_level, partition_generatable,
+                                  rewrite_rows_guarded, title_only_rows)
+    from bullet_in.run import GEMINI_MODEL
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
+                or {}).get("replacements", {})
+    club_map = (yaml.safe_load(Path("config/club_map.yaml").read_text())
+                or {}).get("clubs", {})
+    name_map = pstore.gate_name_map()
+    for _ in range(3):
+        missing = [r for r in mart.rows_missing_translation()
+                   if r["content_hash"] in targets]
+        if not missing:
+            break
+        by_hash = {r["content_hash"]: r for r in missing}
+        generatable, title_only = partition_generatable(missing)
+        rewrite_rows, translate_rows = partition_by_body_level(generatable)
+        results = {}
+        results.update(enrich_rows(translate_rows, client, GEMINI_MODEL, mode="translate"))
+        rewritten, gate_reports = rewrite_rows_guarded(rewrite_rows, client, GEMINI_MODEL)
+        results.update(rewritten)
+        results.update(title_only_rows(title_only, client, GEMINI_MODEL))
+        for h, v in results.items():
+            t, s, s3, b, _ = finalize_translation(v, by_hash.get(h, {}),
+                                                  glossary, name_map, club_map)
+            mart.set_translation(h, t, s, s3, b)
+        for h, rep in gate_reports.items():
+            mart.set_rewrite_retention(h, rep["retention"])
+
+
+def _render(engine) -> None:
+    """run.py 서빙 경로와 1:1 재렌더 (SERVING_SELECT_SQL import — 런북 스니펫 드리프트 방지)."""
+    from sqlalchemy import text
+    from bullet_in.run import SERVING_SELECT_SQL
+    from bullet_in.score import load_sources
+    from bullet_in.credibility import load_registry, journalist_directory, outlet_directory
+    from bullet_in.serve.render import write_site
+    with engine.connect() as c:
+        rows = [dict(r) for r in c.execute(text(SERVING_SELECT_SQL)).mappings().all()]
+    write_site(rows, load_sources("config/sources.yaml"), "site",
+               directory=journalist_directory("config/credibility.yaml"),
+               registry=load_registry("config/credibility.yaml"),
+               outlet_dir=outlet_directory("config/credibility.yaml"))
+    print(f"site 재생성: {len(rows)} 행")
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--name", required=True, help="players.full_name")
+    ap.add_argument("--ko", required=True, help="검출용 한글 표기 (사람 확정 값)")
+    ap.add_argument("--category", choices=["squad", "manager", "external"])
+    ap.add_argument("--transfer-status", dest="transfer_status",
+                    choices=["none", "in_link", "in_done", "out_link", "out_done",
+                             "link_dropped", "other_club", "loan_in", "loan_out"])
+    ap.add_argument("--club")
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args(argv)
+
+    from sqlalchemy import create_engine
+    from bullet_in.storage.mariadb import MartStore
+    from bullet_in.storage.players import PlayerStore
+    engine = create_engine(os.environ["MARIADB_URL"])
+    mart, pstore = MartStore(engine), PlayerStore(engine)
+    player = pstore.get_player(args.name)
+    if player is None:
+        print(f"선수 없음: {args.name}")
+        return 1
+    if (w := surname_warning(player["surname"])):
+        log.warning(w)
+
+    holder = pstore.ko_name_holder(args.ko)
+    if holder is not None and holder != player["id"]:
+        print(f"ko_name 충돌: '{args.ko}' 는 이미 다른 선수 (id={holder}) 의 확정 표기")
+        return 1
+
+    hashes = pstore.articles_for(player["id"])
+    if args.dry_run:
+        trial_map = {**pstore.gate_name_map(), args.ko: player["surname"]}
+        suspects = recheck_titles(mart.rows_for_hashes(hashes), trial_map)
+        print(f"[dry-run] 등장 기사 {len(hashes)} · 재번역 대상 {len(suspects)}")
+        return 0
+
+    pstore.confirm(player["id"], ko_name=args.ko, category=args.category,
+                   transfer_status=args.transfer_status, club=args.club)
+    suspects = recheck_titles(mart.rows_for_hashes(hashes),
+                              pstore.gate_name_map())
+    if suspects:
+        mart.clear_translation(suspects)
+        _converge(mart, pstore, engine, set(suspects))
+    _render(engine)
+    print(f"확정: {args.name} → {args.ko} · 등장 기사 {len(hashes)} · 재번역 {len(suspects)}")
+    return 0
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    raise SystemExit(main())

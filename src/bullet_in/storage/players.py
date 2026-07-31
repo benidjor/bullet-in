@@ -88,6 +88,13 @@ class PlayerStore:
                 "SELECT content_hash FROM article_players WHERE player_id=:p"),
                 {"p": player_id}).all()]
 
+    def ko_name_holder(self, ko_name: str) -> int | None:
+        """ko_name 을 이미 보유한 선수 id (candidate 제외) — 중복 승격 충돌 검사."""
+        with self.engine.connect() as c:
+            return c.execute(text(
+                "SELECT id FROM players WHERE ko_name=:ko AND status != 'candidate'"),
+                {"ko": ko_name}).scalar()
+
     def gate_player_id(self, ko_name: str) -> int:
         with self.engine.connect() as c:
             return c.execute(text("SELECT id FROM players WHERE ko_name=:ko"),
