@@ -20,6 +20,7 @@ from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows
                               retranslation_summary)
 from bullet_in.tone import select_tone_backfill
 from bullet_in import transfer_stage
+from bullet_in import roster
 from bullet_in.serve.render import write_site, write_ops
 from bullet_in.quality import success_rate, volume_anomalies, evaluate_freshness, evaluate_coverage
 from bullet_in import notify
@@ -100,15 +101,29 @@ async def main(concurrency: int):
     rewritten, gate_reports = rewrite_rows_guarded(rewrite_rows, client, GEMINI_MODEL)
     results.update(rewritten)
     results.update(title_only_rows(title_only, client, GEMINI_MODEL))
+
+    # 추출 쌍 반영 (스펙 §4.1 · §4.2): 저장은 번역 채택 여부와 무관 — 원문 근거 추출이고
+    # 재시도 회차의 재추출은 upsert 멱등이다
+    by_hash = {r["content_hash"]: r for r in missing}
+    pstore = PlayerStore(engine)
+    new_candidates: list[dict] = []
+    for h, v in results.items():
+        pairs = roster.normalize_pairs(v.get("players"))
+        for cand in roster.record_article_players(pstore, h, pairs):
+            row = by_hash.get(h, {})
+            new_candidates.append({**cand, "title": row.get("title_original"),
+                                   "url": row.get("url")})
+    if new_candidates:
+        notify.send_alert(**notify.build_candidate_alert(new_candidates, run_id=run_id))
+
     glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
                 or {}).get("replacements", {})
-    name_map = PlayerStore(engine).gate_name_map()
+    name_map = pstore.gate_name_map()
     if not name_map:
         logging.getLogger(__name__).warning(
             "players 사전이 비어 있음 — migrate_roster 미실행이면 인명 게이트가 꺼진 채 돈다")
     club_map = (yaml.safe_load(Path("config/club_map.yaml").read_text())
                 or {}).get("clubs", {})
-    by_hash = {r["content_hash"]: r for r in missing}
     finals = {h: finalize_translation(v, by_hash.get(h, {}), glossary, name_map, club_map)
               for h, v in results.items()}
     for h, (title_ko, s_ko, s3_ko, body_ko, _) in finals.items():

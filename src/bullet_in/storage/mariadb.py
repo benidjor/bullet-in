@@ -84,7 +84,7 @@ class MartStore:
     def rows_missing_translation(self) -> list[dict]:
         with self.engine.connect() as c:
             rows = c.execute(text(
-                "SELECT content_hash,source_id,title_original,body_excerpt,"
+                "SELECT content_hash,url,source_id,title_original,body_excerpt,"
                 "body_source,body_level,outlet,summary_ko "
                 "FROM articles WHERE title_ko IS NULL")).mappings().all()
         return [dict(r) for r in rows]
