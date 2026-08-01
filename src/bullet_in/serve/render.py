@@ -785,6 +785,11 @@ def _decorate(row: dict, sources: dict, now: datetime,
     a["_datetime"] = published_datetime(row)
     a["_time"] = time_in_group(row)
     a["_show_summary"] = show_summary(row.get("tier"))
+    # 링크 선수 동향 라벨 (B안 2026-08-01): 영입 링크 확정 선수가 연결됐고
+    # 표시 제목에 아스날이 없는 글 — 왜 이 글이 있는지 화면이 설명한다
+    a["_ctx"] = (bool(row.get("linked_player"))
+                 and "아스날" not in a["_title"]
+                 and "arsenal" not in a["_title"].lower())
     return a
 
 

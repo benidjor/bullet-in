@@ -33,7 +33,11 @@ GEMINI_MODEL = "gemini-3.1-flash-lite"
 SERVING_SELECT_SQL = (
     "SELECT content_hash,url,source_id,title_original,title_ko,summary_ko,"
     "summary3_ko,body_ko,body_source,image_url,images_json,outlet,journalist,team,"
-    "transfer_stage,tier,confidence_score,published_at,published_precision,fetched_at "
+    "transfer_stage,tier,confidence_score,published_at,published_precision,fetched_at,"
+    # 링크 선수 동향 라벨 판별 (B안 2026-08-01) — 영입 링크 확정 선수 연결 여부
+    "EXISTS(SELECT 1 FROM article_players ap JOIN players p ON p.id=ap.player_id "
+    "WHERE ap.content_hash=articles.content_hash AND p.status='confirmed' "
+    "AND p.transfer_status='in_link') AS linked_player "
     "FROM articles")
 
 # started_at 은 Python UTC 바인딩 · finished_at 은 UTC_TIMESTAMP() — 세션 TZ 무관 (spec §5)

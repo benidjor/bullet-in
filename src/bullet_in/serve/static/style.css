@@ -230,6 +230,7 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .cardhead{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:0 0 5px;font-size:12px}
 .cardhead .src{font-family:var(--serif);font-weight:700;color:var(--mut)}
 .cardhead .cred{color:var(--dim)}
+.cardhead .ctx{color:#8a6d1a;border:1px solid #d8c37a;background:#faf3dc;padding:1px 6px;border-radius:2px;font-size:11px}
 .cardhead .when{margin-left:auto;color:var(--dim);font-variant-numeric:tabular-nums}
 .item .htitle{font-family:var(--serif);font-weight:700;line-height:1.34;margin:0 0 5px;color:var(--tone,var(--ink))}
 .item.g0 .htitle,.item.g1 .htitle{font-weight:900;font-size:17px}
