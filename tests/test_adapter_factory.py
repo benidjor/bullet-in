@@ -88,3 +88,29 @@ def test_factory_x_playwright_defaults_to_cited_path():
                         "config": {"handle": "afcstuff"}}]}
     a = build_adapters(cfg)[0]
     assert a.self_source is False
+
+def _fmkorea_cfg(extra_config=None):
+    return {"sources": [
+        {"source_id": "fmkorea", "adapter": "fmkorea", "enabled": True,
+         "config": {"search_url": "https://fm.test/s?t={target}&kw={keyword}",
+                    "search_keywords": [{"keyword": "아스날", "target": "title"}],
+                    **(extra_config or {})}}]}
+
+def test_factory_injects_fmkorea_relevance_filter():
+    cfg = _fmkorea_cfg({"relevance_terms": ["아스날", "아스널", "arsenal"]})
+    a = build_adapters(cfg, fmkorea_player_names={"디오망데"})[0]
+    assert a.relevance_terms == ["아스날", "아스널", "arsenal"]
+    assert a.player_names == {"디오망데"}
+
+def test_factory_fmkorea_no_filter_by_default():
+    # relevance_terms 없는 config + player_names 미전달 = 필터 없음 (기존 동작)
+    a = build_adapters(_fmkorea_cfg())[0]
+    assert a.relevance_terms == [] and a.player_names == set()
+
+def test_live_config_has_relevance_terms_triple():
+    # 재발 방지 규칙 (트러블슈팅 2026-08-01 §4): 구단명 판정은 3종 동시
+    import yaml
+    from pathlib import Path
+    cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
+    c = next(s for s in cfg["sources"] if s["source_id"] == "fmkorea")["config"]
+    assert set(c["relevance_terms"]) == {"아스날", "아스널", "arsenal"}

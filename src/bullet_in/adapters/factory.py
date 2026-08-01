@@ -11,7 +11,7 @@ from bullet_in.adapters.fmkorea import FmkoreaAdapter
 
 log = logging.getLogger(__name__)
 
-def build_adapters(cfg: dict) -> list:
+def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None) -> list:
     out = []
     for s in cfg["sources"]:
         if not s.get("enabled", True):
@@ -52,7 +52,9 @@ def build_adapters(cfg: dict) -> list:
                 base_url=c.get("base_url", "https://www.fmkorea.com"),
                 body_selector=c.get("body_selector", ".xe_content"),
                 max_posts=c.get("max_posts", 15),
-                proxy=os.environ.get("FMKOREA_PROXY")))
+                proxy=os.environ.get("FMKOREA_PROXY"),
+                relevance_terms=c.get("relevance_terms"),
+                player_names=fmkorea_player_names))
         else:
             raise ValueError(f"unknown adapter: {kind}")
     return out
