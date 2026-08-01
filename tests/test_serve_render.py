@@ -830,3 +830,27 @@ def test_detail_note_stays_for_translated_body():
     html = render_article(_decorated(row), [], row["content_hash"], SOURCES, NOW)
     assert "자동 번역한 것입니다" in html
     assert "원문 본문을 확보하지 못해" not in html
+
+
+def test_linked_player_context_badge_only_on_market_articles():
+    # B안 (2026-08-01 확정): 영입 링크 확정 선수가 연결되고 제목에 아스날이 없는
+    # 시장 동향 글에만 "아스날 링크 선수" 라벨 — 아스날 글 · 연결 없는 글은 그대로
+    html = render_index(
+        [_row(content_hash="hctx", linked_player=1,
+              title_ko="비니시우스 주니오르, 레알 마드리드 잔류 결정"),
+         _row(content_hash="hars", linked_player=1,
+              title_ko="아스날, 기마랑이스 영입 임박"),
+         _row(content_hash="hnone", linked_player=0,
+              title_ko="첼시, 조던 헨더슨 영입전 선두")],
+        SOURCES, NOW)
+    assert html.count("아스날 링크 선수") == 1
+    assert '<span class="ctx">아스날 링크 선수</span>' in html
+
+
+def test_linked_player_badge_skips_english_arsenal_title():
+    # 한국어 제목이 비어 영문 제목이 표시되는 경우 — Arsenal 포함이면 아스날 글로 본다
+    html = render_index(
+        [_row(content_hash="hen", linked_player=1, title_ko=None,
+              title_original="Arsenal close in on Bruno Guimaraes deal")],
+        SOURCES, NOW)
+    assert "아스날 링크 선수" not in html

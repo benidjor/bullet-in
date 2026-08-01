@@ -10,7 +10,7 @@
   <article class="lead">
     <a href="article/{{ lead.content_hash }}.html">
       {% if lead.image_url %}<div class="limg"><img src="{{ lead.image_url }}" alt="" loading="eager" referrerpolicy="no-referrer" onerror="this.closest('.limg').style.display='none'"></div>{% endif %}
-      <div class="cardhead">{{ stage_badge(lead._stage_disp) }}<span class="src">{{ lead._outlet }}</span>{% if lead._reader_tier %}<span class="cred">{{ lead._reader_tier }}</span>{% endif %}<span class="when">{{ lead._date or lead._when }}</span></div>
+      <div class="cardhead">{{ stage_badge(lead._stage_disp) }}<span class="src">{{ lead._outlet }}</span>{% if lead._reader_tier %}<span class="cred">{{ lead._reader_tier }}</span>{% endif %}{% if lead._ctx %}<span class="ctx">아스날 링크 선수</span>{% endif %}<span class="when">{{ lead._date or lead._when }}</span></div>
       <h2>{{ lead._title }}</h2>
       {% if lead.summary_ko %}<p class="dek">{{ lead.summary_ko }}</p>{% endif %}
     </a>
@@ -21,7 +21,7 @@
     <a class="mitem" href="article/{{ m.content_hash }}.html">
       {% if m.image_url %}<div class="rimg"><img src="{{ m.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.rimg').style.display='none'"></div>{% else %}<div class="rimg"></div>{% endif %}
       <div>
-        <div class="cardhead">{{ stage_badge(m._stage_disp) }}<span class="src">{{ m._outlet }}</span>{% if m._reader_tier %}<span class="cred">{{ m._reader_tier }}</span>{% endif %}<span class="when">{{ m._date or m._when }}</span></div>
+        <div class="cardhead">{{ stage_badge(m._stage_disp) }}<span class="src">{{ m._outlet }}</span>{% if m._reader_tier %}<span class="cred">{{ m._reader_tier }}</span>{% endif %}{% if m._ctx %}<span class="ctx">아스날 링크 선수</span>{% endif %}<span class="when">{{ m._date or m._when }}</span></div>
         <h3>{{ m._title }}</h3>
       </div>
     </a>
