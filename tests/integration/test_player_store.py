@@ -146,3 +146,42 @@ def test_ko_name_holder_blocks_duplicate_promotion(engine):
     assert holder is not None and holder != pid2   # 확정 CLI 가 여기서 차단해야 함
 
     assert store.ko_name_holder("존재하지않음") is None
+
+
+def test_confirmed_ko_names_excludes_archived_and_candidate(engine):
+    store = PlayerStore(engine)
+    store.seed(ROSTER)
+    with engine.begin() as c:
+        c.execute(text("UPDATE players SET status='archived' WHERE full_name='Leandro Trossard'"))
+        c.execute(text(
+            "INSERT INTO players (full_name,surname,ko_candidate,category,status,"
+            "transfer_status,origin,added_at) VALUES "
+            "('New Guy','Guy','뉴가이','external','candidate','in_link','extracted',NOW())"))
+    names = store.confirmed_ko_names()
+    assert "트로사르" not in names        # archived 제외 (필터 인정 집합은 confirmed 전체)
+    assert "뉴가이" not in names          # 후보 미공급
+    assert "사카" in names
+
+
+def test_active_link_players_only_links_ordered_by_id(engine):
+    store = PlayerStore(engine)
+    store.seed(ROSTER)
+    with engine.begin() as c:
+        c.execute(text("UPDATE players SET transfer_status='in_link' WHERE full_name='Bukayo Saka'"))
+        c.execute(text("UPDATE players SET transfer_status='out_link' WHERE full_name='William Saliba'"))
+    rows = store.active_link_players()
+    names = [n for _, n in rows]
+    # ROSTER 에 이미 in_link/out_link 확정 선수가 있어 (2026-07-31 후보 확정 운영) 전체가
+    # 사카·살리바 둘만은 아니다 — 이번에 지정한 둘이 seed 순서상 id 최소라 맨 앞에 온다.
+    assert names[:2] == ["사카", "살리바"]
+    assert [pid for pid, _ in rows] == sorted(pid for pid, _ in rows)
+
+
+def test_active_link_players_excludes_archived_link(engine):
+    store = PlayerStore(engine)
+    store.seed(ROSTER)
+    with engine.begin() as c:
+        c.execute(text("UPDATE players SET transfer_status='in_link', status='archived' "
+                       "WHERE full_name='Bukayo Saka'"))
+    names = [n for _, n in store.active_link_players()]
+    assert "사카" not in names   # archived 는 활성 이적축에서 제외

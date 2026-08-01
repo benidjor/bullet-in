@@ -53,7 +53,13 @@ async def main(concurrency: int):
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
     sources = load_sources("config/sources.yaml")
     registry = load_registry("config/credibility.yaml")
-    adapters = build_adapters(cfg)
+
+    engine = create_engine(os.environ["MARIADB_URL"])
+    mart = MartStore(engine)
+    mart.ensure_schema()
+    pstore = PlayerStore(engine)
+    # fmkorea 무관 글 필터 인정 집합 주입 (워치리스트 스펙 §3.2) — 배치와 동일 집합
+    adapters = build_adapters(cfg, fmkorea_player_names=pstore.confirmed_ko_names())
 
     t0 = time.perf_counter()
     started_at_utc = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -81,9 +87,6 @@ async def main(concurrency: int):
     mongo = MongoClient(os.environ["MONGO_URI"])[os.environ.get("MONGO_DB", "bulletin")]
     RawStore(mongo).insert_many(raw)
 
-    engine = create_engine(os.environ["MARIADB_URL"])
-    mart = MartStore(engine)
-    mart.ensure_schema()
     arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
     logging.getLogger(__name__).info(
         "drop 집계 — 동일 내용 생략 %d · 기존 기사 유지 %d · 여자팀 %d · 기자 allowlist %d",
@@ -108,7 +111,6 @@ async def main(concurrency: int):
 
     # 추출 쌍 반영 (스펙 §4.1 · §4.2): 저장은 번역 채택 여부와 무관 — 원문 근거 추출이고
     # 재시도 회차의 재추출은 upsert 멱등이다
-    pstore = PlayerStore(engine)
     try:
         by_hash = {r["content_hash"]: r for r in missing}
         new_candidates: list[dict] = []
