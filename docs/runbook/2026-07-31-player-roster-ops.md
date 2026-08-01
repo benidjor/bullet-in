@@ -62,6 +62,8 @@ docker exec -i bullet-in-mariadb-1 mariadb -uroot -pbulletin bulletin -e "SELECT
 
 `-p` 뒤 비밀번호는 `docker-compose.yml` 의 `MARIADB_ROOT_PASSWORD` 값이다.
 출력의 `id` 는 생애주기 전이 (§6) 에서 대상 선수를 지정할 때 쓰는 번호다.
+후보가 0건이면 헤더도 없이 아무것도 출력되지 않는다 (mariadb 배치 모드 동작 · 2026-08-01 실측)
+— 무출력을 명령 실패로 오독하지 말 것, 실패는 stderr 에 오류 문구가 따로 찍힌다.
 
 한 줄로 둔 이유가 있다.
 여러 줄 Python 스크립트를 셸에 붙여넣으면 마지막 `EOF` 앞에 공백이 섞이는 순간 종료 표시로 인식되지 않아, 셸이 입력을 계속 기다린 채 멈춘다 (2026-07-31 실제로 겪음).
