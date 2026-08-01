@@ -854,3 +854,13 @@ def test_linked_player_badge_skips_english_arsenal_title():
               title_original="Arsenal close in on Bruno Guimaraes deal")],
         SOURCES, NOW)
     assert "아스날 링크 선수" not in html
+
+
+def test_linked_player_badge_skips_arsenal_variant_spelling_title():
+    # 첫 회차 실측 오폭 (2026-08-01 15:00): 번역이 "아스널" 변형 표기를 쓰면
+    # 제외 조건을 빠져나가 아스날 글에 라벨이 붙었다 — 변형 표기도 아스날 글로 본다
+    html = render_index(
+        [_row(content_hash="hvar", linked_player=1,
+              title_ko="월드컵 여파, 아스널 여름 이적시장 계획에 미칠 영향은?")],
+        SOURCES, NOW)
+    assert "아스날 링크 선수" not in html

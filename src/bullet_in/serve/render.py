@@ -789,6 +789,7 @@ def _decorate(row: dict, sources: dict, now: datetime,
     # 표시 제목에 아스날이 없는 글 — 왜 이 글이 있는지 화면이 설명한다
     a["_ctx"] = (bool(row.get("linked_player"))
                  and "아스날" not in a["_title"]
+                 and "아스널" not in a["_title"]  # 번역 변형 표기 (첫 회차 실측 오폭)
                  and "arsenal" not in a["_title"].lower())
     return a
 
