@@ -794,3 +794,93 @@ def test_sources_yaml_has_arteta_keyword_with_title_guard():
     arteta = next(k for k in kws if "아르테타" in k["keyword"])
     assert arteta["target"] == "title_content"
     assert arteta["title_must_contain"] == "아르테타"
+
+
+# ---- 무관 글 필터 (스펙 2026-08-01 §3.2) ----
+
+UNRELATED_SEARCH = ('<a class="hx" href="/index.php?document_srl=71">'
+                    '[BBC] 유벤투스 새 감독 발표</a>')
+UNRELATED_POST = ('<div class="xe_content"><p>유벤투스 소식.</p>'
+                  '<p>https://ex.test/u</p></div>')
+UNRELATED_ART = '<html><body><article><p>Juventus news only.</p></article></body></html>'
+
+def _filter_adapter(**kw):
+    return FmkoreaAdapter(
+        source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+        search_keywords=[{"keyword": "kw1", "target": "title"}],
+        base_url="https://www.fmkorea.com", **kw)
+
+def _mock_single_post(search_html, post_html, art_html, art_url="https://ex.test/u"):
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(
+        return_value=httpx.Response(200, text=search_html))
+    respx.get("https://www.fmkorea.com/71").mock(
+        return_value=httpx.Response(200, text=post_html))
+    respx.get(art_url).mock(return_value=httpx.Response(200, text=art_html))
+
+@respx.mock
+def test_filter_off_when_not_injected():
+    # 인자 미주입 = 필터 없음 — 백필 등 기존 호출부 회귀 가드
+    _mock_single_post(UNRELATED_SEARCH, UNRELATED_POST, UNRELATED_ART)
+    a = _filter_adapter()
+    assert len(asyncio.run(a.fetch())) == 1
+
+@respx.mock
+def test_filter_passes_club_term_in_title():
+    search = ('<a class="hx" href="/index.php?document_srl=71">'
+              '[BBC] 아스날, 유벤투스와 협상</a>')
+    _mock_single_post(search, UNRELATED_POST, UNRELATED_ART)
+    a = _filter_adapter(relevance_terms=["아스날", "아스널", "arsenal"])
+    assert len(asyncio.run(a.fetch())) == 1
+
+@respx.mock
+def test_filter_passes_club_term_in_body_only():
+    # 제목엔 구단명 없음 · 언론사 본문에 Arsenal — 대소문자 무시 (_squash)
+    art = '<html><body><article><p>Talks with Arsenal continue.</p></article></body></html>'
+    _mock_single_post(UNRELATED_SEARCH, UNRELATED_POST, art)
+    a = _filter_adapter(relevance_terms=["아스날", "아스널", "arsenal"])
+    assert len(asyncio.run(a.fetch())) == 1
+
+@respx.mock
+def test_filter_passes_player_name_in_title():
+    search = ('<a class="hx" href="/index.php?document_srl=71">'
+              '[BBC] 디오망데, PSG 와 협상</a>')
+    _mock_single_post(search, UNRELATED_POST, UNRELATED_ART)
+    a = _filter_adapter(relevance_terms=["아스날", "아스널", "arsenal"],
+                        player_names={"디오망데"})
+    assert len(asyncio.run(a.fetch())) == 1
+
+@respx.mock
+def test_filter_drops_unrelated_and_counts(caplog):
+    _mock_single_post(UNRELATED_SEARCH, UNRELATED_POST, UNRELATED_ART)
+    a = _filter_adapter(relevance_terms=["아스날", "아스널", "arsenal"],
+                        player_names={"디오망데"})
+    with caplog.at_level("INFO"):
+        items = asyncio.run(a.fetch())
+    assert items == []
+    assert a.relevance_dropped == 1
+    assert any("무관 글" in r.message for r in caplog.records)
+
+@respx.mock
+def test_filter_squash_matching_variant_spacing():
+    # 변형 표기 붙여쓰기 ("아스널이") 도 공백 무시 비교로 잡는다
+    search = ('<a class="hx" href="/index.php?document_srl=71">'
+              '[BBC] 아 스널이 원하는 선수</a>')
+    _mock_single_post(search, UNRELATED_POST, UNRELATED_ART)
+    a = _filter_adapter(relevance_terms=["아스널"])
+    assert len(asyncio.run(a.fetch())) == 1
+
+# ---- 검색 실패 카운터 (스펙 §6 — 커서 유지 판단 입력) ----
+
+@respx.mock
+def test_search_failures_counted_on_429():
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(429))
+    a = _filter_adapter()
+    assert asyncio.run(a.fetch()) == []
+    assert a.search_failures == 1
+
+@respx.mock
+def test_search_failures_zero_on_success():
+    _mock_single_post(UNRELATED_SEARCH, UNRELATED_POST, UNRELATED_ART)
+    a = _filter_adapter()
+    asyncio.run(a.fetch())
+    assert a.search_failures == 0
