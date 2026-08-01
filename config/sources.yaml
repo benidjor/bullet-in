@@ -148,4 +148,6 @@ sources:
       base_url: "https://www.fmkorea.com"
       body_selector: ".xe_content"
       max_posts: 15
+      # 무관 글 필터 인정 구단 키워드 — 변형 표기 3종 동시 (트러블슈팅 2026-08-01 §4)
+      relevance_terms: ["아스날", "아스널", "arsenal"]
     enabled: true  # 퍼가기 금지 정책·429 대응 구현 완료(2026-06-28)

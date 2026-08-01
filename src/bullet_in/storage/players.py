@@ -106,6 +106,21 @@ class PlayerStore:
                             {"fn": full_name}).mappings().first()
         return dict(row) if row else None
 
+    def confirmed_ko_names(self) -> set[str]:
+        """무관 글 필터 인정 집합 (워치리스트 스펙 §3.2) — confirmed 전체 (스쿼드 포함)."""
+        with self.engine.connect() as c:
+            return {r[0] for r in c.execute(text(
+                "SELECT ko_name FROM players WHERE status='confirmed' "
+                "AND ko_name IS NOT NULL")).all()}
+
+    def active_link_players(self) -> list[tuple[int, str]]:
+        """워치리스트 로테이션 명단 (스펙 §3.1) — 활성 이적축 · id 순."""
+        with self.engine.connect() as c:
+            return [(r[0], r[1]) for r in c.execute(text(
+                "SELECT id, ko_name FROM players WHERE status='confirmed' "
+                "AND transfer_status IN ('in_link','out_link') "
+                "AND ko_name IS NOT NULL ORDER BY id")).all()]
+
     def confirm(self, player_id: int, *, ko_name: str,
                 category: str | None = None, transfer_status: str | None = None,
                 club: str | None = None) -> None:

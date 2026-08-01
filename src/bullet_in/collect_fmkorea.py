@@ -54,13 +54,14 @@ def tunnel_alive(proxy_url: str, timeout: float = 3.0) -> bool:
 def build_fmkorea_adapter(cfg: dict, proxy: str | None, *, pages: int = 1,
                           request_gap_sec: float = 0.0,
                           exclude_titles: set[str] | None = None,
-                          max_posts: int | None = None) -> FmkoreaAdapter:
+                          max_posts: int | None = None,
+                          search_keywords: list[dict] | None = None) -> FmkoreaAdapter:
     """config 에서 fmkorea 소스 블록을 읽어 어댑터를 만든다 (factory 와 동일 인자).
     선택 인자는 백필 회차 전용이고, 기본값이면 정기 회차와 같은 어댑터가 된다."""
     s = next(x for x in cfg["sources"] if x["source_id"] == "fmkorea")
     c = s["config"]
     return FmkoreaAdapter(
-        "fmkorea", c["search_url"], c["search_keywords"],
+        "fmkorea", c["search_url"], search_keywords if search_keywords is not None else c["search_keywords"],
         item_selector=c.get("item_selector", "a.hx"),
         base_url=c.get("base_url", "https://www.fmkorea.com"),
         body_selector=c.get("body_selector", ".xe_content"),

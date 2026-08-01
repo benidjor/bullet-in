@@ -180,7 +180,9 @@ class FmkoreaAdapter:
                  body_selector: str = ".xe_content", max_posts: int = 15,
                  proxy: str | None = None, pages: int = 1,
                  request_gap_sec: float = 0.0,
-                 exclude_titles: set[str] | None = None):
+                 exclude_titles: set[str] | None = None,
+                 relevance_terms: list[str] | None = None,
+                 player_names: set[str] | None = None):
         self.source_id = source_id
         self.search_url = search_url            # {keyword} · {target} 자리표시 포함
         self.search_keywords = search_keywords
@@ -192,6 +194,10 @@ class FmkoreaAdapter:
         self.pages = pages
         self.request_gap_sec = request_gap_sec
         self.exclude_titles = exclude_titles or set()
+        self.relevance_terms = relevance_terms or []
+        self.player_names = player_names or set()
+        self.search_failures = 0      # 이번 fetch 에서 실패한 키워드 검색 수
+        self.relevance_dropped = 0    # 무관 글 필터 탈락 수
 
     async def _gap(self) -> None:
         """fmkorea 요청 사이 간격 — 0 이면 대기 없음 (정기 회차 동작 불변)."""
@@ -201,6 +207,7 @@ class FmkoreaAdapter:
     async def _discover(self, c: httpx.AsyncClient) -> list[tuple[str, str]]:
         """키워드 × 페이지 검색 → a.hx 파싱 → 정규 글 URL.
         키워드별 결과를 라운드로빈으로 max_posts 배분한다."""
+        self.search_failures = 0
         per_kw, seen, first = [], set(), True
         for kw in self.search_keywords:
             results = []
@@ -220,10 +227,12 @@ class FmkoreaAdapter:
                     else:
                         log.warning("fmkorea 검색 HTTP %s kw=%s p=%s — 스킵",
                                     e.response.status_code, kw["keyword"], page)
+                    self.search_failures += 1
                     break                       # 이 키워드의 남은 페이지도 중단
                 except httpx.HTTPError as e:
                     log.warning("fmkorea 검색 실패 kw=%s p=%s err=%s — 스킵",
                                 kw["keyword"], page, e)
+                    self.search_failures += 1
                     break
                 soup = BeautifulSoup(r.text, "html.parser")
                 for a in soup.select(self.item_selector):
@@ -242,6 +251,16 @@ class FmkoreaAdapter:
                     results.append((title, post_url))
             per_kw.append(results)
         return _round_robin(per_kw, self.max_posts)
+
+    def _relevant(self, title: str, body: str) -> bool:
+        """무관 글 필터 (스펙 §3.2) — 구단 키워드 (제목 · 본문) 또는 선수명 (제목) 포함 시 통과.
+        인정 집합 미주입이면 필터 없음 — 백필 등 기존 호출부 무영향."""
+        if not self.relevance_terms and not self.player_names:
+            return True
+        t, b = _squash(title), _squash(body)
+        if any(_squash(k) in t or _squash(k) in b for k in self.relevance_terms):
+            return True
+        return any(_squash(n) in t for n in self.player_names)
 
     async def _process(self, c: httpx.AsyncClient,
                        matched: list[tuple[str, str]]) -> list[RawItem]:
@@ -300,6 +319,10 @@ class FmkoreaAdapter:
                         body = _body_text(html, self.body_selector)
                         lang, material_level = "ko", 1
             body = strip_publish_datetime(body)
+            if not self._relevant(title, body):
+                self.relevance_dropped += 1
+                log.info("fmkorea 무관 글 필터 탈락 — title=%s url=%s", title, url)
+                continue
             journalist = journalist or extract_body_journalist(body)
             body_level = material_level if body else 0
             if pub is None:
