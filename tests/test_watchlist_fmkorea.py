@@ -1,7 +1,95 @@
+import asyncio
+from datetime import datetime, timezone
+from bullet_in import watchlist_fmkorea
+from bullet_in.models import RawItem
 from bullet_in.watchlist_fmkorea import (read_cursor, write_cursor, next_slice,
                                          build_keywords, next_cursor)
 
 IDS = [10, 20, 30, 40, 50]
+
+
+class _FakeAdapter:
+    def __init__(self, raw, search_failures=0):
+        self._raw = raw
+        self.search_failures = search_failures
+        self.relevance_dropped = 0
+        self.relevance_terms = []
+        self.player_names = set()
+    async def fetch(self):
+        return self._raw
+
+class _FakeMart:
+    def __init__(self):
+        pass
+    def ensure_schema(self):
+        pass
+    def db_now(self):
+        return datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+    def source_watermarks(self):
+        return {}
+
+class _FakePStore:
+    def __init__(self, players):
+        self._players = players
+    def active_link_players(self):
+        return self._players
+    def confirmed_ko_names(self):
+        return {"디오망데"}
+
+
+def _run_main(monkeypatch, tmp_path, *, adapter, players, dry_run=False,
+              persisted=None):
+    monkeypatch.setenv("MARIADB_URL", "fake://")
+    monkeypatch.setattr(watchlist_fmkorea, "create_engine", lambda url: None)
+    monkeypatch.setattr(watchlist_fmkorea, "MartStore", lambda e: _FakeMart())
+    monkeypatch.setattr(watchlist_fmkorea, "PlayerStore", lambda e: _FakePStore(players))
+    monkeypatch.setattr(watchlist_fmkorea, "build_fmkorea_adapter",
+                        lambda cfg, proxy, **kw: adapter)
+    monkeypatch.setattr(watchlist_fmkorea, "persist",
+                        lambda raw, mart: (persisted or []).append(raw) or (len(raw), 0, 0))
+    monkeypatch.setattr(watchlist_fmkorea, "STATE_PATH", tmp_path / "stamp")
+    monkeypatch.setattr(watchlist_fmkorea, "CURSOR_PATH", tmp_path / "cursor")
+    monkeypatch.delenv("FMKOREA_PROXY", raising=False)
+    asyncio.run(watchlist_fmkorea.main(dry_run=dry_run, force=True))
+
+
+_RAW = [RawItem(source_id="fmkorea", source_type="html", url="https://fm.test/1",
+                fetched_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                raw_payload={"title": "[BBC] 디오망데", "body": "b", "body_level": 1})]
+_PLAYERS = [(10, "디오망데"), (20, "히메네스")]
+
+
+def test_main_advances_cursor_on_success(monkeypatch, tmp_path):
+    _run_main(monkeypatch, tmp_path, adapter=_FakeAdapter(_RAW), players=_PLAYERS)
+    assert watchlist_fmkorea.read_cursor(tmp_path / "cursor") == 20
+    assert (tmp_path / "stamp").exists()          # 접촉 스탬프 공유 기록
+
+def test_main_holds_cursor_on_search_failure(monkeypatch, tmp_path):
+    _run_main(monkeypatch, tmp_path,
+              adapter=_FakeAdapter(_RAW, search_failures=1), players=_PLAYERS)
+    assert watchlist_fmkorea.read_cursor(tmp_path / "cursor") is None
+
+def test_main_dry_run_no_persist_no_cursor(monkeypatch, tmp_path):
+    persisted = []
+    _run_main(monkeypatch, tmp_path, adapter=_FakeAdapter(_RAW), players=_PLAYERS,
+              dry_run=True, persisted=persisted)
+    assert persisted == []                        # 적재 없음
+    assert watchlist_fmkorea.read_cursor(tmp_path / "cursor") is None
+    assert (tmp_path / "stamp").exists()          # 실접촉이므로 스탬프는 기록
+
+def test_main_zero_active_links_exits_clean(monkeypatch, tmp_path):
+    _run_main(monkeypatch, tmp_path, adapter=_FakeAdapter([]), players=[])
+    assert not (tmp_path / "stamp").exists()      # 검색 0회 — 접촉 없음
+
+def test_watchlist_guard_uses_60min_gap():
+    # 가드 60분 (스펙 §3.1) — collect 의 should_supplement 를 GAP_HOURS 로 재사용
+    from bullet_in.collect_fmkorea import should_supplement
+    now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+    from datetime import timedelta
+    assert should_supplement(now - timedelta(minutes=30), now,
+                             gap_hours=watchlist_fmkorea.GAP_HOURS) is False
+    assert should_supplement(now - timedelta(minutes=61), now,
+                             gap_hours=watchlist_fmkorea.GAP_HOURS) is True
 
 def test_next_slice_from_start_when_no_cursor():
     assert next_slice(IDS, None, size=3) == [10, 20, 30]
