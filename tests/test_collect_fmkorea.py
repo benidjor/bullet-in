@@ -141,3 +141,15 @@ def test_persist_returns_load_dup_blocked_3tuple(monkeypatch):
     assert result == (1, 1, 1)          # 적재 1 · 동일 내용 생략 1 · 기존 기사 유지 1
     assert len(mart.upserted) == 1
     assert mart.upserted[0].url == new_url
+
+
+def test_build_fmkorea_adapter_search_keywords_override():
+    kws = [{"keyword": "디오망데", "target": "title"}]
+    a = build_fmkorea_adapter(_CFG, None, search_keywords=kws, max_posts=5)
+    assert a.search_keywords == kws
+    assert a.max_posts == 5
+
+
+def test_build_fmkorea_adapter_search_keywords_default_is_config():
+    a = build_fmkorea_adapter(_CFG, None)
+    assert a.search_keywords == [{"keyword": "아스날", "target": "title"}]
