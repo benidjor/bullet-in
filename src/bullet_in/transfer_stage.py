@@ -18,6 +18,14 @@ SIDEBAR_STAGES: list[tuple[str, str, str]] = [
 
 OTHER = "other"
 
+DIRECTIONS = {"in", "out", "none"}
+
+
+def normalize_direction(value: str | None) -> str:
+    """LLM이 돌려준 방향이 허용 값이면 그대로, 아니면 none으로 강등."""
+    return value if value in DIRECTIONS else "none"
+
+
 STAGE_ENUMS: list[str] = [e for e, _, _ in SIDEBAR_STAGES]
 _LABEL = {e: label for e, label, _ in SIDEBAR_STAGES}
 _CSS = {e: css for e, _, css in SIDEBAR_STAGES}
@@ -42,7 +50,12 @@ def is_displayable(stage: str | None) -> bool:
     return (stage or "") in _LABEL
 
 
-def rule_stage(source_id: str | None) -> str | None:
-    """소스 조건 규칙 단계 (spec §4.1) — 공홈만 official, 그 외는 None(LLM 분류 몫).
+def rule_stage(source_id: str | None) -> tuple[str | None, str | None]:
+    """소스 조건 규칙 (stage, direction) — 방향 축 스펙 §4.1.
+    공홈은 stage 만 고정 (방향은 LLM 몫) · 가십은 둘 다 고정 (LLM 완전 제외).
     official 은 이 규칙 경로에서만 생성된다 (LLM enum 에서 제외 · 반환 시 강등)."""
-    return "official" if source_id == "arsenal_official" else None
+    if source_id == "arsenal_official":
+        return "official", None
+    if source_id == "bbc_gossip":
+        return "rumour", "none"
+    return None, None

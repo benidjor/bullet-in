@@ -29,8 +29,18 @@ def test_is_displayable_excludes_other_and_none():
     assert ts.is_displayable(None) is False
 
 
-def test_rule_stage_official_only_for_arsenal_official():
-    # 오피셜은 공홈 소스 규칙 전용 (spec §4.1) — 그 외 소스·None 은 LLM 몫
-    assert ts.rule_stage("arsenal_official") == "official"
-    assert ts.rule_stage("bbc_sport") is None
-    assert ts.rule_stage(None) is None
+def test_rule_stage_returns_stage_direction_pairs():
+    # 규칙 경로 2형태 (스펙 2026-08-02 §4.1) — 공홈은 stage 만 고정 (방향은 LLM 몫),
+    # 가십은 둘 다 고정 (다주제 라운드업은 대표 단계 · 방향이 성립하지 않음)
+    assert ts.rule_stage("arsenal_official") == ("official", None)
+    assert ts.rule_stage("bbc_gossip") == ("rumour", "none")
+    assert ts.rule_stage("bbc_sport") == (None, None)
+    assert ts.rule_stage(None) == (None, None)
+
+
+def test_normalize_direction_keeps_valid_else_none():
+    assert ts.normalize_direction("in") == "in"
+    assert ts.normalize_direction("out") == "out"
+    assert ts.normalize_direction("none") == "none"
+    assert ts.normalize_direction("bogus") == "none"
+    assert ts.normalize_direction(None) == "none"
