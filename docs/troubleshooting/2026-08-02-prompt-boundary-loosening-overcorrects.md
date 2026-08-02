@@ -48,4 +48,5 @@
 - 정정 PR — #201 (제외 4종 · dry-run 복귀 5 · 대조군 4 유지)
 - 재분류 절차 — `docs/runbook/2026-06-30-transfer-stage-classification-ops.md` §3.2
 - 실측 원장 — `docs/superpowers/2026-07-28-content-trust-audit-handoff.md` §3
+- 같은 재분류에서 드러난 다른 계열 결함 — `docs/troubleshooting/2026-08-02-origin-error-page-stored-as-body.md`
 
