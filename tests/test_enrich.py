@@ -302,12 +302,17 @@ def test_stage_prompt_keeps_other_for_non_transfer_only():
         assert boundary in STAGE_PROMPT, f"STAGE_PROMPT 가 경계 유형 '{boundary}' 를 누락"
 
 
-def test_stage_prompt_keeps_roundups_and_staff_news_as_other():
-    """다주제 라운드업 · 칼럼은 대표 단계가 성립하지 않고, 감독 · 스태프 인사는 선수 이적이 아니다.
-    경계 유형 보강이 이 둘까지 단계로 끌어가지 않도록 프롬프트에 명시한다."""
+def test_stage_prompt_keeps_roundups_and_non_transfer_news_as_other():
+    """other 완화가 이적 아닌 글까지 끌어가지 않도록 제외 목록을 함께 못 박는다.
+    2026-08-02 표적 재분류에서 스폰서십 계약 2건 · 재계약 1건 · 서비스 공지 1건이
+    단계를 받은 과교정을 실측해 추가한 규칙이다."""
     from bullet_in.enrich import STAGE_PROMPT
     assert "시장 라운드업 · 총평 · 칼럼은 대표 단계가 성립하지 않으므로 other" in STAGE_PROMPT
-    assert "감독 · 스태프 인사도 other" in STAGE_PROMPT
+    for excluded in ("스폰서십 · 유니폼 · 중계권 같은 상업 계약",
+                     "소속 구단과의 재계약 · 계약 연장",
+                     "감독 · 스태프 인사",
+                     "기사가 아닌 공지 · 안내 · 목록 링크"):
+        assert excluded in STAGE_PROMPT, f"STAGE_PROMPT 가 이적 아닌 유형 '{excluded}' 를 누락"
 
 
 def test_stage_prompt_covers_non_arsenal_transfers():
