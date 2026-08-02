@@ -24,7 +24,7 @@ Tier 2-b (PR #18) 로 도입된 영입 단계 분류 (`articles.transfer_stage`)
 '이적 합의' (agreed) 신설과 함께 official 부여 방식이 LLM 판정에서 소스 규칙으로 바뀌었다.
 설계 배경은 `docs/superpowers/specs/2026-07-19-transfer-stage-overhaul-design.md` §2 · §4 참고.
 
-- **규칙 경로만 official 을 생성한다.** `transfer_stage.rule_stage(source_id)` 는 `source_id` 가 `arsenal_official` (공홈) 인 행만 `"official"` 을 반환하고, 그 외는 `None` (LLM 분류 몫) 이다. `run.py` 의 분류 패스가 미태깅 행을 규칙 대상 / LLM 대상으로 나눠, 규칙 대상은 LLM 호출 없이 바로 `set_stage` 한다.
+- **규칙 경로만 official 을 생성한다.** `transfer_stage.rule_stage(source_id)` 는 공홈 (`arsenal_official`) 행에만 `official` 을 부여한다 (2026-08-02 방향 축 이후 반환값은 `("official", None)` 형태의 쌍이다 — §3.1 참고). `run.py` 의 분류 패스가 미태깅 행을 규칙 대상 / LLM 대상으로 나눠, 규칙 대상은 LLM 호출 없이 바로 `set_stage` 한다.
 - **LLM enum 에서 official 이 제거됐다.** `STAGE_PROMPT` 는 더 이상 official 을 제시하지 않는다 — 공홈이 아닌 소스는 구조적으로 official 이 될 수 없다.
 - **모델이 그래도 official 을 반환하면 agreed 로 강등한다.** `enrich.classify_stage_rows` 가 `stage == "official"` 응답을 agreed 로 낮추고 `WARNING` 로그를 남긴다 — 정상 흐름에서는 뜨지 않아야 하는 신호다.
 - **진단: 비공홈 official 불변량.** 아래 SQL 은 항상 0 을 반환해야 한다. 0 이 아니면 규칙 분리가 깨졌거나 강등 방어를 우회한 경로가 있다는 뜻이다.
@@ -68,6 +68,7 @@ from sqlalchemy import create_engine
 from google import genai
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import classify_stage_rows
+from bullet_in.run import GEMINI_MODEL
 from bullet_in import transfer_stage
 
 engine = create_engine(os.environ["MARIADB_URL"])
@@ -79,17 +80,20 @@ rows = mart.rows_missing_stage()
 print(f"미태깅: {len(rows)}")
 
 llm_rows = []
+stage_ruled = {}
 for r in rows:
-    ruled = transfer_stage.rule_stage(r["source_id"])
-    if ruled:
-        mart.set_stage(r["content_hash"], ruled)
-    else:
-        llm_rows.append(r)
+    stage_fixed, direction_fixed = transfer_stage.rule_stage(r["source_id"])
+    if stage_fixed and direction_fixed:      # 가십 — 단계 · 방향 둘 다 고정 (LLM 제외)
+        mart.set_stage(r["content_hash"], stage_fixed, direction_fixed)
+        continue
+    if stage_fixed:                          # 공홈 — 단계만 고정 · 방향은 LLM 판정
+        stage_ruled[r["content_hash"]] = stage_fixed
+    llm_rows.append(r)
 
-out = classify_stage_rows(llm_rows, client, "gemini-2.5-flash-lite")
+out = classify_stage_rows(llm_rows, client, GEMINI_MODEL)
 print(f"이번 회차 LLM 분류: {len(out)}")
-for h, stage in out.items():
-    mart.set_stage(h, stage)
+for h, (stage, direction) in out.items():
+    mart.set_stage(h, stage_ruled.get(h, stage), direction)
 PY
 ```
 
