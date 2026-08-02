@@ -312,10 +312,12 @@ def test_outlet_display_promoted_and_non_x_rows_unchanged():
 
 
 def test_facet_stage_counts_bbc_gossip_as_rumour():
-    # 카드 필터 키는 bbc_gossip → rumour 고정 (_decorate) — 사이드바 건수도 같은 키로
-    # 세야 카운트와 필터 결과가 일치한다 (2026-07-25 필터 도달 수정)
+    # 가십 루머 롤업 하드코딩은 저장 계층 규칙 (rule_stage) 으로 이동했다
+    # (방향 축 스펙 §5) — facet_counts 는 더 이상 source_id 로 override 하지 않고
+    # 저장값을 그대로 센다. 배포판 실측으로 bbc_gossip 전행이 이미 rumour 로
+    # 저장돼 있어 사이드바 건수는 하드코딩 제거 전후로 동일하다.
     arts = [{"source_id": "bbc_gossip", "outlet": None, "tier": 4, "team": "arsenal",
-             "transfer_stage": "interest"}]
+             "transfer_stage": "rumour"}]
     f = facet_counts(arts, {"bbc_gossip": {"display_name": "BBC Football Gossip"}})
     assert f["stage"]["rumour"] == 1
     assert f["stage"]["interest"] == 0

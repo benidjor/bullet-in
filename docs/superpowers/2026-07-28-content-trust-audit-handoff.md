@@ -213,7 +213,9 @@ with engine.connect() as c:
     rows = [dict(r) for r in c.execute(text(
         "SELECT content_hash, source_id, tier, title_original, title_ko, summary_ko, "
         "transfer_stage FROM articles WHERE transfer_stage IS NOT NULL")).mappings().all()]
-target = [r for r in rows if not transfer_stage.rule_stage(r["source_id"])]
+# 2026-08-02 방향 축 도입으로 rule_stage 가 (stage, direction) 튜플을 반환하게 됐다
+# (스펙 §4) — 항상 truthy 이므로 첫 원소로 판정해야 한다.
+target = [r for r in rows if transfer_stage.rule_stage(r["source_id"])[0] is None]
 
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 runA = classify_stage_rows(target, client, GEMINI_MODEL)

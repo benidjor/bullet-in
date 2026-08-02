@@ -42,6 +42,7 @@ fmkorea 도 세어야 한다 (2026-07-30 개정).
 `run.py` 의 enrich 블록과 같은 함수 · 순서를 재사용한다 — 규칙이 두 벌로 갈라지지 않게 새 로직을 만들지 않는다.
 저장 직전 후처리 (표기 사전 · 환각 게이트 4축 · 문단 보정) 는 `enrich.finalize_translation` 한 벌뿐이므로 그것을 import 해서 쓴다.
 여기에 `set_translation` 을 직접 부르면 게이트 경고 로그가 안 남고 400자 초과 문단이 안 쪼개져, 가십 단신 카드가 조용히 깨진다.
+마지막 분류 블록도 run.py 의 현행 분류 패스와 동일한 형태를 유지한다 (규칙 경로 2형태 · 방향 축 스펙 §4).
 
 ```bash
 uv run python - <<'EOF'
@@ -54,6 +55,7 @@ from bullet_in.enrich import (classify_stage_rows, enrich_rows,
                               partition_generatable, rewrite_rows_guarded,
                               title_only_rows)
 from bullet_in.run import GEMINI_MODEL
+from bullet_in import transfer_stage
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.storage.players import PlayerStore
 
@@ -86,10 +88,18 @@ for attempt in range(3):
     print(f"패스 {attempt + 1}: {len(results)} / {len(missing)} 성공 "
           f"· 재작성 {len(rewritten)} · 제목만 {len(title_only)}")
 print("최종 미번역 잔존:", len(mart.rows_missing_translation()))
-staged = mart.rows_missing_stage()
-if staged:
-    for h, s in classify_stage_rows(staged, client, GEMINI_MODEL).items():
-        mart.set_stage(h, s)
+llm_rows = []
+stage_ruled = {}
+for r in mart.rows_missing_stage():
+    stage_fixed, direction_fixed = transfer_stage.rule_stage(r["source_id"])
+    if stage_fixed and direction_fixed:
+        mart.set_stage(r["content_hash"], stage_fixed, direction_fixed)
+        continue
+    if stage_fixed:
+        stage_ruled[r["content_hash"]] = stage_fixed
+    llm_rows.append(r)
+for h, (stage, direction) in classify_stage_rows(llm_rows, client, GEMINI_MODEL).items():
+    mart.set_stage(h, stage_ruled.get(h, stage), direction)
 print("미분류 잔존:", len(mart.rows_missing_stage()))
 EOF
 ```
