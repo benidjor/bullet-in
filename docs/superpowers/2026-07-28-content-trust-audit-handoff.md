@@ -223,8 +223,8 @@ runB = classify_stage_rows(target, client, GEMINI_MODEL)
 
 stored = {r["content_hash"]: r["transfer_stage"] for r in target}
 common = set(runA) & set(runB)
-noise = [h for h in common if runA[h] != runB[h]]
-solid = [h for h in common if runA[h] == runB[h] and runA[h] != stored[h]]
+noise = [h for h in common if runA[h][0] != runB[h][0]]
+solid = [h for h in common if runA[h][0] == runB[h][0] and runA[h][0] != stored[h]]
 print(f"흔들림 {len(noise)} · 재현 불일치 {len(solid)} / 공통 {len(common)}")
 ```
 
