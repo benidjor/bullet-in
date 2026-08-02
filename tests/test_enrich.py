@@ -201,36 +201,46 @@ class _StageClient:
     def __init__(self, text, exc=None): self.models = _StageModels(text, exc)
 
 
-def test_classify_returns_hash_to_stage():
-    payload = ('[{"content_hash":"a","stage":"negotiating"},'
-               '{"content_hash":"b","stage":"agreed"}]')
+def test_classify_returns_stage_and_direction():
+    payload = ('[{"content_hash":"a","stage":"negotiating","direction":"in"},'
+               '{"content_hash":"b","stage":"agreed","direction":"out"}]')
     rows = [{"content_hash": "a", "title_original": "Arsenal in talks", "summary_ko": "협상"},
-            {"content_hash": "b", "title_original": "Arsenal confirm", "summary_ko": "발표"}]
+            {"content_hash": "b", "title_original": "Trossard exit agreed", "summary_ko": "합의"}]
     out = classify_stage_rows(rows, _StageClient(payload), "m")
-    assert out == {"a": "negotiating", "b": "agreed"}
+    assert out == {"a": ("negotiating", "in"), "b": ("agreed", "out")}
 
 
 def test_classify_demotes_invalid_stage_to_other():
-    payload = '[{"content_hash":"a","stage":"bogus"}]'
+    payload = '[{"content_hash":"a","stage":"bogus","direction":"in"}]'
     out = classify_stage_rows([{"content_hash": "a", "title_original": "T", "summary_ko": ""}],
                               _StageClient(payload), "m")
-    assert out == {"a": "other"}
+    assert out == {"a": ("other", "in")}
+
+
+def test_classify_demotes_invalid_or_missing_direction_to_none():
+    # direction 이 허용 밖 값이거나 응답에 아예 없으면 none 강등 (모호 → 무표시가 안전)
+    payload = ('[{"content_hash":"a","stage":"rumour","direction":"sideways"},'
+               '{"content_hash":"b","stage":"rumour"}]')
+    rows = [{"content_hash": "a", "title_original": "A", "summary_ko": ""},
+            {"content_hash": "b", "title_original": "B", "summary_ko": ""}]
+    out = classify_stage_rows(rows, _StageClient(payload), "m")
+    assert out == {"a": ("rumour", "none"), "b": ("rumour", "none")}
 
 
 def test_classify_demotes_official_to_agreed():
     """프롬프트에 없어도 모델이 official을 뱉으면 agreed로 강등 (spec §4.3 불변량)."""
-    payload = '[{"content_hash":"h1","stage":"official"}]'
+    payload = '[{"content_hash":"h1","stage":"official","direction":"in"}]'
     rows = [{"content_hash": "h1", "title_original": "t", "summary_ko": "s"}]
     out = classify_stage_rows(rows, _StageClient(payload), "m")
-    assert out == {"h1": "agreed"}
+    assert out == {"h1": ("agreed", "in")}
 
 
 def test_classify_omits_missing_hashes():
-    payload = '[{"content_hash":"a","stage":"rumour"}]'   # b 누락
+    payload = '[{"content_hash":"a","stage":"rumour","direction":"none"}]'   # b 누락
     rows = [{"content_hash": "a", "title_original": "A", "summary_ko": ""},
             {"content_hash": "b", "title_original": "B", "summary_ko": ""}]
     out = classify_stage_rows(rows, _StageClient(payload), "m")
-    assert out == {"a": "rumour"}   # b는 NULL 유지 (다음 사이클 재시도)
+    assert out == {"a": ("rumour", "none")}   # b는 NULL 유지 (다음 사이클 재시도)
 
 
 def test_classify_skips_unparseable_batch():
@@ -285,6 +295,14 @@ def test_stage_prompt_covers_non_arsenal_transfers():
     other · negotiating 으로 새던 오분류 방지 (79b99b1b · 2f556abe 사례)."""
     from bullet_in.enrich import STAGE_PROMPT
     assert "이적 주체가 아스날이 아니어도" in STAGE_PROMPT
+
+def test_stage_prompt_lists_directions_and_tie_rule():
+    """프롬프트가 방향 3값 정의 · 임대 포괄 · 대등 혼합 out 우선을 담는다 (방향 축 스펙 §4.2)."""
+    from bullet_in.enrich import STAGE_PROMPT
+    for d in ("- in:", "- out:", "- none:"):
+        assert d in STAGE_PROMPT, f"STAGE_PROMPT 가 방향 {d} 정의를 누락"
+    assert "임대" in STAGE_PROMPT
+    assert "대등" in STAGE_PROMPT
 
 from bullet_in.enrich import resummarize_rows
 
