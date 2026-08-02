@@ -24,7 +24,7 @@ Tier 2-b (PR #18) 로 도입된 영입 단계 분류 (`articles.transfer_stage`)
 '이적 합의' (agreed) 신설과 함께 official 부여 방식이 LLM 판정에서 소스 규칙으로 바뀌었다.
 설계 배경은 `docs/superpowers/specs/2026-07-19-transfer-stage-overhaul-design.md` §2 · §4 참고.
 
-- **규칙 경로만 official 을 생성한다.** `transfer_stage.rule_stage(source_id)` 는 `source_id` 가 `arsenal_official` (공홈) 인 행만 `"official"` 을 반환하고, 그 외는 `None` (LLM 분류 몫) 이다. `run.py` 의 분류 패스가 미태깅 행을 규칙 대상 / LLM 대상으로 나눠, 규칙 대상은 LLM 호출 없이 바로 `set_stage` 한다.
+- **규칙 경로만 official 을 생성한다.** `transfer_stage.rule_stage(source_id)` 는 공홈 (`arsenal_official`) 행에만 `official` 을 부여한다 (2026-08-02 방향 축 이후 반환값은 `("official", None)` 형태의 쌍이다 — §3.1 참고). `run.py` 의 분류 패스가 미태깅 행을 규칙 대상 / LLM 대상으로 나눠, 규칙 대상은 LLM 호출 없이 바로 `set_stage` 한다.
 - **LLM enum 에서 official 이 제거됐다.** `STAGE_PROMPT` 는 더 이상 official 을 제시하지 않는다 — 공홈이 아닌 소스는 구조적으로 official 이 될 수 없다.
 - **모델이 그래도 official 을 반환하면 agreed 로 강등한다.** `enrich.classify_stage_rows` 가 `stage == "official"` 응답을 agreed 로 낮추고 `WARNING` 로그를 남긴다 — 정상 흐름에서는 뜨지 않아야 하는 신호다.
 - **진단: 비공홈 official 불변량.** 아래 SQL 은 항상 0 을 반환해야 한다. 0 이 아니면 규칙 분리가 깨졌거나 강등 방어를 우회한 경로가 있다는 뜻이다.
@@ -68,6 +68,7 @@ from sqlalchemy import create_engine
 from google import genai
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.enrich import classify_stage_rows
+from bullet_in.run import GEMINI_MODEL
 from bullet_in import transfer_stage
 
 engine = create_engine(os.environ["MARIADB_URL"])
@@ -79,17 +80,20 @@ rows = mart.rows_missing_stage()
 print(f"미태깅: {len(rows)}")
 
 llm_rows = []
+stage_ruled = {}
 for r in rows:
-    ruled = transfer_stage.rule_stage(r["source_id"])
-    if ruled:
-        mart.set_stage(r["content_hash"], ruled)
-    else:
-        llm_rows.append(r)
+    stage_fixed, direction_fixed = transfer_stage.rule_stage(r["source_id"])
+    if stage_fixed and direction_fixed:      # 가십 — 단계 · 방향 둘 다 고정 (LLM 제외)
+        mart.set_stage(r["content_hash"], stage_fixed, direction_fixed)
+        continue
+    if stage_fixed:                          # 공홈 — 단계만 고정 · 방향은 LLM 판정
+        stage_ruled[r["content_hash"]] = stage_fixed
+    llm_rows.append(r)
 
-out = classify_stage_rows(llm_rows, client, "gemini-2.5-flash-lite")
+out = classify_stage_rows(llm_rows, client, GEMINI_MODEL)
 print(f"이번 회차 LLM 분류: {len(out)}")
-for h, stage in out.items():
-    mart.set_stage(h, stage)
+for h, (stage, direction) in out.items():
+    mart.set_stage(h, stage_ruled.get(h, stage), direction)
 PY
 ```
 
@@ -255,6 +259,15 @@ PY
 
 - **비-기사 링크가 `rumour` 등으로 오분류될 수 있다.** 라이브에서 "Want more transfer stories? Read Thursday's full gossip column" 같은 football.london 네비게이션 · teaser 링크가 `rumour` 로 태깅됐다. 근본 원인은 분류기가 아니라 **수집 단계의 이적 키워드 필터 미착수 (로드맵 Tier 1-3)** 로 비-기사 링크까지 적재되는 것이다. Tier 1-3 + 기존 데이터 정리가 들어오면 이 잡음이 줄어든다. 메모리 `tier1-cleanup-track` 참조.
 - **재계약 기사도 공홈 official 배지를 받는다 — 의도된 동작 (2026-07-19 재검토 종결).** 공홈 수집이 taxonomy 판별 (Transfer news · Contract news + Men) 로 전환되며 1군 재계약 포함이 사용자 결정으로 확정됐다. 단계 enum 에 재계약이 없어 LLM 경로로 보내면 `other` (서빙 숨김) 로 떨어지므로, 규칙 경로의 official 태깅이 재계약을 노출하는 유일한 경로이기도 하다. 배경: `docs/superpowers/specs/2026-07-19-arsenal-official-api-recovery-design.md` §4.3.
+
+- **타 구단 이적에 붙은 방향 값은 기준 구단이 없다 — 결정 보류 (2026-08-02 사용자 확정).**
+프롬프트는 방향을 아스날 기준으로 정의하지만 (`in` = 아스날로 오는 이적), 모델은 타 구단 기사에서 그 이적 자체의 영입 · 방출로 답한다.
+실측하면 `transfer_direction` 이 `in` · `out` 인 333건 중 35건이 아스날이 제목 · 요약 · 원제 어디에도 없는 타 구단 이적이고 (첼시 · PSG · 바르셀로나 등), 그중 28건이 `in` 이다.
+기준 구단을 적는 칸이 없어 값만으로는 누구 기준인지 알 수 없다
+— `articles.team` 은 전건 `arsenal` (여자팀 분리용 잔재) 이고 `players.club` 은 선수의 현재 소속이며 절반이 NULL 이다.
+선택지는 셋이다: 아스날 기준을 고정해 타 구단 이적을 `none` 으로 되돌리거나, 주체 구단 기준으로 정의하고 기준 구단 컬럼을 신설하거나, 현행 값을 "영입성 · 방출성 주제 표지" 로 정의해 문서만 고치는 것이다.
+결정은 방향을 처음 소비할 #144 (선수 페이지) 착수 때로 미뤘다
+— 지금은 방향을 화면에 노출하지 않아 피해가 없고, 아스날 기준 축은 `players.transfer_status` (`in_link` · `out_link`) 가 선수 단위로 이미 들고 있어 선수 페이지가 그 값을 쓸 수 있기 때문이다.
 
 ## 참조
 
