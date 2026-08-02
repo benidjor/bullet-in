@@ -113,6 +113,18 @@ SELECT 는 `bullet_in.run.SERVING_SELECT_SQL` 을 import 해서 쓴다
 `docs/troubleshooting/2026-07-19-runbook-snippet-logic-drift.md`).
 `write_site` 의 인자는 여전히 run.py 서빙 경로와 1:1 로 유지할 것.
 
+**실행 전 점검 (2026-08-02 사고 이후 필수)** — 다른 트랙의 배치가 도는 중에 렌더하면 중간 상태가 그대로 배포된다.
+소급 재분류처럼 값을 비웠다 채우는 작업과 겹치면 전 기사가 "기타" 로 집계된 페이지가 공개된다
+(`docs/troubleshooting/2026-08-02-rerender-during-reclassification.md`).
+
+```bash
+git log --oneline -3                       # pull 로 새로 들어온 커밋의 성격 확인
+ps aux | grep -E '[b]ullet_in|[b]ackfill'  # 돌고 있는 배치가 없는지 확인
+```
+
+새 커밋이 스키마 · 분류 체계를 바꾸는 것이면 그 트랙의 롤아웃 (소급 배치) 이 끝났는지 먼저 확인한다.
+확인 목적의 배포라면 아예 미뤄도 된다 — 다음 정기 회차가 렌더 · 배포까지 한다.
+
 ```bash
 uv run python - <<'EOF'
 import os
@@ -125,6 +137,9 @@ from bullet_in.serve.render import write_site
 engine = create_engine(os.environ["MARIADB_URL"])
 with engine.connect() as c:
     rows = [dict(r) for r in c.execute(text(SERVING_SELECT_SQL)).mappings().all()]
+# 단계가 빈 행은 표시 · 집계가 전부 "기타" 로 쏠린다 — 중간 상태면 여기서 멈춘다
+blank = sum(1 for r in rows if not r["transfer_stage"])
+assert blank == 0, f"stage 빈 행 {blank} — 재분류 수렴 후 다시 실행"
 write_site(rows, load_sources("config/sources.yaml"), "site",
            directory=journalist_directory("config/credibility.yaml"),
            registry=load_registry("config/credibility.yaml"),
@@ -132,6 +147,11 @@ write_site(rows, load_sources("config/sources.yaml"), "site",
 print("site 재생성:", len(rows), "행")
 EOF
 ```
+
+**배포 후 확인은 보이는 자리에서 한다** — 배지 · 카드 요소는 `index.html` · `all.html` 에서,
+본문 · 원문 링크는 `article/<hash>.html` 에서 grep 한다.
+상세 페이지에서 카드 요소를 찾으면 항상 빈 결과가 나와 이상을 놓친다
+(`docs/troubleshooting/2026-08-02-badge-condition-collides-with-hide-policy.md`).
 
 ## 5. 전건 백필 — 번역 모델을 바꿨을 때
 
