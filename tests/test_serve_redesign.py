@@ -97,10 +97,14 @@ def test_gossip_when_none_precision_date_only():
     assert R.gossip_when(row, now) == "7월 20일 (월)"
 
 
-def test_bbc_gossip_stage_forced_to_rumour():
+def test_bbc_gossip_stage_matches_stored_rumour():
+    # 가십 루머 롤업 하드코딩은 저장 계층 규칙 (rule_stage) 으로 이동했다
+    # (방향 축 스펙 §5) — _decorate 는 더 이상 source_id 로 override 하지 않고
+    # 저장값을 그대로 쓴다. 배포판 실측으로 bbc_gossip 전행이 이미 rumour 로
+    # 저장돼 있어 화면 표시는 하드코딩 제거 전후로 동일하다.
     now = datetime(2026, 7, 23)
     row = {"content_hash": "x", "source_id": "bbc_gossip",
-           "transfer_stage": "negotiating", "title_ko": "t", "tier": 4.0}
+           "transfer_stage": "rumour", "title_ko": "t", "tier": 4.0}
     a = R._decorate(row, {}, now)
     assert a["_stage_disp"] == {"label": "루머", "tone": "gray", "filled": False}
     assert a["_stage"] == "rumour"      # 필터 키도 루머로 일치

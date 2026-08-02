@@ -445,9 +445,7 @@ def _facet_rows(counts: Counter, labels: dict, tiers: dict) -> dict:
 
 def filter_stage(row: dict) -> str | None:
     """카드 · 사이드바 건수가 공유하는 필터 단계 키.
-    BBC 가십은 루머 롤업 → 배지 · 필터 키 · 건수를 항상 루머로 (#121 리뷰 2차)."""
-    if row.get("source_id") == "bbc_gossip":
-        return "rumour"
+    가십 루머 롤업은 저장 계층 규칙 (rule_stage) 으로 이동 — 방향 축 스펙 §5."""
     return row.get("transfer_stage")
 
 

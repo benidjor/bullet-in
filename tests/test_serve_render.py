@@ -864,3 +864,14 @@ def test_linked_player_badge_skips_arsenal_variant_spelling_title():
               title_ko="월드컵 여파, 아스널 여름 이적시장 계획에 미칠 영향은?")],
         SOURCES, NOW)
     assert "아스날 링크 선수" not in html
+
+
+from bullet_in.serve.render import filter_stage
+
+
+def test_filter_stage_returns_stored_value_for_bbc_gossip():
+    # 가십 루머 롤업 하드코딩 제거 (방향 축 스펙 §5) — filter_stage 는 이제
+    # source_id 분기 없이 저장값을 그대로 반환한다. 배포판 실측으로 bbc_gossip
+    # 전행 (59건) 이 rule_stage 규칙에 따라 rumour 로 저장돼 있어 화면은 불변이다.
+    row = {"source_id": "bbc_gossip", "transfer_stage": "rumour"}
+    assert filter_stage(row) == "rumour"
