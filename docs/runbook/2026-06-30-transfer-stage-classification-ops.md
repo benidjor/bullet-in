@@ -116,6 +116,48 @@ PY
 
 **2026-07-19 실측**: 201건 NULL 복원 → LLM 분류 1패스로 수렴 (잔존 0). 규칙 경로는 0건 (공홈 적재 0건). 재분류 후 official 0건은 공홈 적재가 없는 동안 정상이다 ("오피셜 규칙 분리" 절 참고).
 
+### 3.1. 방향 축 반영 (2026-08-02)
+
+2026-08-02 방향 축 스펙 이후로는 재분류할 때 `transfer_stage` 뿐 아니라 `transfer_direction` (in · out · none) 도 함께 부여한다.
+설계 배경은 `docs/superpowers/specs/2026-08-02-transfer-stage-direction-design.md` 참고.
+
+사전 덤프에도 `transfer_direction` 을 포함한다.
+다만 이 컬럼이 신설되는 첫 소급 재분류에서는 전건이 NULL 이므로, 실질적인 복원 대상은 여전히 `transfer_stage` 뿐이다.
+
+이 컬럼은 코드 반영 후 정기 회차 (또는 enrich 전용 재실행) 가 한 번 지나야 `ensure_schema()` 로 생성된다.
+VM 에서 pull 직후 회차가 아직 한 번도 돌지 않았다면 아래 덤프는 `Unknown column 'transfer_direction'` 오류로 실패하므로, 회차가 한 번 지난 뒤에 실행할 것.
+
+```bash
+uv run python - <<'PY'
+import csv, os, sys
+from sqlalchemy import create_engine, text
+e = create_engine(os.environ["MARIADB_URL"])
+with e.connect() as c, open("stage_dump.csv", "w", newline="") as f:
+    w = csv.writer(f)
+    w.writerow(["content_hash", "transfer_stage", "transfer_direction"])
+    for row in c.execute(text(
+            "SELECT content_hash, transfer_stage, transfer_direction FROM articles")):
+        w.writerow(row)
+print("덤프 완료: stage_dump.csv")
+PY
+```
+
+방향 축이 들어오면서 규칙 경로가 2형태로 갈라졌다.
+bbc_gossip 소스는 `rumour` + `none` 으로 고정돼 LLM 을 거치지 않는다.
+arsenal_official 소스는 `official` 고정은 그대로이되, 방향만 LLM 이 판정하므로 이 소스는 배치에 포함된다.
+
+재분류 후에는 아래 쿼리 3종으로 수렴을 확인한다.
+
+```sql
+SELECT COUNT(*) FROM articles WHERE transfer_stage IS NULL;      -- 0 이어야 수렴
+SELECT COUNT(*) FROM articles WHERE transfer_direction IS NULL;  -- 0 이어야 수렴
+SELECT transfer_stage, COUNT(*) FROM articles
+ WHERE source_id = 'bbc_gossip' GROUP BY transfer_stage;         -- rumour 단일이어야 정상
+```
+
+마지막으로 스팟 체크를 한다.
+`docs/superpowers/2026-07-28-content-trust-audit-handoff.md` §3.5 에서 방출 어휘로 지목된 기사 3건 (content_hash 가 `096b26b9` · `cb0894b7` · `b38deb05` 로 시작) 의 `transfer_direction` 이 `out` 으로 들어갔는지 확인한다.
+
 ## 4. 분포 검증
 
 ```bash

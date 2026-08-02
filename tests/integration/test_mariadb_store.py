@@ -78,6 +78,7 @@ def test_changed_url_updates_hash_and_resets_translation(engine):
 def test_rows_missing_stage_and_set_stage(engine):
     from bullet_in.models import Article
     from datetime import datetime, timezone
+    from sqlalchemy import text
     store = MartStore(engine)
     store.upsert([Article(content_hash="hs", url="https://x.test/s",
                           source_id="bbc_sport",
@@ -89,8 +90,13 @@ def test_rows_missing_stage_and_set_stage(engine):
     assert missing["hs"]["title_original"] == "Arsenal close on Gyokeres"
     assert missing["hs"]["summary_ko"] == "요케레스 임박"
     assert missing["hs"]["source_id"] == "bbc_sport"   # 규칙·LLM 분리 판정 입력 (spec §4.1)
-    store.set_stage("hs", "negotiating")
+    store.set_stage("hs", "negotiating", "in")
     assert "hs" not in {r["content_hash"] for r in store.rows_missing_stage()}
+    with engine.connect() as c:
+        row = c.execute(text(
+            "SELECT transfer_stage, transfer_direction FROM articles "
+            "WHERE content_hash='hs'")).one()
+    assert tuple(row) == ("negotiating", "in")
 
 
 def test_upsert_preserves_stage_on_revision_change(engine):

@@ -729,37 +729,44 @@ STAGE_PROMPT = (
     "- agreed: 구단 간 이적 합의 · 딜 확정/임박 보도 (구두 합의 · 원칙적 합의 · verbal agreement · "
     "agreement in principle · 'on verge of signing' 포함 · 타 매체의 공식 발표 보도 포함)\n"
     "- other: 이적과 무관하거나 단계를 판단할 수 없음\n"
+    "방향 (direction — 반드시 아래 영문 값 중 하나로 답한다):\n"
+    "- in: 아스날로 오는 이적 (임대 영입 포함)\n"
+    "- out: 아스날에서 나가는 이적 (방출 · 매각 · 임대 방출 포함)\n"
+    "- none: 이적 무관 기사 · 방향을 판단할 수 없음\n"
+    "방향은 제목이 내세우는 주된 이적 하나로 정한다 — 요약 말미의 부수 언급"
+    " (예: 영입 기사 끝의 '방출 작업도 진행 중' 한 줄) 은 무시한다.\n"
+    "제목이 영입과 방출을 병기하는 대등 혼합이면 out 으로 답한다.\n"
     "합의 보도는 당사자로 가른다 — 구단과 구단이면 agreed, 선수와 구단이면 personal_terms.\n"
     "이적 주체가 아스날이 아니어도 (타 구단 간 이적을 다룬 기사) 그 이적의 단계로 분류한다.\n"
-    "각 기사의 content_hash는 그대로 두고 stage만 채운다.\n"
-    'ONLY JSON 배열: [{{"content_hash":"...","stage":"rumour"}}]\n\n'
+    "각 기사의 content_hash는 그대로 두고 stage와 direction만 채운다.\n"
+    'ONLY JSON 배열: [{{"content_hash":"...","stage":"rumour","direction":"in"}}]\n\n'
     "기사 목록:\n{items}")
 
 
-def _extract_stages(text: str) -> dict[str, str] | None:
+def _extract_stages(text: str) -> dict[str, tuple[str, str | None]] | None:
     m = re.search(r"\[.*\]", text, re.DOTALL)
     if not m:
         return None
     try:
         data = json.loads(m.group(0))
-        out: dict[str, str] = {}
+        out: dict[str, tuple[str, str | None]] = {}
         for item in data:
             h, s = item.get("content_hash"), item.get("stage")
             if h and s:
-                out[h] = s
+                out[h] = (s, item.get("direction"))
         return out
     except (json.JSONDecodeError, TypeError, AttributeError):
         return None
 
 
 def classify_stage_rows(rows: list[dict], client, model: str,
-                        batch_size: int = 20) -> dict[str, str]:
-    """미태깅 행을 batch_size 단위로 묶어 영입 단계를 분류한다.
+                        batch_size: int = 20) -> dict[str, tuple[str, str]]:
+    """미태깅 행을 batch_size 단위로 묶어 이적 단계 · 방향을 분류한다.
 
-    content_hash -> stage(enum) 를 반환한다. 허용 enum 밖 값은 other로 강등하고,
-    응답에 없는 hash는 결과에서 빠져 (NULL 유지) 다음 사이클에 재시도된다.
-    429를 만나면 그 회차는 즉시 중단한다 (남은 배치 다음 사이클 누적)."""
-    result: dict[str, str] = {}
+    content_hash -> (stage, direction) 을 반환한다. 허용 enum 밖 stage는 other,
+    direction은 none으로 강등하고, 응답에 없는 hash는 결과에서 빠져 (NULL 유지)
+    다음 사이클에 재시도된다. 429를 만나면 그 회차는 즉시 중단한다."""
+    result: dict[str, tuple[str, str]] = {}
     for i in range(0, len(rows), batch_size):
         batch = rows[i:i + batch_size]
         items = json.dumps(
@@ -783,11 +790,11 @@ def classify_stage_rows(rows: list[dict], client, model: str,
         if parsed is None:
             log.warning("Gemini 응답 파싱 실패, 단계 분류 배치 스킵")
             continue
-        for h, stage in parsed.items():
+        for h, (stage, direction) in parsed.items():
             stage = _stage.normalize(stage)
             if stage == "official":
                 # 규칙 경로 전용 불변량 (spec §4.3) — 프롬프트 밖 응답 방어
                 log.warning("LLM이 official 반환 — agreed로 강등 content_hash=%s", h)
                 stage = "agreed"
-            result[h] = stage
+            result[h] = (stage, _stage.normalize_direction(direction))
     return result
