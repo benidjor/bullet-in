@@ -73,7 +73,7 @@ def phase_reverify(apply: bool) -> None:
     mart.ensure_schema()
     arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
     mart.upsert(arts)
-    ruled = transfer_stage.rule_stage("arsenal_official")
+    ruled, _ = transfer_stage.rule_stage("arsenal_official")
     for r in mart.rows_missing_stage():
         if r["source_id"] == "arsenal_official" and ruled:
             mart.set_stage(r["content_hash"], ruled)
