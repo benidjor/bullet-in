@@ -153,7 +153,7 @@ SELECT transfer_stage, COUNT(*) FROM articles
 ```
 
 마지막으로 스팟 체크를 한다.
-`2026-07-28-content-trust-audit-handoff.md` §3.5 에서 방출 어휘로 지목된 기사 3건 (content_hash 가 `096b26b9` · `cb0894b7` · `b38deb05` 로 시작) 의 `transfer_direction` 이 `out` 으로 들어갔는지 확인한다.
+`docs/superpowers/2026-07-28-content-trust-audit-handoff.md` §3.5 에서 방출 어휘로 지목된 기사 3건 (content_hash 가 `096b26b9` · `cb0894b7` · `b38deb05` 로 시작) 의 `transfer_direction` 이 `out` 으로 들어갔는지 확인한다.
 
 ## 4. 분포 검증
 
