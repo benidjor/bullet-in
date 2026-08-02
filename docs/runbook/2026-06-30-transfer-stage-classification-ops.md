@@ -166,6 +166,71 @@ SELECT transfer_stage, COUNT(*) FROM articles
 결과는 1패스 수렴 — 규칙 경로 59건 (가십 전행 rumour) · LLM 400건 · 잔존 0.
 재측정 (감사 스크립트 2회 실행) 은 단계 재현 불일치 24% → 6.6% · 방향 4.6% 로, 목표 (모델 흔들림 수준 약 9% 이하) 를 충족했다.
 
+### 3.2. 표적 재분류 (일부 버킷만 다시 매길 때)
+
+전건이 아니라 특정 버킷만 다시 볼 때가 있다 — 프롬프트를 좁게 고쳤거나, 한 단계에 오분류가 몰려 있을 때다.
+전건 재분류보다 싸지만 (2026-08-02 실측: 59건 · LLM 3배치) 대상을 고르는 방식에 함정이 하나 있다.
+
+**대상은 조건이 아니라 해시 목록으로 고정한다.**
+`WHERE transfer_stage = 'other'` 로 되돌리면 그 회차에는 맞지만, 재분류로 값이 바뀐 행은 다음번에 같은 조건으로 잡히지 않는다.
+프롬프트를 한 번 더 고쳐 다시 돌려야 할 때 대상 집합이 이미 흩어져 있는 것이다.
+그래서 되돌리기 전에 대상 해시를 파일로 떠 두고, 재실행은 그 파일을 기준으로 한다.
+
+```bash
+uv run python - <<'PY'
+import csv, os
+from sqlalchemy import create_engine, text
+e = create_engine(os.environ["MARIADB_URL"])
+with e.connect() as c, open("stage_dump_other.csv", "w", newline="") as f:
+    w = csv.writer(f)
+    w.writerow(["content_hash", "transfer_stage", "transfer_direction"])
+    rows = c.execute(text("SELECT content_hash, transfer_stage, transfer_direction "
+                          "FROM articles WHERE transfer_stage = 'other'")).all()
+    for r in rows:
+        w.writerow(r)
+print("대상 덤프:", len(rows), "행")
+PY
+```
+
+되돌릴 때는 이 파일의 해시를 그대로 쓴다 (재실행에도 같은 파일을 쓴다).
+
+```python
+from sqlalchemy import bindparam, text
+hashes = [r["content_hash"] for r in csv.DictReader(open("stage_dump_other.csv"))]
+with eng.begin() as c:
+    n = c.execute(text("UPDATE articles SET transfer_stage = NULL WHERE content_hash IN :hs")
+                  .bindparams(bindparam("hs", expanding=True)), {"hs": hashes}).rowcount
+```
+
+이후 분류는 §2 스니펫과 같다.
+
+**프롬프트를 바꿨다면 되돌리기 전에 dry-run 한다.**
+배포판에서 대상 행을 읽기 전용으로 뽑아 로컬에서 한 배치만 분류하면, DB 를 건드리지 않고 새 프롬프트의 효과를 볼 수 있다 (Gemini 1회 호출).
+고치려는 행만 넣지 말고 **이미 잘 분류된 행 몇 건을 대조군으로 함께** 넣는다 — 새 규칙이 정상 판정까지 되돌리는 과소 · 과대 교정을 그때 잡는다.
+
+```bash
+# VM 에서 대상 행을 JSON 으로 뽑아 로컬에 저장한 뒤, 로컬 체크아웃에서 분류만 돌린다
+uv run python - <<'PY'
+import json, os
+from google import genai
+from bullet_in.enrich import classify_stage_rows
+from bullet_in.run import GEMINI_MODEL
+rows = json.load(open("target_rows.json"))
+out = classify_stage_rows(rows, genai.Client(api_key=os.environ["GEMINI_API_KEY"]), GEMINI_MODEL)
+for r in rows:
+    new, direction = out.get(r["content_hash"], ("(누락)", "-"))
+    mark = "  " if r["transfer_stage"] == new else "→ "
+    print(f'{mark}{r["content_hash"][:8]} {r["transfer_stage"]:13s} {new:13s} {(r["title_ko"] or "")[:38]}')
+PY
+```
+
+**끝났다고 판단하는 기준은 잔존 0 이 아니다.**
+분류 패스는 모델이 답을 돌려주기만 하면 오류 없이 수렴한다.
+반드시 이동 내역을 유형별로 훑어 과교정을 확인한다 — 2026-08-02 에는 이 검사에서 스폰서십 계약 · 재계약 기사가 `agreed` 를 받은 것을 발견해 프롬프트를 한 번 더 고쳤다
+(`docs/troubleshooting/2026-08-02-prompt-boundary-loosening-overcorrects.md`).
+
+**2026-08-02 실측**: `other` 59건 표적 재분류 → 1패스 수렴 · 이동 22 · 유지 37 → 과교정 4건 발견 → 프롬프트 정정 후 같은 59건 재실행 (2패스 수렴) → 이동 17 · 유지 42.
+
 ## 4. 분포 검증
 
 ```bash
