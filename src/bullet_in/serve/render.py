@@ -732,6 +732,26 @@ def sweep_orphan_pages(articles: list[dict], out_dir: str | Path) -> list[str]:
     return removed
 
 
+def linked_player_label(names: str | None, title: str) -> str | None:
+    """링크 선수 배지 문구 — 연결된 선수 이름으로 이 글이 왜 여기 있는지 밝힌다.
+
+    이름을 쓰는 이유 (2026-08-02 확정): 일반 문구 "아스날 링크 선수" 는 감독 사임
+    같은 글에 붙었을 때 무엇을 가리키는지 알려 주지 못한다.
+    제목에 아스날이 이미 있으면 설명할 게 없어 배지를 달지 않는다
+    (변형 표기 "아스널" · 영문 제목 Arsenal 포함 — 2026-08-01 오폭 실측).
+    여럿이면 첫 이름만 적고 나머지는 인원으로 접는다 — 카드 머리가 길어지지 않게."""
+    if not names:
+        return None
+    if "아스날" in title or "아스널" in title or "arsenal" in title.lower():
+        return None
+    people = [n for n in names.split("|") if n]
+    if not people:
+        return None
+    if len(people) == 1:
+        return f"{people[0]} 관련"
+    return f"{people[0]} 외 {len(people) - 1}명 관련"
+
+
 def _decorate(row: dict, sources: dict, now: datetime,
               directory: dict | None = None, outlet_dir: dict | None = None) -> dict:
     a = dict(row)
@@ -783,12 +803,7 @@ def _decorate(row: dict, sources: dict, now: datetime,
     a["_datetime"] = published_datetime(row)
     a["_time"] = time_in_group(row)
     a["_show_summary"] = show_summary(row.get("tier"))
-    # 링크 선수 동향 라벨 (B안 2026-08-01): 영입 링크 확정 선수가 연결됐고
-    # 표시 제목에 아스날이 없는 글 — 왜 이 글이 있는지 화면이 설명한다
-    a["_ctx"] = (bool(row.get("linked_player"))
-                 and "아스날" not in a["_title"]
-                 and "아스널" not in a["_title"]  # 번역 변형 표기 (첫 회차 실측 오폭)
-                 and "arsenal" not in a["_title"].lower())
+    a["_ctx"] = linked_player_label(row.get("linked_players"), a["_title"])
     return a
 
 
