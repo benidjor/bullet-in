@@ -110,6 +110,7 @@ class MartStore:
 
     def set_stage(self, content_hash: str, stage: str,
                   direction: str | None = None) -> None:
+        """direction 을 생략하면 기존 transfer_direction 이 NULL 로 덮어써진다."""
         with self.engine.begin() as c:
             c.execute(text("UPDATE articles SET transfer_stage=:s, "
                            "transfer_direction=:d WHERE content_hash=:h"),

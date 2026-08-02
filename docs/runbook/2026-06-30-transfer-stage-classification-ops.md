@@ -124,6 +124,9 @@ PY
 사전 덤프에도 `transfer_direction` 을 포함한다.
 다만 이 컬럼이 신설되는 첫 소급 재분류에서는 전건이 NULL 이므로, 실질적인 복원 대상은 여전히 `transfer_stage` 뿐이다.
 
+이 컬럼은 코드 반영 후 정기 회차 (또는 enrich 전용 재실행) 가 한 번 지나야 `ensure_schema()` 로 생성된다.
+VM 에서 pull 직후 회차가 아직 한 번도 돌지 않았다면 아래 덤프는 `Unknown column 'transfer_direction'` 오류로 실패하므로, 회차가 한 번 지난 뒤에 실행할 것.
+
 ```bash
 uv run python - <<'PY'
 import csv, os, sys

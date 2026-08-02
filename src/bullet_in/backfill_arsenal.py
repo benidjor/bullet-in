@@ -73,6 +73,7 @@ def phase_reverify(apply: bool) -> None:
     mart.ensure_schema()
     arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
     mart.upsert(arts)
+    # 소급 재분류 이후 재실행하면 stage 만 채워지고 정기 분류 대상에서 빠져 direction 은 NULL 로 남으니, 필요하면 런북 3절 재분류로 채울 것.
     ruled, _ = transfer_stage.rule_stage("arsenal_official")
     for r in mart.rows_missing_stage():
         if r["source_id"] == "arsenal_official" and ruled:
