@@ -290,6 +290,26 @@ def test_stage_prompt_splits_agreement_by_party():
     assert "구단과 구단이면 agreed, 선수와 구단이면 personal_terms" in STAGE_PROMPT
     assert "구두 합의라도 당사자가 선수-구단이면 여기" in STAGE_PROMPT
 
+def test_stage_prompt_keeps_other_for_non_transfer_only():
+    """other 는 이적 무관 글 전용 — 무산 · 몸값 · 분쟁 · 대안 후보 보도는 단계를 받는다.
+    2026-08-02 실측 16건 (other 버킷에 남은 이적 기사) 의 경계 유형 보강."""
+    from bullet_in.enrich import STAGE_PROMPT
+    assert "other 는 이적과 정말 무관한 글에만 쓴다" in STAGE_PROMPT
+    for boundary in ("무산 · 결렬 · 포기 · 잔류 확정 · 이적설 부인",
+                     "몸값 · 이적료 책정 보도",
+                     "분쟁 · 법적 절차",
+                     "대안 후보군 · 연쇄 반응"):
+        assert boundary in STAGE_PROMPT, f"STAGE_PROMPT 가 경계 유형 '{boundary}' 를 누락"
+
+
+def test_stage_prompt_keeps_roundups_and_staff_news_as_other():
+    """다주제 라운드업 · 칼럼은 대표 단계가 성립하지 않고, 감독 · 스태프 인사는 선수 이적이 아니다.
+    경계 유형 보강이 이 둘까지 단계로 끌어가지 않도록 프롬프트에 명시한다."""
+    from bullet_in.enrich import STAGE_PROMPT
+    assert "시장 라운드업 · 총평 · 칼럼은 대표 단계가 성립하지 않으므로 other" in STAGE_PROMPT
+    assert "감독 · 스태프 인사도 other" in STAGE_PROMPT
+
+
 def test_stage_prompt_covers_non_arsenal_transfers():
     """타 구단 간 이적 기사도 그 이적의 단계로 분류한다 — 아스날이 주체가 아니라는 이유로
     other · negotiating 으로 새던 오분류 방지 (79b99b1b · 2f556abe 사례)."""
