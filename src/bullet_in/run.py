@@ -34,10 +34,12 @@ SERVING_SELECT_SQL = (
     "SELECT content_hash,url,source_id,title_original,title_ko,summary_ko,"
     "summary3_ko,body_ko,body_source,image_url,images_json,outlet,journalist,team,"
     "transfer_stage,tier,confidence_score,published_at,published_precision,fetched_at,"
-    # 링크 선수 동향 라벨 판별 (B안 2026-08-01 · 소속 제외 2026-08-02) — 영입 링크
-    # 확정 선수가 연결됐고, 아스날 소속 (squad · manager · director) 확정 인물 연결은
-    # 없는 글. 소속 인물이 함께 연결된 글은 그 자체로 아스날 글이라 배지가 설명할 게 없다.
-    "(EXISTS(SELECT 1 FROM article_players ap JOIN players p ON p.id=ap.player_id "
+    # 링크 선수 동향 라벨 판별 (B안 2026-08-01 · 소속 제외 · 비이적 한정 2026-08-02)
+    # — 비이적 기사 (other) 이면서 영입 링크 확정 선수가 연결됐고, 아스날 소속
+    # (squad · manager · director) 확정 인물 연결은 없는 글. 이적 기사는 링크 자체가
+    # 문맥이고, 소속 인물 동반 기사는 그 자체로 아스날 글이라 배지가 설명할 게 없다.
+    "(articles.transfer_stage='other' "
+    "AND EXISTS(SELECT 1 FROM article_players ap JOIN players p ON p.id=ap.player_id "
     "WHERE ap.content_hash=articles.content_hash AND p.status='confirmed' "
     "AND p.transfer_status='in_link') "
     "AND NOT EXISTS(SELECT 1 FROM article_players ap2 JOIN players p2 ON p2.id=ap2.player_id "
