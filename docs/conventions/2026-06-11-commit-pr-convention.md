@@ -220,6 +220,7 @@ squash 전 개별 commit과 리뷰 코멘트는 PR 페이지에 영구 보존됨
 - 코드 변경이 없는 순수 검증 Task (예: 샘플 E2E 실행)는 그 코드를 검증하는 PR의 "검증" 섹션에 흡수함 (빈 diff PR 방지)
 - TDD로 한 Task가 여러 commit (실패 테스트 → 구현 → 리뷰 fix)이 되어도 squash가 main에 Task당 1 commit으로 정리함.
 - 머지는 작성자 (사용자)가 PR 셀프 리뷰 · 체크 후 직접 수행함 (§2.6)
+- **머지된 PR 의 브랜치에는 push 하지 않음.** squash 후에는 PR 이 닫혀 있어 push 해도 main 에 반영되지 않고 조용히 유실됨. 보강할 것이 생기면 `gh pr view <번호> --json state` 로 상태를 먼저 확인하고, MERGED 면 `origin/main` 에서 새 브랜치를 따 새 PR 로 올림 (실제 유실 2회 · 경위와 확인법: `docs/troubleshooting/2026-08-03-push-after-squash-merge-is-lost.md`)
 
 ### 2.6. 셀프 리뷰
 
