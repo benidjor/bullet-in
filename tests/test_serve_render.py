@@ -247,6 +247,37 @@ def test_index_hides_offmission_card_by_default():
     assert "display:none" in o_tag       # off-mission(other) 카드만 숨김
     assert "display:none" not in t_tag   # 이적 카드(rumour)는 노출
 
+def test_index_shows_offmission_card_when_linked_player_badged():
+    # 기타 숨김 정책의 예외 (2026-08-02 확정): 링크 선수 배지가 붙은 글은 배지가
+    # 존재 이유를 설명하므로 기본 화면에 노출한다 — 숨기면 배지를 볼 수 없다
+    ot = _row(content_hash="ob", transfer_stage="other", linked_players="기마랑이스",
+              title_ko="뉴캐슬, 에디 하우 감독 즉시 사임")
+    html = render_index([ot], SOURCES, NOW)
+    tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/ob\.html"', html).group(0)
+    assert "display:none" not in tag
+
+
+def test_index_badged_card_carries_ctx_data_attr():
+    # 필터 JS 가 이 표식으로 기타 숨김 규칙에서 배지 카드를 빼낸다
+    ot = _row(content_hash="ob", transfer_stage="other", linked_players="기마랑이스",
+              title_ko="뉴캐슬, 에디 하우 감독 즉시 사임")
+    html = render_index([ot], SOURCES, NOW)
+    assert 'data-ctx="1"' in html
+
+
+def test_index_still_hides_offmission_card_without_badge():
+    # 회귀 가드 — 배지 없는 기타 글은 그대로 숨김 (PR #22 정책 유지)
+    html = render_index([_row(content_hash="o2", transfer_stage="other")], SOURCES, NOW)
+    tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/o2\.html"', html).group(0)
+    assert "display:none" in tag
+
+
+def test_app_js_exempts_badged_cards_from_other_hiding():
+    # 서버 렌더만 고치면 필터를 한 번 건드리는 순간 다시 숨는다 — JS 판정도 같이 예외
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "d.ctx" in js
+
+
 def test_sidebar_has_other_bucket_checkbox():
     html = render_index([_row(transfer_stage="other")], SOURCES, NOW)
     assert 'data-group="bucket"' in html

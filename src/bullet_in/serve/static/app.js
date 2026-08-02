@@ -236,7 +236,9 @@ function applyFilters() {
     const okSrc = !srcActive
       || outlets.includes(d.outlet) || journalists.includes(d.journalist);
     const okTier = tiers.length === 0 || tiers.includes(d.tier);
-    const isOther = !d.stage || d.stage === 'other';
+    // 링크 선수 배지 (data-ctx) 가 붙은 글은 기타 숨김 규칙에서 뺀다 — 배지가
+    // 존재 이유를 설명하는 글이라, 서버 렌더처럼 여기서도 일반 카드로 다룬다.
+    const isOther = (!d.stage || d.stage === 'other') && !d.ctx;
     const okStage = isOther ? showOther
       : (stageEnums.size === 0 || stageEnums.has(d.stage));
     return okText && okSrc && okTier && okStage;
