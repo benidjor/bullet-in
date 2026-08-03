@@ -266,6 +266,91 @@ uv run python -m bullet_in.backfill_rewrite --limit 20 --offset 20       # 2구�
 번역 4필드를 뜨는 절차이므로 대상이 재작성이어도 같은 덤프로 대조 · 롤백할 수 있다.
 - 끝나면 §4 로 사이트를 다시 만든다.
 
+## 5.6. 재작성 게이트 잔존 판독 — 경고를 어디까지 손봐야 하나
+
+재작성 패스를 돌리면 게이트에 걸린 행마다 경고가 한 줄씩 남는다.
+전부 손봐야 하는 것은 아니다 — 축마다 뜻이 다르고, 구조적으로 걸릴 수밖에 없는 유형이 있다.
+
+```
+재작성 게이트 잔존 content_hash=678f0cde… 잔존율=0.765 누락=['19'] 신규수치=[] 인용훼손=['…'] 인명=[] 구단=[] 시도=3
+```
+
+### 5.6.1. 기준값 (2026-08-03 · 82행 전건 소급)
+
+| 축 | 잔존 행 | 뜻 |
+| --- | --- | --- |
+| 인명 주입 | 0 | 원문에 없는 사람 이름 — **0 이 정상** |
+| 구단 주입 | 0 | 원문에 없는 구단 — **0 이 정상** |
+| 신규 수치 | 2 | 원문에 없는 숫자를 만듦 |
+| 숫자 누락 | 15 | 원문 숫자가 산출물에서 빠짐 |
+| 인용 훼손 | 5 | 따옴표 안 발화가 원형이 아님 |
+
+- 잔존 행은 19 / 82 (23%) 였고 전부 시도 3회를 소진했다.
+- **잔존 비율이 곧 비용이다** — 잔존 행은 통과 행의 세 배를 호출한다.
+비율이 크게 오르면 프롬프트나 게이트 임계를 의심한다.
+- 잔존율은 최대 0.765 · 임계 (0.75) 초과가 1행이었다.
+
+### 5.6.2. 인용이 많은 기사는 잔존율이 높은 것이 정상이다
+
+인용문은 재작성 대상이 아니라 원형 보존이 계약이다.
+그래서 인용 비중이 큰 기사는 복제 게이트에 구조적으로 걸린다 — **인용 원형 보존과 복제 게이트가 서로 반대되는 것을 요구하는 셈이다.**
+
+구조적으로 걸린 것인지 실제 문제인지는 인용을 뺀 지문만 다시 재면 가려진다.
+
+```bash
+uv run python - <<'EOF'
+import os
+from sqlalchemy import create_engine, text
+from bullet_in.fidelity import quote_spans, char_ngram_retention
+eng = create_engine(os.environ["MARIADB_URL"])
+r = eng.connect().execute(text(
+    "SELECT body_source, body_ko FROM articles WHERE content_hash LIKE '678f0cde%'")).one()
+src, out = r[0] or "", r[1] or ""
+qs = quote_spans(src)
+for q in qs:
+    out = out.replace(q, " ")
+print("인용", len(qs), "개 ·", sum(len(q) for q in qs), "자 / 원문", len(src), "자")
+print("인용 제외 지문 잔존율:", round(char_ngram_retention(src, out), 3))
+EOF
+```
+
+실측 — 인터뷰 기사 하나가 원문 1992자 중 인용이 854자 (43%) 였고, 잔존율 0.765 가 인용을 빼면 0.566 으로 내려갔다.
+이런 행은 손댈 것이 없다.
+
+### 5.6.3. 인용 훼손은 눈으로 대조한 뒤 판단한다
+
+경고가 곧 훼손은 아니다.
+중첩 따옴표가 있는 발화에서 경계가 밀릴 수 있으므로 원문과 산출물을 직접 대조한다.
+
+```bash
+uv run python - <<'EOF'
+import os
+from sqlalchemy import create_engine, text
+from bullet_in.fidelity import missing_quotes
+eng = create_engine(os.environ["MARIADB_URL"])
+r = eng.connect().execute(text(
+    "SELECT body_source, body_ko FROM articles WHERE content_hash LIKE '678f0cde%'")).one()
+for q in missing_quotes(r[0] or "", r[1] or ""):
+    print("원문 발화:", q[:60])
+    print("  산출물에 존재:", q[:30] in (r[1] or ""))
+EOF
+```
+
+산출물에 그 발언이 없으면 실제 훼손이다.
+모델이 세 번 재시도에도 따르지 않은 경우이고, 최선안이 채택된 채 경고만 남는다 (본문을 버리지 않는 설계).
+수동 정정 대상은 발언 내용이 바뀐 것뿐이다 — 조사나 공백 차이는 게이트가 이미 무시한다.
+
+### 5.6.4. 조치 우선순위
+
+1. **인명 · 구단 주입** — 하나라도 나오면 즉시 확인한다.
+지어낸 인물 · 구단은 이 파이프라인이 가장 경계하는 유형이고, 실측 기준값이 0 이다.
+2. **인용 훼손** — §5.6.3 으로 대조한 뒤 실제면 수동 정정.
+3. **신규 수치** — 원문에 그 숫자가 있는지 확인한다.
+단위 환산 관용 때문에 배수 관계인 표기 변경은 통과하므로, 값이 맞아도 표기가 바뀐 경우가 있다.
+4. **숫자 누락** — 단발 토큰 (나이 · 등번호 · 경기 수) 이면 대개 부차적이다.
+금액 · 이적료 · 연도가 빠졌으면 확인한다.
+5. **잔존율 초과** — §5.6.2 로 인용 비중을 먼저 본다.
+
 ## 6. 표기 사전 소급 적용 — 재번역 없이 표기만 고칠 때
 
 `config/glossary.yaml` 에 교정 항목을 더해도 **이미 저장된 번역은 바뀌지 않는다.**
