@@ -1294,10 +1294,7 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
         encoding="utf-8")
     (out / "about.html").write_text(render_about(), encoding="utf-8")
 
-    try:
-        entries = build_player_entries(articles, load_page_players())
-    except (KeyError, Exception):
-        entries = []
+    entries = build_player_entries(articles, load_page_players())
     write_player_pages(entries, sources, out, now, directory=directory,
                        outlet_dir=outlet_dir)
 
