@@ -12,6 +12,20 @@ log = logging.getLogger(__name__)
 
 _BODY_MAX_CHARS = 2000
 
+ORIGIN_BODY_MIN_CHARS = 200
+
+
+def origin_body_usable(body: str) -> bool:
+    """원문 URL 이 돌려준 본문을 등급 2 재료로 채택해도 되는지 판정한다.
+
+    상태 코드만으로는 부족하다 — 만료된 라이브 블로그가 200 과 함께 안내 문구를
+    돌려주고, 그 문장이 언론사 본문으로 저장된 실사례가 있다
+    (docs/troubleshooting/2026-08-02-origin-error-page-stored-as-body.md).
+    길이 기준은 배포판 실측이다 (2026-08-03 · 등급 2 본문 273건 중 200자 미만은
+    오류 안내 2건뿐 · 그다음으로 짧은 정상 본문이 251자).
+    거부는 손실이 아니라 등급 하락이다 — 게시글 본문 (등급 1) 으로 물러선다."""
+    return len((body or "").strip()) >= ORIGIN_BODY_MIN_CHARS
+
 def _body_text(html: str, selector: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     el = soup.select_one(selector)
@@ -287,37 +301,39 @@ class FmkoreaAdapter:
                 log.warning("fmkorea 원문/말머리 해소 실패 — 스킵 url=%s", url)
                 continue
             if outlet in PAYWALLED_OUTLETS:
+                body = _body_text(html, self.body_selector)
                 if _is_repost_blocked(html):
-                    # §9.1 ②: 퍼가기 금지 + 페이월 → 헤드라인 + 출처 + 링크만 (본문·게시글 이미지 미복제)
-                    log.info("fmkorea 퍼가기 금지 + 페이월 — 헤드라인만 저장 url=%s", url)
-                    body, images = "", []
+                    # E안: 본문은 재작성해 서빙하되 게시글 이미지는 복제하지 않는다
+                    # — 이미지는 재작성이 불가능해 리스크의 성격이 다르다.
+                    log.info("fmkorea 퍼가기 금지 + 페이월 — 본문 채택 · 이미지 제외 url=%s", url)
+                    images = []
                 else:
-                    body = _body_text(html, self.body_selector)
                     # 게시글 이미지 ≈ 원문 기사 이미지 재게재 (spec 확정 결정)
                     images = extract_body_images(html, self.body_selector, base_url=url)
                 image = await _fetch_og_image(c, orig)
                 lang = "ko"
                 material_level = 1        # 채택한 재료 = 커뮤니티가 옮긴 게시글 본문
             else:
+                body, lang, material_level = "", "ko", 1
+                image, images = None, []
                 try:
                     ro = await c.get(orig)
                     ro.raise_for_status()
-                    body = extract_article_body(ro.text)
-                    image = extract_og_image(ro.text)
-                    images = extract_body_images(ro.text, base_url=orig)
-                    pub = extract_published_at(ro.text)
-                    lang = "en"
-                    material_level = 2    # 채택한 재료 = 원문 URL 에서 받은 언론사 본문
                 except httpx.HTTPError:
                     # 원문 차단 (실측 26건 중 25건이 406 · 403 · 페이월) — 게시글 본문으로 폴백.
-                    # 퍼가기 금지 글은 지금처럼 본문 없이 진행한다 (스펙 §4.1).
-                    image, images = None, []
-                    if _is_repost_blocked(html):
-                        body, lang, material_level = "", "en", 2
+                    log.info("fmkorea 원문 접속 실패 — 게시글 본문 채택 url=%s", orig)
+                else:
+                    origin_body = extract_article_body(ro.text)
+                    if origin_body_usable(origin_body):
+                        body, lang, material_level = origin_body, "en", 2
+                        image = extract_og_image(ro.text)
+                        images = extract_body_images(ro.text, base_url=orig)
+                        pub = extract_published_at(ro.text)
                     else:
-                        log.info("fmkorea 원문 접속 실패 — 게시글 본문 채택 url=%s", orig)
-                        body = _body_text(html, self.body_selector)
-                        lang, material_level = "ko", 1
+                        log.info("fmkorea 원문이 오류 안내로 보임 (%d자) — 게시글 본문 채택 url=%s",
+                                 len((origin_body or "").strip()), orig)
+                if material_level == 1:
+                    body = _body_text(html, self.body_selector)
             body = strip_publish_datetime(body)
             if not self._relevant(title, body):
                 self.relevance_dropped += 1

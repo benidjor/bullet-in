@@ -10,7 +10,14 @@ FREE_BODY = ('<div class="xe_content"><p>아스날 본문.</p>'
              '<p>https://ex.test/a</p></div>')
 PAY_BODY = ('<div class="xe_content"><p>아스날 본문.</p>'
             '<p>https://www.nytimes.com/athletic/9/b</p></div>')
-FREE_ART = '<html><body><article><p>Arsenal news.</p></article></body></html>'
+FREE_ART = ('<html><body><article><p>Arsenal have secured a significant victory in ongoing transfer '
+            'negotiations this summer. The club management completed the acquisition of a key midfielder '
+            'who brings valuable experience and technical skills to strengthen the squad. This strategic '
+            'signing reinforces Arsenal position in the Premier League competition. The player brings '
+            'international experience having played for multiple top clubs across Europe and other leagues. '
+            'The announcement was made during a comprehensive press conference where the coaching staff '
+            'expressed satisfaction with the completed transfer. Fans have reacted positively to this news '
+            'on social media platforms.</p></article></body></html>')
 
 @respx.mock
 def test_fmkorea_search_union_dedup():
@@ -198,8 +205,12 @@ def test_fmkorea_free_outlet_fetches_original_english_body():
     body = ('<div class="xe_content"><p>아스날이 요케레스를 영입한다.</p>'
             '<p>https://www.bbc.com/sport/football/articles/gyo</p></div>')
     original = ('<html><head><meta property="og:image" content="https://img.bbc/g.jpg"></head>'
-                '<body><article><p>Arsenal have signed Gyokeres.</p>'
-                '<p>The fee is 60m.</p></article></body></html>')
+                '<body><article><p>Arsenal have signed Gyokeres following successful negotiations with his previous club. '
+                'The fee is reported to be sixty million pounds sterling which makes it a significant investment. '
+                'The Swedish striker brings valuable experience from European football. '
+                'He is expected to strengthen the team significantly in the coming season. '
+                'The deal was finalized after weeks of intensive discussions. '
+                'The player has already begun training with the squad.</p></article></body></html>')
     respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(200, text=search_html))
     respx.get("https://www.fmkorea.com/1").mock(return_value=httpx.Response(200, text=body))
     respx.get("https://www.bbc.com/sport/football/articles/gyo").mock(
@@ -211,7 +222,7 @@ def test_fmkorea_free_outlet_fetches_original_english_body():
     assert it.url == "https://www.bbc.com/sport/football/articles/gyo"
     assert it.raw_payload["outlet"] == "BBC"
     assert it.raw_payload["lang"] == "en"
-    assert "Arsenal have signed Gyokeres." in it.raw_payload["body"]   # 원문 영어 본문
+    assert "Arsenal have signed Gyokeres" in it.raw_payload["body"]   # 원문 영어 본문
     assert it.raw_payload["image_url"] == "https://img.bbc/g.jpg"
 
 @respx.mock
@@ -248,7 +259,11 @@ def test_post_url_none_when_no_srl():
     assert _post_url_from_href("/index.php?mid=football_news&act=dispBoard",
                                "https://www.fmkorea.com") is None
 
-FREE_ART_IMG = ('<html><body><article><p>Arsenal news.</p>'
+FREE_ART_IMG = ('<html><body><article><p>Arsenal news and updates about the team performance. '
+                'The club has made significant signings to strengthen the squad. '
+                'These acquisitions represent a strong commitment to competition. '
+                'The coaching staff expressed enthusiasm about the new roster. '
+                'Fans anticipate an exciting season ahead with these additions.</p>'
                 '<img src="https://art.test/1.jpg"></article></body></html>')
 PAY_BODY_IMG = ('<div class="xe_content"><p>아스날 본문.</p>'
                 '<img src="https://fmimg.test/p.jpg">'
@@ -310,8 +325,8 @@ BLOCKED_PAY_POST = _post_html(
     '<p>https://www.nytimes.com/athletic/9/b</p>', blocked=True)
 
 @respx.mock
-def test_fmkorea_blocked_paywalled_keeps_headline_only(caplog):
-    # §9.1 ②: 퍼가기 금지 + 페이월 → 본문·게시글 이미지 미복제, 헤드라인 + 출처 + 링크만
+def test_fmkorea_blocked_paywalled_keeps_post_body(caplog):
+    # E안: 퍼가기 금지 + 페이월 → 게시글 본문 채택 · 게시글 이미지 제외
     respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(
         200, text='<a class="hx" href="/index.php?document_srl=2">[디 애슬레틱 - 온스테인] 아스날 수비수 보강</a>'))
     respx.get("https://www.fmkorea.com/2").mock(return_value=httpx.Response(200, text=BLOCKED_PAY_POST))
@@ -325,8 +340,9 @@ def test_fmkorea_blocked_paywalled_keeps_headline_only(caplog):
     assert len(items) == 1
     it = items[0]
     assert it.url == "https://www.nytimes.com/athletic/9/b"
-    assert it.raw_payload["body"] == ""            # fmkorea 번역 본문 미복제
-    assert it.raw_payload["images"] == []          # 게시글 이미지 미복제
+    assert "아스날이 센터백을 원한다." in it.raw_payload["body"]  # fmkorea 게시글 본문 채택
+    assert it.raw_payload["images"] == []          # 게시글 이미지 제외
+    assert it.raw_payload["body_level"] == 1       # 게시글 본문
     assert it.raw_payload["image_url"] == "https://img.nyt/a.jpg"   # og 이미지는 원문에서
     assert it.raw_payload["outlet"] == "The Athletic"
     assert it.raw_payload["journalist"] == "온스테인"
@@ -346,7 +362,7 @@ def test_fmkorea_blocked_free_outlet_keeps_original_body():
                        base_url="https://www.fmkorea.com")
     it = asyncio.run(a.fetch())[0]
     assert it.raw_payload["lang"] == "en"
-    assert "Arsenal news." in it.raw_payload["body"]
+    assert "Arsenal have secured a significant victory" in it.raw_payload["body"]
 
 @respx.mock
 def test_fmkorea_drops_official_prefix_posts():
@@ -381,7 +397,11 @@ def test_post_published_none_when_absent():
 def test_fmkorea_free_path_uses_original_published():
     art = ('<html><head><script type="application/ld+json">'
            '{"datePublished":"2026-07-19T08:00:00Z"}</script></head>'
-           '<body><article><p>Arsenal news.</p></article></body></html>')
+           '<body><article><p>Arsenal news and updates. The team continues to show strong performance. '
+           'Recent signings have made a significant impact on the squad dynamics. '
+           'The coaching staff remains optimistic about the season. '
+           'Fans have expressed positive reactions to the current form. '
+           'The next match is scheduled for this weekend.</p></article></body></html>')
     respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(
         200, text='<a class="hx" href="/index.php?document_srl=1">[BBC] 아스날</a>'))
     respx.get("https://www.fmkorea.com/1").mock(return_value=httpx.Response(
@@ -686,12 +706,12 @@ def test_fmkorea_keeps_original_url_when_falling_back_to_post_body():
 
 
 @respx.mock
-def test_fmkorea_declares_zero_level_when_repost_blocked():
+def test_fmkorea_declares_post_level_when_repost_blocked():
     respx.get("https://www.nytimes.com/athletic/9/b").mock(
         return_value=httpx.Response(200, text=""))
     items = asyncio.run(_one_post(BLOCKED_PAY_POST).fetch())
-    assert items[0].raw_payload["body"] == ""
-    assert items[0].raw_payload["body_level"] == 0
+    assert "아스날이 센터백을 원한다." in items[0].raw_payload["body"]  # 게시글 본문 채택
+    assert items[0].raw_payload["body_level"] == 1  # 게시글 본문
 
 
 @respx.mock
@@ -728,14 +748,15 @@ def test_fmkorea_falls_back_to_post_body_when_original_fetch_fails():
 
 
 @respx.mock
-def test_fmkorea_fallback_skipped_when_repost_blocked():
-    # 퍼가기 금지 글은 폴백에서도 본문을 복제하지 않는다 (스펙 §4.1)
+def test_fmkorea_fallback_uses_post_body_when_repost_blocked():
+    # 폴백: 원문 접속 실패 → 게시글 본문 채택 · 이미지 제외
     blocked = BLOCKED_PAY_POST.replace("https://www.nytimes.com/athletic/9/b",
                                        "https://ex.test/a")
     respx.get("https://ex.test/a").mock(return_value=httpx.Response(403))
     items = asyncio.run(_one_post(blocked, title="[텔레그래프] 아스날 소식").fetch())
-    assert items[0].raw_payload["body"] == ""
-    assert items[0].raw_payload["body_level"] == 0
+    assert "아스날이 센터백을 원한다." in items[0].raw_payload["body"]  # 게시글 본문 채택
+    assert items[0].raw_payload["body_level"] == 1  # 게시글 본문
+    assert items[0].raw_payload["images"] == []  # 이미지 제외
 
 
 # --- 키워드별 제목 필수어 (아르테타 인터뷰 유입 · 2026-07-30 사용자 지시) ---
@@ -835,7 +856,11 @@ def test_filter_passes_club_term_in_title():
 @respx.mock
 def test_filter_passes_club_term_in_body_only():
     # 제목엔 구단명 없음 · 언론사 본문에 Arsenal — 대소문자 무시 (_squash)
-    art = '<html><body><article><p>Talks with Arsenal continue.</p></article></body></html>'
+    art = ('<html><body><article><p>Talks with Arsenal continue to develop as the club explores '
+           'new opportunities for strengthening the squad. Multiple discussions are underway. '
+           'The negotiations involve significant financial commitments from the board. '
+           'Arsenal management has demonstrated serious intent in the transfer window. '
+           'Recent progress suggests positive developments are imminent.</p></article></body></html>')
     _mock_single_post(UNRELATED_SEARCH, UNRELATED_POST, art)
     a = _filter_adapter(relevance_terms=["아스날", "아스널", "arsenal"])
     assert len(asyncio.run(a.fetch())) == 1
@@ -884,3 +909,60 @@ def test_search_failures_zero_on_success():
     a = _filter_adapter()
     asyncio.run(a.fetch())
     assert a.search_failures == 0
+
+BLOCKED_PAY_BODY = ('<div class="rd_body"><strong>퍼가기가 금지된 글입니다</strong>'
+                    '<div class="xe_content"><p>아스날이 영입에 근접했다.</p>'
+                    '<p><img src="/p.jpg"></p>'
+                    '<p>https://www.nytimes.com/athletic/9/b</p></div></div>')
+
+
+@respx.mock
+def test_blocked_paywalled_post_keeps_body_without_images():
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(
+        return_value=httpx.Response(200, text=(
+            '<a class="hx" href="/index.php?document_srl=222">'
+            '[디 애슬레틱] 아스날 B</a>')))
+    respx.get("https://www.fmkorea.com/222").mock(
+        return_value=httpx.Response(200, text=BLOCKED_PAY_BODY))
+    respx.get("https://www.nytimes.com/athletic/9/b").mock(
+        return_value=httpx.Response(200, text=""))
+    a = FmkoreaAdapter(source_id="fmkorea",
+                       search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    item = asyncio.run(a.fetch())[0]
+    assert "아스날이 영입에 근접했다." in item.raw_payload["body"]
+    assert item.raw_payload["body_level"] == 1
+    assert item.raw_payload["images"] == []
+
+
+ERROR_PAGE = ('<html><body><article><p>Friday 24 July 2026 23:47, UK</p>'
+              '<p>Sorry, this blog is currently unavailable. '
+              'Please try again later.</p></article></body></html>')
+
+
+@respx.mock
+def test_origin_error_page_falls_back_to_post_body():
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(
+        return_value=httpx.Response(200, text=(
+            '<a class="hx" href="/index.php?document_srl=111">[BBC] 아스날 A</a>')))
+    respx.get("https://www.fmkorea.com/111").mock(
+        return_value=httpx.Response(200, text=FREE_BODY))
+    respx.get("https://ex.test/a").mock(
+        return_value=httpx.Response(200, text=ERROR_PAGE))
+    a = FmkoreaAdapter(source_id="fmkorea",
+                       search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    item = asyncio.run(a.fetch())[0]
+    assert item.raw_payload["body_level"] == 1
+    assert item.raw_payload["lang"] == "ko"
+    assert "아스날 본문." in item.raw_payload["body"]
+    assert "unavailable" not in item.raw_payload["body"]
+
+
+def test_origin_body_usable_boundary():
+    from bullet_in.adapters.fmkorea import origin_body_usable
+    assert not origin_body_usable("Sorry, this blog is currently unavailable.")
+    assert not origin_body_usable("  " + "가" * 199 + "  ")
+    assert origin_body_usable("가" * 200)
