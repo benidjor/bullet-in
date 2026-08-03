@@ -113,6 +113,17 @@ SELECT 는 `bullet_in.run.SERVING_SELECT_SQL` 을 import 해서 쓴다
 `docs/troubleshooting/2026-07-19-runbook-snippet-logic-drift.md`).
 `write_site` 의 인자는 여전히 run.py 서빙 경로와 1:1 로 유지할 것.
 
+**이 스니펫은 `ops.html` 을 다시 만들지 않는다.**
+운영 뷰는 `write_ops` 가 만드는데 그것은 `run.py` 안에서만 돌기 때문이다.
+그래서 재생성 뒤 `site/` 를 보면 `index.html` · `players.html` 은 방금 시각인데 `ops.html` 만 직전 정기 회차 시각으로 남는다.
+**이것을 "VM 에 코드가 안 올라갔다" 로 오해하기 쉽다** — 2026-08-03 에 실제로 그 오진이 나왔다.
+운영 뷰의 변경까지 확인하려면 다음 정기 회차를 기다리거나 `write_ops` 를 따로 호출한다.
+
+```bash
+ls -l --time-style=+%H:%M site/index.html site/players.html site/ops.html
+# ops.html 만 낡았다면 정상 — 코드 반영 여부는 git log 로 확인한다
+```
+
 **실행 전 점검 (2026-08-02 사고 이후 필수)** — 다른 트랙의 배치가 도는 중에 렌더하면 중간 상태가 그대로 배포된다.
 소급 재분류처럼 값을 비웠다 채우는 작업과 겹치면 전 기사가 "기타" 로 집계된 페이지가 공개된다
 (`docs/troubleshooting/2026-08-02-rerender-during-reclassification.md`).

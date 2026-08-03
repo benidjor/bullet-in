@@ -314,10 +314,44 @@ UPDATE players SET transfer_status='link_dropped',
                     status='archived', archived_at=UTC_TIMESTAMP() WHERE id=?;
 
 -- 이적 시장 종료 — 남은 영입 링크 선수 일괄 archived
-UPDATE players SET status='archived', archived_at=UTC_TIMESTAMP()
+-- 주의: transfer_status 를 반드시 함께 정리한다 (아래 "보관할 때 이적 축도 정리한다" 참조)
+UPDATE players SET status='archived', archived_at=UTC_TIMESTAMP(),
+                    transfer_status='link_dropped'
   WHERE category='external' AND transfer_status='in_link'
     AND status != 'archived';
 ```
+
+### 6.1. 보관할 때 이적 축도 정리한다 (2026-08-03 추가)
+
+**`status` 만 `archived` 로 찍고 `transfer_status` 를 그대로 두면 자동 발굴 기본값이 남는다.**
+`PlayerStore.insert_candidate()` 가 새 후보에 `in_link` 를 박기 때문이다 — 사람이 그 값을 교정하지 않으면 "영입 링크" 인 채로 보관된다.
+
+2026-08-03 실측에서 보관 행 78건 중 75건이 이 상태였다.
+무리뉴 · 하우 · 플릭 (감독), 외질 · 베르캄프 (은퇴), 페드리 · 메시 (아스날 무관), 심지어 구단명 "Arsenal" 이 선수로 추출된 행까지 전부 `in_link` 를 달고 있었다.
+
+**왜 오래 안 드러났나** — 그때까지 `transfer_status` 를 읽는 코드가 둘뿐이었고 (링크 선수 배지 · 워치리스트 로테이션) 둘 다 `status='confirmed'` 로 먼저 걸러서, 보관 행의 값은 아무도 보지 않았다.
+선수 색인이 그 컬럼의 첫 소비자가 되면서 무리뉴 · 외질이 "진행 중" 그룹에 오를 뻔했다.
+
+보관할 때는 사유를 값으로 남긴다.
+
+| 보관 사유 | `transfer_status` |
+| --- | --- |
+| 아스날 링크였다가 다른 구단으로 갔다 | `other_club` |
+| 아스날 링크가 성사 없이 사그라들었다 | `link_dropped` |
+| 애초에 아스날 링크가 아니었다 (감독 · 은퇴 · 오추출 · 타 구단 선수) | `none` |
+
+세 번째가 특히 중요하다.
+`none` 은 "이적 축이 없다" 는 뜻이라 선수 색인 대상에서 자연히 빠진다 (스펙 §3.1).
+`in_link` 를 그대로 두면 오등재가 화면에 노출된다.
+
+```sql
+-- 보관 사유 미기입 행 점검 — 정기적으로 0 이어야 한다
+SELECT id, full_name, transfer_status FROM players
+ WHERE status = 'archived' AND transfer_status = 'in_link';
+```
+
+`link_dropped` 는 2026-08-03 기준 0건이다.
+운영이 링크 소멸을 이 값으로 적어 온 적이 없어서인데, 선수 색인의 "이적 무산" 그룹이 이 값을 쓰므로 앞으로 채워야 그 그룹이 작동한다.
 
 일괄 archived 대상은 영입 링크 (`category='external' AND transfer_status='in_link'`) 뿐이다.
 방출 링크 (`category='squad' AND transfer_status='out_link'`) 는 스쿼드 소속 선수라 archived 대상이 아니다 — 시장이 닫혀도 그 선수는 여전히 아스날 소속이므로 명단에서 빼는 게 아니라 방출 이야기가 없던 일이 됐을 뿐이다.
