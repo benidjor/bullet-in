@@ -62,8 +62,18 @@ def test_normalize_pairs_demotes_official_for_other_sources():
     assert normalize_pairs(raw)[0]["stage"] == "agreed"        # 인자 생략 = 강등
 
 
-def test_normalize_pairs_arsenal_official_does_not_promote_other_stages():
-    raw = [{"full_name": "Someone", "ko": "누군가", "stage": "rumour"},
-           {"full_name": "Another One", "ko": "다른이", "stage": "발표"}]
+def test_normalize_pairs_overwrites_stage_for_arsenal_official():
+    # 추출 프롬프트가 official 을 선택지에서 배제하므로 모델은 agreed 를 답한다
+    # — 유지 방식으로는 승격이 일어나지 않아 규칙으로 덮어쓴다
+    raw = [{"full_name": "Martin Zubimendi", "ko": "수비멘디", "stage": "agreed"},
+           {"full_name": "Someone Else", "ko": "누군가", "stage": "rumour"},
+           {"full_name": "Third Guy", "ko": "셋째", "stage": "발표"}]
     out = normalize_pairs(raw, "arsenal_official")
-    assert [p["stage"] for p in out] == ["rumour", "other"]
+    assert [p["stage"] for p in out] == ["official", "official", "official"]
+
+
+def test_normalize_pairs_does_not_overwrite_for_other_sources():
+    raw = [{"full_name": "Martin Zubimendi", "ko": "수비멘디", "stage": "agreed"},
+           {"full_name": "Someone Else", "ko": "누군가", "stage": "rumour"}]
+    out = normalize_pairs(raw, "bbc_sport")
+    assert [p["stage"] for p in out] == ["agreed", "rumour"]
