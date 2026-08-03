@@ -13,12 +13,18 @@ _MAX_KO = 50             # players.ko_candidate VARCHAR(50)
 _HANGUL_RE = re.compile(r"[가-힣]")
 
 
-def normalize_pairs(raw) -> list[dict]:
+def normalize_pairs(raw, source_id: str | None = None) -> list[dict]:
     """모델 출력 players 필드 검증 — 이름 없는 항목 · 비 dict · 중복은 버리고
-    stage 는 enum 정규화 (official 은 규칙 경로 전용이라 agreed 강등 · 분류 패스와 동일).
+    stage 는 enum 정규화.
+
+    official 은 규칙 경로 전용이라 원칙적으로 agreed 로 강등하되, 공홈 기사에서는
+    그대로 저장한다 (스펙 §8.1) — 그러지 않으면 공홈 발표가 선수 타임라인에서
+    직전 기사와 같은 값이 되어 노드조차 생기지 않는다. 판정은 rule_stage() 를
+    재사용한다 (arsenal_official 문자열의 단일 출처 유지).
     스키마 폭 (VARCHAR 100/50) 을 넘는 출력과 배열 폭주는 여기서 걸러 DB 예외를 막는다."""
     if not isinstance(raw, list):
         return []
+    ruled_official = _stage.rule_stage(source_id)[0] == "official"
     out, seen = [], set()
     for item in raw[:_MAX_PAIRS]:
         if not isinstance(item, dict):
@@ -31,7 +37,7 @@ def normalize_pairs(raw) -> list[dict]:
             continue
         seen.add(folded)
         stage = _stage.normalize(item.get("stage"))
-        if stage == "official":
+        if stage == "official" and not ruled_official:
             stage = "agreed"
         ko = (item.get("ko") or "").strip() or None
         if ko and len(ko) > _MAX_KO:

@@ -124,7 +124,8 @@ async def main(concurrency: int):
         by_hash = {r["content_hash"]: r for r in missing}
         new_candidates: list[dict] = []
         for h, v in results.items():
-            pairs = roster.normalize_pairs(v.get("players"))
+            pairs = roster.normalize_pairs(v.get("players"),
+                                           by_hash.get(h, {}).get("source_id"))
             for cand in roster.record_article_players(pstore, h, pairs):
                 row = by_hash.get(h, {})
                 new_candidates.append({**cand, "title": row.get("title_original"),

@@ -47,3 +47,23 @@ def test_normalize_pairs_drops_hangul_full_name():
            {"full_name": "Son Heung-min", "ko": "손흥민", "stage": "rumour"}]
     out = normalize_pairs(raw)
     assert [p["full_name"] for p in out] == ["Son Heung-min"]
+
+
+def test_normalize_pairs_keeps_official_for_arsenal_official():
+    raw = [{"full_name": "Martin Zubimendi", "ko": "수비멘디", "stage": "official"}]
+    out = normalize_pairs(raw, "arsenal_official")
+    assert out[0]["stage"] == "official"
+
+
+def test_normalize_pairs_demotes_official_for_other_sources():
+    raw = [{"full_name": "Martin Zubimendi", "ko": "수비멘디", "stage": "official"}]
+    assert normalize_pairs(raw, "bbc_sport")[0]["stage"] == "agreed"
+    assert normalize_pairs(raw, None)[0]["stage"] == "agreed"
+    assert normalize_pairs(raw)[0]["stage"] == "agreed"        # 인자 생략 = 강등
+
+
+def test_normalize_pairs_arsenal_official_does_not_promote_other_stages():
+    raw = [{"full_name": "Someone", "ko": "누군가", "stage": "rumour"},
+           {"full_name": "Another One", "ko": "다른이", "stage": "발표"}]
+    out = normalize_pairs(raw, "arsenal_official")
+    assert [p["stage"] for p in out] == ["rumour", "other"]
