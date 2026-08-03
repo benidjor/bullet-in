@@ -27,17 +27,22 @@ PR 을 둘로 나눠 데이터를 먼저 정돈한 뒤 화면을 얹는다.
 - 커밋은 `benidjor <94089198+benidjor@users.noreply.github.com>` 신원으로 한다.
 - `git reset` · `git rebase` 를 쓰지 않는다.
 
-## 승인된 스펙 이탈 2건 (2026-08-03 사용자 확정)
+## 승인된 스펙 이탈 3건 (2026-08-03 사용자 확정)
 
-착수 직후 운영 DB 실측 (스펙 §11.4) 에서 전제가 어긋난 것이 확인돼 사용자가 아래 둘을 확정했다.
+착수 직후 운영 DB 실측 (스펙 §11.4) 에서 전제가 어긋난 것이 확인돼 사용자가 아래 셋을 확정했다.
 
-1. **보관 64행의 `transfer_status` 를 `none` 으로 갱신한다** (Task 5).
+1. **보관 75행의 `transfer_status` 를 `none` 으로 갱신한다** (Task 5).
 보관 행 78건 중 75건이 `in_link` 인데, 이는 `insert_candidate()` 가 넣는 기본값이 사람 보관 시 교정되지 않고 남은 것이다.
+그중 귀속 기사가 있어 색인에 실제로 나타났을 행은 64건이다.
 운영이 실제로 사유를 남길 때는 `other_club` 을 썼다 (은두카 · 마테우스 페르난데스 · 밤바 3건).
 갱신하면 스펙 §3.1 조건을 고치지 않고 §3.2 가 서술한 동작 (스태프 · 은퇴 · 오등재 제외) 이 실현된다.
 2. **색인 대상에서 `candidate` 를 제외한다.**
 스펙 §3.1 은 `status` 를 조건에 넣지 않기로 했으나 후보 행을 논의하지 않았다.
 후보 7명은 전원 사람 승인 전이고 각각 기사 1건이라, 확정 전 페이지를 만들지 않는다.
+3. **오피셜 승격 방식을 유지가 아니라 덮어쓰기로 바꾼다.**
+스펙 §8.1 은 공홈 기사에서 모델이 낸 `official` 을 유지하는 방식으로 적혀 있으나, 추출 프롬프트가 `official` 을 선택지에서 배제하고 있어 그 방식으로는 승격이 일어나지 않는다.
+2026-08-03 사용자 확정으로 덮어쓰기로 전환했다
+— 공홈 소스면 모델 답과 무관하게 `official` 을 저장하며, 이는 기사 단위 경로 (`run.py` 의 `stage_ruled`) 및 소급 `UPDATE` 와 같은 규칙이다.
 
 ## 착수 시점 실측값 (2026-08-03 · VM 운영 DB)
 
@@ -49,7 +54,7 @@ PR 을 둘로 나눠 데이터를 먼저 정돈한 뒤 화면을 얹는다.
 | `transfer_stage` NULL | 0 |
 | `transfer_direction` NULL | 0 |
 | 방향 분포 | `in` 297 · `none` 137 · `out` 42 |
-| 아스날 무관 방향 부여 건 (재분류 대상) | 38 |
+| 아스날 무관 방향 부여 건 (재분류 대상) | 38 (in 31 · out 7) |
 | 그 38건의 단계 분포 | `negotiating` 11 · `agreed` 9 · `interest` 8 · `rumour` 8 · `medical` 1 · `personal_terms` 1 |
 | `arsenal_official` 기사에 걸린 `article_players` | 6 (`agreed` 5 · `medical` 1) |
 | 보관 행 `transfer_status` | `in_link` 75 · `other_club` 3 |
@@ -356,7 +361,7 @@ docs(plan): 선수 페이지 재개 구현 계획 · 방향 기준 결정 반영
 방향 기준 항목을 결정 내용으로 바꾼다.
 
 - 계획서: PR 2개 · 태스크 11개 · 착수 시점 실측 기준선
-- 승인된 이탈 2건: 보관 64행 사유 갱신 · 후보 색인 제외
+- 승인된 이탈 2건: 보관 75행 사유 갱신 · 후보 색인 제외
 - 런북: 알려진 한계의 선택지 나열을 아스날 기준 확정으로 교체
 
 Refs: docs/superpowers/specs/2026-08-03-serve-player-pages-resume-design.md
@@ -430,18 +435,41 @@ SELECT ap.stage, COUNT(*) FROM article_players ap
 
 검증: 실행 후 `official` 6 · 다른 값 0.
 
-- [ ] **Step 3: 보관 64행의 이적 축 갱신**
+- [ ] **Step 3: 보관 75행의 이적 축 갱신**
 
-대상을 조건이 아니라 id 목록으로 고정한다 (런북 §3.2 의 교훈).
+대상을 조건이 아니라 id 목록으로 고정한다 (런북 §3.2 의 교훈)
+— 덤프와 갱신 사이에 새로 보관되는 행이 생겨도 함께 잡히지 않도록, 갱신은 파일에 고정된 id 로만 실행한다.
 
 ```bash
+# VM 에서 — 대상 id 를 먼저 파일로 고정
+uv run python - <<'PY'
+import csv, os
+from sqlalchemy import create_engine, text
+e = create_engine(os.environ["MARIADB_URL"])
+with e.connect() as c, open("archived_inlink_ids.csv", "w", newline="") as f:
+    w = csv.writer(f)
+    w.writerow(["id", "full_name", "transfer_status"])
+    rows = c.execute(text("SELECT id, full_name, transfer_status FROM players "
+                          "WHERE status='archived' AND transfer_status='in_link'")).all()
+    for r in rows:
+        w.writerow(r)
+print("대상 덤프:", len(rows), "행")
+PY
+cat archived_inlink_ids.csv
+
+# 그 파일의 id 로만 갱신한다
+uv run python - <<'PY'
+import csv, os
+from sqlalchemy import bindparam, create_engine, text
+e = create_engine(os.environ["MARIADB_URL"])
+ids = [int(r["id"]) for r in csv.DictReader(open("archived_inlink_ids.csv"))]
+with e.begin() as c:
+    n = c.execute(text("UPDATE players SET transfer_status='none' WHERE id IN :ids")
+                  .bindparams(bindparam("ids", expanding=True)), {"ids": ids}).rowcount
+print("갱신:", n, "행")
+PY
+
 docker compose exec -T mariadb mariadb -uroot -pbulletin bulletin -e "
-SELECT GROUP_CONCAT(id) FROM players
- WHERE status = 'archived' AND transfer_status = 'in_link';" > ~/archived-ids.txt
-cat ~/archived-ids.txt
-docker compose exec -T mariadb mariadb -uroot -pbulletin bulletin -e "
-UPDATE players SET transfer_status = 'none'
- WHERE status = 'archived' AND transfer_status = 'in_link';
 SELECT status, transfer_status, COUNT(*) FROM players GROUP BY 1,2 ORDER BY 1,2;"
 ```
 
@@ -578,7 +606,7 @@ SELECT transfer_stage, COUNT(*) FROM articles GROUP BY 1 ORDER BY 2 DESC;"
 **검증:**
 - `stage_null` = 0.
 0 이 아니면 분류 블록을 다시 돌린다 (최대 3회).
-- 재분류 대상 38건의 방향이 `none` 으로 옮겨져 전체 분포가 대략 `in` 266 · `none` 172 · `out` 38 근처가 된다.
+- 재분류 대상 38건 (`in` 31 · `out` 7) 의 방향이 `none` 으로 옮겨져 전체 분포가 `in` 266 · `none` 175 · `out` 35 근처가 된다.
 - 단계 전체 분포가 재분류 전과 크게 다르지 않다.
 
 - [ ] **Step 7: 결과를 기록한다**
@@ -1858,7 +1886,7 @@ ls ~/bullet-in/site/player/*.html | wc -l
 - **재분류가 단계를 흔든다** — dry-run 대조군 12건에서 단계 이동 0 을 확인하고 넘어간다.
 움직이면 프롬프트를 고쳐 다시 돌린다 (#200 → #201 선례).
 - **보관 갱신이 잘못됐다** — Task 5 Step 1 덤프에서 `players` 만 복원한다.
-갱신 대상 id 목록은 `~/archived-ids.txt` 에 남아 있다.
+갱신 대상 id 목록은 `archived_inlink_ids.csv` 에 남아 있다.
 - **렌더 결함** — 정적 렌더 안에서 끝난다.
 `git revert` 후 다음 렌더에서 `players.html` 과 `player/` 가 생성되지 않으며, 배포 디렉터리에 남은 파일은 `player/` 삭제로 정리한다.
 - **재렌더 시점 충돌** — 다른 트랙 배치가 도는 중에 렌더하면 중간 상태가 배포된다.
