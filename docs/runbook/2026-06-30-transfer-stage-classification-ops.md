@@ -33,6 +33,23 @@ Tier 2-b (PR #18) 로 도입된 영입 단계 분류 (`articles.transfer_stage`)
 SELECT COUNT(*) FROM articles WHERE transfer_stage = 'official' AND source_id != 'arsenal_official';
 ```
 
+### 단계는 두 곳에 저장된다 (2026-08-03 보강)
+
+위 규칙은 기사 단위 `articles.transfer_stage` 이야기다.
+선수 단위 `article_players.stage` 는 경로가 따로여서, enrich 의 추출 결과가 `roster.normalize_pairs()` 를 지나 저장된다.
+공홈 규칙을 여기에 넣지 않아 두 값이 갈려 있었다 (경위는 트러블슈팅 `2026-08-03-stage-stored-twice-diverges.md`).
+
+- **공홈이면 조건 없이 덮어쓴다.** `normalize_pairs()` 가 `source_id` 를 받아 `rule_stage()` 로 공홈을 판정하고, 맞으면 모델 응답과 무관하게 `official` 로 덮는다 (#208).
+"official 이면 유지" 로는 승격되지 않는다 — 추출 프롬프트가 stage 선택지에서 official 을 빼 놓아 모델이 공홈에서도 official 을 답하지 않기 때문이다.
+- **비공홈 소스의 강등은 그대로다.** 모델이 official 을 뱉으면 `agreed` 로 낮춘다.
+- **진단: 공홈 선수 단계 불변량.** 아래 SQL 도 0 을 반환해야 한다.
+0 이 아니면 #208 이전에 적재된 행이 남아 있거나 (스펙 §8.1 의 소급 `UPDATE` 로 정리), 승격 규칙을 우회한 경로가 있다는 뜻이다.
+
+```sql
+SELECT COUNT(*) FROM article_players ap JOIN articles a ON a.content_hash = ap.content_hash
+ WHERE a.source_id = 'arsenal_official' AND ap.stage <> 'official';
+```
+
 ## 1. 스키마 마이그레이션 (멱등)
 
 전체 파이프라인 (`python -m bullet_in.run`) 은 시작 시 `ensure_schema()` 로 컬럼을 자동 적용하므로 별도 작업이 불필요하다.
