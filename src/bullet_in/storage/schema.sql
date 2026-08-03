@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS players (
   added_at DATETIME NOT NULL,
   confirmed_at DATETIME,
   archived_at DATETIME);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS ko_full_name VARCHAR(60);
 CREATE TABLE IF NOT EXISTS article_players (
   content_hash CHAR(64) NOT NULL,
   player_id INT NOT NULL,
