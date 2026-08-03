@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 COLOR_ANOMALY = 0xF2A600
 COLOR_FAILURE = 0xE01E5A
 COLOR_CANDIDATE = 0x3BA55D
+COLOR_BLOCK = 0xD9534F
 
 ADAPTER_HINTS = {
     "x_playwright": "X 쿠키 만료 · 핸들 변경",
@@ -207,3 +208,65 @@ def build_candidate_alert(candidates: list[dict], *, run_id: str) -> dict:
     return {"title": f"🆕 링크 선수 후보 {len(candidates)}명 등재",
             "description": "확정 전에는 게이트 · 서빙 사전에 실리지 않는다 — 확정 CLI 로 승격",
             "color": COLOR_CANDIDATE, "fields": fields}
+
+
+def _failure_code_line(codes: dict) -> str | None:
+    """어댑터가 센 검색 실패 사유 — 서버 응답 코드라 관측 사실로 적을 수 있다.
+    계수를 내놓지 않는 어댑터는 None 을 돌려 그 줄이 빠진다."""
+    if not codes:
+        return None
+    total = sum(codes.values())
+    parts = [("연결 오류" if k == "error" else f"HTTP {k}") + f" {v}건"
+             for k, v in sorted(codes.items(), key=lambda kv: str(kv[0]))]
+    return f"검색 실패 {total}건 — " + " · ".join(parts)
+
+
+def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
+                      failure_codes: dict, success_rate: float,
+                      run_id: str) -> dict:
+    """후보 절벽 알림 (차단 알림 스펙 §5.1).
+
+    판정은 run.py 가 끝냈고 여기서는 표시만 한다 — history[0] 이 직전 회차다.
+    ADAPTER_HINTS 를 쓰지 않는다: 후보 0 의 원인은 알림 시점에 알 수 없고,
+    같은 함정으로 SLO-5 를 두 번 고쳤다 (#169 · #174)."""
+    fields = []
+    for sid in cliffs:
+        prev = history[0].get(sid, 0) if history else 0
+        lines = [f"직전 회차 {prev}건 → 이번 회차 0건"]
+        recent = [h.get(sid, 0) for h in history[:4]]
+        if recent:
+            seq = " → ".join(str(n) for n in reversed(recent))
+            lines.append(f"최근 {len(recent) + 1}회: {seq} → 0 (이번)")
+        code_line = _failure_code_line(failure_codes.get(sid) or {})
+        if code_line:
+            lines.append(code_line)
+        lines.append(f"회차 자체는 정상 종료 (success_rate {success_rate:g})")
+        fields.append({"name": _source_field_name(sid, sources),
+                       "value": "\n".join(f"- {ln}" for ln in lines),
+                       "inline": False})
+    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    return {"title": f"🚨 수집 후보 절벽 — 소스 {len(cliffs)}건",
+            "description": "직전 회차까지 후보가 있던 소스가 이번 회차에 0건이 되었습니다.",
+            "color": COLOR_BLOCK, "fields": fields, "url": RUNBOOK_ANOMALY}
+
+
+def build_watchlist_blackout_alert(*, searched: int, failure_codes: dict,
+                                   last_contact) -> dict:
+    """워치리스트 배치 전멸 알림 (차단 알림 스펙 §5.2).
+
+    커서가 전진하지 않는다는 사실을 함께 적는다 — 다음 배치가 같은 슬라이스를
+    다시 검색하므로 사람이 따로 되돌릴 것이 없다."""
+    lines = [f"검색 {searched}명 · "
+             + (_failure_code_line(failure_codes) or f"검색 실패 {searched}건")]
+    if last_contact is not None:
+        lines.append(f"마지막 fmkorea 접촉: {_discord_ts(last_contact, 'R')} "
+                     f"({_discord_ts(last_contact, 'f')})")
+    return {"title": f"🚨 워치리스트 배치 전멸 — 검색 {searched}명 전원 실패",
+            "description": ("검색한 선수 전원의 검색이 실패해 적재가 0건입니다.\n"
+                            "커서는 전진하지 않아 다음 배치가 같은 슬라이스를 "
+                            "다시 검색합니다."),
+            "color": COLOR_BLOCK,
+            "fields": [{"name": "이번 배치",
+                        "value": "\n".join(f"- {ln}" for ln in lines),
+                        "inline": False}],
+            "url": RUNBOOK_ANOMALY}
