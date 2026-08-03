@@ -216,3 +216,20 @@ def test_write_player_pages_skips_delete_when_no_entries(tmp_path):
     (tmp_path / "player" / "keep.html").write_text("기존", encoding="utf-8")
     write_player_pages([], {}, tmp_path, datetime(2026, 7, 6))
     assert (tmp_path / "player" / "keep.html").exists()   # 조회 0건은 오삭제 방어
+
+
+def test_player_chips_only_include_players_with_pages():
+    from bullet_in.serve.render import player_chips
+    arts = [_art("h1", 1, "rumour")]
+    players = [_player(1, "Tzolis", "촐리스", "in_link",
+                       [{"content_hash": "h1", "stage": "rumour"}])]
+    chips = player_chips(build_player_entries(arts, players))
+    assert chips["h1"] == [{"name": "촐리스", "slug": "tzolis"}]
+
+
+def test_player_chips_are_empty_for_unlinked_article():
+    from bullet_in.serve.render import player_chips
+    arts = [_art("h1", 1, "rumour"), _art("h2", 2, "rumour")]
+    players = [_player(1, "Tzolis", "촐리스", "in_link",
+                       [{"content_hash": "h1", "stage": "rumour"}])]
+    assert player_chips(build_player_entries(arts, players)).get("h2") is None

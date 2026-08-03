@@ -1228,7 +1228,8 @@ def build_neighbors(ordered: list[dict], idx: int, sources: dict,
 
 
 def render_article(article: dict, neighbors: list[dict], current_hash: str,
-                   sources: dict, now: datetime, facets: dict | None = None) -> str:
+                   sources: dict, now: datetime, facets: dict | None = None,
+                   chips: list[dict] | None = None) -> str:
     # facets=None이면 빈 구조로 폴백 (하위 호환 유지)
     if facets is None:
         facets = {"team": {}, "tiers": [], "total": 0, "stage": {}, "stage_groups": [],
@@ -1246,7 +1247,19 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
         article["_body_blocks"] = gossip_itemize(
             article["_body_blocks"], roundup_attrib_counts(article.get("body_source")))
     return _env().get_template("detail.html.j2").render(
-        a=article, neighbors=neighbors, active=None, root="../", facets=facets)
+        a=article, neighbors=neighbors, active=None, root="../", facets=facets,
+        chips=chips or [])
+
+
+def player_chips(entries: list[dict]) -> dict[str, list[dict]]:
+    """기사 → 그 기사에 걸린 선수 칩 (스펙 §6). 페이지가 만들어진 선수만 담는다
+    — 페이지 없는 선수에게 칩을 달면 죽은 링크가 된다."""
+    out: dict[str, list[dict]] = {}
+    for e in entries:
+        for a in e["articles"]:
+            out.setdefault(a["content_hash"], []).append(
+                {"name": e["name"], "slug": e["slug"]})
+    return out
 
 
 def write_player_pages(entries: list[dict], sources: dict, out_dir: str | Path,
@@ -1302,11 +1315,13 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
     # 패싯은 전체 기사 기준으로 한 번만 계산해 모든 상세 페이지에 전달
     facets = facet_counts(articles, sources, directory=directory, registry=registry,
                           outlet_dir=outlet_dir)
+    chips_map = player_chips(entries)
     for idx, row in enumerate(ordered):
         a = _decorate(row, sources, now, directory=directory, outlet_dir=outlet_dir)
         neighbors = build_neighbors(ordered, idx, sources, now, directory=directory,
                                     outlet_dir=outlet_dir)
-        html = render_article(a, neighbors, row["content_hash"], sources, now, facets=facets)
+        html = render_article(a, neighbors, row["content_hash"], sources, now,
+                              facets=facets, chips=chips_map.get(row["content_hash"]))
         (out / "article" / f"{row['content_hash']}.html").write_text(
             html, encoding="utf-8")
 

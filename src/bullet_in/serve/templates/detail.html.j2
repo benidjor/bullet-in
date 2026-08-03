@@ -17,6 +17,12 @@
     <div><dt>발행 날짜</dt><dd>{{ a._datetime or a._date or a._when }}</dd></div>
   </dl>
 
+  {% if chips %}
+  <div class="pchips">
+    {% for c in chips %}<a class="pchip" href="{{ root }}player/{{ c.slug }}.html">{{ c.name }}</a>{% endfor %}
+  </div>
+  {% endif %}
+
   {% if a._meta_only %}
   <p class="tnote">원문 본문을 확보하지 못해 제목과 기본 정보만 제공합니다. 내용은 원문에서 확인해 주세요.</p>
   {% else %}
