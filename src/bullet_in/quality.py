@@ -80,3 +80,14 @@ def evaluate_coverage(coverage: dict) -> list[str]:
     if coverage.get("men_tagged", 0) == 0:
         return ["no_men_tag"]
     return []
+
+
+def candidate_cliffs(today: dict[str, int], previous: dict[str, int]) -> list[str]:
+    """직전 회차에 후보가 있었는데 이번에 0 이 된 소스 (차단 알림 스펙 §3.1).
+
+    상태 (후보 == 0) 가 아니라 전이만 잡는다 — 상태로 잡으면 이미 죽어 있는 소스가
+    매 회차 발화한다 (실측 16회차에서 arsenal_official 은 16회 전부 후보 0).
+    직전 회차에 후보가 있었다는 사실 자체가 '직전까지 살아 있었다' 의 증거라
+    추가 이력 조건을 두지 않는다."""
+    return sorted(sid for sid, n in previous.items()
+                  if n > 0 and today.get(sid, 0) == 0)

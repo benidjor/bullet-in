@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from bullet_in.quality import (success_rate, volume_anomaly, volume_anomalies,
-                               Anomaly, evaluate_freshness)
+                               Anomaly, evaluate_freshness, candidate_cliffs)
 
 def test_success_rate_excludes_errored_sources():
     assert success_rate(total_sources=5, errored=1) == 0.8
@@ -120,3 +120,27 @@ def test_evaluate_coverage_quiet_window_is_normal():
 
 def test_evaluate_coverage_empty_dict_is_normal():
     assert evaluate_coverage({}) == []
+
+
+def test_candidate_cliffs_detects_transition_to_zero():
+    # fmkorea 가 직전 회차 10건에서 이번 회차 0건으로 떨어진 경우
+    previous = {"fmkorea": 10, "goal": 13, "guardian": 8}
+    today = {"goal": 14, "guardian": 8}
+    assert candidate_cliffs(today, previous) == ["fmkorea"]
+
+
+def test_candidate_cliffs_ignores_source_that_was_already_zero():
+    # arsenal_official 은 직전에도 이번에도 0 — 전이가 아니므로 발화하지 않는다
+    previous = {"arsenal_official": 0, "goal": 13}
+    today = {"goal": 14}
+    assert candidate_cliffs(today, previous) == []
+
+
+def test_candidate_cliffs_returns_empty_when_no_previous_run():
+    # 첫 회차 — 직전 행이 없으면 판정 대상이 없다
+    assert candidate_cliffs({"goal": 14}, {}) == []
+
+
+def test_candidate_cliffs_sorted_for_stable_alert_order():
+    previous = {"skysports": 5, "fmkorea": 10}
+    assert candidate_cliffs({}, previous) == ["fmkorea", "skysports"]

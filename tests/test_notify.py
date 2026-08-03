@@ -325,3 +325,71 @@ def test_build_candidate_alert_caps_fields():
     alert = build_candidate_alert(cands, run_id="abcd1234-0000")
     assert "15명" in alert["title"]
     assert len(alert["fields"]) <= 12        # 후보 10 + 넘침 요약 + 회차
+
+
+def test_cliff_alert_shows_transition_and_recent_sequence():
+    embed = notify.build_cliff_alert(
+        ["fmkorea"],
+        history=[{"fmkorea": 10, "goal": 13}, {"fmkorea": 10}, {"fmkorea": 0},
+                 {"fmkorea": 10}],
+        sources={"fmkorea": {"display_name": "fmkorea 축구 소식통",
+                             "adapter": "fmkorea"}},
+        failure_codes={"fmkorea": {430: 4}},
+        success_rate=1.0,
+        run_id="3259230a-1111-2222-3333-444444444444")
+    assert "후보 절벽" in embed["title"]
+    body = embed["fields"][0]["value"]
+    assert "직전 회차 10건 → 이번 회차 0건" in body
+    assert "10 → 0 → 10 → 10 → 0 (이번)" in body
+    assert "검색 실패 4건 — HTTP 430 4건" in body
+    assert "success_rate 1" in body
+
+
+def test_cliff_alert_omits_failure_line_when_adapter_has_no_codes():
+    embed = notify.build_cliff_alert(
+        ["guardian"],
+        history=[{"guardian": 8}],
+        sources={"guardian": {"display_name": "The Guardian", "adapter": "rss"}},
+        failure_codes={},
+        success_rate=1.0,
+        run_id="abcdef01")
+    body = embed["fields"][0]["value"]
+    assert "검색 실패" not in body
+    assert "직전 회차 8건 → 이번 회차 0건" in body
+
+
+def test_cliff_alert_has_no_cause_speculation():
+    """원인 추정 문구 금지 (스펙 §5.3) — 어댑터 힌트가 새어들면 안 된다."""
+    embed = notify.build_cliff_alert(
+        ["fmkorea"],
+        history=[{"fmkorea": 10}],
+        sources={"fmkorea": {"display_name": "fmkorea 축구 소식통",
+                             "adapter": "fmkorea"}},
+        failure_codes={"fmkorea": {430: 4}},
+        success_rate=1.0,
+        run_id="abcdef01")
+    rendered = embed["description"] + "".join(f["value"] for f in embed["fields"])
+    assert "원인 후보" not in rendered
+    assert "의심" not in rendered
+    for hint in notify.ADAPTER_HINTS.values():
+        assert hint not in rendered
+
+
+def test_watchlist_blackout_alert_reports_counts_and_codes():
+    embed = notify.build_watchlist_blackout_alert(
+        searched=10,
+        failure_codes={430: 10},
+        last_contact=datetime(2026, 8, 3, 10, 34))
+    assert "전멸" in embed["title"]
+    body = "".join(f["value"] for f in embed["fields"])
+    assert "검색 10명" in body
+    assert "검색 실패 10건 — HTTP 430 10건" in body
+    assert "커서" in embed["description"]
+
+
+def test_watchlist_blackout_alert_without_last_contact():
+    embed = notify.build_watchlist_blackout_alert(
+        searched=10, failure_codes={"error": 10}, last_contact=None)
+    body = "".join(f["value"] for f in embed["fields"])
+    assert "연결 오류 10건" in body
+    assert "마지막" not in body

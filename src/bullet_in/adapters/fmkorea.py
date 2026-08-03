@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+from collections import Counter
 from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
 import re
@@ -211,6 +212,7 @@ class FmkoreaAdapter:
         self.relevance_terms = relevance_terms or []
         self.player_names = player_names or set()
         self.search_failures = 0      # 이번 fetch 에서 실패한 키워드 검색 수
+        self.search_failure_codes: Counter = Counter()   # 실패 사유 (HTTP 상태 코드 · 연결 오류)
         self.relevance_dropped = 0    # 무관 글 필터 탈락 수
 
     async def _gap(self) -> None:
@@ -222,6 +224,7 @@ class FmkoreaAdapter:
         """키워드 × 페이지 검색 → a.hx 파싱 → 정규 글 URL.
         키워드별 결과를 라운드로빈으로 max_posts 배분한다."""
         self.search_failures = 0
+        self.search_failure_codes = Counter()
         per_kw, seen, first = [], set(), True
         for kw in self.search_keywords:
             results = []
@@ -242,11 +245,13 @@ class FmkoreaAdapter:
                         log.warning("fmkorea 검색 HTTP %s kw=%s p=%s — 스킵",
                                     e.response.status_code, kw["keyword"], page)
                     self.search_failures += 1
+                    self.search_failure_codes[e.response.status_code] += 1
                     break                       # 이 키워드의 남은 페이지도 중단
                 except httpx.HTTPError as e:
                     log.warning("fmkorea 검색 실패 kw=%s p=%s err=%s — 스킵",
                                 kw["keyword"], page, e)
                     self.search_failures += 1
+                    self.search_failure_codes["error"] += 1
                     break
                 soup = BeautifulSoup(r.text, "html.parser")
                 for a in soup.select(self.item_selector):

@@ -966,3 +966,44 @@ def test_origin_body_usable_boundary():
     assert not origin_body_usable("Sorry, this blog is currently unavailable.")
     assert not origin_body_usable("  " + "가" * 199 + "  ")
     assert origin_body_usable("가" * 200)
+
+
+@respx.mock
+def test_fmkorea_search_failure_codes_count_status():
+    """상태 코드별로 집계된다 — 알림이 원인 추정 없이 사실을 적기 위한 재료."""
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(430))
+    respx.get("https://fm.test/s?t=title_content&kw=kw2").mock(
+        return_value=httpx.Response(403))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"},
+                                        {"keyword": "kw2", "target": "title_content"}],
+                       base_url="https://www.fmkorea.com")
+    asyncio.run(a.fetch())
+    assert a.search_failures == 2
+    assert dict(a.search_failure_codes) == {430: 1, 403: 1}
+
+
+@respx.mock
+def test_fmkorea_search_failure_codes_count_connection_error():
+    """연결 오류는 상태 코드가 없으므로 error 키로 집계된다."""
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(
+        side_effect=httpx.ConnectError("boom"))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    asyncio.run(a.fetch())
+    assert a.search_failures == 1
+    assert dict(a.search_failure_codes) == {"error": 1}
+
+
+@respx.mock
+def test_fmkorea_search_failure_codes_reset_between_fetches():
+    """fetch 재진입 시 계수가 초기화된다 (search_failures 와 같은 규칙)."""
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(430))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    asyncio.run(a.fetch())
+    assert dict(a.search_failure_codes) == {430: 1}
+    asyncio.run(a.fetch())
+    assert dict(a.search_failure_codes) == {430: 1}   # 누적되지 않는다

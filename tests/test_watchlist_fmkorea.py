@@ -9,9 +9,10 @@ IDS = [10, 20, 30, 40, 50]
 
 
 class _FakeAdapter:
-    def __init__(self, raw, search_failures=0):
+    def __init__(self, raw, search_failures=0, search_failure_codes=None):
         self._raw = raw
         self.search_failures = search_failures
+        self.search_failure_codes = search_failure_codes or {}
         self.relevance_dropped = 0
         self.relevance_terms = []
         self.player_names = set()
@@ -151,3 +152,38 @@ def test_watchlist_batch_uses_request_gap():
     a = build_fmkorea_adapter(cfg, None, request_gap_sec=REQUEST_GAP_SEC,
                               search_keywords=[{"keyword": "k", "target": "title"}])
     assert a.request_gap_sec == REQUEST_GAP_SEC
+
+
+_BLACKOUT_PLAYERS = [(10, "케파"), (20, "누사"), (30, "딕슨"),
+                     (40, "스톤스"), (50, "일디즈")]
+
+
+def test_blackout_alert_sent_when_every_search_fails(monkeypatch, tmp_path):
+    sent = []
+    monkeypatch.setattr(watchlist_fmkorea.notify, "send_alert",
+                        lambda **kw: sent.append(kw))
+    adapter = _FakeAdapter([], search_failures=5, search_failure_codes={430: 5})
+    _run_main(monkeypatch, tmp_path, adapter=adapter, players=_BLACKOUT_PLAYERS)
+    assert len(sent) == 1
+    assert "전멸" in sent[0]["title"]
+
+
+def test_no_alert_on_partial_failure(monkeypatch, tmp_path):
+    """부분 실패는 알리지 않는다 (스펙 §3.2)."""
+    sent = []
+    monkeypatch.setattr(watchlist_fmkorea.notify, "send_alert",
+                        lambda **kw: sent.append(kw))
+    adapter = _FakeAdapter([], search_failures=2, search_failure_codes={430: 2})
+    _run_main(monkeypatch, tmp_path, adapter=adapter, players=_BLACKOUT_PLAYERS)
+    assert sent == []
+
+
+def test_no_alert_on_dry_run(monkeypatch, tmp_path):
+    """dry-run 은 적재도 알림도 하지 않는다."""
+    sent = []
+    monkeypatch.setattr(watchlist_fmkorea.notify, "send_alert",
+                        lambda **kw: sent.append(kw))
+    adapter = _FakeAdapter([], search_failures=5, search_failure_codes={430: 5})
+    _run_main(monkeypatch, tmp_path, adapter=adapter, dry_run=True,
+              players=_BLACKOUT_PLAYERS)
+    assert sent == []
