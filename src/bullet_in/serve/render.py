@@ -1249,6 +1249,32 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
         a=article, neighbors=neighbors, active=None, root="../", facets=facets)
 
 
+def write_player_pages(entries: list[dict], sources: dict, out_dir: str | Path,
+                       now: datetime, directory: dict | None = None,
+                       outlet_dir: dict | None = None) -> None:
+    """선수 색인 · 선수 페이지 생성과 고아 정리.
+
+    대상 0건이면 삭제를 건너뛴다 — DB 조회 실패와 구분할 수 없어, 조회가 비면
+    기존 선수 페이지를 전부 지우게 된다 (draft 리뷰에서 잡힌 결함 · 스펙 §5.4)."""
+    out = Path(out_dir)
+    (out / "player").mkdir(parents=True, exist_ok=True)
+    (out / "players.html").write_text(render_players(entries, now), encoding="utf-8")
+    keep = set()
+    for e in entries:
+        keep.add(f"{e['slug']}.html")
+        (out / "player" / f"{e['slug']}.html").write_text(
+            render_player(e, sources, now, directory=directory, outlet_dir=outlet_dir),
+            encoding="utf-8")
+    if not entries:
+        log.warning("선수 페이지 정리 건너뜀 — 대상 0건 (DB 조회 실패 가능성)")
+        return
+    removed = [p for p in (out / "player").glob("*.html") if p.name not in keep]
+    for p in removed:
+        p.unlink()
+    if removed:
+        log.info("선수 페이지 %d건 삭제 (대상에서 빠진 선수)", len(removed))
+
+
 def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
                now: datetime | None = None,
                directory: dict | None = None, registry=None,
@@ -1267,6 +1293,13 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
                    outlet_dir=outlet_dir),
         encoding="utf-8")
     (out / "about.html").write_text(render_about(), encoding="utf-8")
+
+    try:
+        entries = build_player_entries(articles, load_page_players())
+    except (KeyError, Exception):
+        entries = []
+    write_player_pages(entries, sources, out, now, directory=directory,
+                       outlet_dir=outlet_dir)
 
     ordered = _sorted_latest(articles)
     # 패싯은 전체 기사 기준으로 한 번만 계산해 모든 상세 페이지에 전달

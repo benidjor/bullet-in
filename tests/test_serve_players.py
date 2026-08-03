@@ -194,3 +194,25 @@ def test_render_player_shows_timeline_and_full_list():
     assert "기사 3건" in html
     assert "이후 1건" in html                     # 같은 단계 연속 접힘
     assert "촐리스 단계 없음" in html              # 단계 없는 기사도 목록에
+
+
+def test_write_player_pages_removes_orphans(tmp_path):
+    from bullet_in.serve.render import write_player_pages
+    (tmp_path / "player").mkdir()
+    (tmp_path / "player" / "gone.html").write_text("낡음", encoding="utf-8")
+    arts = [_art("h1", 1, "rumour")]
+    players = [_player(1, "Tzolis", "촐리스", "in_link",
+                       [{"content_hash": "h1", "stage": "rumour"}])]
+    entries = build_player_entries(arts, players)
+    write_player_pages(entries, {}, tmp_path, datetime(2026, 7, 6))
+    assert (tmp_path / "player" / "tzolis.html").exists()
+    assert not (tmp_path / "player" / "gone.html").exists()
+    assert (tmp_path / "players.html").exists()
+
+
+def test_write_player_pages_skips_delete_when_no_entries(tmp_path):
+    from bullet_in.serve.render import write_player_pages
+    (tmp_path / "player").mkdir()
+    (tmp_path / "player" / "keep.html").write_text("기존", encoding="utf-8")
+    write_player_pages([], {}, tmp_path, datetime(2026, 7, 6))
+    assert (tmp_path / "player" / "keep.html").exists()   # 조회 0건은 오삭제 방어
