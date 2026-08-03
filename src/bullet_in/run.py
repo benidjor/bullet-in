@@ -106,6 +106,14 @@ async def main(concurrency: int):
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     from bullet_in.enrich import (partition_by_body_level, partition_generatable,
                                   rewrite_rows_guarded, title_only_rows)
+    glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
+                or {}).get("replacements", {})
+    name_map = pstore.gate_name_map()
+    if not name_map:
+        logging.getLogger(__name__).warning(
+            "players 사전이 비어 있음 — migrate_roster 미실행이면 인명 게이트가 꺼진 채 돈다")
+    club_map = (yaml.safe_load(Path("config/club_map.yaml").read_text())
+                or {}).get("clubs", {})
     missing = mart.rows_missing_translation()
     generatable, title_only = partition_generatable(missing)
     if title_only:
@@ -114,7 +122,8 @@ async def main(concurrency: int):
     rewrite_rows, translate_rows = partition_by_body_level(generatable)
     results: dict[str, dict] = {}
     results.update(enrich_rows(translate_rows, client, GEMINI_MODEL, mode="translate"))
-    rewritten, gate_reports = rewrite_rows_guarded(rewrite_rows, client, GEMINI_MODEL)
+    rewritten, gate_reports = rewrite_rows_guarded(
+        rewrite_rows, client, GEMINI_MODEL, name_map=name_map, club_map=club_map)
     results.update(rewritten)
     results.update(title_only_rows(title_only, client, GEMINI_MODEL))
 
@@ -136,14 +145,6 @@ async def main(concurrency: int):
         logging.getLogger(__name__).warning(
             "추출 쌍 저장 실패 — 이번 회차 건너뜀 (번역 저장에는 영향 없음)", exc_info=True)
 
-    glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
-                or {}).get("replacements", {})
-    name_map = pstore.gate_name_map()
-    if not name_map:
-        logging.getLogger(__name__).warning(
-            "players 사전이 비어 있음 — migrate_roster 미실행이면 인명 게이트가 꺼진 채 돈다")
-    club_map = (yaml.safe_load(Path("config/club_map.yaml").read_text())
-                or {}).get("clubs", {})
     finals = {h: finalize_translation(v, by_hash.get(h, {}), glossary, name_map, club_map)
               for h, v in results.items()}
     for h, (title_ko, s_ko, s3_ko, body_ko, _) in finals.items():

@@ -88,6 +88,16 @@ class MartStore:
                 "body_source,body_level,outlet,summary_ko "
                 "FROM articles WHERE title_ko IS NULL")).mappings().all()
         return [dict(r) for r in rows]
+    def rows_rewritten(self) -> list[dict]:
+        """재작성 경로로 이미 채워진 행 — 소급 재작성 대상 선정용.
+        rows_missing_translation 과 같은 컬럼을 돌려준다 (같은 함수들이 소비한다)."""
+        with self.engine.connect() as c:
+            rows = c.execute(text(
+                "SELECT content_hash,url,source_id,title_original,body_excerpt,"
+                "body_source,body_level,outlet,summary_ko "
+                "FROM articles WHERE body_level=1 AND title_ko IS NOT NULL "
+                "ORDER BY content_hash")).mappings().all()
+        return [dict(r) for r in rows]
     def set_rewrite_retention(self, content_hash: str, retention: float) -> None:
         """재작성 잔존율 기록 — ops 확인 목록의 근거 (스펙 §7)."""
         with self.engine.begin() as c:

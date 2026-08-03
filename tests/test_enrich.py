@@ -462,6 +462,13 @@ def test_paragraphize_does_not_split_on_decimal_point():
     out = paragraphize(block)
     assert not any(l.rstrip().endswith("2.") for l in out.split("\n"))
 
+def test_split_sentences_breaks_after_closing_curly_quote():
+    """굽은따옴표로 끝나는 문장도 분할된다.
+    이 경로가 조용히 깨진 적이 있다 (2026-08-03) — 전 테스트가 통과하는 채로."""
+    from bullet_in.enrich import _split_sentences
+    assert _split_sentences('그는 말했다.” 그리고 떠났다.') == [
+        '그는 말했다.”', '그리고 떠났다.']
+
 def test_paragraphize_passthrough_none_empty_and_unsplittable():
     from bullet_in.enrich import paragraphize
     assert paragraphize(None) is None
@@ -740,6 +747,38 @@ def test_detect_club_injection_real_config_still_flags_unfounded():
               "body_ko": None}
     src = "Hull City are in talks with Aston Villa over a deal for winger Leon Bailey."
     assert detect_club_injection(parsed, src, _real_club_map()) == ["울버햄튼"]
+
+def test_detect_name_injection_flags_body_only_name():
+    from bullet_in.enrich import detect_name_injection
+    parsed = {"title_ko": "아스날, 미드필더 영입 임박",
+              "summary_ko": "아스날이 영입에 근접했다.",
+              "summary3_ko": "", "body_ko": "외데고르가 주장으로 남는다."}
+    src = "Arsenal are closing in on a midfielder."
+    assert detect_name_injection(parsed, src, {"외데고르": "Odegaard"}) == ["외데고르"]
+
+
+def test_detect_name_injection_passes_korean_source():
+    from bullet_in.enrich import detect_name_injection
+    parsed = {"title_ko": "외데고르 잔류", "summary_ko": "",
+              "summary3_ko": "", "body_ko": ""}
+    src = "외데고르가 아스날에 남는다."
+    assert detect_name_injection(parsed, src, {"외데고르": "Odegaard"}) == []
+
+
+def test_detect_name_injection_passes_english_source():
+    from bullet_in.enrich import detect_name_injection
+    parsed = {"title_ko": "아스날 소식", "summary_ko": "",
+              "summary3_ko": "", "body_ko": "외데고르가 주장으로 남는다."}
+    src = "Odegaard stays as captain."
+    assert detect_name_injection(parsed, src, {"외데고르": "Odegaard"}) == []
+
+
+def test_detect_name_injection_empty_map_is_off():
+    from bullet_in.enrich import detect_name_injection
+    parsed = {"title_ko": "외데고르", "summary_ko": "",
+              "summary3_ko": "", "body_ko": ""}
+    assert detect_name_injection(parsed, "", {}) == []
+
 def test_roundup_attrib_counts_extracts_cores_with_counts():
     from bullet_in.enrich import roundup_attrib_counts
     src = ("A move. (Sun) , external Another. (Athletic - subscription required) , external "
@@ -952,9 +991,14 @@ def test_partition_by_body_level_treats_null_level_as_translate():
 
 def test_paraphrase_prompt_carries_completeness_and_no_injection_rules():
     """다섯 판본 비교에서 이 조합이 주입 4개 → 1개 · 없던 소제목 33개 → 9개로
-    줄인 판본이다 (스펙 §6.3). 조항이 빠지면 측정 근거가 무효가 된다."""
+    줄인 판본이다 (스펙 §6.3). 조항이 빠지면 측정 근거가 무효가 된다.
+
+    2026-08-03 (E안) 개정 — 완전성 조항이 '모든 문단을 순서대로 빠짐없이' 에서
+    '사실 단위를 하나도 빠뜨리지 않고' 로 바뀌었다. 정보 단위 재작성은 문단 대응을
+    일부러 버리므로 순서 조항을 유지할 수 없다. 나머지 여섯 조항은 그대로다.
+    바뀐 조항의 효과는 §6.3 측정이 덮지 않는다 — 표본 검수로 확인한다."""
     from bullet_in.enrich import PARAPHRASE_PROMPT
-    for clause in ["모든 문단을 순서대로 빠짐없이",
+    for clause in ["사실 단위를 하나도 빠뜨리지 않고",
                    "모든 숫자",
                    "원문에 없는 소제목을 만들지 않는다",
                    "역할 명칭",
@@ -962,6 +1006,19 @@ def test_paraphrase_prompt_carries_completeness_and_no_injection_rules():
                    "원문 표기를 그대로",
                    "추측으로"]:
         assert clause in PARAPHRASE_PROMPT, clause
+
+
+def test_paraphrase_prompt_is_information_unit_two_stage():
+    from bullet_in.enrich import PARAPHRASE_PROMPT
+    # 1단계 = 사실 단위 추출 · 2단계 = 목록만 재료로 재편
+    assert "사실 단위" in PARAPHRASE_PROMPT
+    assert "문장 단위로 대응" in PARAPHRASE_PROMPT
+    assert "목록에 없는" in PARAPHRASE_PROMPT
+    # 인용문은 재작성 제외 — 게이트 인용 축과 계약이 같아야 한다
+    assert "인용문" in PARAPHRASE_PROMPT
+    # JSON 계약 유지
+    for key in ("title_ko", "summary_ko", "summary3_ko", "body_ko", "players"):
+        assert key in PARAPHRASE_PROMPT
 
 
 class _FakeGemini:
@@ -1162,3 +1219,143 @@ def test_extract_players_prompt_lists_stages():
                   "medical", "agreed", "other"):
         assert stage in EXTRACT_PLAYERS_PROMPT
     assert "official" not in EXTRACT_PLAYERS_PROMPT
+
+
+def test_rewrite_retries_with_reason_notes_and_reports_axes():
+    from bullet_in.enrich import rewrite_rows_guarded
+
+    class _Msg:
+        def __init__(self, text):
+            self.text = text
+
+    class _Models:
+        def __init__(self):
+            self.prompts = []
+
+        def generate_content(self, model, contents, config):
+            self.prompts.append(contents)
+            # 1차는 원문에 없는 구단 (첼시) 과 숫자 (5) 를 만든다 · 2차는 깨끗하다.
+            # 2차 본문을 원문과 다른 문장으로 두어야 잔존율 축에 걸리지 않는다.
+            if len(self.prompts) == 1:
+                body = '아스날이 첼시에서 5년 계약으로 영입한다.'
+            else:
+                body = '영입이 곧 마무리될 전망이다.'
+            return _Msg('{"title_ko":"제목","summary_ko":"요약",'
+                        '"summary3_ko":["1","2","3"],"body_ko":"' + body + '",'
+                        '"players":[]}')
+
+    class _Client:
+        def __init__(self):
+            self.models = _Models()
+
+    client = _Client()
+    rows = [{"content_hash": "h1", "title_original": "아스날 영입",
+             "body_source": "아스날이 영입을 마무리한다."}]
+    results, reports = rewrite_rows_guarded(
+        rows, client, "m", club_map={"첼시": ["Chelsea"]})
+    assert "[구단 주입]" in client.models.prompts[1]
+    assert "[신규 수치]" in client.models.prompts[1]
+    assert reports["h1"]["clubs"] == []
+    assert reports["h1"]["attempts"] == 2
+    assert results["h1"]["body_ko"] == "영입이 곧 마무리될 전망이다."
+
+
+def test_retry_note_omits_untriggered_injection_axis():
+    from bullet_in.enrich import rewrite_rows_guarded
+
+    class _Msg:
+        def __init__(self, text):
+            self.text = text
+
+    class _Models:
+        def __init__(self):
+            self.prompts = []
+
+        def generate_content(self, model, contents, config):
+            self.prompts.append(contents)
+            # 1차는 구단 축만 위반한다 (숫자 · 인용 · 인명 위반 없음)
+            body = ('아스날이 첼시에서 영입한다.' if len(self.prompts) == 1
+                    else '영입이 곧 마무리될 전망이다.')
+            return _Msg('{"title_ko":"제목","summary_ko":"요약",'
+                        '"summary3_ko":["1","2","3"],"body_ko":"' + body + '",'
+                        '"players":[]}')
+
+    class _Client:
+        def __init__(self):
+            self.models = _Models()
+
+    client = _Client()
+    rows = [{"content_hash": "h1", "title_original": "아스날 영입",
+             "body_source": "아스날이 영입을 마무리한다."}]
+    rewrite_rows_guarded(rows, client, "m", club_map={"첼시": ["Chelsea"]})
+    note = client.models.prompts[1]
+    assert "[구단 주입]" in note
+    assert "[인명 주입]" not in note
+    assert "없음" not in note
+
+
+def test_retry_note_carries_both_injection_axes():
+    from bullet_in.enrich import rewrite_rows_guarded
+
+    class _Msg:
+        def __init__(self, text):
+            self.text = text
+
+    class _Models:
+        def __init__(self):
+            self.prompts = []
+
+        def generate_content(self, model, contents, config):
+            self.prompts.append(contents)
+            body = ('아스날이 첼시에서 외데고르를 영입한다.'
+                    if len(self.prompts) == 1 else '영입이 곧 마무리될 전망이다.')
+            return _Msg('{"title_ko":"제목","summary_ko":"요약",'
+                        '"summary3_ko":["1","2","3"],"body_ko":"' + body + '",'
+                        '"players":[]}')
+
+    class _Client:
+        def __init__(self):
+            self.models = _Models()
+
+    client = _Client()
+    rows = [{"content_hash": "h1", "title_original": "아스날 영입",
+             "body_source": "아스날이 영입을 마무리한다."}]
+    rewrite_rows_guarded(rows, client, "m",
+                         name_map={"외데고르": "Odegaard"},
+                         club_map={"첼시": ["Chelsea"]})
+    note = client.models.prompts[1]
+    assert "[구단 주입]" in note
+    assert "[인명 주입]" in note
+
+
+def test_rewrite_gate_grounds_injection_on_title_too():
+    """제목에만 나오는 인명 · 수치는 주입이 아니다 — 프롬프트가 제목도 재료로 준다."""
+    from bullet_in.enrich import rewrite_rows_guarded
+
+    class _Msg:
+        def __init__(self, text):
+            self.text = text
+
+    class _Models:
+        def __init__(self):
+            self.prompts = []
+
+        def generate_content(self, model, contents, config):
+            self.prompts.append(contents)
+            return _Msg('{"title_ko":"제목","summary_ko":"요약",'
+                        '"summary3_ko":["1","2","3"],'
+                        '"body_ko":"외데고르가 2031년까지 남는다.","players":[]}')
+
+    class _Client:
+        def __init__(self):
+            self.models = _Models()
+
+    client = _Client()
+    rows = [{"content_hash": "h1",
+             "title_original": "외데고르, 2031년까지 아스날 잔류",
+             "body_source": "잔류가 확정됐다."}]
+    _, reports = rewrite_rows_guarded(rows, client, "m",
+                                      name_map={"외데고르": "Odegaard"})
+    assert reports["h1"]["names"] == []
+    assert reports["h1"]["extra"] == []
+    assert reports["h1"]["attempts"] == 1      # 오탐이 없으니 재시도하지 않는다

@@ -1,5 +1,5 @@
 from bullet_in.fidelity import (RETENTION_THRESHOLD, char_ngram_retention,
-                                gate_verdict, missing_numbers, select_best)
+                                extra_numbers, gate_verdict, missing_numbers, missing_quotes, quote_spans, select_best)
 
 
 def test_missing_numbers_reports_dropped_token():
@@ -89,3 +89,87 @@ def test_select_best_falls_back_to_fewest_missing():
 
 def test_threshold_default_is_documented_value():
     assert RETENTION_THRESHOLD == 0.75
+
+
+def test_extra_numbers_flags_invented_figure():
+    src = "아스날이 5,000만 파운드를 제안했다."
+    out = "아스날이 5,000만 파운드를 제안했고 계약 기간은 3년이다."
+    assert extra_numbers(src, out) == ["3"]
+
+
+def test_extra_numbers_allows_unit_conversion():
+    src = "아스날이 £50m 을 제안했다."
+    out = "아스날이 5,000만 파운드를 제안했다."
+    assert extra_numbers(src, out) == []
+
+
+def test_extra_numbers_ignores_url_and_publish_date():
+    src = "아스날 소식."
+    out = "아스날 소식. https://ex.test/2026/07/31 July 24, 2026 기준이다."
+    assert extra_numbers(src, out) == []
+
+
+def test_quote_spans_collects_both_quote_marks():
+    text = '그는 “우리는 준비됐다” 고 했고 감독은 "시간이 필요하다" 고 했다.'
+    assert quote_spans(text) == ["우리는 준비됐다", "시간이 필요하다"]
+
+
+def test_missing_quotes_flags_rewritten_quote():
+    src = '아르테타는 “우리는 더 나은 선수가 필요하다” 고 말했다.'
+    out = '아르테타는 “더 좋은 선수가 있어야 한다” 고 말했다.'
+    assert missing_quotes(src, out) == ["우리는 더 나은 선수가 필요하다"]
+
+
+def test_missing_quotes_passes_preserved_quote():
+    src = '아르테타는 “우리는 더 나은 선수가 필요하다” 고 말했다.'
+    out = '감독은 “우리는 더 나은 선수가 필요하다” 는 말을 남겼다.'
+    assert missing_quotes(src, out) == []
+
+
+def test_missing_quotes_ignores_whitespace_change():
+    src = '그는 “우리는  준비됐다” 고 했다.'
+    out = '그는 “우리는 준비됐다” 고 했다.'
+    assert missing_quotes(src, out) == []
+
+
+
+
+def test_missing_quotes_flags_rewritten_straight_quote():
+    # 곧은따옴표 (U+0022) 경로 — 굽은따옴표 테스트와 짝을 이룬다
+    src = '아르테타는 "우리는 더 나은 선수가 필요하다" 고 말했다.'
+    out = '아르테타는 "더 좋은 선수가 있어야 한다" 고 말했다.'
+    assert missing_quotes(src, out) == ["우리는 더 나은 선수가 필요하다"]
+
+
+def test_gate_verdict_fails_on_invented_number():
+    src = "아스날이 £50m 을 제안했다."
+    out = "아스날이 5,000만 파운드를 제안했고 계약은 3년이다."
+    v = gate_verdict(src, out)
+    assert v["extra"] == ["3"]
+    assert v["ok"] is False
+
+
+def test_gate_verdict_fails_on_broken_quote():
+    src = '그는 "우리는 준비가 됐다" 고 말했다.'
+    out = '그는 "준비는 끝났다" 고 밝혔다.'
+    v = gate_verdict(src, out)
+    assert v["quotes"] == ["우리는 준비가 됐다"]
+    assert v["ok"] is False
+
+
+def test_select_best_prefers_fewest_violations():
+    a = {"parsed": "a", "missing": [], "extra": ["3"], "quotes": [],
+         "names": [], "clubs": [], "retention": 0.1}
+    b = {"parsed": "b", "missing": [], "extra": [], "quotes": [],
+         "names": [], "clubs": [], "retention": 0.6}
+    assert select_best([a, b])["parsed"] == "b"
+
+
+def test_select_best_rejects_verbatim_copy_over_real_rewrite():
+    # 복제본은 어느 축도 어기지 않아 위반 0 이 된다 — 잔존율을 위반으로 세지
+    # 않으면 진짜 재작성을 언제나 이긴다.
+    copy = {"parsed": {"body_ko": "복제"}, "missing": [], "extra": [],
+            "quotes": [], "names": [], "clubs": [], "retention": 0.96}
+    real = {"parsed": {"body_ko": "재작성"}, "missing": [], "extra": ["3"],
+            "quotes": [], "names": [], "clubs": [], "retention": 0.18}
+    assert select_best([copy, real])["parsed"]["body_ko"] == "재작성"

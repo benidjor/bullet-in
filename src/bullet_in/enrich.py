@@ -63,33 +63,38 @@ TRANSLATE_PROMPT = (
     "\n\nTitle: {title}\nBody: {body}")
 
 PARAPHRASE_PROMPT = (
-    "다음은 한국어로 번역된 아스날 FC 축구 기사다. 의미·사실·수치·고유명사·인용은 "
-    "절대 바꾸지 말고 문장 표현만 자연스럽게 바꿔 다시 쓴다 (paraphrase). 규칙:\n"
-    "- title_ko: 제목을 간결한 기사 제목체로 다시 쓴다(말머리 대괄호 제거).\n"
+    "다음은 한국어로 옮겨진 아스날 FC 축구 기사다. 두 단계로 다시 쓴다.\n"
+    "1단계 — 원문에서 사실 단위를 모두 뽑는다: 누가 · 무엇을 · 얼마에 · 언제 · "
+    "어느 구단과 · 어떤 상태인지. 평가와 전망도 원문이 말한 것이면 사실 단위다.\n"
+    "2단계 — 그 목록만 재료로 삼아 글을 새로 구성하고 표현을 전부 바꾼다. "
+    "원문 문장을 하나씩 문장 단위로 대응해 옮기지 않는다. "
+    "쓰다가 목록에 없는 내용이 나오면 그 문장을 버린다.\n"
+    "규칙:\n"
+    "- title_ko: 제목을 간결한 기사 제목체로 다시 쓴다 (말머리 대괄호 제거).\n"
     "- summary_ko: 한 문장 요약, 평어체.\n"
     "- summary3_ko: 핵심 3문장 배열, 평어체.\n"
     "- summary_ko·summary3_ko 존댓말 금지: '확정했습니다' ❌ → '확정했다' ⭕.\n"
-    "- body_ko: 본문 전체를 문장 표현만 바꿔 다시 쓴다. 내용 추가·삭제 금지. "
+    "- body_ko: 사실 단위를 하나도 빠뜨리지 않고 전부 담는다. 요약이 아니다. "
     "2~4문장 단위 문단으로 나누고 문단 사이는 줄바꿈 문자(\\n)로 구분한다.\n"
-    "- body_ko 지문도 신문 평어체(종결어미 '~다'): '관심을 갖고 있습니다' ❌ → "
-    "'관심을 갖고 있다' ⭕. 인용문(따옴표 안 발화)은 화자의 말투를 그대로 두되, "
-    "발화 인용은 반드시 큰따옴표로 감싼다.\n"
-    "- 구독·앱 설치·댓글 유도, SNS 팔로우 요청, 팟캐스트·뉴스레터 홍보 등 "
-    "기사 내용과 무관한 문구는 body_ko에서 제외.\n"
-    "- body_ko 경량 마크다운: 원문의 소제목은 '### ', 원문이 강조한 구절만 '**굵게**', "
-    "인용 블록은 '> '. 원문에 없는 장식은 새로 만들지 않는다.\n"
-    "- body_ko 는 요약이 아니라 전문 재작성이다: 원문의 모든 문단을 순서대로 "
-    "빠짐없이 옮기고, 수치 · 인용 · 세부 사실을 임의로 줄이거나 합치지 않는다.\n"
+    "- body_ko 지문은 신문 평어체(종결어미 '~다'): '관심을 갖고 있습니다' ❌ → "
+    "'관심을 갖고 있다' ⭕.\n"
+    "- 인용문(따옴표 안 발화)은 재작성 대상이 아니다. 큰따옴표를 포함해 원문 "
+    "글자 그대로 옮긴다. 줄이거나 다듬지 않는다.\n"
+    "- 사실 · 수치 · 고유명사 · 평가 · 인과를 새로 만들지 않는다. 원문에 없는 "
+    "구단명 · 사람 이름 · 숫자를 쓰면 안 된다.\n"
     "- 원문에 나오는 모든 숫자 (금액 · 나이 · 연도 · 경기 수 · 기록) 를 하나도 "
     "빠뜨리지 않는다.\n"
-    "- 원문에 없는 소제목을 만들지 않는다. 원문에 소제목이 없으면 산출물에도 "
-    "소제목이 없다.\n"
+    "- 숫자는 원문 표기를 그대로 쓴다 (£50m 을 5,000만 파운드로 바꾸지 않는다).\n"
     "- 원문에 없는 수식어 · 부사 · 역할 명칭 (미드필더 · 공격수 · 감독 등) 을 "
     "붙이지 않는다.\n"
     "- 원문에 없는 시간 · 정도 표현 (즉시 · 이미 · 크게 · 확고히 · 전격 등) 을 "
     "넣지 않는다.\n"
-    "- 숫자는 원문 표기를 그대로 쓴다 (£50m 을 5,000만 파운드로 바꾸지 않는다).\n"
     "- 원문이 단정한 것을 추측으로, 추측한 것을 단정으로 바꾸지 않는다.\n"
+    "- 구독·앱 설치·댓글 유도, SNS 팔로우 요청, 팟캐스트·뉴스레터 홍보 등 "
+    "기사 내용과 무관한 문구는 body_ko에서 제외.\n"
+    "- body_ko 경량 마크다운: 원문의 소제목은 '### ', 원문이 강조한 구절만 "
+    "'**굵게**', 인용 블록은 '> '. 원문에 없는 소제목을 만들지 않는다. "
+    "원문에 없는 장식도 새로 만들지 않는다.\n"
     "- players: 이 기사에서 아스날의 이적 · 거취 · 계약과 관련해 다뤄진 선수 · 감독 "
     "목록. 아스날과 무관한 타 구단 간 소식의 인물은 넣지 않는다. 각 항목은 "
     '{{"full_name":"영문 풀네임","ko":"이 기사에서 쓴 한글 표기","stage":"단계"}}.\n'
@@ -256,7 +261,7 @@ def _ko_present(text: str, name: str) -> bool:
         start = text.find(name, start + 1)
     return False
 
-_CLUB_FIELDS = ("title_ko", "summary_ko", "summary3_ko", "body_ko")
+_GATE_FIELDS = ("title_ko", "summary_ko", "summary3_ko", "body_ko")
 
 def detect_club_injection(parsed: dict, source_text: str,
                           club_map: dict[str, list[str]]) -> list[str]:
@@ -266,7 +271,7 @@ def detect_club_injection(parsed: dict, source_text: str,
     실사례: 로저스의 전 소속 (미들즈브러) 학습 지식 주입 — 원문은 Aston Villa 명시."""
     if not club_map:
         return []
-    joined = " ".join(filter(None, (parsed.get(k) for k in _CLUB_FIELDS)))
+    joined = " ".join(filter(None, (parsed.get(k) for k in _GATE_FIELDS)))
     if not joined:
         return []
     src = source_text or ""
@@ -284,6 +289,31 @@ def detect_club_injection(parsed: dict, source_text: str,
             continue
         if any(re.search(rf"\b{re.escape(_fold_latin(a))}\b", folded_src)
                for a in aliases):
+            continue
+        suspects.append(ko)
+    return suspects
+
+def detect_name_injection(parsed: dict, source_text: str,
+                          name_map: dict[str, str]) -> list[str]:
+    """산출물 4필드의 등재 인명이 원문에 근거 없으면 의심 목록 반환 (게이트 4축).
+
+    detect_title_hallucination 과 같은 이중 대조 (한글 표기 or 영문 성) 를
+    제목이 아니라 4필드 전체에 적용한다 — 본문에만 주입된 인명을 잡는다.
+    사전 밖 인명은 미검출이다 (구단 축과 같은 점진 확장)."""
+    if not name_map:
+        return []
+    joined = " ".join(filter(None, (parsed.get(k) for k in _GATE_FIELDS)))
+    if not joined:
+        return []
+    src = source_text or ""
+    folded_src = _fold_latin(src)
+    suspects = []
+    for ko, en in name_map.items():
+        if not _ko_present(joined, ko):
+            continue
+        if _ko_present(src, ko):
+            continue
+        if re.search(rf"\b{re.escape(_fold_latin(en))}\b", folded_src):
             continue
         suspects.append(ko)
     return suspects
@@ -508,20 +538,39 @@ DUPLICATE_RETRY = (
     "\n\n[복제] 직전 시도는 원문 표현을 지나치게 그대로 옮겼다.\n"
     "사실 · 수치 · 인용은 그대로 두되 문장 구성과 표현을 크게 바꿔 다시 쓴다.\n"
     "단 원문에 없는 내용 · 수식어 · 소제목을 새로 넣지 않는다.")
+EXTRA_RETRY = (
+    "\n\n[신규 수치] 직전 시도는 원문에 없는 숫자를 만들었다 — {tokens}.\n"
+    "원문에 없는 수치는 쓰지 않는다.")
+QUOTE_RETRY = (
+    "\n\n[인용 훼손] 직전 시도는 원문 인용문을 바꿔 썼다 — {quotes}.\n"
+    "따옴표 안 발화는 원문 그대로 옮긴다.")
+CLUB_RETRY = (
+    "\n\n[구단 주입] 직전 시도는 원문에 없는 구단을 넣었다 — {clubs}.\n"
+    "원문에 나오지 않는 구단명은 쓰지 않는다.")
+NAME_RETRY = (
+    "\n\n[인명 주입] 직전 시도는 원문에 없는 인물을 넣었다 — {names}.\n"
+    "원문에 나오지 않는 사람 이름은 쓰지 않는다.")
 
 def rewrite_rows_guarded(rows: list[dict], client, model: str,
                          threshold: float = RETENTION_THRESHOLD,
-                         max_attempts: int = 3
+                         max_attempts: int = 3,
+                         name_map: dict[str, str] | None = None,
+                         club_map: dict[str, list[str]] | None = None
                          ) -> tuple[dict[str, dict], dict[str, dict]]:
-    """게시글 본문 재작성 — 게이트에 걸리면 사유를 붙여 재생성하고 최선을 채택한다.
+    """게시글 본문 재작성 — 게이트 4축에 걸리면 사유를 붙여 재생성하고 최선을 채택한다.
 
-    게이트는 재생성 트리거이지 폐기 조건이 아니다 (스펙 §4.4).
-    반환: (결과, 리포트) — 리포트는 잔존율 기록 · ops 노출용."""
+    게이트는 재생성 트리거이지 폐기 조건이 아니다 (스펙 §4.4 · 사용자 확정 2026-08-03).
+    네 축 = 구단 · 인명 · 수치 (누락 · 신규) · 인용 보존.
+    반환: (결과, 리포트) — 리포트는 잔존율 · 축별 잔존 기록 · ops 노출용."""
+    name_map, club_map = name_map or {}, club_map or {}
     results: dict[str, dict] = {}
     reports: dict[str, dict] = {}
     for r in rows:
         h = r["content_hash"]
         source = r.get("body_source") or r.get("body_excerpt") or ""
+        # 주입 판정의 근거는 모델에게 준 재료 전부다 — 제목에만 있는 인명 · 수치를
+        # 주입으로 오탐하지 않게 한다 (finalize_translation 과 같은 범위).
+        grounding = " ".join(filter(None, (r.get("title_original"), source)))
         base = PARAPHRASE_PROMPT.format(title=r["title_original"], body=source)
         attempts: list[dict] = []
         rate_limited = False
@@ -531,6 +580,14 @@ def rewrite_rows_guarded(rows: list[dict], client, model: str,
                 last = attempts[-1]
                 if last["missing"]:
                     note += MISSING_RETRY.format(tokens=", ".join(last["missing"]))
+                if last["extra"]:
+                    note += EXTRA_RETRY.format(tokens=", ".join(last["extra"]))
+                if last["quotes"]:
+                    note += QUOTE_RETRY.format(quotes=" / ".join(last["quotes"]))
+                if last["clubs"]:
+                    note += CLUB_RETRY.format(clubs=", ".join(last["clubs"]))
+                if last["names"]:
+                    note += NAME_RETRY.format(names=", ".join(last["names"]))
                 if last["retention"] > threshold:
                     note += DUPLICATE_RETRY
             try:
@@ -549,22 +606,32 @@ def rewrite_rows_guarded(rows: list[dict], client, model: str,
             if parsed is None:
                 log.warning("Gemini 응답 파싱 실패, 스킵 content_hash=%s", h)
                 break
-            v = gate_verdict(source, parsed["body_ko"] or "", threshold)
+            v = gate_verdict(source, parsed["body_ko"] or "", threshold,
+                             grounding=grounding)
+            names = detect_name_injection(parsed, grounding, name_map)
+            clubs = detect_club_injection(parsed, grounding, club_map)
             attempts.append({"parsed": parsed, "missing": v["missing"],
+                             "extra": v["extra"], "quotes": v["quotes"],
+                             "names": names, "clubs": clubs,
                              "retention": v["retention"]})
-            if v["ok"]:
+            if v["ok"] and not names and not clubs:
                 break
         if rate_limited:
             break
         if not attempts:
             continue
-        best = select_best(attempts)
+        best = select_best(attempts, threshold)
         results[h] = best["parsed"]
         reports[h] = {"retention": best["retention"], "missing": best["missing"],
+                      "extra": best["extra"], "quotes": best["quotes"],
+                      "names": best["names"], "clubs": best["clubs"],
                       "attempts": len(attempts)}
-        if best["retention"] > threshold or best["missing"]:
-            log.warning("재작성 게이트 잔존 content_hash=%s 잔존율=%.3f 누락=%s 시도=%d",
-                        h, best["retention"], best["missing"], len(attempts))
+        if (best["retention"] > threshold or best["missing"] or best["extra"]
+                or best["quotes"] or best["names"] or best["clubs"]):
+            log.warning("재작성 게이트 잔존 content_hash=%s 잔존율=%.3f 누락=%s "
+                        "신규수치=%s 인용훼손=%s 인명=%s 구단=%s 시도=%d",
+                        h, best["retention"], best["missing"], best["extra"],
+                        best["quotes"], best["names"], best["clubs"], len(attempts))
     return results, reports
 
 TITLE_ONLY_PROMPT = (
