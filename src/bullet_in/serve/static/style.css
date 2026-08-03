@@ -313,7 +313,7 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
 .pname{display:block;font-family:var(--serif);font-weight:700;font-size:15px;color:var(--ink);margin:0 0 4px}
 .pmeta{display:block;font-size:12px;color:var(--dim);margin-top:4px}
 
-/* 이적 축 배지 — 색이 계열 (영입 red · 방출 green · 무산과 종료 mut) 을 나르고,
+/* 이적 축 배지 — 색이 계열 (영입 red · 방출 green · 이적 무산과 타 클럽행 mut) 을 나르고,
    테두리가 단계 (링크 파선 · 완료 실선 · 임대 점선) 를 나른다.
    흰 글자 채움 배경은 쓰지 않는다 — 다크 토큰은 흰 글자와 대비가 무너진다
    (red 3.23:1 · green 2.10:1 · WCAG AA 미달).

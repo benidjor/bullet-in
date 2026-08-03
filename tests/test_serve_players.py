@@ -308,8 +308,7 @@ def test_style_css_defines_all_eight_transfer_badge_classes():
 
 def test_transfer_badge_color_splits_in_and_out():
     # 색이 계열을 나른다 — 영입 3종은 red, 방출 3종은 green.
-    css = (Path("src/bullet_in/serve/static/style.css")
-           .read_text(encoding="utf-8"))
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
     for cls in ("t-inlink", "t-indone", "t-loanin"):
         line = next(l for l in css.splitlines() if l.startswith(f".{cls}{{"))
         assert "var(--red)" in line and "var(--green)" not in line
@@ -320,8 +319,7 @@ def test_transfer_badge_color_splits_in_and_out():
 
 def test_transfer_badge_never_uses_white_fill():
     # 다크 토큰은 흰 글자와 대비가 무너진다 (red 3.23:1 · green 2.10:1).
-    css = (Path("src/bullet_in/serve/static/style.css")
-           .read_text(encoding="utf-8"))
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
     for cls in ("t-inlink", "t-indone", "t-loanin",
                 "t-outlink", "t-outdone", "t-loanout"):
         line = next(l for l in css.splitlines() if l.startswith(f".{cls}{{"))

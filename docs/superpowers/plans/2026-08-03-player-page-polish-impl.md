@@ -781,15 +781,29 @@ MSG
 
 1. 사용자가 PR 을 직접 머지한다.
 2. VM 에서 `git pull` 한다 (런북 `2026-07-20-vm-cohost-bootstrap.md` §6.1).
-3. `uv run python -m bullet_in.backfill_ko_full_name --dry-run` 으로 적재 대상 건수를 먼저 본다.
-4. `--dry-run` 없이 실행해 `ko_full_name` 을 적재한다.
-5. 배포 게이트를 확인한다
+3. 스키마를 먼저 반영한다.
+`ko_full_name` 컬럼을 만드는 `ensure_schema()` 는 정기 회차 안에서만 돌기 때문에, 회차를 기다리지 않고 백필 · 재렌더를 하려면 이 단계가 앞에 와야 한다.
+컬럼 없이 백필을 돌리면 `Unknown column 'ko_full_name'` 으로 죽는다.
+
+```bash
+uv run python - <<'EOF'
+import os
+from sqlalchemy import create_engine
+from bullet_in.storage.mariadb import MartStore
+MartStore(create_engine(os.environ["MARIADB_URL"])).ensure_schema()
+print("스키마 반영 완료")
+EOF
+```
+
+4. `uv run python -m bullet_in.backfill_ko_full_name --dry-run` 으로 적재 대상 건수를 먼저 본다.
+5. `--dry-run` 없이 실행해 `ko_full_name` 을 적재한다.
+6. 배포 게이트를 확인한다
 — `transfer_stage` NULL 0건 (런북 `2026-07-19-enrich-only-pass.md` §4).
-6. 런북 §4 의 재렌더 스니펫으로 사이트를 다시 만든다.
-`ensure_schema` 는 회차에서만 도므로, 재렌더 전에 컬럼이 실제로 붙었는지 확인한다.
-7. 라이브에서 확인한다
+7. 런북 §4 의 재렌더 스니펫으로 사이트를 다시 만든다.
+그 스니펫도 `ensure_schema()` 를 부르지 않으므로 3번을 건너뛰면 여기서 같은 오류가 난다.
+8. 라이브에서 확인한다
 — 색인이 50명 · 그룹 4개 (이적 무산은 0건이라 안 보임) · 네 그룹 모두 접기 버튼 · 한글 풀네임 표시 · 죽은 칩 링크 0건.
-8. 다음 정기 회차 (약 3시간 간격) 가 정상으로 도는지 본다.
+9. 다음 정기 회차 (약 3시간 간격) 가 정상으로 도는지 본다.
 
 ## 자기 점검
 

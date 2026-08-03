@@ -1027,7 +1027,7 @@ def stage_timeline(entries: list[dict]) -> list[dict]:
 
 
 def render_players(entries: list[dict], now: datetime) -> str:
-    """선수 색인 (스펙 §4) — 3그룹 · 그룹 안 최근 보도일 내림차순."""
+    """선수 색인 (스펙 §4) — 4그룹 · 그룹 안 최근 보도일 내림차순."""
     groups = []
     for name, collapsed in TRANSFER_GROUPS:
         members = [e for e in entries if transfer_group(e["transfer_status"]) == name]
