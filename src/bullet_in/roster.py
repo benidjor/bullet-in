@@ -13,12 +13,21 @@ _MAX_KO = 50             # players.ko_candidate VARCHAR(50)
 _HANGUL_RE = re.compile(r"[가-힣]")
 
 
-def normalize_pairs(raw) -> list[dict]:
+def normalize_pairs(raw, source_id: str | None = None) -> list[dict]:
     """모델 출력 players 필드 검증 — 이름 없는 항목 · 비 dict · 중복은 버리고
-    stage 는 enum 정규화 (official 은 규칙 경로 전용이라 agreed 강등 · 분류 패스와 동일).
+    stage 는 enum 정규화.
+
+    공홈 기사면 모델이 낸 stage 와 무관하게 official 로 덮어쓴다 (스펙 §8.1 의
+    승격 규칙과 동일) — 추출 프롬프트가 stage 선택지에서 official 을 빼 놓아
+    모델은 공홈에서도 agreed 등을 답하므로, "official 이면 유지" 방식으로는
+    승격이 일어나지 않는다. 기사 단위 경로 (run.py 의 stage_ruled) 와 소급
+    UPDATE 가 이미 공홈 기사의 stage 를 조건 없이 official 로 덮어쓰고 있어
+    여기서도 같은 규칙을 적용해 소급분과 이후 적재분이 갈리지 않게 한다.
+    판정은 rule_stage() 를 재사용한다 (arsenal_official 문자열의 단일 출처 유지).
     스키마 폭 (VARCHAR 100/50) 을 넘는 출력과 배열 폭주는 여기서 걸러 DB 예외를 막는다."""
     if not isinstance(raw, list):
         return []
+    ruled_official = _stage.rule_stage(source_id)[0] == "official"
     out, seen = [], set()
     for item in raw[:_MAX_PAIRS]:
         if not isinstance(item, dict):
@@ -31,7 +40,9 @@ def normalize_pairs(raw) -> list[dict]:
             continue
         seen.add(folded)
         stage = _stage.normalize(item.get("stage"))
-        if stage == "official":
+        if ruled_official:
+            stage = "official"
+        elif stage == "official":
             stage = "agreed"
         ko = (item.get("ko") or "").strip() or None
         if ko and len(ko) > _MAX_KO:

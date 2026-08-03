@@ -23,7 +23,7 @@ from bullet_in.storage.players import PlayerStore
 log = logging.getLogger(__name__)
 
 _TARGET_SQL = text(
-    "SELECT content_hash, title_original, body_source, body_excerpt, url "
+    "SELECT content_hash, source_id, title_original, body_source, body_excerpt, url "
     "FROM articles WHERE NOT EXISTS (SELECT 1 FROM article_players ap "
     "WHERE ap.content_hash = articles.content_hash) ORDER BY published_at, id")
 
@@ -68,7 +68,7 @@ def main(argv=None) -> None:
     done = 0
     for h, raw in extracted.items():
         try:
-            pairs = roster.normalize_pairs(raw)
+            pairs = roster.normalize_pairs(raw, by_hash[h].get("source_id"))
             for cand in roster.record_article_players(pstore, h, pairs):
                 row = by_hash[h]
                 new_candidates.append({**cand, "title": row.get("title_original"),

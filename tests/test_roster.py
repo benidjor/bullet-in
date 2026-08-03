@@ -47,3 +47,33 @@ def test_normalize_pairs_drops_hangul_full_name():
            {"full_name": "Son Heung-min", "ko": "손흥민", "stage": "rumour"}]
     out = normalize_pairs(raw)
     assert [p["full_name"] for p in out] == ["Son Heung-min"]
+
+
+def test_normalize_pairs_keeps_official_for_arsenal_official():
+    raw = [{"full_name": "Martin Zubimendi", "ko": "수비멘디", "stage": "official"}]
+    out = normalize_pairs(raw, "arsenal_official")
+    assert out[0]["stage"] == "official"
+
+
+def test_normalize_pairs_demotes_official_for_other_sources():
+    raw = [{"full_name": "Martin Zubimendi", "ko": "수비멘디", "stage": "official"}]
+    assert normalize_pairs(raw, "bbc_sport")[0]["stage"] == "agreed"
+    assert normalize_pairs(raw, None)[0]["stage"] == "agreed"
+    assert normalize_pairs(raw)[0]["stage"] == "agreed"        # 인자 생략 = 강등
+
+
+def test_normalize_pairs_overwrites_stage_for_arsenal_official():
+    # 추출 프롬프트가 official 을 선택지에서 배제하므로 모델은 agreed 를 답한다
+    # — 유지 방식으로는 승격이 일어나지 않아 규칙으로 덮어쓴다
+    raw = [{"full_name": "Martin Zubimendi", "ko": "수비멘디", "stage": "agreed"},
+           {"full_name": "Someone Else", "ko": "누군가", "stage": "rumour"},
+           {"full_name": "Third Guy", "ko": "셋째", "stage": "발표"}]
+    out = normalize_pairs(raw, "arsenal_official")
+    assert [p["stage"] for p in out] == ["official", "official", "official"]
+
+
+def test_normalize_pairs_does_not_overwrite_for_other_sources():
+    raw = [{"full_name": "Martin Zubimendi", "ko": "수비멘디", "stage": "agreed"},
+           {"full_name": "Someone Else", "ko": "누군가", "stage": "rumour"}]
+    out = normalize_pairs(raw, "bbc_sport")
+    assert [p["stage"] for p in out] == ["agreed", "rumour"]
