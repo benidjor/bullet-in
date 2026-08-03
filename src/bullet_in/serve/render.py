@@ -968,10 +968,11 @@ def load_page_players(engine=None) -> list[dict]:
 def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict]:
     """선수별 기사 목록 · 전이 타임라인 · 현재 단계 (스펙 §5).
 
-    기사 목록은 귀속 전량이다 — 단계 없는 기사도 포함한다.
-    머리의 건수와 목록 수가 어긋나지 않게 하기 위한 것이며 draft 리뷰에서 실제로
-    잡혔던 결함이다 (스펙 §5.3). 서빙 목록에 없는 기사는 링크에서 빠지고, 그 결과
-    남는 기사가 0건인 선수는 빈 페이지가 되지 않도록 결과에서 제외한다."""
+    기사 목록은 단계가 other 인 귀속을 뺀 나머지다.
+    이름만 스친 기사가 그 선수의 이적 기사인 것처럼 쌓이던 것을 막기 위한 것이며,
+    머리 건수도 같은 집합에서 나오므로 "머리 = 목록" 등식은 그대로다 (스펙 §5.3).
+    서빙 목록에 없는 기사는 링크에서 빠지고, 그 결과 남는 기사가 0건인 선수는
+    빈 페이지가 되지 않도록 결과에서 제외한다."""
     by_hash = {a["content_hash"]: a for a in articles}
     folded = {p["id"]: re.sub(r"[^a-z0-9]", "", (p.get("surname") or "").lower())
               for p in players}
@@ -980,7 +981,7 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
     out = []
     for p in players:
         paired = [(by_hash[l["content_hash"]], l["stage"]) for l in p["links"]
-                  if l["content_hash"] in by_hash]
+                  if l["content_hash"] in by_hash and l["stage"] != _stage.OTHER]
         if not paired:
             continue
         paired.sort(key=lambda t: _sort_ts(t[0]))          # 오래된 것부터 (전이 판정)

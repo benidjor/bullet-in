@@ -114,15 +114,33 @@ def test_build_player_entries_orders_articles_newest_first():
 
 
 def test_build_player_entries_header_count_matches_article_list():
-    # draft 리뷰에서 실제로 잡혔던 결함 — 단계 없는 기사도 목록에 든다 (스펙 §5.3)
+    # draft 리뷰에서 실제로 잡혔던 결함 — 머리와 목록이 어긋나지 않도록
+    # 둘 다 other 를 뺀 같은 집합에서 나온다 (스펙 §5.3)
     arts = [_art("h1", 1, "rumour"), _art("h2", 2, None), _art("h3", 3, "other")]
     players = [_player(1, "Tzolis", "촐리스", "in_link",
                        [{"content_hash": "h1", "stage": "rumour"},
                         {"content_hash": "h2", "stage": None},
                         {"content_hash": "h3", "stage": "other"}])]
     [e] = build_player_entries(arts, players)
-    assert e["count"] == len(e["articles"]) == 3
+    assert e["count"] == len(e["articles"]) == 2
     assert [n["stage"] for n in e["timeline"]] == ["rumour"]
+
+
+def test_build_player_entries_excludes_other_from_list_and_count():
+    # 머리 건수와 목록 수가 어긋나면 안 되므로 둘 다 같은 집합에서 나와야 한다.
+    rows = [{"content_hash": "h1", "published_at": datetime(2026, 8, 1)},
+            {"content_hash": "h2", "published_at": datetime(2026, 8, 2)},
+            {"content_hash": "h3", "published_at": datetime(2026, 8, 3)}]
+    players = [{"id": 1, "full_name": "Christos Tzolis", "surname": "Tzolis",
+                "ko_full_name": None, "ko_name": "촐리스",
+                "transfer_status": "in_link",
+                "links": [{"content_hash": "h1", "stage": "interest"},
+                          {"content_hash": "h2", "stage": "other"},
+                          {"content_hash": "h3", "stage": "agreed"}]}]
+    entry = build_player_entries(rows, players)[0]
+    assert entry["count"] == 2
+    assert len(entry["articles"]) == 2
+    assert [a["content_hash"] for a in entry["articles"]] == ["h3", "h1"]
 
 
 def test_build_player_entries_current_stage_is_latest_node():
@@ -134,12 +152,16 @@ def test_build_player_entries_current_stage_is_latest_node():
     assert e["stage"] == "rumour"          # 역행이어도 최신 노드 값
 
 
-def test_build_player_entries_has_no_stage_when_all_other():
-    arts = [_art("h1", 1, "other")]
-    players = [_player(1, "Tzolis", "촐리스", "in_link",
-                       [{"content_hash": "h1", "stage": "other"}])]
-    [e] = build_player_entries(arts, players)
-    assert e["stage"] is None
+def test_build_player_entries_drops_player_whose_articles_are_all_other():
+    # 이적 얘기가 없는데 이름만 스친 선수 — 색인 56명이 50명으로 줄어든 근거다.
+    rows = [{"content_hash": "h1", "published_at": datetime(2026, 8, 1)},
+            {"content_hash": "h2", "published_at": datetime(2026, 8, 2)}]
+    players = [{"id": 1, "full_name": "Martin Zubimendi", "surname": "Zubimendi",
+                "ko_full_name": None, "ko_name": "수비멘디",
+                "transfer_status": "in_link",
+                "links": [{"content_hash": "h1", "stage": "other"},
+                          {"content_hash": "h2", "stage": "other"}]}]
+    assert build_player_entries(rows, players) == []
 
 
 def test_build_player_entries_drops_player_with_no_serving_article():
