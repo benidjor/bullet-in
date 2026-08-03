@@ -102,5 +102,5 @@ SELECT content_hash, source_id, LEFT(body_source, 80)
 - 발견 경위 — `other` 버킷 표적 재분류 (#200 · #201)
 - 게이트 현황 — 번역 신뢰성 트랙 (#159~#164 · 재료 없으면 생성 안 함)
 - 등급 규칙 — 본문 등급 가드 (레벨이 오를 때만 교체)
-- 계통 처리 예정 — E안 (fmkorea 퍼가기 정책 개정 · 확정 · 미착수)
+- 계통 처리 — E안 (fmkorea 퍼가기 정책 개정 · §4 로 구현 · PR #209)
 - 복구 절차 — `docs/runbook/2026-07-19-enrich-only-pass.md` §3 · §4
