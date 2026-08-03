@@ -1332,14 +1332,33 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
     shutil.copytree(_STATIC_DIR / "fonts", out / "fonts", dirs_exist_ok=True)
 
 
-def render_ops(view: dict) -> str:
-    return _env().get_template("ops.html.j2").render(view=view)
+def unmatched_articles(articles: list[dict], linked: set[str]) -> list[dict]:
+    """단계가 있는데 귀속 선수가 0명인 기사 (스펙 §9) — 추출 누락 감시.
+
+    선수 페이지가 article_players 를 유일한 원천으로 쓰므로 추출이 실패한 기사는
+    어느 선수 페이지에도 나타나지 않고 조용히 사라진다. 그것을 볼 수 있는 자리다."""
+    out = []
+    for a in _sorted_latest(articles):
+        if not _stage.is_displayable(filter_stage(a)):
+            continue
+        if a["content_hash"] in linked:
+            continue
+        out.append({"title": a.get("title_ko") or a.get("title_original") or "",
+                    "source": a.get("source_id") or "",
+                    "date": fmt_date(to_kst(_sort_ts(a)[0]))})
+    return out
+
+
+def render_ops(view: dict, unmatched: list[dict] | None = None) -> str:
+    return _env().get_template("ops.html.j2").render(view=view, unmatched=unmatched)
 
 
 def write_ops(snapshot: dict, sources: dict, out_dir: str | Path,
-              anomaly_count: int, now: datetime) -> None:
+              anomaly_count: int, now: datetime,
+              unmatched: list[dict] | None = None) -> None:
     """운영 뷰 site/ops.html 생성. 실패 격리는 호출부 (run.py) 책임."""
     view = build_ops_view(snapshot, sources, anomaly_count, now)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "ops.html").write_text(render_ops(view), encoding="utf-8")
+    (out / "ops.html").write_text(render_ops(view, unmatched=unmatched),
+                                  encoding="utf-8")

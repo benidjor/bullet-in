@@ -415,3 +415,12 @@ if (items.length) {                                       // 인덱스
   };
   if (resetBtn) resetBtn.onclick = resetAll;
 }
+
+// ── 선수 색인 — 무산 그룹 접기 (스펙 §4.1) ─────────────────────────
+document.querySelectorAll('.plgrp .plfold').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const grp = btn.closest('.plgrp');
+    const folded = grp.classList.toggle('folded');
+    btn.textContent = folded ? '펼치기' : '접기';
+  });
+});

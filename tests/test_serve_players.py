@@ -233,3 +233,18 @@ def test_player_chips_are_empty_for_unlinked_article():
     players = [_player(1, "Tzolis", "촐리스", "in_link",
                        [{"content_hash": "h1", "stage": "rumour"}])]
     assert player_chips(build_player_entries(arts, players)).get("h2") is None
+
+
+def test_unmatched_articles_lists_staged_rows_without_extraction():
+    from bullet_in.serve.render import unmatched_articles
+    arts = [_art("h1", 1, "rumour", "추출됨"), _art("h2", 2, "agreed", "추출 실패"),
+            _art("h3", 3, "other", "단계 없음")]
+    rows = unmatched_articles(arts, linked={"h1"})
+    assert [r["title"] for r in rows] == ["추출 실패"]
+    assert rows[0]["source"] == "bbc_sport"
+
+
+def test_unmatched_articles_ignores_stageless_rows():
+    from bullet_in.serve.render import unmatched_articles
+    arts = [_art("h1", 1, None), _art("h2", 2, "other")]
+    assert unmatched_articles(arts, linked=set()) == []
