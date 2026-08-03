@@ -1,10 +1,13 @@
 """선수 색인 · 선수 페이지 순수 함수 단위 테스트 (스펙 §4 · §5)."""
+import re
 from datetime import datetime
+from pathlib import Path
 from bullet_in.serve.render import (TRANSFER_GROUPS, player_slug, stage_timeline,
                                     transfer_badge, transfer_group)
 
 NOW = datetime(2026, 7, 10, 12, 0)
 SOURCES = {"bbc_sport": {"display_name": "BBC Sport", "serving": "full"}}
+STATIC = Path("src/bullet_in/serve/static")
 
 
 def _row(day: int, h: str = "h1"):
@@ -248,3 +251,40 @@ def test_unmatched_articles_ignores_stageless_rows():
     from bullet_in.serve.render import unmatched_articles
     arts = [_art("h1", 1, None), _art("h2", 2, "other")]
     assert unmatched_articles(arts, linked=set()) == []
+
+
+# ── 무산 그룹 접기 — 회귀 가드 (리뷰 지적) ──────────────────────────
+# pytest 는 브라우저를 띄우지 않으므로 아래 단언은 app.js · style.css ·
+# players.html.j2 세 파일이 같은 문자열 계약 (.plfold 셀렉터 · folded 클래스 ·
+# display:none 규칙) 을 공유하는지만 고정한다 — 클릭 시 실제로 접히는 화면
+# 동작 자체는 실브라우저(Playwright)로만 검증 가능하다. 이게 없으면 누가
+# 버튼 클래스명이나 셀렉터를 바꿔도 pytest 는 전부 통과한 채 접기 기능만
+# 조용히 죽는다.
+def test_app_js_has_player_group_fold_contract():
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert ".plfold" in js                              # 버튼 셀렉터
+    assert "folded" in js                                # 토글 클래스명
+
+
+def test_style_css_folds_playerlist_when_group_is_folded():
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
+    assert re.search(r"\.plgrp\.folded\s+\.playerlist\s*\{[^}]*display\s*:\s*none", css), (
+        ".plgrp.folded .playerlist{display:none} 규칙이 없음 — "
+        "접기 버튼을 눌러도 화면에서 목록이 숨지 않는 결함"
+    )
+
+
+def test_style_css_defines_all_eight_transfer_badge_classes():
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
+    for cls in ("t-inlink", "t-outlink", "t-indone", "t-outdone",
+                "t-loanin", "t-loanout", "t-dropped", "t-otherclub"):
+        assert f".{cls}" in css, f".{cls} 스타일 누락"
+
+
+def test_render_players_folded_group_has_plfold_button():
+    arts = [_art("h1", 1, "agreed")]
+    players = [_player(1, "Nduka", "은두카", "other_club",
+                       [{"content_hash": "h1", "stage": "agreed"}])]
+    html = render_players(build_player_entries(arts, players), NOW)
+    assert 'class="plgrp folded"' in html                # plgrp · folded 동시 출현
+    assert 'class="plfold"' in html                       # 접기 버튼 렌더
