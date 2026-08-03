@@ -288,3 +288,35 @@ def test_render_players_folded_group_has_plfold_button():
     html = render_players(build_player_entries(arts, players), NOW)
     assert 'class="plgrp folded"' in html                # plgrp · folded 동시 출현
     assert 'class="plfold"' in html                       # 접기 버튼 렌더
+
+
+def test_app_js_guards_sidebar_null_check_for_daylist_items():
+    """선수 페이지는 daylist 가 있지만 사이드바가 없어서 TypeError 유발.
+
+    렌더링된 선수 페이지는 solo=True 로 사이드바를 제외 (클래스 "side" 없음)
+    하지만 daylist 클래스는 있어서, 브라우저의 app.js 에서 querySelector('.daylist .item')
+    이 반환하는 NodeList 가 비지 않는다. items.length > 0 이므로 조건문 진입하는데,
+    side 가 null 이어서 side.addEventListener() 에서 TypeError 가 난다.
+
+    이 조합 (daylist 있음 + side 없음) 을 만드는 유일한 페이지가 player.html.j2
+    이므로, app.js 에서 널 검사 && side 가 필수다. 선수 페이지가 생겨서야 문제가 드러났으므로
+    회귀 방어는 양쪽 조건을 함께 검증한다."""
+    # app.js 가 items.length 체크할 때 side 를 함께 확인하는가?
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "items.length && side" in js, (
+        "app.js 에서 items.length 체크에 side 널 검사 병합 필요 — "
+        "선수 페이지가 유일하게 daylist 있고 sidebar 없는 조합"
+    )
+
+    # render_player 가 정말 그 조합을 출력하는가?
+    arts = [_art("h1", 1, "rumour")]
+    players = [_player(1, "Tzolis", "촐리스", "in_link",
+                       [{"content_hash": "h1", "stage": "rumour"}])]
+    [e] = build_player_entries(arts, players)
+    html = render_player(e, SOURCES, NOW)
+    assert 'class="daylist' in html, (
+        "선수 페이지가 daylist 없음 (널 검사 필요성 전제 깨짐)"
+    )
+    assert 'class="side"' not in html, (
+        "선수 페이지가 sidebar 있음 (널 검사 필요성 전제 깨짐)"
+    )

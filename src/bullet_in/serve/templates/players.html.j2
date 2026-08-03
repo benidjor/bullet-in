@@ -3,7 +3,7 @@
 {% block content %}
 <div class="sechead"><h2>선수</h2><span class="kst">이적 축별 · 최근 보도순</span></div>
 {% for g in groups %}{% if g.members %}
-<div class="plgrp{{ ' folded' if g.collapsed }}" data-group="{{ g.name }}">
+<div class="plgrp{{ ' folded' if g.collapsed }}">
   <h3 class="plgroup">{{ g.name }} <span class="ct">{{ g.members|length }}</span>
     {% if g.collapsed %}<button class="plfold" type="button">펼치기</button>{% endif %}
   </h3>
