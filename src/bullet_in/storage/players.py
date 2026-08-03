@@ -7,6 +7,11 @@ from sqlalchemy.engine import Engine
 # 게이트 · 서빙 사전 술어 — 후보 (자동 등재) 배제 + archived 잔류 (스펙 §3.2 · §8)
 _DICT_WHERE = "status IN ('confirmed','archived') AND ko_name IS NOT NULL"
 
+# 선수 페이지 대상 술어 (스펙 §3.1 + 후보 제외 · 2026-08-03 사용자 확정)
+# — 스태프 · 이적 얘기 없는 스쿼드 · 사유 없는 보관 · 미확정 후보가 여기서 빠진다.
+_PAGE_WHERE = ("category IN ('squad','external') AND transfer_status <> 'none' "
+               "AND status <> 'candidate'")
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -120,6 +125,31 @@ class PlayerStore:
                 "SELECT id, ko_name FROM players WHERE status='confirmed' "
                 "AND transfer_status IN ('in_link','out_link') "
                 "AND ko_name IS NOT NULL ORDER BY id")).all()]
+
+    def page_players(self) -> list[dict]:
+        """선수 페이지 대상 (스펙 §3.1) — 귀속 기사가 없는 선수는 뺀다.
+        빈 페이지를 만들지 않기 위한 조건이며 page_player_links 와 술어를 공유한다."""
+        with self.engine.connect() as c:
+            return [dict(r) for r in c.execute(text(
+                "SELECT id, full_name, surname, ko_name, transfer_status "
+                f"FROM players WHERE {_PAGE_WHERE} AND EXISTS ("
+                "SELECT 1 FROM article_players ap WHERE ap.player_id = players.id) "
+                "ORDER BY id")).mappings().all()]
+
+    def page_player_links(self) -> list[dict]:
+        """대상 선수의 기사 귀속 전량 — (선수, 기사, 그 기사에서 그 선수의 단계)."""
+        with self.engine.connect() as c:
+            return [dict(r) for r in c.execute(text(
+                "SELECT ap.player_id, ap.content_hash, ap.stage "
+                "FROM article_players ap JOIN players p ON p.id = ap.player_id "
+                f"WHERE {_PAGE_WHERE}")).mappings().all()]
+
+    def linked_hashes(self) -> set[str]:
+        """추출이 한 명이라도 붙인 기사 (ops 추출 누락 표의 여집합 · 스펙 §9).
+        대상 술어를 걸지 않는다 — 스태프만 걸린 기사도 추출은 성공한 것이다."""
+        with self.engine.connect() as c:
+            return {r[0] for r in c.execute(text(
+                "SELECT DISTINCT content_hash FROM article_players")).all()}
 
     def confirm(self, player_id: int, *, ko_name: str,
                 category: str | None = None, transfer_status: str | None = None,

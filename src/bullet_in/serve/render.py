@@ -905,6 +905,159 @@ def load_player_names(engine=None) -> list[str]:
     return sorted(names, key=len, reverse=True)
 
 
+# ── 선수 페이지 (스펙 §4 · §5) ─────────────────────────────────────────
+# 선수 단위 이적 축 배지 — players 스펙 §3.1 의 화면 배지 열을 그대로 옮긴다.
+# 기사 단위 transfer_direction 은 이 화면에서 쓰지 않는다 (스펙 §4.2).
+_TRANSFER_BADGE: dict[str, tuple[str, str]] = {
+    "in_link": ("영입 링크", "t-inlink"),
+    "out_link": ("방출 링크", "t-outlink"),
+    "in_done": ("영입 완료", "t-indone"),
+    "out_done": ("방출 완료", "t-outdone"),
+    "loan_in": ("임대 영입", "t-loanin"),
+    "loan_out": ("임대 이적", "t-loanout"),
+    "link_dropped": ("링크 소멸", "t-dropped"),
+    "other_club": ("타 클럽행", "t-otherclub"),
+}
+
+# 색인 3그룹 (스펙 §4.1) — (그룹명, 기본 접힘). 무산 그룹은 되짚기용이라 접어 둔다.
+TRANSFER_GROUPS: list[tuple[str, bool]] = [
+    ("진행 중", False), ("성사", False), ("무산과 종료", True),
+]
+
+_TRANSFER_GROUP_OF: dict[str, str] = {
+    "in_link": "진행 중", "out_link": "진행 중",
+    "in_done": "성사", "out_done": "성사", "loan_in": "성사", "loan_out": "성사",
+    "link_dropped": "무산과 종료", "other_club": "무산과 종료",
+}
+
+
+def transfer_badge(status: str | None) -> dict | None:
+    """선수 이적 축 배지 {label, cls}. 축이 없으면 (none) 배지를 달지 않는다."""
+    d = _TRANSFER_BADGE.get(status or "")
+    return {"label": d[0], "cls": d[1]} if d else None
+
+
+def transfer_group(status: str | None) -> str | None:
+    """색인 그룹명. 여덟 값이 3그룹으로 빠짐없이 갈린다."""
+    return _TRANSFER_GROUP_OF.get(status or "")
+
+
+def player_slug(surname: str, player_id: int, dupes: set[str]) -> str:
+    """선수 페이지 slug — 소문자 영문 성. 동성 복수면 surname-id 로 떨어뜨린다."""
+    base = re.sub(r"[^a-z0-9]", "", (surname or "").lower()) or "player"
+    return f"{base}-{player_id}" if base in dupes else base
+
+
+def load_page_players(engine=None) -> list[dict]:
+    """선수 페이지 대상 + 귀속 (스펙 §3.1) — DB 단일 원천.
+    engine 미지정 시 MARIADB_URL 로 생성한다 — write_site 호출부 (run.py · 런북) 는
+    이미 그 env 로 돌므로 시그니처 연쇄 변경 없이 전환된다 (load_player_names 선례)."""
+    from sqlalchemy import create_engine
+    from bullet_in.storage.players import PlayerStore
+    store = PlayerStore(engine or create_engine(os.environ["MARIADB_URL"]))
+    players = store.page_players()
+    links: dict[int, list[dict]] = {}
+    for l in store.page_player_links():
+        links.setdefault(l["player_id"], []).append(
+            {"content_hash": l["content_hash"], "stage": l["stage"]})
+    for p in players:
+        p["links"] = links.get(p["id"], [])
+    return players
+
+
+def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict]:
+    """선수별 기사 목록 · 전이 타임라인 · 현재 단계 (스펙 §5).
+
+    기사 목록은 귀속 전량이다 — 단계 없는 기사도 포함한다.
+    머리의 건수와 목록 수가 어긋나지 않게 하기 위한 것이며 draft 리뷰에서 실제로
+    잡혔던 결함이다 (스펙 §5.3). 서빙 목록에 없는 기사는 링크에서 빠지고, 그 결과
+    남는 기사가 0건인 선수는 빈 페이지가 되지 않도록 결과에서 제외한다."""
+    by_hash = {a["content_hash"]: a for a in articles}
+    folded = {p["id"]: re.sub(r"[^a-z0-9]", "", (p.get("surname") or "").lower())
+              for p in players}
+    counts = Counter(folded.values())
+    dupes = {s for s, n in counts.items() if n > 1}
+    out = []
+    for p in players:
+        paired = [(by_hash[l["content_hash"]], l["stage"]) for l in p["links"]
+                  if l["content_hash"] in by_hash]
+        if not paired:
+            continue
+        paired.sort(key=lambda t: _sort_ts(t[0]))          # 오래된 것부터 (전이 판정)
+        timeline = stage_timeline([{"row": r, "stage": s} for r, s in paired])
+        slug = player_slug(p.get("surname") or "", p["id"], dupes)
+        if folded[p["id"]] in dupes:
+            log.warning("동성 복수 — slug 를 id 로 떨어뜨림: %s → %s",
+                        p["full_name"], slug)
+        out.append({**p,
+                    "name": p.get("ko_name") or p["full_name"],
+                    "slug": slug,
+                    "articles": [r for r, _ in reversed(paired)],
+                    "timeline": timeline,
+                    "stage": timeline[0]["stage"] if timeline else None,
+                    "count": len(paired),
+                    "last_ts": _sort_ts(paired[-1][0])[0]})
+    return out
+
+
+def stage_timeline(entries: list[dict]) -> list[dict]:
+    """단계 전이 노드 (스펙 §5.2) — 직전과 값이 달라진 기사만 노드로 만든다.
+
+    입력은 오래된 것부터 정렬된 [{"row", "stage"}], 출력은 최신 노드가 앞이다.
+    같은 단계로 이어진 기사는 노드의 follow 로 접고, other · 빈 값은 배지 대상이
+    아니므로 노드도 follow 도 만들지 않는다.
+    역행은 그대로 새 노드가 된다 — 딜이 틀어진 것인지 오분류인지 화면에서 가릴 수
+    없으므로 지어내지 않는다 (최고 도달 단계로 고정하면 링크가 소멸한 선수의 배지가
+    이적 합의로 남는 모순이 생긴다)."""
+    nodes: list[dict] = []
+    for e in entries:
+        stage = e.get("stage")
+        if not _stage.is_displayable(stage):
+            continue
+        if nodes and nodes[-1]["stage"] == stage:
+            nodes[-1]["follow"] += 1
+            continue
+        nodes.append({"row": e["row"], "stage": stage, "follow": 0})
+    return list(reversed(nodes))
+
+
+def render_players(entries: list[dict], now: datetime) -> str:
+    """선수 색인 (스펙 §4) — 3그룹 · 그룹 안 최근 보도일 내림차순."""
+    groups = []
+    for name, collapsed in TRANSFER_GROUPS:
+        members = [e for e in entries if transfer_group(e["transfer_status"]) == name]
+        members.sort(key=lambda e: e["last_ts"], reverse=True)
+        for e in members:
+            e["_badge"] = transfer_badge(e["transfer_status"])
+            e["_stage"] = display_stage(e["stage"])
+            e["_last"] = fmt_date(to_kst(e["last_ts"]))
+        groups.append({"name": name, "collapsed": collapsed, "members": members})
+    return _env().get_template("players.html.j2").render(
+        groups=groups, active="players", root="", solo=True)
+
+
+def render_player(entry: dict, sources: dict, now: datetime,
+                  directory: dict | None = None,
+                  outlet_dir: dict | None = None) -> str:
+    """선수 페이지 (스펙 §5) — 머리 · 전이 타임라인 · 귀속 기사 전량."""
+    decorated = {}
+    for a in entry["articles"]:
+        d = _decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
+        # _decorate 의 _date 는 UTC 라 타임라인 · 카드가 머리와 다른 날짜로 보일 수
+        # 있다 — 선수 페이지 지역 범위로만 KST 로 보정한다.
+        d["_kdate"] = fmt_date(to_kst(_sort_ts(a)[0]))
+        decorated[a["content_hash"]] = d
+    nodes = [{"a": decorated[n["row"]["content_hash"]],
+              "badge": display_stage(n["stage"]), "follow": n["follow"]}
+             for n in entry["timeline"]]
+    return _env().get_template("player.html.j2").render(
+        e=entry, badge=transfer_badge(entry["transfer_status"]),
+        stage=display_stage(entry["stage"]), nodes=nodes,
+        articles=[decorated[a["content_hash"]] for a in entry["articles"]],
+        last=fmt_date(to_kst(entry["last_ts"])),
+        active="players", root="../", solo=True)
+
+
 def load_clubs(path: str = "config/club_map.yaml") -> dict:
     """구단 검출 사전 (결말 · 행선지 칩) — club_map 의 한글 구단명."""
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
@@ -1075,7 +1228,8 @@ def build_neighbors(ordered: list[dict], idx: int, sources: dict,
 
 
 def render_article(article: dict, neighbors: list[dict], current_hash: str,
-                   sources: dict, now: datetime, facets: dict | None = None) -> str:
+                   sources: dict, now: datetime, facets: dict | None = None,
+                   chips: list[dict] | None = None) -> str:
     # facets=None이면 빈 구조로 폴백 (하위 호환 유지)
     if facets is None:
         facets = {"team": {}, "tiers": [], "total": 0, "stage": {}, "stage_groups": [],
@@ -1093,7 +1247,45 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
         article["_body_blocks"] = gossip_itemize(
             article["_body_blocks"], roundup_attrib_counts(article.get("body_source")))
     return _env().get_template("detail.html.j2").render(
-        a=article, neighbors=neighbors, active=None, root="../", facets=facets)
+        a=article, neighbors=neighbors, active=None, root="../", facets=facets,
+        chips=chips or [])
+
+
+def player_chips(entries: list[dict]) -> dict[str, list[dict]]:
+    """기사 → 그 기사에 걸린 선수 칩 (스펙 §6). 페이지가 만들어진 선수만 담는다
+    — 페이지 없는 선수에게 칩을 달면 죽은 링크가 된다."""
+    out: dict[str, list[dict]] = {}
+    for e in entries:
+        for a in e["articles"]:
+            out.setdefault(a["content_hash"], []).append(
+                {"name": e["name"], "slug": e["slug"]})
+    return out
+
+
+def write_player_pages(entries: list[dict], sources: dict, out_dir: str | Path,
+                       now: datetime, directory: dict | None = None,
+                       outlet_dir: dict | None = None) -> None:
+    """선수 색인 · 선수 페이지 생성과 고아 정리.
+
+    대상 0건이면 삭제를 건너뛴다 — DB 조회 실패와 구분할 수 없어, 조회가 비면
+    기존 선수 페이지를 전부 지우게 된다 (draft 리뷰에서 잡힌 결함 · 스펙 §5.4)."""
+    out = Path(out_dir)
+    (out / "player").mkdir(parents=True, exist_ok=True)
+    (out / "players.html").write_text(render_players(entries, now), encoding="utf-8")
+    keep = set()
+    for e in entries:
+        keep.add(f"{e['slug']}.html")
+        (out / "player" / f"{e['slug']}.html").write_text(
+            render_player(e, sources, now, directory=directory, outlet_dir=outlet_dir),
+            encoding="utf-8")
+    if not entries:
+        log.warning("선수 페이지 정리 건너뜀 — 대상 0건 (DB 조회 실패 가능성)")
+        return
+    removed = [p for p in (out / "player").glob("*.html") if p.name not in keep]
+    for p in removed:
+        p.unlink()
+    if removed:
+        log.info("선수 페이지 %d건 삭제 (대상에서 빠진 선수)", len(removed))
 
 
 def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
@@ -1115,15 +1307,21 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
         encoding="utf-8")
     (out / "about.html").write_text(render_about(), encoding="utf-8")
 
+    entries = build_player_entries(articles, load_page_players())
+    write_player_pages(entries, sources, out, now, directory=directory,
+                       outlet_dir=outlet_dir)
+
     ordered = _sorted_latest(articles)
     # 패싯은 전체 기사 기준으로 한 번만 계산해 모든 상세 페이지에 전달
     facets = facet_counts(articles, sources, directory=directory, registry=registry,
                           outlet_dir=outlet_dir)
+    chips_map = player_chips(entries)
     for idx, row in enumerate(ordered):
         a = _decorate(row, sources, now, directory=directory, outlet_dir=outlet_dir)
         neighbors = build_neighbors(ordered, idx, sources, now, directory=directory,
                                     outlet_dir=outlet_dir)
-        html = render_article(a, neighbors, row["content_hash"], sources, now, facets=facets)
+        html = render_article(a, neighbors, row["content_hash"], sources, now,
+                              facets=facets, chips=chips_map.get(row["content_hash"]))
         (out / "article" / f"{row['content_hash']}.html").write_text(
             html, encoding="utf-8")
 
@@ -1134,14 +1332,33 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
     shutil.copytree(_STATIC_DIR / "fonts", out / "fonts", dirs_exist_ok=True)
 
 
-def render_ops(view: dict) -> str:
-    return _env().get_template("ops.html.j2").render(view=view)
+def unmatched_articles(articles: list[dict], linked: set[str]) -> list[dict]:
+    """단계가 있는데 귀속 선수가 0명인 기사 (스펙 §9) — 추출 누락 감시.
+
+    선수 페이지가 article_players 를 유일한 원천으로 쓰므로 추출이 실패한 기사는
+    어느 선수 페이지에도 나타나지 않고 조용히 사라진다. 그것을 볼 수 있는 자리다."""
+    out = []
+    for a in _sorted_latest(articles):
+        if not _stage.is_displayable(filter_stage(a)):
+            continue
+        if a["content_hash"] in linked:
+            continue
+        out.append({"title": a.get("title_ko") or a.get("title_original") or "",
+                    "source": a.get("source_id") or "",
+                    "date": fmt_date(to_kst(_sort_ts(a)[0]))})
+    return out
+
+
+def render_ops(view: dict, unmatched: list[dict] | None = None) -> str:
+    return _env().get_template("ops.html.j2").render(view=view, unmatched=unmatched)
 
 
 def write_ops(snapshot: dict, sources: dict, out_dir: str | Path,
-              anomaly_count: int, now: datetime) -> None:
+              anomaly_count: int, now: datetime,
+              unmatched: list[dict] | None = None) -> None:
     """운영 뷰 site/ops.html 생성. 실패 격리는 호출부 (run.py) 책임."""
     view = build_ops_view(snapshot, sources, anomaly_count, now)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "ops.html").write_text(render_ops(view), encoding="utf-8")
+    (out / "ops.html").write_text(render_ops(view, unmatched=unmatched),
+                                  encoding="utf-8")

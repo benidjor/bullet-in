@@ -1,9 +1,11 @@
 {% macro stage_badge(s) %}{% if s %}<span class="stage {{ s.tone }}{{ ' filled' if s.filled }}">{{ s.label }}</span>{% endif %}{% endmacro %}
-{% macro card(a, dest=None, when=None, cls='', show_cred=True, thumb=False, hidden=False) %}
+{% macro card(a, dest=None, when=None, cls='', show_cred=True, thumb=False, hidden=False, show_all=False) %}
 {% set show_thumb = thumb and a.image_url %}
 {# 기타 단계는 기본 숨김 (#22) 이나, 링크 선수 배지가 붙은 글은 예외로 노출한다
-   — 배지가 존재 이유를 설명하는 글이라 숨기면 배지를 볼 수 없다 (2026-08-02). #}
-<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if hidden or (not a._stage_disp and not a._ctx) %} style="display:none"{% endif %} href="article/{{ a.content_hash }}.html"
+   — 배지가 존재 이유를 설명하는 글이라 숨기면 배지를 볼 수 없다 (2026-08-02).
+   선수 페이지 (show_all) 는 귀속 기사 전량을 보여줘야 해서 이 기본 숨김을 끈다
+   — 머리 건수와 목록 수가 어긋나면 안 되기 때문 (선수 페이지 스펙 §5.3). #}
+<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if hidden or (not show_all and not a._stage_disp and not a._ctx) %} style="display:none"{% endif %} href="{{ root }}article/{{ a.content_hash }}.html"
    data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-tier="{{ a._tier_key }}"{% if a._ctx %} data-ctx="1"{% endif %}
    data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}"
    data-published="{{ a._published_iso }}" data-confidence="{{ a.confidence_score or 0 }}"

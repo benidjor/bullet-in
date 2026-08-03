@@ -43,6 +43,7 @@
   <nav class="nav">
     <a class="{{ 'active' if active == 'home' else '' }}" href="{{ root }}index.html">홈</a>
     <a class="{{ 'active' if active == 'all' else '' }}" href="{{ root }}all.html">전체 기사</a>
+    <a class="{{ 'active' if active == 'players' else '' }}" href="{{ root }}players.html">선수</a>
     <a class="{{ 'active' if active == 'about' else '' }}" href="{{ root }}about.html">소개</a>
   </nav>
   <label class="search">
@@ -67,8 +68,8 @@
 
 {% block band %}{% endblock %}
 
-<div class="shell{{ ' solo' if about_page }}">
-  {% if not about_page %}
+<div class="shell{{ ' solo' if about_page or solo }}">
+  {% if not about_page and not solo %}
   <aside class="side">
     <h4>팀</h4>
     <label class="opt"><input type="checkbox" data-group="team" data-value="arsenal" checked> Arsenal <span class="ct">{{ facets.team.get('arsenal', 0) }}</span></label>

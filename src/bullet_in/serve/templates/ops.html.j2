@@ -129,6 +129,14 @@
 </table>
 {% else %}<p class="mut">임계값 초과 없음</p>{% endif %}
 
+<h2>⑦ 선수 추출 누락 (영입 단계 있음 · 귀속 선수 0명)</h2>
+<p class="mut">추출이 실패한 기사는 어느 선수 페이지에도 실리지 않는다 — 재추출 대상.</p>
+{% if unmatched %}
+<table><thead><tr><th>날짜</th><th>소스</th><th>제목</th></tr></thead><tbody>
+{% for r in unmatched %}<tr><td>{{ r.date }}</td><td>{{ r.source }}</td><td>{{ r.title }}</td></tr>{% endfor %}
+</tbody></table>
+{% else %}<p class="mut">없음</p>{% endif %}
+
 <footer><a href="index.html">← 기사 페이지로</a></footer>
 </body>
 </html>

@@ -1,0 +1,22 @@
+{% extends "_layout.html.j2" %}
+{% block title %}선수 · Bullet-in{% endblock %}
+{% block content %}
+<div class="sechead"><h2>선수</h2><span class="kst">이적 축별 · 최근 보도순</span></div>
+{% for g in groups %}{% if g.members %}
+<div class="plgrp{{ ' folded' if g.collapsed }}">
+  <h3 class="plgroup">{{ g.name }} <span class="ct">{{ g.members|length }}</span>
+    {% if g.collapsed %}<button class="plfold" type="button">펼치기</button>{% endif %}
+  </h3>
+  <div class="playerlist">
+  {% for e in g.members %}
+    <a class="pcard" href="player/{{ e.slug }}.html">
+      <span class="pname">{{ e.name }}</span>
+      {% if e._badge %}<span class="tbadge {{ e._badge.cls }}">{{ e._badge.label }}</span>{% endif %}
+      {% if e._stage %}<span class="stage {{ e._stage.tone }}{{ ' filled' if e._stage.filled }}">{{ e._stage.label }}</span>{% endif %}
+      <span class="pmeta">기사 {{ e.count }}건 · 최근 {{ e._last }}</span>
+    </a>
+  {% endfor %}
+  </div>
+</div>
+{% endif %}{% endfor %}
+{% endblock %}

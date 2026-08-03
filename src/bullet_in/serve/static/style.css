@@ -298,6 +298,59 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
 .more .nowtag{font-size:10px;font-weight:700;color:#fff;background:var(--red);
   border-radius:2px;padding:1px 6px;margin-right:6px}
 
+/* ── 선수 색인 · 선수 페이지 (§4 · §5) ────────────────────────────── */
+.plgrp{margin:0 0 22px}
+.plgroup{display:flex;align-items:center;gap:8px;font-family:var(--serif);font-weight:700;
+  font-size:16px;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+.plgroup .ct{font-size:12px;color:var(--dim);font-weight:600}
+.plfold{margin-left:auto;padding:3px 10px;border:1px solid var(--hair);border-radius:2px;
+  background:none;color:var(--mut);font:inherit;font-size:12px;cursor:pointer}
+.plfold:hover{color:var(--ink);border-color:var(--mut)}
+.playerlist{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.plgrp.folded .playerlist{display:none}
+.pcard{display:block;padding:11px 12px;border:1px solid var(--hair);border-radius:2px}
+.pcard:hover{border-color:var(--mut)}
+.pname{display:block;font-family:var(--serif);font-weight:700;font-size:15px;color:var(--ink);margin:0 0 4px}
+.pmeta{display:block;font-size:12px;color:var(--dim);margin-top:4px}
+
+/* 이적 축 배지 — 8값을 4색 (red·green·yellow 강조 + mut 무채색) × 실선(in)/파선(out) 으로 구분.
+   흰 글자 채움 배경은 쓰지 않는다 — 다크 토큰의 green·yellow 는 밝게 튜닝돼 있어
+   흰 글자와 대비가 무너진다 (라이트 5.36:1·4.17:1 → 다크 2.10:1·2.14:1, WCAG AA 미달).
+   텍스트 색만 쓰는 쪽으로 통일 — 각 색은 라이트·다크 양쪽 paper 대비 실측 4.5:1 이상
+   (보고서 "수정 라운드 1" 표 참조). yellow 만 --ink 를 20% 섞어 라이트 대비를 4.0→5.4 로 끌어올린다. */
+.tbadge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;
+  padding:1px 6px;border-radius:2px;letter-spacing:.01em;margin:0 6px 4px 0}
+.t-inlink{color:var(--red);border:1px solid var(--red)}
+.t-outlink{color:var(--red);border:1px dashed var(--red)}
+.t-indone{color:var(--green);border:1px solid var(--green)}
+.t-outdone{color:var(--green);border:1px dashed var(--green)}
+.t-loanin{color:color-mix(in srgb,var(--yellow) 80%,var(--ink) 20%);
+  border:1px solid color-mix(in srgb,var(--yellow) 80%,var(--ink) 20%)}
+.t-loanout{color:color-mix(in srgb,var(--yellow) 80%,var(--ink) 20%);
+  border:1px dashed color-mix(in srgb,var(--yellow) 80%,var(--ink) 20%)}
+.t-dropped{color:var(--mut);border:1px solid var(--hair)}
+.t-otherclub{color:var(--mut);border:1px dashed var(--hair)}
+
+.phead{margin:0 0 20px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.phead h2{font-family:var(--serif);font-weight:900;font-size:28px;margin:0}
+.phead .pmeta{width:100%;margin-top:2px}
+
+.timeline{margin:0 0 26px}
+.tlnode{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;padding:9px 0;
+  border-top:1px solid var(--hair)}
+.tlnode:first-child{border-top:0}
+.tldate{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;width:74px;flex:0 0 auto}
+.tltitle{flex:1;min-width:0;font-weight:600;line-height:1.4}
+.tltitle:hover{color:var(--red)}
+.tlsrc{font-size:12px;color:var(--mut);white-space:nowrap}
+.tlmore{font-size:11px;color:var(--dim)}
+.plist{margin-top:4px}
+
+.pchips{margin:8px 0 0;display:flex;flex-wrap:wrap;gap:6px}
+.pchip{display:inline-block;padding:2px 8px;border:1px solid var(--hair);border-radius:2px;
+  font-size:12px;color:var(--mut)}
+.pchip:hover{color:var(--red);border-color:var(--red)}
+
 /* ── 소개 페이지 (§10) ────────────────────────────────────────────── */
 .shell.solo{grid-template-columns:1fr;max-width:820px}
 .about{max-width:680px}
