@@ -185,3 +185,73 @@ def test_active_link_players_excludes_archived_link(engine):
                        "WHERE full_name='Bukayo Saka'"))
     names = [n for _, n in store.active_link_players()]
     assert "사카" not in names   # archived 는 활성 이적축에서 제외
+
+
+def _add_player(engine, *, full_name, surname, ko_name, category, status,
+                transfer_status):
+    with engine.begin() as c:
+        c.execute(text(
+            "INSERT INTO players (full_name,surname,ko_name,category,status,"
+            "transfer_status,origin,added_at) VALUES "
+            "(:fn,:sn,:ko,:cat,:st,:ts,'curated',NOW())"),
+            {"fn": full_name, "sn": surname, "ko": ko_name, "cat": category,
+             "st": status, "ts": transfer_status})
+        return c.execute(text("SELECT id FROM players WHERE full_name=:fn"),
+                         {"fn": full_name}).scalar_one()
+
+
+def test_page_players_applies_target_condition(engine):
+    store = PlayerStore(engine)
+    keep = _add_player(engine, full_name="Target One", surname="One",
+                       ko_name="타깃", category="external", status="confirmed",
+                       transfer_status="in_link")
+    staff = _add_player(engine, full_name="Boss Man", surname="Man",
+                        ko_name="보스", category="manager", status="confirmed",
+                        transfer_status="in_link")
+    no_axis = _add_player(engine, full_name="Squad Guy", surname="Guy",
+                          ko_name="스쿼드", category="squad", status="confirmed",
+                          transfer_status="none")
+    cand = _add_player(engine, full_name="Cand Idate", surname="Idate",
+                       ko_name="후보", category="external", status="candidate",
+                       transfer_status="in_link")
+    archived_kept = _add_player(engine, full_name="Gone Elsewhere", surname="Elsewhere",
+                                ko_name="타클럽", category="external",
+                                status="archived", transfer_status="other_club")
+    orphan = _add_player(engine, full_name="No Articles", surname="Articles",
+                         ko_name="무기사", category="external", status="confirmed",
+                         transfer_status="in_link")
+    for pid in (keep, staff, no_axis, cand, archived_kept):
+        store.link_article("a" * 64, pid, "interest")
+    ids = {p["id"] for p in store.page_players()}
+    assert keep in ids
+    assert archived_kept in ids       # 사유가 값에 남은 보관 선수는 노출 (스펙 §3.1)
+    assert staff not in ids           # 스태프 제외
+    assert no_axis not in ids         # 이적 축 없음 제외
+    assert cand not in ids            # 후보 제외 (승인된 이탈)
+    assert orphan not in ids          # 귀속 기사 0건 제외
+
+
+def test_page_player_links_shares_the_same_predicate(engine):
+    store = PlayerStore(engine)
+    keep = _add_player(engine, full_name="Link Target", surname="Target",
+                       ko_name="대상", category="external", status="confirmed",
+                       transfer_status="in_link")
+    staff = _add_player(engine, full_name="Link Boss", surname="Boss",
+                        ko_name="감독", category="manager", status="confirmed",
+                        transfer_status="in_link")
+    store.link_article("b" * 64, keep, "agreed")
+    store.link_article("b" * 64, staff, "agreed")
+    links = store.page_player_links()
+    assert {l["player_id"] for l in links} == {keep}
+    assert links[0]["stage"] == "agreed"
+    assert links[0]["content_hash"] == "b" * 64
+
+
+def test_linked_hashes_ignores_the_target_condition(engine):
+    store = PlayerStore(engine)
+    staff = _add_player(engine, full_name="Only Staff", surname="Staff",
+                        ko_name="스태프", category="manager", status="confirmed",
+                        transfer_status="none")
+    store.link_article("c" * 64, staff, "rumour")
+    # 추출은 됐으나 페이지 대상이 아닌 선수만 걸린 기사도 "추출 누락" 이 아니다
+    assert "c" * 64 in store.linked_hashes()
