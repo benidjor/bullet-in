@@ -990,7 +990,8 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
             log.warning("동성 복수 — slug 를 id 로 떨어뜨림: %s → %s",
                         p["full_name"], slug)
         out.append({**p,
-                    "name": p.get("ko_name") or p["full_name"],
+                    "name": (p.get("ko_full_name") or p.get("ko_name")
+                             or p["full_name"]),
                     "slug": slug,
                     "articles": [r for r, _ in reversed(paired)],
                     "timeline": timeline,

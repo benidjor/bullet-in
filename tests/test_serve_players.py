@@ -290,6 +290,24 @@ def test_render_players_folded_group_has_plfold_button():
     assert 'class="plfold"' in html                       # 접기 버튼 렌더
 
 
+def test_build_player_entries_prefers_ko_full_name():
+    rows = [{"content_hash": "h1", "published_at": datetime(2026, 8, 1)}]
+    players = [{"id": 1, "full_name": "Christos Tzolis", "surname": "Tzolis",
+                "ko_full_name": "크리스토스 촐리스", "ko_name": "촐리스",
+                "transfer_status": "in_link",
+                "links": [{"content_hash": "h1", "stage": "interest"}]}]
+    assert build_player_entries(rows, players)[0]["name"] == "크리스토스 촐리스"
+
+
+def test_build_player_entries_falls_back_to_ko_name():
+    rows = [{"content_hash": "h1", "published_at": datetime(2026, 8, 1)}]
+    players = [{"id": 1, "full_name": "Christos Tzolis", "surname": "Tzolis",
+                "ko_full_name": None, "ko_name": "촐리스",
+                "transfer_status": "in_link",
+                "links": [{"content_hash": "h1", "stage": "interest"}]}]
+    assert build_player_entries(rows, players)[0]["name"] == "촐리스"
+
+
 def test_app_js_guards_sidebar_null_check_for_daylist_items():
     """선수 페이지는 daylist 가 있지만 사이드바가 없어서 TypeError 유발.
 
