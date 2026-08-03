@@ -31,16 +31,19 @@ def test_transfer_badge_is_none_for_no_axis():
 def test_transfer_group_splits_eight_values_without_gap():
     assert transfer_group("in_link") == "진행 중"
     assert transfer_group("out_link") == "진행 중"
-    for v in ("in_done", "out_done", "loan_in", "loan_out"):
-        assert transfer_group(v) == "성사"
-    for v in ("link_dropped", "other_club"):
-        assert transfer_group(v) == "무산과 종료"
-    assert transfer_group("none") is None
+    assert transfer_group("in_done") == "이적 확정"
+    assert transfer_group("out_done") == "이적 확정"
+    assert transfer_group("loan_in") == "이적 확정"
+    assert transfer_group("loan_out") == "이적 확정"
+    assert transfer_group("link_dropped") == "이적 무산"
+    assert transfer_group("other_club") == "타 클럽행"
+    assert transfer_group("none") == ""
 
 
 def test_transfer_groups_order_and_collapse_flag():
-    assert [g for g, _ in TRANSFER_GROUPS] == ["진행 중", "성사", "무산과 종료"]
-    assert [c for _, c in TRANSFER_GROUPS] == [False, False, True]
+    assert TRANSFER_GROUPS == [
+        ("진행 중", False), ("이적 확정", False),
+        ("이적 무산", True), ("타 클럽행", True)]
 
 
 def test_player_slug_is_lowercased_surname():
@@ -200,10 +203,10 @@ def test_render_players_groups_and_collapses():
                _player(2, "Nduka", "은두카", "other_club",
                        [{"content_hash": "h2", "stage": "agreed"}])]
     html = render_players(build_player_entries(arts, players), NOW)
-    assert "진행 중" in html and "무산과 종료" in html
-    assert "성사" not in html                     # 빈 그룹은 그리지 않는다
+    assert "진행 중" in html and "타 클럽행" in html
+    assert "이적 확정" not in html                 # 빈 그룹은 그리지 않는다
     assert 'href="player/tzolis.html"' in html
-    assert "folded" in html                       # 무산 그룹 기본 접힘
+    assert "folded" in html                       # 타 클럽행 그룹 기본 접힘
     assert 'class="side"' not in html             # 사이드바 제외 (스펙 §5.3)
 
 
@@ -303,13 +306,18 @@ def test_style_css_defines_all_eight_transfer_badge_classes():
         assert f".{cls}" in css, f".{cls} 스타일 누락"
 
 
-def test_render_players_folded_group_has_plfold_button():
-    arts = [_art("h1", 1, "agreed")]
-    players = [_player(1, "Nduka", "은두카", "other_club",
-                       [{"content_hash": "h1", "stage": "agreed"}])]
-    html = render_players(build_player_entries(arts, players), NOW)
-    assert 'class="plgrp folded"' in html                # plgrp · folded 동시 출현
-    assert 'class="plfold"' in html                       # 접기 버튼 렌더
+def test_render_players_every_group_has_a_fold_button():
+    # 접힌 그룹만 버튼이 있으면 펼쳐진 그룹은 접을 수 없고, 접힌 그룹은 비어 보인다.
+    entries = [
+        {"name": "촐리스", "slug": "tzolis", "transfer_status": "in_link",
+         "stage": "interest", "count": 3, "last_ts": datetime(2026, 8, 2)},
+        {"name": "모건 로저스", "slug": "rogers", "transfer_status": "other_club",
+         "stage": "agreed", "count": 5, "last_ts": datetime(2026, 8, 1)},
+    ]
+    html = render_players(entries, datetime(2026, 8, 3))
+    assert html.count('class="plfold"') == 2
+    assert ">접기<" in html
+    assert ">펼치기<" in html
 
 
 def test_build_player_entries_prefers_ko_full_name():

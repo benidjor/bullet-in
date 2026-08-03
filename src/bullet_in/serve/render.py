@@ -919,15 +919,18 @@ _TRANSFER_BADGE: dict[str, tuple[str, str]] = {
     "other_club": ("타 클럽행", "t-otherclub"),
 }
 
-# 색인 3그룹 (스펙 §4.1) — (그룹명, 기본 접힘). 무산 그룹은 되짚기용이라 접어 둔다.
+# 색인 4그룹 (스펙 §4.1) — (그룹명, 기본 접힘).
+# 무산 · 타 클럽행은 되짚기용이라 접어 두고, 접기 · 펼치기는 네 그룹 모두에 둔다.
 TRANSFER_GROUPS: list[tuple[str, bool]] = [
-    ("진행 중", False), ("성사", False), ("무산과 종료", True),
+    ("진행 중", False), ("이적 확정", False),
+    ("이적 무산", True), ("타 클럽행", True),
 ]
 
 _TRANSFER_GROUP_OF: dict[str, str] = {
     "in_link": "진행 중", "out_link": "진행 중",
-    "in_done": "성사", "out_done": "성사", "loan_in": "성사", "loan_out": "성사",
-    "link_dropped": "무산과 종료", "other_club": "무산과 종료",
+    "in_done": "이적 확정", "out_done": "이적 확정",
+    "loan_in": "이적 확정", "loan_out": "이적 확정",
+    "link_dropped": "이적 무산", "other_club": "타 클럽행",
 }
 
 
@@ -937,9 +940,9 @@ def transfer_badge(status: str | None) -> dict | None:
     return {"label": d[0], "cls": d[1]} if d else None
 
 
-def transfer_group(status: str | None) -> str | None:
-    """색인 그룹명. 여덟 값이 3그룹으로 빠짐없이 갈린다."""
-    return _TRANSFER_GROUP_OF.get(status or "")
+def transfer_group(status: str | None) -> str:
+    """색인 그룹명. 여덟 값이 4그룹으로 빠짐없이 갈린다."""
+    return _TRANSFER_GROUP_OF.get(status or "") or ""
 
 
 def player_slug(surname: str, player_id: int, dupes: set[str]) -> str:
