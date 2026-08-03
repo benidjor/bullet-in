@@ -138,3 +138,16 @@ def test_next_cursor_holds_on_search_failure():
 
 def test_next_cursor_none_on_empty_slice():
     assert next_cursor([], search_failures=0) is None
+
+def test_watchlist_batch_uses_request_gap():
+    import yaml
+    from pathlib import Path
+    from bullet_in.collect_fmkorea import build_fmkorea_adapter
+    from bullet_in.watchlist_fmkorea import REQUEST_GAP_SEC
+
+    # 회차 밀도 (분당 약 33요청, 24요청/43초 실측) 수준으로 낮추는 값이어야 한다
+    assert REQUEST_GAP_SEC >= 1.0
+    cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
+    a = build_fmkorea_adapter(cfg, None, request_gap_sec=REQUEST_GAP_SEC,
+                              search_keywords=[{"keyword": "k", "target": "title"}])
+    assert a.request_gap_sec == REQUEST_GAP_SEC

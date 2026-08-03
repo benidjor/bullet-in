@@ -22,6 +22,7 @@ CURSOR_PATH = Path.home() / ".bullet-in" / "watchlist_cursor"
 GAP_HOURS = 1.0      # 최근 접촉 60분 이내면 스킵 (스펙 §3.1)
 SLICE_SIZE = 10      # 배치당 검색 인원 (보수안)
 MAX_POSTS = 5        # 배치당 fetch 상한 (보수안)
+REQUEST_GAP_SEC = 2.0   # 검색 · 글 fetch 사이 간격 — 배치 밀도를 정기 회차 수준으로
 
 
 def read_cursor(path: Path) -> int | None:
@@ -95,7 +96,8 @@ async def main(dry_run: bool = False, force: bool = False) -> None:
     kws = build_keywords([names[pid] for pid in slice_ids])
 
     adapter = build_fmkorea_adapter(cfg, proxy, search_keywords=kws,
-                                    max_posts=MAX_POSTS)
+                                    max_posts=MAX_POSTS,
+                                    request_gap_sec=REQUEST_GAP_SEC)
     # 무관 글 필터 주입 — 정기 회차 (run.py) 와 같은 인정 집합 (스펙 §3.2).
     # build_fmkorea_adapter 는 변경 범위가 인자 1개로 묶여 있어 (스펙 §3.4)
     # 생성 후 공개 속성에 대입한다.
