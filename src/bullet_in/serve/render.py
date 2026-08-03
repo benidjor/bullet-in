@@ -905,6 +905,70 @@ def load_player_names(engine=None) -> list[str]:
     return sorted(names, key=len, reverse=True)
 
 
+# ── 선수 페이지 (스펙 §4 · §5) ─────────────────────────────────────────
+# 선수 단위 이적 축 배지 — players 스펙 §3.1 의 화면 배지 열을 그대로 옮긴다.
+# 기사 단위 transfer_direction 은 이 화면에서 쓰지 않는다 (스펙 §4.2).
+_TRANSFER_BADGE: dict[str, tuple[str, str]] = {
+    "in_link": ("영입 링크", "t-inlink"),
+    "out_link": ("방출 링크", "t-outlink"),
+    "in_done": ("영입 완료", "t-indone"),
+    "out_done": ("방출 완료", "t-outdone"),
+    "loan_in": ("임대 영입", "t-loanin"),
+    "loan_out": ("임대 이적", "t-loanout"),
+    "link_dropped": ("링크 소멸", "t-dropped"),
+    "other_club": ("타 클럽행", "t-otherclub"),
+}
+
+# 색인 3그룹 (스펙 §4.1) — (그룹명, 기본 접힘). 무산 그룹은 되짚기용이라 접어 둔다.
+TRANSFER_GROUPS: list[tuple[str, bool]] = [
+    ("진행 중", False), ("성사", False), ("무산과 종료", True),
+]
+
+_TRANSFER_GROUP_OF: dict[str, str] = {
+    "in_link": "진행 중", "out_link": "진행 중",
+    "in_done": "성사", "out_done": "성사", "loan_in": "성사", "loan_out": "성사",
+    "link_dropped": "무산과 종료", "other_club": "무산과 종료",
+}
+
+
+def transfer_badge(status: str | None) -> dict | None:
+    """선수 이적 축 배지 {label, cls}. 축이 없으면 (none) 배지를 달지 않는다."""
+    d = _TRANSFER_BADGE.get(status or "")
+    return {"label": d[0], "cls": d[1]} if d else None
+
+
+def transfer_group(status: str | None) -> str | None:
+    """색인 그룹명. 여덟 값이 3그룹으로 빠짐없이 갈린다."""
+    return _TRANSFER_GROUP_OF.get(status or "")
+
+
+def player_slug(surname: str, player_id: int, dupes: set[str]) -> str:
+    """선수 페이지 slug — 소문자 영문 성. 동성 복수면 surname-id 로 떨어뜨린다."""
+    base = re.sub(r"[^a-z0-9]", "", (surname or "").lower()) or "player"
+    return f"{base}-{player_id}" if base in dupes else base
+
+
+def stage_timeline(entries: list[dict]) -> list[dict]:
+    """단계 전이 노드 (스펙 §5.2) — 직전과 값이 달라진 기사만 노드로 만든다.
+
+    입력은 오래된 것부터 정렬된 [{"row", "stage"}], 출력은 최신 노드가 앞이다.
+    같은 단계로 이어진 기사는 노드의 follow 로 접고, other · 빈 값은 배지 대상이
+    아니므로 노드도 follow 도 만들지 않는다.
+    역행은 그대로 새 노드가 된다 — 딜이 틀어진 것인지 오분류인지 화면에서 가릴 수
+    없으므로 지어내지 않는다 (최고 도달 단계로 고정하면 링크가 소멸한 선수의 배지가
+    이적 합의로 남는 모순이 생긴다)."""
+    nodes: list[dict] = []
+    for e in entries:
+        stage = e.get("stage")
+        if not _stage.is_displayable(stage):
+            continue
+        if nodes and nodes[-1]["stage"] == stage:
+            nodes[-1]["follow"] += 1
+            continue
+        nodes.append({"row": e["row"], "stage": stage, "follow": 0})
+    return list(reversed(nodes))
+
+
 def load_clubs(path: str = "config/club_map.yaml") -> dict:
     """구단 검출 사전 (결말 · 행선지 칩) — club_map 의 한글 구단명."""
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
