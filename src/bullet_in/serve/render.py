@@ -948,6 +948,58 @@ def player_slug(surname: str, player_id: int, dupes: set[str]) -> str:
     return f"{base}-{player_id}" if base in dupes else base
 
 
+def load_page_players(engine=None) -> list[dict]:
+    """선수 페이지 대상 + 귀속 (스펙 §3.1) — DB 단일 원천.
+    engine 미지정 시 MARIADB_URL 로 생성한다 — write_site 호출부 (run.py · 런북) 는
+    이미 그 env 로 돌므로 시그니처 연쇄 변경 없이 전환된다 (load_player_names 선례)."""
+    from sqlalchemy import create_engine
+    from bullet_in.storage.players import PlayerStore
+    store = PlayerStore(engine or create_engine(os.environ["MARIADB_URL"]))
+    players = store.page_players()
+    links: dict[int, list[dict]] = {}
+    for l in store.page_player_links():
+        links.setdefault(l["player_id"], []).append(
+            {"content_hash": l["content_hash"], "stage": l["stage"]})
+    for p in players:
+        p["links"] = links.get(p["id"], [])
+    return players
+
+
+def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict]:
+    """선수별 기사 목록 · 전이 타임라인 · 현재 단계 (스펙 §5).
+
+    기사 목록은 귀속 전량이다 — 단계 없는 기사도 포함한다.
+    머리의 건수와 목록 수가 어긋나지 않게 하기 위한 것이며 draft 리뷰에서 실제로
+    잡혔던 결함이다 (스펙 §5.3). 서빙 목록에 없는 기사는 링크에서 빠지고, 그 결과
+    남는 기사가 0건인 선수는 빈 페이지가 되지 않도록 결과에서 제외한다."""
+    by_hash = {a["content_hash"]: a for a in articles}
+    folded = {p["id"]: re.sub(r"[^a-z0-9]", "", (p.get("surname") or "").lower())
+              for p in players}
+    counts = Counter(folded.values())
+    dupes = {s for s, n in counts.items() if n > 1}
+    out = []
+    for p in players:
+        paired = [(by_hash[l["content_hash"]], l["stage"]) for l in p["links"]
+                  if l["content_hash"] in by_hash]
+        if not paired:
+            continue
+        paired.sort(key=lambda t: _sort_ts(t[0]))          # 오래된 것부터 (전이 판정)
+        timeline = stage_timeline([{"row": r, "stage": s} for r, s in paired])
+        slug = player_slug(p.get("surname") or "", p["id"], dupes)
+        if folded[p["id"]] in dupes:
+            log.warning("동성 복수 — slug 를 id 로 떨어뜨림: %s → %s",
+                        p["full_name"], slug)
+        out.append({**p,
+                    "name": p.get("ko_name") or p["full_name"],
+                    "slug": slug,
+                    "articles": [r for r, _ in reversed(paired)],
+                    "timeline": timeline,
+                    "stage": timeline[0]["stage"] if timeline else None,
+                    "count": len(paired),
+                    "last_ts": _sort_ts(paired[-1][0])[0]})
+    return out
+
+
 def stage_timeline(entries: list[dict]) -> list[dict]:
     """단계 전이 노드 (스펙 §5.2) — 직전과 값이 달라진 기사만 노드로 만든다.
 
@@ -967,6 +1019,43 @@ def stage_timeline(entries: list[dict]) -> list[dict]:
             continue
         nodes.append({"row": e["row"], "stage": stage, "follow": 0})
     return list(reversed(nodes))
+
+
+def render_players(entries: list[dict], now: datetime) -> str:
+    """선수 색인 (스펙 §4) — 3그룹 · 그룹 안 최근 보도일 내림차순."""
+    groups = []
+    for name, collapsed in TRANSFER_GROUPS:
+        members = [e for e in entries if transfer_group(e["transfer_status"]) == name]
+        members.sort(key=lambda e: e["last_ts"], reverse=True)
+        for e in members:
+            e["_badge"] = transfer_badge(e["transfer_status"])
+            e["_stage"] = display_stage(e["stage"])
+            e["_last"] = fmt_date(to_kst(e["last_ts"]))
+        groups.append({"name": name, "collapsed": collapsed, "members": members})
+    return _env().get_template("players.html.j2").render(
+        groups=groups, active="players", root="", solo=True)
+
+
+def render_player(entry: dict, sources: dict, now: datetime,
+                  directory: dict | None = None,
+                  outlet_dir: dict | None = None) -> str:
+    """선수 페이지 (스펙 §5) — 머리 · 전이 타임라인 · 귀속 기사 전량."""
+    decorated = {}
+    for a in entry["articles"]:
+        d = _decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
+        # _decorate 의 _date 는 UTC 라 타임라인 · 카드가 머리와 다른 날짜로 보일 수
+        # 있다 — 선수 페이지 지역 범위로만 KST 로 보정한다.
+        d["_kdate"] = fmt_date(to_kst(_sort_ts(a)[0]))
+        decorated[a["content_hash"]] = d
+    nodes = [{"a": decorated[n["row"]["content_hash"]],
+              "badge": display_stage(n["stage"]), "follow": n["follow"]}
+             for n in entry["timeline"]]
+    return _env().get_template("player.html.j2").render(
+        e=entry, badge=transfer_badge(entry["transfer_status"]),
+        stage=display_stage(entry["stage"]), nodes=nodes,
+        articles=[decorated[a["content_hash"]] for a in entry["articles"]],
+        last=fmt_date(to_kst(entry["last_ts"])),
+        active="players", root="../", solo=True)
 
 
 def load_clubs(path: str = "config/club_map.yaml") -> dict:
