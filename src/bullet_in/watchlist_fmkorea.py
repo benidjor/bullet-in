@@ -15,6 +15,7 @@ from bullet_in.collect_fmkorea import (STATE_PATH, build_fmkorea_adapter, persis
                                        tunnel_alive, write_last_contact)
 from bullet_in.storage.mariadb import MartStore
 from bullet_in.storage.players import PlayerStore
+from bullet_in import notify
 
 log = logging.getLogger(__name__)
 
@@ -121,6 +122,18 @@ async def main(dry_run: bool = False, force: bool = False) -> None:
     cur = next_cursor(slice_ids, adapter.search_failures)
     if cur is not None:
         write_cursor(CURSOR_PATH, cur)
+
+    # 배치 전멸 알림 (차단 알림 스펙 §3.2): 검색 실패가 슬라이스 전원과 같을 때만.
+    # 부분 실패는 알리지 않는다 — 실측 3회 모두 전원 실패였다.
+    if slice_ids and adapter.search_failures == len(slice_ids):
+        try:
+            notify.send_alert(**notify.build_watchlist_blackout_alert(
+                searched=len(slice_ids),
+                failure_codes=dict(getattr(adapter, "search_failure_codes", {}) or {}),
+                last_contact=last))
+        except Exception:
+            log.warning("배치 전멸 알림 발송 실패 — 배치는 계속 진행", exc_info=True)
+
     log.info("워치리스트 배치 완료 — 검색 %d명 · 적재 %d · 동일 내용 생략 %d · "
              "기존 기사 유지 %d · 필터 탈락 %d · 검색 실패 %d · 커서 %s",
              len(slice_ids), n, dup, blocked, adapter.relevance_dropped,
