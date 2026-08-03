@@ -131,7 +131,8 @@ class PlayerStore:
         빈 페이지를 만들지 않기 위한 조건이며 page_player_links 와 술어를 공유한다."""
         with self.engine.connect() as c:
             return [dict(r) for r in c.execute(text(
-                "SELECT id, full_name, surname, ko_name, transfer_status "
+                "SELECT id, full_name, surname, ko_name, ko_full_name, "
+                "transfer_status "
                 f"FROM players WHERE {_PAGE_WHERE} AND EXISTS ("
                 "SELECT 1 FROM article_players ap WHERE ap.player_id = players.id) "
                 "ORDER BY id")).mappings().all()]

@@ -313,21 +313,20 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
 .pname{display:block;font-family:var(--serif);font-weight:700;font-size:15px;color:var(--ink);margin:0 0 4px}
 .pmeta{display:block;font-size:12px;color:var(--dim);margin-top:4px}
 
-/* 이적 축 배지 — 8값을 4색 (red·green·yellow 강조 + mut 무채색) × 실선(in)/파선(out) 으로 구분.
-   흰 글자 채움 배경은 쓰지 않는다 — 다크 토큰의 green·yellow 는 밝게 튜닝돼 있어
-   흰 글자와 대비가 무너진다 (라이트 5.36:1·4.17:1 → 다크 2.10:1·2.14:1, WCAG AA 미달).
-   텍스트 색만 쓰는 쪽으로 통일 — 각 색은 라이트·다크 양쪽 paper 대비 실측 4.5:1 이상
-   (보고서 "수정 라운드 1" 표 참조). yellow 만 --ink 를 20% 섞어 라이트 대비를 4.0→5.4 로 끌어올린다. */
+/* 이적 축 배지 — 색이 계열 (영입 red · 방출 green · 이적 무산과 타 클럽행 mut) 을 나르고,
+   테두리가 단계 (링크 파선 · 완료 실선 · 임대 점선) 를 나른다.
+   흰 글자 채움 배경은 쓰지 않는다 — 다크 토큰은 흰 글자와 대비가 무너진다
+   (red 3.23:1 · green 2.10:1 · WCAG AA 미달).
+   텍스트 색만 쓰며 paper 대비는 계산으로 확인했다 — 라이트/다크 순으로
+   red 5.03/5.80 · green 5.14/8.93 · mut 5.20/6.98 로 전부 4.5:1 이상이다. */
 .tbadge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;
   padding:1px 6px;border-radius:2px;letter-spacing:.01em;margin:0 6px 4px 0}
-.t-inlink{color:var(--red);border:1px solid var(--red)}
-.t-outlink{color:var(--red);border:1px dashed var(--red)}
-.t-indone{color:var(--green);border:1px solid var(--green)}
-.t-outdone{color:var(--green);border:1px dashed var(--green)}
-.t-loanin{color:color-mix(in srgb,var(--yellow) 80%,var(--ink) 20%);
-  border:1px solid color-mix(in srgb,var(--yellow) 80%,var(--ink) 20%)}
-.t-loanout{color:color-mix(in srgb,var(--yellow) 80%,var(--ink) 20%);
-  border:1px dashed color-mix(in srgb,var(--yellow) 80%,var(--ink) 20%)}
+.t-inlink{color:var(--red);border:1px dashed var(--red)}
+.t-indone{color:var(--red);border:1px solid var(--red)}
+.t-loanin{color:var(--red);border:1px dotted var(--red)}
+.t-outlink{color:var(--green);border:1px dashed var(--green)}
+.t-outdone{color:var(--green);border:1px solid var(--green)}
+.t-loanout{color:var(--green);border:1px dotted var(--green)}
 .t-dropped{color:var(--mut);border:1px solid var(--hair)}
 .t-otherclub{color:var(--mut);border:1px dashed var(--hair)}
 

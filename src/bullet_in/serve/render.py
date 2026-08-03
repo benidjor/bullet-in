@@ -919,15 +919,18 @@ _TRANSFER_BADGE: dict[str, tuple[str, str]] = {
     "other_club": ("타 클럽행", "t-otherclub"),
 }
 
-# 색인 3그룹 (스펙 §4.1) — (그룹명, 기본 접힘). 무산 그룹은 되짚기용이라 접어 둔다.
+# 색인 4그룹 (스펙 §4.1) — (그룹명, 기본 접힘).
+# 무산 · 타 클럽행은 되짚기용이라 접어 두고, 접기 · 펼치기는 네 그룹 모두에 둔다.
 TRANSFER_GROUPS: list[tuple[str, bool]] = [
-    ("진행 중", False), ("성사", False), ("무산과 종료", True),
+    ("진행 중", False), ("이적 확정", False),
+    ("이적 무산", True), ("타 클럽행", True),
 ]
 
 _TRANSFER_GROUP_OF: dict[str, str] = {
     "in_link": "진행 중", "out_link": "진행 중",
-    "in_done": "성사", "out_done": "성사", "loan_in": "성사", "loan_out": "성사",
-    "link_dropped": "무산과 종료", "other_club": "무산과 종료",
+    "in_done": "이적 확정", "out_done": "이적 확정",
+    "loan_in": "이적 확정", "loan_out": "이적 확정",
+    "link_dropped": "이적 무산", "other_club": "타 클럽행",
 }
 
 
@@ -937,9 +940,9 @@ def transfer_badge(status: str | None) -> dict | None:
     return {"label": d[0], "cls": d[1]} if d else None
 
 
-def transfer_group(status: str | None) -> str | None:
-    """색인 그룹명. 여덟 값이 3그룹으로 빠짐없이 갈린다."""
-    return _TRANSFER_GROUP_OF.get(status or "")
+def transfer_group(status: str | None) -> str:
+    """색인 그룹명. 여덟 값이 4그룹으로 빠짐없이 갈린다."""
+    return _TRANSFER_GROUP_OF.get(status or "") or ""
 
 
 def player_slug(surname: str, player_id: int, dupes: set[str]) -> str:
@@ -968,10 +971,11 @@ def load_page_players(engine=None) -> list[dict]:
 def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict]:
     """선수별 기사 목록 · 전이 타임라인 · 현재 단계 (스펙 §5).
 
-    기사 목록은 귀속 전량이다 — 단계 없는 기사도 포함한다.
-    머리의 건수와 목록 수가 어긋나지 않게 하기 위한 것이며 draft 리뷰에서 실제로
-    잡혔던 결함이다 (스펙 §5.3). 서빙 목록에 없는 기사는 링크에서 빠지고, 그 결과
-    남는 기사가 0건인 선수는 빈 페이지가 되지 않도록 결과에서 제외한다."""
+    기사 목록은 단계가 other 인 귀속을 뺀 나머지다.
+    이름만 스친 기사가 그 선수의 이적 기사인 것처럼 쌓이던 것을 막기 위한 것이며,
+    머리 건수도 같은 집합에서 나오므로 "머리 = 목록" 등식은 그대로다 (스펙 §5.3).
+    서빙 목록에 없는 기사는 링크에서 빠지고, 그 결과 남는 기사가 0건인 선수는
+    빈 페이지가 되지 않도록 결과에서 제외한다."""
     by_hash = {a["content_hash"]: a for a in articles}
     folded = {p["id"]: re.sub(r"[^a-z0-9]", "", (p.get("surname") or "").lower())
               for p in players}
@@ -980,7 +984,7 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
     out = []
     for p in players:
         paired = [(by_hash[l["content_hash"]], l["stage"]) for l in p["links"]
-                  if l["content_hash"] in by_hash]
+                  if l["content_hash"] in by_hash and l["stage"] != _stage.OTHER]
         if not paired:
             continue
         paired.sort(key=lambda t: _sort_ts(t[0]))          # 오래된 것부터 (전이 판정)
@@ -990,7 +994,8 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
             log.warning("동성 복수 — slug 를 id 로 떨어뜨림: %s → %s",
                         p["full_name"], slug)
         out.append({**p,
-                    "name": p.get("ko_name") or p["full_name"],
+                    "name": (p.get("ko_full_name") or p.get("ko_name")
+                             or p["full_name"]),
                     "slug": slug,
                     "articles": [r for r, _ in reversed(paired)],
                     "timeline": timeline,
@@ -1022,7 +1027,7 @@ def stage_timeline(entries: list[dict]) -> list[dict]:
 
 
 def render_players(entries: list[dict], now: datetime) -> str:
-    """선수 색인 (스펙 §4) — 3그룹 · 그룹 안 최근 보도일 내림차순."""
+    """선수 색인 (스펙 §4) — 4그룹 · 그룹 안 최근 보도일 내림차순."""
     groups = []
     for name, collapsed in TRANSFER_GROUPS:
         members = [e for e in entries if transfer_group(e["transfer_status"]) == name]

@@ -31,16 +31,19 @@ def test_transfer_badge_is_none_for_no_axis():
 def test_transfer_group_splits_eight_values_without_gap():
     assert transfer_group("in_link") == "진행 중"
     assert transfer_group("out_link") == "진행 중"
-    for v in ("in_done", "out_done", "loan_in", "loan_out"):
-        assert transfer_group(v) == "성사"
-    for v in ("link_dropped", "other_club"):
-        assert transfer_group(v) == "무산과 종료"
-    assert transfer_group("none") is None
+    assert transfer_group("in_done") == "이적 확정"
+    assert transfer_group("out_done") == "이적 확정"
+    assert transfer_group("loan_in") == "이적 확정"
+    assert transfer_group("loan_out") == "이적 확정"
+    assert transfer_group("link_dropped") == "이적 무산"
+    assert transfer_group("other_club") == "타 클럽행"
+    assert transfer_group("none") == ""
 
 
 def test_transfer_groups_order_and_collapse_flag():
-    assert [g for g, _ in TRANSFER_GROUPS] == ["진행 중", "성사", "무산과 종료"]
-    assert [c for _, c in TRANSFER_GROUPS] == [False, False, True]
+    assert TRANSFER_GROUPS == [
+        ("진행 중", False), ("이적 확정", False),
+        ("이적 무산", True), ("타 클럽행", True)]
 
 
 def test_player_slug_is_lowercased_surname():
@@ -114,15 +117,33 @@ def test_build_player_entries_orders_articles_newest_first():
 
 
 def test_build_player_entries_header_count_matches_article_list():
-    # draft 리뷰에서 실제로 잡혔던 결함 — 단계 없는 기사도 목록에 든다 (스펙 §5.3)
+    # draft 리뷰에서 실제로 잡혔던 결함 — 머리와 목록이 어긋나지 않도록
+    # 둘 다 other 를 뺀 같은 집합에서 나온다 (스펙 §5.3)
     arts = [_art("h1", 1, "rumour"), _art("h2", 2, None), _art("h3", 3, "other")]
     players = [_player(1, "Tzolis", "촐리스", "in_link",
                        [{"content_hash": "h1", "stage": "rumour"},
                         {"content_hash": "h2", "stage": None},
                         {"content_hash": "h3", "stage": "other"}])]
     [e] = build_player_entries(arts, players)
-    assert e["count"] == len(e["articles"]) == 3
+    assert e["count"] == len(e["articles"]) == 2
     assert [n["stage"] for n in e["timeline"]] == ["rumour"]
+
+
+def test_build_player_entries_excludes_other_from_list_and_count():
+    # 머리 건수와 목록 수가 어긋나면 안 되므로 둘 다 같은 집합에서 나와야 한다.
+    rows = [{"content_hash": "h1", "published_at": datetime(2026, 8, 1)},
+            {"content_hash": "h2", "published_at": datetime(2026, 8, 2)},
+            {"content_hash": "h3", "published_at": datetime(2026, 8, 3)}]
+    players = [{"id": 1, "full_name": "Christos Tzolis", "surname": "Tzolis",
+                "ko_full_name": None, "ko_name": "촐리스",
+                "transfer_status": "in_link",
+                "links": [{"content_hash": "h1", "stage": "interest"},
+                          {"content_hash": "h2", "stage": "other"},
+                          {"content_hash": "h3", "stage": "agreed"}]}]
+    entry = build_player_entries(rows, players)[0]
+    assert entry["count"] == 2
+    assert len(entry["articles"]) == 2
+    assert [a["content_hash"] for a in entry["articles"]] == ["h3", "h1"]
 
 
 def test_build_player_entries_current_stage_is_latest_node():
@@ -134,12 +155,16 @@ def test_build_player_entries_current_stage_is_latest_node():
     assert e["stage"] == "rumour"          # 역행이어도 최신 노드 값
 
 
-def test_build_player_entries_has_no_stage_when_all_other():
-    arts = [_art("h1", 1, "other")]
-    players = [_player(1, "Tzolis", "촐리스", "in_link",
-                       [{"content_hash": "h1", "stage": "other"}])]
-    [e] = build_player_entries(arts, players)
-    assert e["stage"] is None
+def test_build_player_entries_drops_player_whose_articles_are_all_other():
+    # 이적 얘기가 없는데 이름만 스친 선수 — 색인 56명이 50명으로 줄어든 근거다.
+    rows = [{"content_hash": "h1", "published_at": datetime(2026, 8, 1)},
+            {"content_hash": "h2", "published_at": datetime(2026, 8, 2)}]
+    players = [{"id": 1, "full_name": "Martin Zubimendi", "surname": "Zubimendi",
+                "ko_full_name": None, "ko_name": "수비멘디",
+                "transfer_status": "in_link",
+                "links": [{"content_hash": "h1", "stage": "other"},
+                          {"content_hash": "h2", "stage": "other"}]}]
+    assert build_player_entries(rows, players) == []
 
 
 def test_build_player_entries_drops_player_with_no_serving_article():
@@ -178,10 +203,10 @@ def test_render_players_groups_and_collapses():
                _player(2, "Nduka", "은두카", "other_club",
                        [{"content_hash": "h2", "stage": "agreed"}])]
     html = render_players(build_player_entries(arts, players), NOW)
-    assert "진행 중" in html and "무산과 종료" in html
-    assert "성사" not in html                     # 빈 그룹은 그리지 않는다
+    assert "진행 중" in html and "타 클럽행" in html
+    assert "이적 확정" not in html                 # 빈 그룹은 그리지 않는다
     assert 'href="player/tzolis.html"' in html
-    assert "folded" in html                       # 무산 그룹 기본 접힘
+    assert "folded" in html                       # 타 클럽행 그룹 기본 접힘
     assert 'class="side"' not in html             # 사이드바 제외 (스펙 §5.3)
 
 
@@ -281,13 +306,56 @@ def test_style_css_defines_all_eight_transfer_badge_classes():
         assert f".{cls}" in css, f".{cls} 스타일 누락"
 
 
-def test_render_players_folded_group_has_plfold_button():
-    arts = [_art("h1", 1, "agreed")]
-    players = [_player(1, "Nduka", "은두카", "other_club",
-                       [{"content_hash": "h1", "stage": "agreed"}])]
-    html = render_players(build_player_entries(arts, players), NOW)
-    assert 'class="plgrp folded"' in html                # plgrp · folded 동시 출현
-    assert 'class="plfold"' in html                       # 접기 버튼 렌더
+def test_transfer_badge_color_splits_in_and_out():
+    # 색이 계열을 나른다 — 영입 3종은 red, 방출 3종은 green.
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
+    for cls in ("t-inlink", "t-indone", "t-loanin"):
+        line = next(l for l in css.splitlines() if l.startswith(f".{cls}{{"))
+        assert "var(--red)" in line and "var(--green)" not in line
+    for cls in ("t-outlink", "t-outdone", "t-loanout"):
+        line = next(l for l in css.splitlines() if l.startswith(f".{cls}{{"))
+        assert "var(--green)" in line and "var(--red)" not in line
+
+
+def test_transfer_badge_never_uses_white_fill():
+    # 다크 토큰은 흰 글자와 대비가 무너진다 (red 3.23:1 · green 2.10:1).
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
+    for cls in ("t-inlink", "t-indone", "t-loanin",
+                "t-outlink", "t-outdone", "t-loanout"):
+        line = next(l for l in css.splitlines() if l.startswith(f".{cls}{{"))
+        assert "background" not in line
+
+
+def test_render_players_every_group_has_a_fold_button():
+    # 접힌 그룹만 버튼이 있으면 펼쳐진 그룹은 접을 수 없고, 접힌 그룹은 비어 보인다.
+    entries = [
+        {"name": "촐리스", "slug": "tzolis", "transfer_status": "in_link",
+         "stage": "interest", "count": 3, "last_ts": datetime(2026, 8, 2)},
+        {"name": "모건 로저스", "slug": "rogers", "transfer_status": "other_club",
+         "stage": "agreed", "count": 5, "last_ts": datetime(2026, 8, 1)},
+    ]
+    html = render_players(entries, datetime(2026, 8, 3))
+    assert html.count('class="plfold"') == 2
+    assert ">접기<" in html
+    assert ">펼치기<" in html
+
+
+def test_build_player_entries_prefers_ko_full_name():
+    rows = [{"content_hash": "h1", "published_at": datetime(2026, 8, 1)}]
+    players = [{"id": 1, "full_name": "Christos Tzolis", "surname": "Tzolis",
+                "ko_full_name": "크리스토스 촐리스", "ko_name": "촐리스",
+                "transfer_status": "in_link",
+                "links": [{"content_hash": "h1", "stage": "interest"}]}]
+    assert build_player_entries(rows, players)[0]["name"] == "크리스토스 촐리스"
+
+
+def test_build_player_entries_falls_back_to_ko_name():
+    rows = [{"content_hash": "h1", "published_at": datetime(2026, 8, 1)}]
+    players = [{"id": 1, "full_name": "Christos Tzolis", "surname": "Tzolis",
+                "ko_full_name": None, "ko_name": "촐리스",
+                "transfer_status": "in_link",
+                "links": [{"content_hash": "h1", "stage": "interest"}]}]
+    assert build_player_entries(rows, players)[0]["name"] == "촐리스"
 
 
 def test_app_js_guards_sidebar_null_check_for_daylist_items():
