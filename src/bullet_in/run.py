@@ -22,7 +22,8 @@ from bullet_in.tone import select_tone_backfill
 from bullet_in import transfer_stage
 from bullet_in import roster
 from bullet_in.serve.render import write_site, write_ops, unmatched_articles
-from bullet_in.quality import success_rate, volume_anomalies, evaluate_freshness, evaluate_coverage
+from bullet_in.quality import (success_rate, volume_anomalies, evaluate_freshness,
+                               evaluate_coverage, candidate_cliffs)
 from bullet_in import notify
 
 GEMINI_MODEL = "gemini-3.1-flash-lite"
@@ -57,6 +58,28 @@ RUN_INSERT_SQL = (
     "VALUES (:rid,:drid,:started,UTC_TIMESTAMP(),:dur,:fetch,:counts,:cands,"
     ":new,:dup,:blocked,:err,:sr)")
 
+# 후보 절벽 판정 재료 (차단 알림 스펙 §3.1): [0] 이 직전 회차 · 나머지는 알림 표시용.
+# 이번 회차 행은 파이프라인 마지막에 적재되므로 이 시점의 최신 행이 곧 직전 회차다.
+CANDIDATE_HISTORY_SQL = ("SELECT candidate_counts FROM pipeline_runs "
+                         "ORDER BY started_at DESC LIMIT 5")
+
+
+def cliff_alert_payload(candidate_counts: dict, history: list[dict], *,
+                        adapters, sources: dict, success_rate: float,
+                        run_id: str) -> dict | None:
+    """절벽이 있으면 알림 payload · 없으면 None (차단 알림 스펙 §3.1 · §5.1)."""
+    if not history:
+        return None
+    cliffs = candidate_cliffs(candidate_counts, history[0])
+    if not cliffs:
+        return None
+    failure_codes = {a.source_id: dict(getattr(a, "search_failure_codes", {}) or {})
+                     for a in adapters}
+    return notify.build_cliff_alert(
+        cliffs, history=history, sources=sources,
+        failure_codes=failure_codes, success_rate=success_rate, run_id=run_id)
+
+
 async def main(concurrency: int):
     run_id = str(uuid.uuid4())
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
@@ -80,6 +103,21 @@ async def main(concurrency: int):
     candidate_counts = dict(Counter(it.source_id for it in raw))
     logging.getLogger(__name__).info(
         "소스별 후보 계수: %s", json.dumps(candidate_counts, ensure_ascii=False))
+
+    # 수집 후보 절벽 알림 (차단 알림 스펙 §3.1): 번역 · 렌더를 기다리지 않고 먼저 보낸다.
+    # 판정 · 발송 실패가 회차를 멈추지 않게 감싼다 (ops 뷰 생성과 같은 격리).
+    try:
+        with engine.connect() as c:
+            cand_hist = [json.loads(s) for s in
+                         c.execute(text(CANDIDATE_HISTORY_SQL)).scalars().all() if s]
+        payload = cliff_alert_payload(
+            candidate_counts, cand_hist, adapters=adapters, sources=sources,
+            success_rate=success_rate(len(adapters), len(errors)), run_id=run_id)
+        if payload:
+            notify.send_alert(**payload)
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "후보 절벽 판정 실패 — 이번 회차 건너뜀 (수집에는 영향 없음)", exc_info=True)
 
     # 공홈 커버리지 감시: 창 후보 · Men 퍼널 불변식 위반 시 알림 (spec 2026-07-24 §5)
     for a in adapters:
