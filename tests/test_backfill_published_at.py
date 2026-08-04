@@ -41,3 +41,21 @@ def test_target_sources_exclude_tweets():
                "x_afcstuff": {"adapter": "x_playwright"},
                "x_ornstein": {"adapter": "x_playwright"}}
     assert target_source_ids(sources) == ["bbc_sport", "fmkorea"]
+
+
+def test_cli_accepts_source_and_dry_run_flags():
+    # 스펙 §4.4 — 언론사와 fmkorea 를 따로 돌리려면 소스 지정이 필요하다.
+    import bullet_in.backfill_published_at as m
+    ap = m._parser()
+    args = ap.parse_args(["--source-id", "fmkorea", "--dry-run", "--limit", "5"])
+    assert args.source_id == "fmkorea"
+    assert args.dry_run is True
+    assert args.limit == 5
+
+
+def test_cli_defaults_are_all_sources_and_write_mode():
+    import bullet_in.backfill_published_at as m
+    args = m._parser().parse_args([])
+    assert args.source_id is None
+    assert args.dry_run is False
+    assert args.limit is None

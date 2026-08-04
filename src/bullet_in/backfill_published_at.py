@@ -56,3 +56,67 @@ _SELECT_SQL = text(
 _UPDATE_SQL = text(
     "UPDATE articles SET published_at=:p, published_precision=:pr "
     "WHERE content_hash=:h")
+
+
+async def backfill(source_id: str | None = None, limit: int | None = None,
+                   dry_run: bool = False) -> dict[str, dict]:
+    sources = load_sources("config/sources.yaml")
+    sids = [source_id] if source_id else target_source_ids(sources)
+    engine = create_engine(os.environ["MARIADB_URL"])
+    with engine.connect() as c:
+        rows = [dict(r) for r in
+                c.execute(_SELECT_SQL, {"sids": sids}).mappings().all()]
+    if limit:
+        rows = rows[:limit]
+    log.info("대상 %d건 (소스 %s)", len(rows), ", ".join(sids))
+    stats: dict[str, dict] = {}
+
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True,
+                                 headers={"User-Agent": "bullet-in/0.1"}) as client:
+        for i, row in enumerate(rows):
+            sid = row["source_id"]
+            st = stats.setdefault(sid, {"ok": 0, "skip": 0, "fail": 0})
+            try:
+                try:
+                    r = await client.get(row["url"])
+                    r.raise_for_status()
+                except httpx.HTTPError as e:
+                    st["fail"] += 1              # 404 · 차단 · 타임아웃 → 무변경
+                    log.warning("fetch 실패 %s: %r", row["url"], e)
+                    continue
+                got = decide(r.text, row["fetched_at"])
+                if got is None:
+                    st["skip"] += 1
+                    log.info("발행일 못 읽음 · 무변경 %s", row["url"])
+                    continue
+                log.info("%s %s → %s (%s)", sid, row["published_at"], got[0], got[1])
+                if not dry_run:
+                    with engine.begin() as c:
+                        c.execute(_UPDATE_SQL, {"p": got[0], "pr": got[1],
+                                                "h": row["content_hash"]})
+                st["ok"] += 1
+            finally:
+                if i < len(rows) - 1:
+                    await asyncio.sleep(REQUEST_GAP_SEC)
+    return stats
+
+
+def _parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(description="발행일 복구 (멱등)")
+    ap.add_argument("--source-id", default=None, help="한 소스만 대상 (스펙 §4.4 분리 실행)")
+    ap.add_argument("--limit", type=int, default=None, help="대상 상한")
+    ap.add_argument("--dry-run", action="store_true", help="DB 쓰기 없이 결과만 로깅")
+    return ap
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    args = _parser().parse_args()
+    stats = asyncio.run(backfill(source_id=args.source_id, limit=args.limit,
+                                 dry_run=args.dry_run))
+    for sid, s in sorted(stats.items()):
+        print(f"{sid}: 복구 {s['ok']} · 무변경 {s['skip']} · 실패 {s['fail']}")
+
+
+if __name__ == "__main__":
+    main()
