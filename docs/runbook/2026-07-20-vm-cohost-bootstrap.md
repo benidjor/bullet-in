@@ -110,6 +110,31 @@ git pull --ff-only
 - **서빙 · 템플릿 · CSS 만 바뀐 경우** — 회차를 돌릴 필요 없이 사이트만 다시 만들고 배포한다.
 enrich 전용 런북 §4 의 재생성 스니펫을 쓴 뒤 `./infra/deploy-site.sh` 를 실행한다.
 - 재생성 SELECT 는 `bullet_in.run.SERVING_SELECT_SQL` 을 import 해서 쓴다 (컬럼을 옮겨 적으면 어긋난다 — #107).
+- **컬럼이 새로 생긴 경우** — 스키마를 먼저 반영한다 (아래 6.2).
+
+### 6.2. 새 컬럼은 회차를 기다리거나 손으로 먼저 반영한다
+
+`schema.sql` 의 `ALTER TABLE … ADD COLUMN IF NOT EXISTS` 를 적용하는 `ensure_schema()` 는 **정기 회차 안에서만 돈다.**
+런북 §4 의 재생성 스니펫도 그것을 부르지 않는다.
+
+그래서 `git pull` 직후 백필이나 재렌더를 돌리면 `Unknown column …` 으로 죽는다.
+회차를 기다려도 되지만, 기다리지 않으려면 이 한 줄을 먼저 돌린다 (2026-08-04 실측).
+
+```bash
+cd ~/bullet-in && set -a && source .env && set +a
+/home/ubuntu/.local/bin/uv run python - <<'EOF'
+import os
+from sqlalchemy import create_engine
+from bullet_in.storage.mariadb import MartStore
+MartStore(create_engine(os.environ["MARIADB_URL"])).ensure_schema()
+print("스키마 반영 완료")
+EOF
+```
+
+- **`uv` 를 절대 경로로 쓴다.**
+`ssh <호스트> '<명령>'` 처럼 비대화형으로 실행하면 PATH 에 없어 `uv: command not found` 가 난다.
+systemd 유닛도 `/home/ubuntu/.local/bin/uv` 를 박아 쓴다.
+- 컬럼이 실제로 붙었는지는 `SHOW COLUMNS FROM <테이블>` 로 확인한다.
 
 반영 후 라이브에서 확인한다.
 
@@ -177,6 +202,25 @@ curl -sL -H 'Cache-Control: no-cache' "https://bullet-in.pages.dev/?cb=$RANDOM" 
 ```
 
 ①이 틀렸으면 HTML 생성 문제, ②가 틀렸으면 배포 문제, ③만 틀렸으면 캐시가 풀릴 때까지 기다리면 된다.
+
+### 라이브 확인의 함정 둘 (2026-08-04 실측)
+
+**없는 경로가 404 가 아니라 200 으로 인덱스를 돌려준다.**
+Cloudflare Pages 의 소프트 404 다.
+그래서 **지운 페이지가 정말 사라졌는지를 상태 코드로 판정하면 안 된다.**
+
+```bash
+# 지웠다고 생각한 페이지와 아무 없는 경로를 함께 찍어 본문을 비교한다
+curl -sL https://bullet-in.pages.dev/player/<지운slug>.html | grep -oE "<h2>[^<]*</h2>" | head -2
+curl -sL https://bullet-in.pages.dev/player/zzznotexist.html | grep -oE "<h2>[^<]*</h2>" | head -2
+```
+
+둘의 본문이 같으면 정상적으로 지워진 것이다 (둘 다 인덱스로 떨어진 것).
+페이지 목록이 맞는지는 산출물 쪽에서 세는 편이 확실하다 — `ls site/player/*.html | wc -l`.
+
+**정적 자산은 사이트 루트에 있다.**
+저장소 경로는 `src/bullet_in/serve/static/style.css` 이지만 배포본에서는 `/style.css` · `/app.js` 다.
+`/static/style.css` 를 요청하면 소프트 404 로 인덱스 HTML 이 돌아와, CSS 를 grep 해도 아무것도 안 걸린다.
 
 ## 9. 참고
 
