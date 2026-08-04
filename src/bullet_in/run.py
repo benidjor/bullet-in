@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, text
 from google import genai
 from bullet_in.adapters.factory import build_adapters
 from bullet_in.ingest import gather_all
+from bullet_in.adapters.fmkorea import is_arsenal_relevant
 from bullet_in.canonical import content_hash, canonical_url
 from bullet_in.pipeline import to_articles
 from bullet_in.score import load_sources
@@ -62,6 +63,67 @@ RUN_INSERT_SQL = (
 # 이번 회차 행은 파이프라인 마지막에 적재되므로 이 시점의 최신 행이 곧 직전 회차다.
 CANDIDATE_HISTORY_SQL = ("SELECT candidate_counts FROM pipeline_runs "
                          "ORDER BY started_at DESC LIMIT 5")
+
+
+# 서빙 제외 판정에 쓰는 확정 선수 연결 — 추출이 붙인 기사만 남는다.
+LINKED_HASHES_SQL = ("SELECT DISTINCT ap.content_hash FROM article_players ap "
+                     "JOIN players p ON p.id = ap.player_id WHERE p.status = 'confirmed'")
+
+# 성 매칭 최소 길이 — 두 글자 성 (고든 · 스콧) 은 다른 낱말에 섞여 오탐한다.
+SURNAME_MIN_LEN = 3
+
+
+def roster_surnames(player_names) -> set[str]:
+    """명단 이름에서 한글 성만 추린다 — 두 어절 이상 이름의 마지막 어절.
+
+    한 어절 이름 (케파 · 누사) 은 이미 풀네임 매칭 대상이라 뺀다.
+    성이 필요한 이유는 게시글 제목이 성만 쓰는 일이 잦기 때문이다
+    (`[레퀴프]디오망데와 PSG의 계약…` — 명단은 `얀 디오망데`)."""
+    out = set()
+    for n in player_names:
+        parts = (n or "").split()
+        if len(parts) > 1 and len(parts[-1]) >= SURNAME_MIN_LEN:
+            out.add(parts[-1])
+    return out
+
+
+def _serving_kept(row: dict, terms, names, surnames, linked) -> bool:
+    """fmkorea 글을 화면에 남길지 — 네 신호 중 하나라도 걸리면 남긴다."""
+    title_o = row.get("title_original") or ""
+    title_k = row.get("title_ko") or ""
+    # ① 수집 때와 같은 판정 (구단 키워드는 제목 · 본문, 풀네임은 제목)
+    if is_arsenal_relevant(title_o, row.get("body_ko") or "", terms, names):
+        return True
+    # ② 번역 제목 — 번역이 아스날 맥락이나 풀네임을 복원하는 경우가 있다
+    if is_arsenal_relevant(title_k, "", terms, names):
+        return True
+    # ③ 제목이 성만 쓴 경우 (동명이인 포함) — 어느 쪽이든 명단 선수 기사다
+    if surnames and is_arsenal_relevant(f"{title_o} {title_k}", "", [], surnames):
+        return True
+    # ④ 추출이 확정 선수를 붙인 기사 — 추출이 보강되면 여기서 자동으로 살아난다
+    return row.get("content_hash") in linked
+
+
+def serving_rows(rows: list[dict], *, relevance_terms, player_names,
+                 linked: set[str] | None = None) -> tuple[list[dict], int]:
+    """서빙 목록에서 fmkorea 무관 글을 뺀다 — 렌더 입력만 거르고 DB 는 그대로 둔다.
+
+    수집 단계 무관 글 필터 (워치리스트 스펙 §3.2) 도입 전에 적재된 타 구단 이적 기사가
+    화면에 남아 있다 (2026-08-04 실측 10건 · 전건 노출 · 대부분 온스테인 키워드 유입).
+    서빙 판정은 수집보다 관대하다 — 적재 뒤에야 생기는 번역 제목과 확정 선수 연결을
+    함께 볼 수 있기 때문이다. 본문 이름 매칭은 쓰지 않는다 (실측 결과 스치는 언급으로
+    타 구단 기사 4건이 딸려 왔다).
+    fmkorea 외 소스는 아스날 전용 피드라 대상이 아니다."""
+    surnames = roster_surnames(player_names)
+    linked = linked or set()
+    keep, hidden = [], 0
+    for r in rows:
+        if r.get("source_id") != "fmkorea" or _serving_kept(
+                r, relevance_terms, player_names, surnames, linked):
+            keep.append(r)
+        else:
+            hidden += 1
+    return keep, hidden
 
 
 def cliff_alert_payload(candidate_counts: dict, history: list[dict], *,
@@ -224,6 +286,17 @@ async def main(concurrency: int):
 
     with engine.connect() as c:
         rows = [dict(r) for r in c.execute(text(SERVING_SELECT_SQL)).mappings().all()]
+    # 수집 필터 도입 전 적재된 fmkorea 무관 글을 서빙에서만 제외 (DB 는 보존).
+    # 어댑터가 들고 있는 인정 집합을 그대로 써서 수집 · 서빙 기준을 하나로 묶는다.
+    # 목록에서 빠지면 sweep_orphan_pages 가 상세 페이지도 함께 정리한다.
+    fm = next((a for a in adapters if a.source_id == "fmkorea"), None)
+    if fm is not None:
+        with engine.connect() as c:
+            linked = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
+        rows, hidden = serving_rows(rows, relevance_terms=fm.relevance_terms,
+                                    player_names=fm.player_names, linked=linked)
+        if hidden:
+            logging.getLogger(__name__).info("fmkorea 무관 글 서빙 제외 %d건", hidden)
     write_site(rows, sources, "site",
                directory=journalist_directory("config/credibility.yaml"),
                registry=registry,

@@ -46,6 +46,20 @@ def _squash(s: str) -> str:
     return re.sub(r"\s+", "", s or "").lower()
 
 
+def is_arsenal_relevant(title: str, body: str, relevance_terms, player_names) -> bool:
+    """무관 글 판정 (워치리스트 스펙 §3.2) — 구단 키워드 (제목 · 본문) 또는 선수명 (제목) 포함 시 통과.
+
+    인정 집합이 둘 다 비면 필터 없음 — 백필 등 기존 호출부 무영향.
+    수집 (어댑터) 과 서빙 (run.py) 이 같은 규칙을 쓰도록 모듈 함수로 둔다.
+    두 곳이 갈리면 화면에 남은 글과 새로 들어오는 글의 기준이 어긋난다."""
+    if not relevance_terms and not player_names:
+        return True
+    t, b = _squash(title), _squash(body)
+    if any(_squash(k) in t or _squash(k) in b for k in relevance_terms):
+        return True
+    return any(_squash(n) in t for n in player_names)
+
+
 def _round_robin(per_kw: list[list[tuple[str, str]]], limit: int) -> list[tuple[str, str]]:
     """키워드별 결과 리스트를 라운드로빈으로 최대 limit개 뽑는다 (앞 키워드 독식 방지)."""
     out, i = [], 0
@@ -272,14 +286,7 @@ class FmkoreaAdapter:
         return _round_robin(per_kw, self.max_posts)
 
     def _relevant(self, title: str, body: str) -> bool:
-        """무관 글 필터 (스펙 §3.2) — 구단 키워드 (제목 · 본문) 또는 선수명 (제목) 포함 시 통과.
-        인정 집합 미주입이면 필터 없음 — 백필 등 기존 호출부 무영향."""
-        if not self.relevance_terms and not self.player_names:
-            return True
-        t, b = _squash(title), _squash(body)
-        if any(_squash(k) in t or _squash(k) in b for k in self.relevance_terms):
-            return True
-        return any(_squash(n) in t for n in self.player_names)
+        return is_arsenal_relevant(title, body, self.relevance_terms, self.player_names)
 
     async def _process(self, c: httpx.AsyncClient,
                        matched: list[tuple[str, str]]) -> list[RawItem]:
