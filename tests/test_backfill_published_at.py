@@ -59,3 +59,12 @@ def test_cli_defaults_are_all_sources_and_write_mode():
     assert args.source_id is None
     assert args.dry_run is False
     assert args.limit is None
+
+
+def test_update_touches_only_the_two_date_columns():
+    # 이 모듈의 존재 이유 — 번역 리셋을 피하려 발행일 두 칸만 갱신한다 (스펙 §4.2).
+    import bullet_in.backfill_published_at as m
+    sql = str(m._UPDATE_SQL)
+    set_clause = sql.split("SET", 1)[1].split("WHERE", 1)[0]
+    assigned = {p.split("=")[0].strip() for p in set_clause.split(",")}
+    assert assigned == {"published_at", "published_precision"}

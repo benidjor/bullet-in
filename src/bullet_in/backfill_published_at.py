@@ -61,7 +61,10 @@ _UPDATE_SQL = text(
 async def backfill(source_id: str | None = None, limit: int | None = None,
                    dry_run: bool = False) -> dict[str, dict]:
     sources = load_sources("config/sources.yaml")
-    sids = [source_id] if source_id else target_source_ids(sources)
+    allowed = target_source_ids(sources)
+    if source_id and source_id not in allowed:
+        raise SystemExit(f"대상 아닌 소스: {source_id} — 가능한 소스: {', '.join(allowed)}")
+    sids = [source_id] if source_id else allowed
     engine = create_engine(os.environ["MARIADB_URL"])
     with engine.connect() as c:
         rows = [dict(r) for r in
@@ -89,7 +92,8 @@ async def backfill(source_id: str | None = None, limit: int | None = None,
                     st["skip"] += 1
                     log.info("발행일 못 읽음 · 무변경 %s", row["url"])
                     continue
-                log.info("%s %s → %s (%s)", sid, row["published_at"], got[0], got[1])
+                prefix = "[dry-run] " if dry_run else ""
+                log.info("%s%s %s → %s (%s)", prefix, sid, row["published_at"], got[0], got[1])
                 if not dry_run:
                     with engine.begin() as c:
                         c.execute(_UPDATE_SQL, {"p": got[0], "pr": got[1],
@@ -114,8 +118,9 @@ def main() -> None:
     args = _parser().parse_args()
     stats = asyncio.run(backfill(source_id=args.source_id, limit=args.limit,
                                  dry_run=args.dry_run))
+    prefix = "[dry-run] " if args.dry_run else ""
     for sid, s in sorted(stats.items()):
-        print(f"{sid}: 복구 {s['ok']} · 무변경 {s['skip']} · 실패 {s['fail']}")
+        print(f"{prefix}{sid}: 복구 {s['ok']} · 무변경 {s['skip']} · 실패 {s['fail']}")
 
 
 if __name__ == "__main__":
