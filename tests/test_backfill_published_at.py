@@ -23,15 +23,16 @@ def test_no_date_in_html_is_skipped():
     assert decide("<html><head></head><body>no date</body></html>", _FETCHED) is None
 
 
-def test_future_date_is_rejected():
-    # 수집 시각 + 1시간을 넘는 값은 오파싱으로 본다 (pipeline._published 와 같은 가드).
-    assert decide(_ld("2026-07-19T09:00:00Z"), _FETCHED) is None
-
-
-def test_date_just_inside_the_guard_is_accepted():
-    got = decide(_ld("2026-07-18T22:30:00Z"), _FETCHED)
+def test_date_at_the_guard_boundary_is_accepted():
+    # 수집 시각 + 정확히 1시간: 채택돼야 함 (경계 정각).
+    got = decide(_ld("2026-07-18T22:56:51Z"), _FETCHED)
     assert got is not None
-    assert got[0] == datetime(2026, 7, 18, 22, 30)
+    assert got[0] == datetime(2026, 7, 18, 22, 56, 51)
+
+
+def test_date_just_beyond_the_guard_is_rejected():
+    # 수집 시각 + 1시간 + 1초: 폐기돼야 함 (경계 1초 뒤).
+    assert decide(_ld("2026-07-18T22:56:52Z"), _FETCHED) is None
 
 
 def test_target_sources_exclude_tweets():
