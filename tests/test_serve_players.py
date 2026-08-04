@@ -37,7 +37,9 @@ def test_transfer_group_splits_eight_values_without_gap():
     assert transfer_group("loan_out") == "이적 확정"
     assert transfer_group("link_dropped") == "이적 무산"
     assert transfer_group("other_club") == "타 클럽행"
-    assert transfer_group("none") == ""
+    # 이적 축이 없는 선수는 어느 그룹에도 안 들어간다 — 빈 문자열이 아니라 없음이다.
+    assert transfer_group("none") is None
+    assert transfer_group(None) is None
 
 
 def test_transfer_groups_order_and_collapse_flag():
