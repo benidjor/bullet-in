@@ -267,8 +267,8 @@ def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
                        "value": "\n".join(f"- {ln}" for ln in lines),
                        "inline": False})
     fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
-    return {"title": f"🚨 수집 후보 절벽 — 소스 {len(cliffs)}건",
-            "description": "직전 회차까지 후보가 있던 소스가 이번 회차에 0건이 되었습니다.",
+    return {"title": f"🚨 이번 회차 수집 0건 — 소스 {len(cliffs)}건",
+            "description": "직전 회차까지 글을 가져오던 소스가 이번 회차에 한 건도 못 가져왔습니다.",
             "color": COLOR_BLOCK, "fields": fields, "url": RUNBOOK_ANOMALY}
 
 
@@ -283,12 +283,13 @@ def build_watchlist_blackout_alert(*, searched: int, failure_codes: dict,
     if last_contact is not None:
         lines.append(f"마지막 fmkorea 접촉: {_discord_ts(last_contact, 'R')} "
                      f"({_discord_ts(last_contact, 'f')})")
-    return {"title": f"🚨 워치리스트 배치 전멸 — 검색 {searched}명 전원 실패",
-            "description": ("검색한 선수 전원의 검색이 실패해 적재가 0건입니다.\n"
-                            "커서는 전진하지 않아 다음 배치가 같은 슬라이스를 "
-                            "다시 검색합니다."),
+    return {"title": f"🚨 fmkorea 선수 검색 실패 — {searched}명 전원",
+            "description": (f"이번 차례 선수 {searched}명을 fmkorea 에서 이름으로 검색했으나 "
+                            "전부 실패해 새로 가져온 글이 없습니다.\n"
+                            "검색 순서는 그대로 두어 다음 차례에 같은 선수들을 "
+                            "다시 시도합니다."),
             "color": COLOR_BLOCK,
-            "fields": [{"name": "이번 배치",
+            "fields": [{"name": "이번 차례",
                         "value": "\n".join(f"- {ln}" for ln in lines),
                         "inline": False}],
             "url": RUNBOOK_ANOMALY}

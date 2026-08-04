@@ -165,7 +165,7 @@ def test_blackout_alert_sent_when_every_search_fails(monkeypatch, tmp_path):
     adapter = _FakeAdapter([], search_failures=5, search_failure_codes={430: 5})
     _run_main(monkeypatch, tmp_path, adapter=adapter, players=_BLACKOUT_PLAYERS)
     assert len(sent) == 1
-    assert "전멸" in sent[0]["title"]
+    assert "전원" in sent[0]["title"]
 
 
 def test_no_alert_on_partial_failure(monkeypatch, tmp_path):

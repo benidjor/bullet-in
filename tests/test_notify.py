@@ -337,7 +337,7 @@ def test_cliff_alert_shows_transition_and_recent_sequence():
         failure_codes={"fmkorea": {430: 4}},
         success_rate=1.0,
         run_id="3259230a-1111-2222-3333-444444444444")
-    assert "후보 절벽" in embed["title"]
+    assert "수집 0건" in embed["title"]
     body = embed["fields"][0]["value"]
     assert "직전 회차 10건 → 이번 회차 0건" in body
     assert "10 → 0 → 10 → 10 → 0 (이번)" in body
@@ -380,11 +380,11 @@ def test_watchlist_blackout_alert_reports_counts_and_codes():
         searched=10,
         failure_codes={430: 10},
         last_contact=datetime(2026, 8, 3, 10, 34))
-    assert "전멸" in embed["title"]
+    assert "전원" in embed["title"]
     body = "".join(f["value"] for f in embed["fields"])
     assert "검색 10명" in body
     assert "검색 실패 10건 — HTTP 430 10건" in body
-    assert "커서" in embed["description"]
+    assert "다시 시도" in embed["description"]
 
 
 def test_watchlist_blackout_alert_without_last_contact():
