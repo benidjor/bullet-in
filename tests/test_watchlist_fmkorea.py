@@ -165,7 +165,7 @@ def test_blackout_alert_sent_when_every_search_fails(monkeypatch, tmp_path):
     adapter = _FakeAdapter([], search_failures=5, search_failure_codes={430: 5})
     _run_main(monkeypatch, tmp_path, adapter=adapter, players=_BLACKOUT_PLAYERS)
     assert len(sent) == 1
-    assert "전멸" in sent[0]["title"]
+    assert "전원" in sent[0]["title"]
 
 
 def test_no_alert_on_partial_failure(monkeypatch, tmp_path):
@@ -187,3 +187,13 @@ def test_no_alert_on_dry_run(monkeypatch, tmp_path):
     _run_main(monkeypatch, tmp_path, adapter=adapter, dry_run=True,
               players=_BLACKOUT_PLAYERS)
     assert sent == []
+
+
+def test_contact_basis_logged_for_diagnosis(monkeypatch, tmp_path, caplog):
+    """접촉 기준값은 알림 표기뿐 아니라 60분 가드의 입력이라 구성요소를 남긴다.
+    2026-08-04 알림이 실제 접촉과 3시간 어긋나 원인을 못 짚은 사례가 근거."""
+    (tmp_path / "stamp").write_text("2026-08-03T22:31:50")
+    with caplog.at_level("INFO"):
+        _run_main(monkeypatch, tmp_path, adapter=_FakeAdapter(_RAW), players=_PLAYERS)
+    assert "fmkorea 접촉 기준" in caplog.text
+    assert "2026-08-03 22:31:50" in caplog.text

@@ -80,9 +80,15 @@ async def main(dry_run: bool = False, force: bool = False) -> None:
     pstore = PlayerStore(engine)
 
     now = mart.db_now()
-    marks = [t for t in (read_last_contact(STATE_PATH),
-                         mart.source_watermarks().get("fmkorea")) if t]
+    stamp = read_last_contact(STATE_PATH)
+    watermark = mart.source_watermarks().get("fmkorea")
+    marks = [t for t in (stamp, watermark) if t]
     last = max(marks) if marks else None
+    # 채택값은 알림 표기뿐 아니라 아래 60분 가드의 입력이다.
+    # 2026-08-04 전멸 알림 두 건이 실제 접촉과 약 3시간 어긋났는데 스탬프가 덮어써진 뒤라
+    # 원인을 못 짚었다 — 다음 발생 때 되짚도록 구성요소를 남긴다.
+    log.info("fmkorea 접촉 기준 (UTC) — 스탬프 %s · 워터마크 %s · 채택 %s",
+             stamp, watermark, last)
     if not force and not should_supplement(last, now, gap_hours=GAP_HOURS):
         log.info("워치리스트 배치 스킵 — 마지막 fmkorea 접촉 %s (60분 이내)", last)
         return

@@ -1,9 +1,28 @@
 from __future__ import annotations
-import logging, os
+import logging, os, re
 import httpx
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+
+
+class _WebhookRedactFilter(logging.Filter):
+    """httpx INFO 로그의 Discord 웹훅 주소를 가린다.
+
+    웹훅 주소는 그 자체가 인증 수단이라 저널 읽기 권한이 곧 발송 권한이 된다.
+    httpx 로거를 통째로 올리지 않는 이유는 나머지 요청 로그가 수집 진단에 쓰이기 때문이다
+    (소스별 본문 요청 수를 세는 근거)."""
+    _RE = re.compile(r"(api/webhooks/)\S+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        if "api/webhooks/" in msg:
+            record.msg = self._RE.sub(r"\1[REDACTED]", msg)
+            record.args = ()
+        return True
+
+
+logging.getLogger("httpx").addFilter(_WebhookRedactFilter())
 
 COLOR_ANOMALY = 0xF2A600
 COLOR_FAILURE = 0xE01E5A
@@ -240,13 +259,16 @@ def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
         code_line = _failure_code_line(failure_codes.get(sid) or {})
         if code_line:
             lines.append(code_line)
-        lines.append(f"회차 자체는 정상 종료 (success_rate {success_rate:g})")
+        # "정상 종료" 라고 쓰면 success_rate 가 1 미만일 때 숫자와 말이 어긋난다
+        # (실사례 2026-08-04 06:04 — arsenal_official 503 으로 0.889).
+        # 실패 알림이 왜 따로 안 왔는지만 사실로 적고 판단은 숫자에 맡긴다.
+        lines.append(f"회차는 실패로 끝나지 않음 (success_rate {success_rate:g})")
         fields.append({"name": _source_field_name(sid, sources),
                        "value": "\n".join(f"- {ln}" for ln in lines),
                        "inline": False})
     fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
-    return {"title": f"🚨 수집 후보 절벽 — 소스 {len(cliffs)}건",
-            "description": "직전 회차까지 후보가 있던 소스가 이번 회차에 0건이 되었습니다.",
+    return {"title": f"🚨 이번 회차 수집 0건 — 소스 {len(cliffs)}건",
+            "description": "직전 회차까지 글을 가져오던 소스가 이번 회차에 한 건도 못 가져왔습니다.",
             "color": COLOR_BLOCK, "fields": fields, "url": RUNBOOK_ANOMALY}
 
 
@@ -261,12 +283,13 @@ def build_watchlist_blackout_alert(*, searched: int, failure_codes: dict,
     if last_contact is not None:
         lines.append(f"마지막 fmkorea 접촉: {_discord_ts(last_contact, 'R')} "
                      f"({_discord_ts(last_contact, 'f')})")
-    return {"title": f"🚨 워치리스트 배치 전멸 — 검색 {searched}명 전원 실패",
-            "description": ("검색한 선수 전원의 검색이 실패해 적재가 0건입니다.\n"
-                            "커서는 전진하지 않아 다음 배치가 같은 슬라이스를 "
-                            "다시 검색합니다."),
+    return {"title": f"🚨 fmkorea 선수 검색 실패 — {searched}명 전원",
+            "description": (f"이번 차례 선수 {searched}명을 fmkorea 에서 이름으로 검색했으나 "
+                            "전부 실패해 새로 가져온 글이 없습니다.\n"
+                            "검색 순서는 그대로 두어 다음 차례에 같은 선수들을 "
+                            "다시 시도합니다."),
             "color": COLOR_BLOCK,
-            "fields": [{"name": "이번 배치",
+            "fields": [{"name": "이번 차례",
                         "value": "\n".join(f"- {ln}" for ln in lines),
                         "inline": False}],
             "url": RUNBOOK_ANOMALY}

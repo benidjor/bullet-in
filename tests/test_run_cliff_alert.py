@@ -28,7 +28,7 @@ def test_payload_built_for_cliff_with_adapter_codes():
         adapters=[_Adapter("fmkorea", {430: 4}), _Adapter("goal")],
         sources={"fmkorea": {"display_name": "fmkorea 축구 소식통"}},
         success_rate=1.0, run_id="3259230a")
-    assert "후보 절벽" in payload["title"]
+    assert "수집 0건" in payload["title"]
     assert "HTTP 430 4건" in payload["fields"][0]["value"]
 
 
