@@ -940,9 +940,9 @@ def transfer_badge(status: str | None) -> dict | None:
     return {"label": d[0], "cls": d[1]} if d else None
 
 
-def transfer_group(status: str | None) -> str:
-    """색인 그룹명. 여덟 값이 4그룹으로 빠짐없이 갈린다."""
-    return _TRANSFER_GROUP_OF.get(status or "") or ""
+def transfer_group(status: str | None) -> str | None:
+    """색인 그룹명. 여덟 값이 4그룹으로 빠짐없이 갈리고, 그 밖의 값은 None 이다."""
+    return _TRANSFER_GROUP_OF.get(status or "")
 
 
 def player_slug(surname: str, player_id: int, dupes: set[str]) -> str:
