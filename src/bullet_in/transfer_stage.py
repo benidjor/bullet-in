@@ -1,11 +1,15 @@
-"""영입 단계 단일 출처 — enum ↔ 한국어 라벨 ↔ css 클래스 ↔ 사이드바 순서.
+"""영입 단계 단일 출처 — enum ↔ 한국어 라벨 ↔ css 클래스.
 
 enrich (프롬프트 · 검증) · render (라벨 · 클래스) · 서빙 템플릿이 이 모듈을
 공유해 단계 정의가 한 곳에만 존재하도록 한다.
 """
 from __future__ import annotations
 
-# (enum, 한국어 라벨, css 클래스) — 사이드바 표시 순서 (위 → 아래, 진행 단계 높은 순)
+# (enum, 한국어 라벨, css 클래스) — 라벨 · 클래스 조회의 단일 출처다.
+# 여기 나열 순서는 화면에 나타나지 않는다 — 사이드바 필터가 그리는 것은
+# render._STAGE_DISPLAY_GROUPS 이고, 그쪽이 negotiating 과 medical 을 협상 중
+# 하나로 묶는다. 이 주석이 "사이드바 표시 순서" 라고 적혀 있어 실제로 오진을
+# 부른 적이 있다 (docs/troubleshooting/2026-08-04-called-design-a-defect-without-reading-it.md).
 SIDEBAR_STAGES: list[tuple[str, str, str]] = [
     ("official", "오피셜", "s-off"),
     ("agreed", "이적 합의", "s-agree"),
