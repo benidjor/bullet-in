@@ -393,3 +393,33 @@ def test_watchlist_blackout_alert_without_last_contact():
     body = "".join(f["value"] for f in embed["fields"])
     assert "연결 오류 10건" in body
     assert "마지막" not in body
+
+
+def test_webhook_url_redacted_in_httpx_log(caplog):
+    """웹훅 주소는 그 자체가 인증 수단 — httpx INFO 로그에 토큰이 남으면 안 된다."""
+    logger = logging.getLogger("httpx")
+    with caplog.at_level(logging.INFO, logger="httpx"):
+        logger.info('HTTP Request: POST https://discord.com/api/webhooks/1526/TOKENSECRET '
+                    '"HTTP/1.1 204 No Content"')
+    assert "TOKENSECRET" not in caplog.text
+    assert "[REDACTED]" in caplog.text
+
+
+def test_non_webhook_httpx_log_untouched(caplog):
+    """다른 요청 로그는 그대로 남는다 — 수집 진단에 쓰이는 정보다."""
+    logger = logging.getLogger("httpx")
+    with caplog.at_level(logging.INFO, logger="httpx"):
+        logger.info('HTTP Request: GET https://www.fmkorea.com/10167419258 "HTTP/1.1 200 OK"')
+    assert "10167419258" in caplog.text
+    assert "[REDACTED]" not in caplog.text
+
+
+def test_cliff_alert_reports_cycle_outcome_without_claiming_normal():
+    """success_rate 가 1 미만인데 '정상 종료' 라고 쓰면 숫자와 말이 어긋난다."""
+    embed = notify.build_cliff_alert(
+        ["fmkorea"], history=[{"fmkorea": 10}],
+        sources={"fmkorea": {"display_name": "fmkorea 축구 소식통"}},
+        failure_codes={}, success_rate=0.889, run_id="abcdef01")
+    body = embed["fields"][0]["value"]
+    assert "success_rate 0.889" in body
+    assert "정상 종료" not in body

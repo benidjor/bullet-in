@@ -1,9 +1,28 @@
 from __future__ import annotations
-import logging, os
+import logging, os, re
 import httpx
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+
+
+class _WebhookRedactFilter(logging.Filter):
+    """httpx INFO 로그의 Discord 웹훅 주소를 가린다.
+
+    웹훅 주소는 그 자체가 인증 수단이라 저널 읽기 권한이 곧 발송 권한이 된다.
+    httpx 로거를 통째로 올리지 않는 이유는 나머지 요청 로그가 수집 진단에 쓰이기 때문이다
+    (소스별 본문 요청 수를 세는 근거)."""
+    _RE = re.compile(r"(api/webhooks/)\S+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        if "api/webhooks/" in msg:
+            record.msg = self._RE.sub(r"\1[REDACTED]", msg)
+            record.args = ()
+        return True
+
+
+logging.getLogger("httpx").addFilter(_WebhookRedactFilter())
 
 COLOR_ANOMALY = 0xF2A600
 COLOR_FAILURE = 0xE01E5A
@@ -240,7 +259,10 @@ def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
         code_line = _failure_code_line(failure_codes.get(sid) or {})
         if code_line:
             lines.append(code_line)
-        lines.append(f"회차 자체는 정상 종료 (success_rate {success_rate:g})")
+        # "정상 종료" 라고 쓰면 success_rate 가 1 미만일 때 숫자와 말이 어긋난다
+        # (실사례 2026-08-04 06:04 — arsenal_official 503 으로 0.889).
+        # 실패 알림이 왜 따로 안 왔는지만 사실로 적고 판단은 숫자에 맡긴다.
+        lines.append(f"회차는 실패로 끝나지 않음 (success_rate {success_rate:g})")
         fields.append({"name": _source_field_name(sid, sources),
                        "value": "\n".join(f"- {ln}" for ln in lines),
                        "inline": False})
