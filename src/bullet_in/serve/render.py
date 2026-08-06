@@ -969,7 +969,7 @@ def load_page_players(engine=None) -> list[dict]:
 
 
 def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict]:
-    """선수별 기사 목록 · 전이 타임라인 · 현재 단계 (스펙 §5).
+    """선수별 기사 목록 · 진행 단계 사다리 · 현재 단계 (스펙 §5).
 
     기사 목록은 단계가 other 인 귀속을 뺀 나머지다.
     이름만 스친 기사가 그 선수의 이적 기사인 것처럼 쌓이던 것을 막기 위한 것이며,
