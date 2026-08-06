@@ -136,21 +136,36 @@ ps aux | grep -E '[b]ullet_in|[b]ackfill'  # 돌고 있는 배치가 없는지 �
 새 커밋이 스키마 · 분류 체계를 바꾸는 것이면 그 트랙의 롤아웃 (소급 배치) 이 끝났는지 먼저 확인한다.
 확인 목적의 배포라면 아예 미뤄도 된다 — 다음 정기 회차가 렌더 · 배포까지 한다.
 
+**fmkorea 무관 글 필터를 빼먹으면 안 된다 (2026-08-07 정정).**
+PR #225 부터 run.py 서빙 경로는 `write_site` 전에 `serving_rows` 로 fmkorea 무관 글을 거른다.
+필터 없는 옛 스니펫으로 재생성하면 서빙에서 감춰 둔 타 구단 기사 (2026-08-07 실측 12건) 가 목록 · 상세 · 선수 페이지에 다시 노출된다.
+아래 스니펫은 그 필터까지 포함해 run.py 서빙 경로와 1:1 이다 (2026-08-07 사다리 배포에서 실사용).
+
 ```bash
 uv run python - <<'EOF'
-import os
+import os, yaml
 from sqlalchemy import create_engine, text
-from bullet_in.run import SERVING_SELECT_SQL
+from bullet_in.run import SERVING_SELECT_SQL, LINKED_HASHES_SQL, serving_rows
 from bullet_in.score import load_sources
 from bullet_in.credibility import load_registry, journalist_directory, outlet_directory
 from bullet_in.serve.render import write_site
+from bullet_in.storage.players import PlayerStore
 
 engine = create_engine(os.environ["MARIADB_URL"])
 with engine.connect() as c:
     rows = [dict(r) for r in c.execute(text(SERVING_SELECT_SQL)).mappings().all()]
+    linked = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
 # 단계가 빈 행은 표시 · 집계가 전부 "기타" 로 쏠린다 — 중간 상태면 여기서 멈춘다
 blank = sum(1 for r in rows if not r["transfer_stage"])
 assert blank == 0, f"stage 빈 행 {blank} — 재분류 수렴 후 다시 실행"
+# fmkorea 무관 글 서빙 제외 (PR #225) — 어댑터 생성 없이 config 에서 같은 인정 집합을 만든다
+cfg = yaml.safe_load(open("config/sources.yaml", encoding="utf-8"))
+fm_cfg = next(s for s in cfg["sources"] if s.get("adapter") == "fmkorea")
+rows, hidden = serving_rows(rows,
+    relevance_terms=fm_cfg.get("config", {}).get("relevance_terms", []),
+    player_names=PlayerStore(engine).confirmed_ko_names(),
+    linked=linked)
+print(f"무관 글 서빙 제외 {hidden}건")
 write_site(rows, load_sources("config/sources.yaml"), "site",
            directory=journalist_directory("config/credibility.yaml"),
            registry=load_registry("config/credibility.yaml"),
