@@ -370,6 +370,41 @@ def test_render_player_section_title_and_flatlist():
     assert 'class="daylist plist flatlist"' in html          # 행 높이 정렬 (§5.1)
 
 
+def test_render_player_marks_extra_blocks_beyond_ten():
+    arts = [_art(f"h{i}", min(i, 28), "rumour", f"기사 {i}") for i in range(1, 13)]
+    players = [_player(1, "Tzolis", "촐리스", "in_link",
+                       [{"content_hash": f"h{i}", "stage": "rumour"}
+                        for i in range(1, 13)])]
+    [e] = build_player_entries(arts, players)
+    html = render_player(e, SOURCES, NOW)
+    assert html.count("pl-extra") == 2                        # 11 · 12번째 블록만
+    assert "기사 더보기 · 남은 2건" in html
+    assert 'id="plMore"' in html and 'class="latestmore"' in html
+
+
+def test_render_player_has_no_more_button_at_ten_or_less():
+    arts = [_art("h1", 1, "rumour")]
+    players = [_player(1, "Tzolis", "촐리스", "in_link",
+                       [{"content_hash": "h1", "stage": "rumour"}])]
+    [e] = build_player_entries(arts, players)
+    html = render_player(e, SOURCES, NOW)
+    assert "pl-extra" not in html
+    assert "plMore" not in html
+
+
+# pytest 는 브라우저를 띄우지 않으므로 아래 단언은 세 파일이 같은 문자열 계약
+# (pl-extra 클래스 · plMore id) 을 공유하는지만 고정한다 (.plfold 계약 테스트와
+# 같은 방식) — 클릭 동작 자체는 실브라우저로만 검증된다.
+def test_player_more_contract_shared_across_three_files():
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
+    tpl = Path("src/bullet_in/serve/templates/player.html.j2").read_text(encoding="utf-8")
+    assert "pl-extra" in js and "plMore" in js
+    assert re.search(r"\.block\.pl-extra\s*\{[^}]*display\s*:\s*none", css), (
+        ".block.pl-extra{display:none} 규칙이 없음 — 더보기 전에도 전량 노출되는 결함")
+    assert "pl-extra" in tpl and 'id="plMore"' in tpl
+
+
 def test_app_js_guards_sidebar_null_check_for_daylist_items():
     """선수 페이지는 daylist 가 있지만 사이드바가 없어서 TypeError 유발.
 

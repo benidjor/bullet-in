@@ -24,6 +24,7 @@
 {% endif %}
 <div class="sechead"><h2>기사</h2><span class="kst">{{ e.count }}건</span></div>
 <div class="daylist plist flatlist">
-  {% for a in articles %}<div class="block">{{ card(a, thumb=True, when=a._kdate, show_all=True) }}</div>{% endfor %}
+  {% for a in articles %}<div class="block{{ ' pl-extra' if loop.index > 10 }}">{{ card(a, thumb=True, when=a._kdate, show_all=True) }}</div>{% endfor %}
 </div>
+{% if articles|length > 10 %}<button class="latestmore" id="plMore" type="button">기사 더보기 · 남은 {{ articles|length - 10 }}건</button>{% endif %}
 {% endblock %}

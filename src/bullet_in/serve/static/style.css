@@ -306,6 +306,7 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
 .plfold{margin-left:auto;padding:3px 10px;border:1px solid var(--hair);border-radius:2px;
   background:none;color:var(--mut);font:inherit;font-size:12px;cursor:pointer}
 .plfold:hover{color:var(--ink);border-color:var(--mut)}
+.block.pl-extra{display:none}                   /* 선수 페이지 — 11번째부터 더보기 뒤로 */
 .playerlist{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .plgrp.folded .playerlist{display:none}
 .pcard{display:block;padding:11px 12px;border:1px solid var(--hair);border-radius:2px}

@@ -424,3 +424,28 @@ document.querySelectorAll('.plgrp .plfold').forEach(btn => {
     btn.textContent = folded ? '펼치기' : '접기';
   });
 });
+
+// ── 선수 페이지 — 기사 10건 단위 더보기 · 접기 (사다리 스펙 §5.2) ────
+// 서버가 11번째 블록부터 pl-extra 를 붙여 두고, 여기서는 노출 건수 shown 기준으로
+// 매번 다시 계산한다. 선수 페이지엔 사이드바가 없어 applyFilters 가 배선되지
+// 않으므로 (items.length && side) 인라인 display 와 부딪히지 않는다.
+const plList = document.querySelector('.plist');
+const plMore = document.getElementById('plMore');
+if (plList && plMore) {
+  const plBlocks = [...plList.querySelectorAll('.block')];
+  const PL_INIT = 10;
+  let plShown = PL_INIT;
+  const plSync = () => {
+    plBlocks.forEach((b, i) => b.classList.toggle('pl-extra', i >= plShown));
+    const left = plBlocks.length - plShown;
+    plMore.textContent = left > 0 ? `기사 더보기 · 남은 ${left}건` : '접기';
+  };
+  plMore.onclick = () => {
+    if (plShown < plBlocks.length) { plShown += 10; }
+    else {
+      plShown = PL_INIT;
+      plList.previousElementSibling?.scrollIntoView({ behavior: 'smooth', block: 'start' });  // 구역 머리 (sechead)
+    }
+    plSync();
+  };
+}
