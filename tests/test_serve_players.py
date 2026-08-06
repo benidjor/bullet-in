@@ -2,7 +2,7 @@
 import re
 from datetime import datetime
 from pathlib import Path
-from bullet_in.serve.render import (TRANSFER_GROUPS, player_slug, stage_timeline,
+from bullet_in.serve.render import (TRANSFER_GROUPS, player_slug, stage_ladder,
                                     transfer_badge, transfer_group)
 
 NOW = datetime(2026, 7, 10, 12, 0)
@@ -10,9 +10,10 @@ SOURCES = {"bbc_sport": {"display_name": "BBC Sport", "serving": "full"}}
 STATIC = Path("src/bullet_in/serve/static")
 
 
-def _row(day: int, h: str = "h1"):
-    """전이 판정용 최소 행 — stage_timeline 은 순서만 쓰고 정렬 키를 읽지 않는다."""
-    return {"content_hash": h, "published_at": datetime(2026, 7, day, 12, 0)}
+def _row(day: int, h: str = "h1", tier=2):
+    """사다리 판정용 최소 행 — stage_ladder 는 tier 와 입력 순서만 쓴다."""
+    return {"content_hash": h, "tier": tier,
+            "published_at": datetime(2026, 7, day, 12, 0)}
 
 
 def test_transfer_badge_covers_all_eight_values():
@@ -59,34 +60,54 @@ def test_player_slug_falls_back_to_surname_id_on_collision():
     assert player_slug("Vieira", 88, dupes) == "vieira-88"
 
 
-def test_stage_timeline_makes_node_only_when_stage_changes():
-    entries = [{"row": _row(1), "stage": "rumour"},
-               {"row": _row(2), "stage": "rumour"},
-               {"row": _row(3), "stage": "interest"}]
-    nodes = stage_timeline(entries)
-    assert [n["stage"] for n in nodes] == ["interest", "rumour"]   # 최신 우선
-    assert nodes[1]["follow"] == 1                                  # 같은 단계 1건 접힘
-    assert nodes[0]["follow"] == 0
+def test_stage_ladder_one_line_per_group_in_progress_order():
+    entries = [{"row": _row(1, "h1"), "stage": "rumour"},
+               {"row": _row(2, "h2"), "stage": "rumour"},
+               {"row": _row(3, "h3"), "stage": "agreed"}]
+    lines = stage_ladder(entries)
+    assert [l["stage"] for l in lines] == ["agreed", "rumour"]   # 진행 단계 순 (위가 앞)
+    assert [l["count"] for l in lines] == [1, 2]                 # 건수 = 묶음 전체 (대표 포함)
 
 
-def test_stage_timeline_skips_other_and_blank():
-    entries = [{"row": _row(1), "stage": "other"},
-               {"row": _row(2), "stage": None},
-               {"row": _row(3), "stage": "agreed"}]
-    nodes = stage_timeline(entries)
-    assert [n["stage"] for n in nodes] == ["agreed"]
-    assert nodes[0]["follow"] == 0            # other · 빈 값은 follow 도 올리지 않는다
+def test_stage_ladder_merges_negotiating_and_medical_into_one_line():
+    entries = [{"row": _row(1, "h1", tier=4), "stage": "negotiating"},
+               {"row": _row(2, "h2", tier=4), "stage": "medical"}]
+    [line] = stage_ladder(entries)
+    assert line["row"]["content_hash"] == "h1"   # 동률 → 이른 기사
+    assert line["count"] == 2                    # 협상 중 한 줄로 합산
 
 
-def test_stage_timeline_keeps_regression_as_its_own_node():
-    entries = [{"row": _row(1), "stage": "agreed"},
-               {"row": _row(2), "stage": "rumour"}]
-    nodes = stage_timeline(entries)
-    assert [n["stage"] for n in nodes] == ["rumour", "agreed"]
+def test_stage_ladder_rep_is_highest_credibility_and_missing_tier_is_lowest():
+    entries = [{"row": _row(1, "h1", tier=4), "stage": "agreed"},
+               {"row": _row(2, "h2", tier=1), "stage": "agreed"},
+               {"row": _row(3, "h3", tier=None), "stage": "agreed"}]
+    [line] = stage_ladder(entries)
+    assert line["row"]["content_hash"] == "h2"   # tier 작을수록 높음 · 미상 (None) 은 최하
+    assert line["count"] == 3
 
 
-def test_stage_timeline_is_empty_when_no_article_has_a_stage():
-    assert stage_timeline([{"row": _row(1), "stage": "other"}]) == []
+def test_stage_ladder_tie_official_latest_others_earliest():
+    # 공홈은 합의 때 · 확정 때 두 번 올린다 — 마지막 공지가 현재 상태다 (스펙 §4.2).
+    entries = [{"row": _row(4, "ag1", tier=1), "stage": "agreed"},
+               {"row": _row(14, "off1", tier=0), "stage": "official"},
+               {"row": _row(14, "ag2", tier=1), "stage": "agreed"},
+               {"row": _row(16, "off2", tier=0), "stage": "official"}]
+    lines = stage_ladder(entries)
+    assert lines[0]["row"]["content_hash"] == "off2"   # 오피셜 — 동률이면 늦은 기사
+    assert lines[1]["row"]["content_hash"] == "ag1"    # 나머지 — 동률이면 이른 기사
+
+
+def test_stage_ladder_skips_other_and_blank():
+    entries = [{"row": _row(1, "h1"), "stage": "other"},
+               {"row": _row(2, "h2"), "stage": None},
+               {"row": _row(3, "h3"), "stage": "agreed"}]
+    lines = stage_ladder(entries)
+    assert [l["stage"] for l in lines] == ["agreed"]
+    assert lines[0]["count"] == 1     # other · 빈 값은 줄도 건수도 만들지 않는다
+
+
+def test_stage_ladder_is_empty_when_no_article_has_a_stage():
+    assert stage_ladder([{"row": _row(1), "stage": "other"}]) == []
 
 
 from bullet_in.serve.render import build_player_entries
@@ -128,7 +149,7 @@ def test_build_player_entries_header_count_matches_article_list():
                         {"content_hash": "h3", "stage": "other"}])]
     [e] = build_player_entries(arts, players)
     assert e["count"] == len(e["articles"]) == 2
-    assert [n["stage"] for n in e["timeline"]] == ["rumour"]
+    assert [l["stage"] for l in e["ladder"]] == ["rumour"]
 
 
 def test_build_player_entries_excludes_other_from_list_and_count():
@@ -148,13 +169,25 @@ def test_build_player_entries_excludes_other_from_list_and_count():
     assert [a["content_hash"] for a in entry["articles"]] == ["h3", "h1"]
 
 
-def test_build_player_entries_current_stage_is_latest_node():
+def test_build_player_entries_current_stage_is_time_axis_latest():
     arts = [_art("h1", 1, "agreed"), _art("h2", 5, "rumour")]
     players = [_player(1, "Tzolis", "촐리스", "in_link",
                        [{"content_hash": "h1", "stage": "agreed"},
                         {"content_hash": "h2", "stage": "rumour"}])]
     [e] = build_player_entries(arts, players)
-    assert e["stage"] == "rumour"          # 역행이어도 최신 노드 값
+    assert e["stage"] == "rumour"          # 역행이어도 시간축 최신값 (사다리 첫 줄 아님)
+
+
+def test_build_player_entries_stage_ignores_ladder_top_official():
+    # §6.2 회귀 방어 — 오피셜 기사가 섞여 있어도 머리 · 색인 배지는 시간축 최신
+    # 단계다. 사다리 첫 줄 (오피셜) 을 그대로 읽으면 실측 다섯 명 전부 틀린다.
+    arts = [_art("h1", 1, "official"), _art("h2", 5, "interest")]
+    players = [_player(1, "Tzolis", "촐리스", "in_link",
+                       [{"content_hash": "h1", "stage": "official"},
+                        {"content_hash": "h2", "stage": "interest"}])]
+    [e] = build_player_entries(arts, players)
+    assert e["stage"] == "interest"
+    assert e["ladder"][0]["stage"] == "official"   # 사다리 자체는 오피셜이 위
 
 
 def test_build_player_entries_drops_player_whose_articles_are_all_other():
@@ -212,7 +245,7 @@ def test_render_players_groups_and_collapses():
     assert 'class="side"' not in html             # 사이드바 제외 (스펙 §5.3)
 
 
-def test_render_player_shows_timeline_and_full_list():
+def test_render_player_ladder_line_has_count_and_credibility():
     arts = [_art("h1", 1, "rumour", "촐리스 관심"), _art("h2", 2, "rumour", "촐리스 재보도"),
             _art("h3", 3, None, "촐리스 단계 없음")]
     players = [_player(1, "Tzolis", "촐리스", "in_link",
@@ -222,8 +255,19 @@ def test_render_player_shows_timeline_and_full_list():
     [e] = build_player_entries(arts, players)
     html = render_player(e, SOURCES, NOW)
     assert "기사 3건" in html
-    assert "이후 1건" in html                     # 같은 단계 연속 접힘
-    assert "촐리스 단계 없음" in html              # 단계 없는 기사도 목록에
+    assert "같은 단계 2건" in html            # 묶음 전체 건수 (대표 포함)
+    assert "이후 " not in html                 # 전이형 문구 잔존 방지
+    assert "공신력 중" in html                 # tier 2 독자 라벨 — tlsrc 에 병기 (§4.3)
+    assert "촐리스 단계 없음" in html          # 단계 없는 기사도 목록에
+
+
+def test_render_player_ladder_hides_count_when_single():
+    arts = [_art("h1", 1, "agreed", "촐리스 합의")]
+    players = [_player(1, "Tzolis", "촐리스", "in_link",
+                       [{"content_hash": "h1", "stage": "agreed"}])]
+    [e] = build_player_entries(arts, players)
+    html = render_player(e, SOURCES, NOW)
+    assert "같은 단계" not in html             # 1건이면 건수 표시 없음 (§4.2)
 
 
 def test_write_player_pages_removes_orphans(tmp_path):

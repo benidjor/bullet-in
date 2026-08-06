@@ -987,8 +987,8 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
                   if l["content_hash"] in by_hash and l["stage"] != _stage.OTHER]
         if not paired:
             continue
-        paired.sort(key=lambda t: _sort_ts(t[0]))          # 오래된 것부터 (전이 판정)
-        timeline = stage_timeline([{"row": r, "stage": s} for r, s in paired])
+        paired.sort(key=lambda t: _sort_ts(t[0]))          # 오래된 것부터 (사다리 입력)
+        ladder = stage_ladder([{"row": r, "stage": s} for r, s in paired])
         slug = player_slug(p.get("surname") or "", p["id"], dupes)
         if folded[p["id"]] in dupes:
             log.warning("동성 복수 — slug 를 id 로 떨어뜨림: %s → %s",
@@ -998,32 +998,48 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
                              or p["full_name"]),
                     "slug": slug,
                     "articles": [r for r, _ in reversed(paired)],
-                    "timeline": timeline,
-                    "stage": timeline[0]["stage"] if timeline else None,
+                    "ladder": ladder,
+                    # 현재 단계는 시간축 최신값이다 (사다리 스펙 §6.2) — 사다리는
+                    # 오피셜이 앞이라 첫 줄을 읽으면 뜻이 "가장 진행된 단계" 로 바뀐다.
+                    "stage": next((s for _, s in reversed(paired)
+                                   if _stage.is_displayable(s)), None),
                     "count": len(paired),
                     "last_ts": _sort_ts(paired[-1][0])[0]})
     return out
 
 
-def stage_timeline(entries: list[dict]) -> list[dict]:
-    """단계 전이 노드 (스펙 §5.2) — 직전과 값이 달라진 기사만 노드로 만든다.
+_STAGE_GROUP_OF = {e: label for label, enums in _STAGE_DISPLAY_GROUPS for e in enums}
 
-    입력은 오래된 것부터 정렬된 [{"row", "stage"}], 출력은 최신 노드가 앞이다.
-    같은 단계로 이어진 기사는 노드의 follow 로 접고, other · 빈 값은 배지 대상이
-    아니므로 노드도 follow 도 만들지 않는다.
-    역행은 그대로 새 노드가 된다 — 딜이 틀어진 것인지 오분류인지 화면에서 가릴 수
-    없으므로 지어내지 않는다 (최고 도달 단계로 고정하면 링크가 소멸한 선수의 배지가
-    이적 합의로 남는 모순이 생긴다)."""
-    nodes: list[dict] = []
+
+def stage_ladder(entries: list[dict]) -> list[dict]:
+    """진행 단계 사다리 (사다리 스펙 §4.2) — 표시 묶음 6종마다 대표 기사 하나.
+
+    입력은 오래된 것부터 정렬된 [{"row", "stage"}], 출력은 오피셜이 앞이다.
+    대표는 공신력 높은 순 (tier 작을수록 높음 · 미상은 최하 — pick_representative
+    의 99.0 선례) 이고, 동률이면 오피셜 묶음만 늦은 기사를 뽑는다 — 공홈은 합의
+    때 · 확정 때 두 번 올리므로 마지막 공지가 현재 상태다. 나머지 다섯 묶음은
+    이른 기사 (그 단계가 처음 보도된 시점). count 는 묶음 전체 건수 (대표 포함)
+    라 머리 · 사이드바 건수와 셈법이 같다. other · 빈 값은 줄도 건수도 없다."""
+    buckets: dict[str, list[dict]] = {}
     for e in entries:
-        stage = e.get("stage")
-        if not _stage.is_displayable(stage):
+        if not _stage.is_displayable(e.get("stage")):
             continue
-        if nodes and nodes[-1]["stage"] == stage:
-            nodes[-1]["follow"] += 1
+        buckets.setdefault(_STAGE_GROUP_OF[e["stage"]], []).append(e)
+
+    def cred(e):
+        t = e["row"].get("tier")
+        return float(t) if t is not None else 99.0
+
+    out = []
+    for label, _ in _STAGE_DISPLAY_GROUPS:
+        b = buckets.get(label)
+        if not b:
             continue
-        nodes.append({"row": e["row"], "stage": stage, "follow": 0})
-    return list(reversed(nodes))
+        # 오피셜은 마지막 공지가 현재 상태다 — 뒤집어 넣어 동률에서 늦은 기사가 이기게 한다.
+        seq = list(reversed(b)) if label == "오피셜" else b
+        rep = min(seq, key=cred)       # 안정 선택 — 동률이면 seq 순서상 첫 기사
+        out.append({"row": rep["row"], "stage": rep["stage"], "count": len(b)})
+    return out
 
 
 def render_players(entries: list[dict], now: datetime) -> str:
@@ -1044,17 +1060,17 @@ def render_players(entries: list[dict], now: datetime) -> str:
 def render_player(entry: dict, sources: dict, now: datetime,
                   directory: dict | None = None,
                   outlet_dir: dict | None = None) -> str:
-    """선수 페이지 (스펙 §5) — 머리 · 전이 타임라인 · 귀속 기사 전량."""
+    """선수 페이지 (스펙 §5) — 머리 · 진행 단계 사다리 · 귀속 기사 전량."""
     decorated = {}
     for a in entry["articles"]:
         d = _decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
-        # _decorate 의 _date 는 UTC 라 타임라인 · 카드가 머리와 다른 날짜로 보일 수
+        # _decorate 의 _date 는 UTC 라 사다리 · 카드가 머리와 다른 날짜로 보일 수
         # 있다 — 선수 페이지 지역 범위로만 KST 로 보정한다.
         d["_kdate"] = fmt_date(to_kst(_sort_ts(a)[0]))
         decorated[a["content_hash"]] = d
     nodes = [{"a": decorated[n["row"]["content_hash"]],
-              "badge": display_stage(n["stage"]), "follow": n["follow"]}
-             for n in entry["timeline"]]
+              "badge": display_stage(n["stage"]), "count": n["count"]}
+             for n in entry["ladder"]]
     return _env().get_template("player.html.j2").render(
         e=entry, badge=transfer_badge(entry["transfer_status"]),
         stage=display_stage(entry["stage"]), nodes=nodes,

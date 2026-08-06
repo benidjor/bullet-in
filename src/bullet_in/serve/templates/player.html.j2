@@ -16,8 +16,8 @@
     <span class="tldate">{{ n.a._kdate }}</span>
     {% if n.badge %}<span class="stage {{ n.badge.tone }}{{ ' filled' if n.badge.filled }}">{{ n.badge.label }}</span>{% endif %}
     <a class="tltitle" href="{{ root }}article/{{ n.a.content_hash }}.html">{{ n.a._title }}</a>
-    <span class="tlsrc">{{ n.a._outlet }}</span>
-    {% if n.follow %}<span class="tlmore">이후 {{ n.follow }}건</span>{% endif %}
+    <span class="tlsrc">{{ n.a._outlet }}{% if n.a._reader_tier %} · {{ n.a._reader_tier }}{% endif %}</span>
+    {% if n.count > 1 %}<span class="tlmore">같은 단계 {{ n.count }}건</span>{% endif %}
   </div>
   {% endfor %}
 </div>
