@@ -2,9 +2,11 @@ import bullet_in.transfer_stage as ts
 
 
 def test_sidebar_stages_order_and_count():
+    # 진행 단계 순 (사다리 스펙 §4.1) — 화면 순서 (render._STAGE_DISPLAY_GROUPS) 가
+    # 정답이고, medical 은 협상 중 묶음의 짝이라 negotiating 바로 뒤에 둔다.
     enums = [e for e, _, _ in ts.SIDEBAR_STAGES]
-    assert enums == ["official", "agreed", "medical", "personal_terms",
-                     "negotiating", "interest", "rumour"]
+    assert enums == ["official", "agreed", "negotiating", "medical",
+                     "personal_terms", "interest", "rumour"]
 
 
 def test_label_and_css_lookup():

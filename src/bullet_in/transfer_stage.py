@@ -10,12 +10,14 @@ from __future__ import annotations
 # render._STAGE_DISPLAY_GROUPS 이고, 그쪽이 negotiating 과 medical 을 협상 중
 # 하나로 묶는다. 이 주석이 "사이드바 표시 순서" 라고 적혀 있어 실제로 오진을
 # 부른 적이 있다 (docs/troubleshooting/2026-08-04-called-design-a-defect-without-reading-it.md).
+# 2026-08-06 사다리 스펙 §4.1 로 화면 순서 (render._STAGE_DISPLAY_GROUPS) 와 같은
+# 순서로 정합해 두었다 — 사다리의 진행 단계 정렬은 그쪽 목록이 기준이다.
 SIDEBAR_STAGES: list[tuple[str, str, str]] = [
     ("official", "오피셜", "s-off"),
     ("agreed", "이적 합의", "s-agree"),
+    ("negotiating", "협상 중", "s-talk"),
     ("medical", "메디컬", "s-med"),
     ("personal_terms", "개인 합의", "s-personal"),
-    ("negotiating", "협상 중", "s-talk"),
     ("interest", "관심", "s-interest"),
     ("rumour", "루머", "s-rum"),
 ]
