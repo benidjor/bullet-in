@@ -9,7 +9,7 @@
   <span class="pmeta">기사 {{ e.count }}건 · 최근 보도 {{ last }}</span>
 </div>
 {% if nodes %}
-<div class="sechead"><h2>단계 흐름</h2></div>
+<div class="sechead"><h2>진행 단계</h2></div>
 <div class="timeline">
   {% for n in nodes %}
   <div class="tlnode">
@@ -23,7 +23,7 @@
 </div>
 {% endif %}
 <div class="sechead"><h2>기사</h2><span class="kst">{{ e.count }}건</span></div>
-<div class="daylist plist">
+<div class="daylist plist flatlist">
   {% for a in articles %}<div class="block">{{ card(a, thumb=True, when=a._kdate, show_all=True) }}</div>{% endfor %}
 </div>
 {% endblock %}

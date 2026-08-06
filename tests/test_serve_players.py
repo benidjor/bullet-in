@@ -360,6 +360,16 @@ def test_build_player_entries_falls_back_to_ko_name():
     assert build_player_entries(rows, players)[0]["name"] == "촐리스"
 
 
+def test_render_player_section_title_and_flatlist():
+    arts = [_art("h1", 1, "rumour")]
+    players = [_player(1, "Tzolis", "촐리스", "in_link",
+                       [{"content_hash": "h1", "stage": "rumour"}])]
+    [e] = build_player_entries(arts, players)
+    html = render_player(e, SOURCES, NOW)
+    assert "진행 단계" in html and "단계 흐름" not in html   # 제목 (§5.3)
+    assert 'class="daylist plist flatlist"' in html          # 행 높이 정렬 (§5.1)
+
+
 def test_app_js_guards_sidebar_null_check_for_daylist_items():
     """선수 페이지는 daylist 가 있지만 사이드바가 없어서 TypeError 유발.
 
