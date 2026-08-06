@@ -1016,10 +1016,11 @@ def stage_ladder(entries: list[dict]) -> list[dict]:
 
     입력은 오래된 것부터 정렬된 [{"row", "stage"}], 출력은 오피셜이 앞이다.
     대표는 공신력 높은 순 (tier 작을수록 높음 · 미상은 최하 — pick_representative
-    의 99.0 선례) 이고, 동률이면 오피셜 묶음만 늦은 기사를 뽑는다 — 공홈은 합의
-    때 · 확정 때 두 번 올리므로 마지막 공지가 현재 상태다. 나머지 다섯 묶음은
-    이른 기사 (그 단계가 처음 보도된 시점). count 는 묶음 전체 건수 (대표 포함)
-    라 머리 · 사이드바 건수와 셈법이 같다. other · 빈 값은 줄도 건수도 없다."""
+    의 99.0 선례) 이고, 동률이면 전 묶음 공통으로 가장 늦은 기사를 뽑는다
+    (§4.2 개정 2026-08-07) — 줄의 날짜가 그 단계의 최신 보도를 가리켜야 이른
+    기사끼리 날짜가 뒤섞여 보이는 위화감이 줄고, 공홈의 마지막 공지 = 현재 상태
+    규칙도 같은 식으로 흡수된다. count 는 묶음 전체 건수 (대표 포함) 라
+    머리 · 사이드바 건수와 셈법이 같다. other · 빈 값은 줄도 건수도 없다."""
     buckets: dict[str, list[dict]] = {}
     for e in entries:
         if not _stage.is_displayable(e.get("stage")):
@@ -1035,9 +1036,8 @@ def stage_ladder(entries: list[dict]) -> list[dict]:
         b = buckets.get(label)
         if not b:
             continue
-        # 오피셜은 마지막 공지가 현재 상태다 — 뒤집어 넣어 동률에서 늦은 기사가 이기게 한다.
-        seq = list(reversed(b)) if label == "오피셜" else b
-        rep = min(seq, key=cred)       # 안정 선택 — 동률이면 seq 순서상 첫 기사
+        # 뒤집어 넣어 동률에서 늦은 기사가 이기게 한다 (min 은 안정 선택 — 첫 최소값).
+        rep = min(reversed(b), key=cred)
         out.append({"row": rep["row"], "stage": rep["stage"], "count": len(b)})
     return out
 

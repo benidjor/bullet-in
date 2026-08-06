@@ -73,7 +73,7 @@ def test_stage_ladder_merges_negotiating_and_medical_into_one_line():
     entries = [{"row": _row(1, "h1", tier=4), "stage": "negotiating"},
                {"row": _row(2, "h2", tier=4), "stage": "medical"}]
     [line] = stage_ladder(entries)
-    assert line["row"]["content_hash"] == "h1"   # 동률 → 이른 기사
+    assert line["row"]["content_hash"] == "h2"   # 동률 → 늦은 기사 (2026-08-07 개정)
     assert line["count"] == 2                    # 협상 중 한 줄로 합산
 
 
@@ -86,15 +86,16 @@ def test_stage_ladder_rep_is_highest_credibility_and_missing_tier_is_lowest():
     assert line["count"] == 3
 
 
-def test_stage_ladder_tie_official_latest_others_earliest():
-    # 공홈은 합의 때 · 확정 때 두 번 올린다 — 마지막 공지가 현재 상태다 (스펙 §4.2).
+def test_stage_ladder_tie_picks_latest_in_every_group():
+    # 동률이면 전 묶음 공통으로 늦은 기사다 (스펙 §4.2 개정 2026-08-07) — 줄의 날짜가
+    # 그 단계의 최신 보도를 가리키게 한다. 오피셜의 "마지막 공지" 규칙도 여기 포함된다.
     entries = [{"row": _row(4, "ag1", tier=1), "stage": "agreed"},
                {"row": _row(14, "off1", tier=0), "stage": "official"},
                {"row": _row(14, "ag2", tier=1), "stage": "agreed"},
                {"row": _row(16, "off2", tier=0), "stage": "official"}]
     lines = stage_ladder(entries)
-    assert lines[0]["row"]["content_hash"] == "off2"   # 오피셜 — 동률이면 늦은 기사
-    assert lines[1]["row"]["content_hash"] == "ag1"    # 나머지 — 동률이면 이른 기사
+    assert lines[0]["row"]["content_hash"] == "off2"   # 오피셜 — 늦은 공지
+    assert lines[1]["row"]["content_hash"] == "ag2"    # 나머지 묶음도 늦은 기사
 
 
 def test_stage_ladder_skips_other_and_blank():
