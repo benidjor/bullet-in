@@ -130,8 +130,12 @@ ls -l --time-style=+%H:%M site/index.html site/players.html site/ops.html
 
 ```bash
 git log --oneline -3                       # pull 로 새로 들어온 커밋의 성격 확인
-ps aux | grep -E '[b]ullet_in|[b]ackfill'  # 돌고 있는 배치가 없는지 확인
+ps aux | grep -E '[b]ullet_in|[b]ackfill' | grep -v "bash -c"  # 돌고 있는 배치가 없는지 확인
 ```
+
+두 번째 grep (`-v "bash -c"`) 은 자기 오탐 방지다.
+이 점검을 `ssh <호스트> '<명령 모음>'` 으로 실행하면 감싼 bash 의 명령줄에 "bullet_in" 문자열 (뒤따르는 재생성 스니펫의 import) 이 들어 있어, `[b]` 트릭으로 grep 자신은 제외해도 그 bash 가 걸린다.
+2026-08-07 사다리 배포에서 실제로 이 오탐으로 반영이 한 번 중단됐다.
 
 새 커밋이 스키마 · 분류 체계를 바꾸는 것이면 그 트랙의 롤아웃 (소급 배치) 이 끝났는지 먼저 확인한다.
 확인 목적의 배포라면 아예 미뤄도 된다 — 다음 정기 회차가 렌더 · 배포까지 한다.
