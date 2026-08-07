@@ -113,9 +113,11 @@ def filter_miss_suspects(rejects: list[dict], now: datetime,
             continue
         try:
             dt = datetime.fromisoformat(pub.replace("Z", "+00:00"))
-        except ValueError:
-            continue
-        if (now - dt).total_seconds() > recent_hours * 3600:
+            if (now - dt).total_seconds() > recent_hours * 3600:
+                continue
+        except (ValueError, TypeError):
+            # TypeError: naive datetime (오프셋 없는 published) 를 aware now 와 뺄 때
+            # (2026-08-07 재현 — run.py 관측 루프 전멸로 이어짐)
             continue
         if _TRANSFER_TITLE_RE.search(r.get("title") or ""):
             out.append(r)

@@ -171,3 +171,18 @@ def test_filter_miss_suspects_pattern_and_recency():
          "published": None, "taxonomies": ["Men", "News"]},
     ]
     assert [s["url"] for s in filter_miss_suspects(rejects, now)] == ["u1"]
+
+
+def test_filter_miss_suspects_skips_naive_published_without_raising():
+    # published 가 오프셋 없는 naive ISO 문자열이면 (now - dt) 가 TypeError —
+    # 그 항목만 건너뛰고 나머지는 정상 판정한다 (재현 사례: run.py 관측 루프 전멸 방지)
+    from datetime import datetime, timezone
+    from bullet_in.quality import filter_miss_suspects
+    now = datetime(2026, 8, 7, 6, 0, 0, tzinfo=timezone.utc)
+    rejects = [
+        {"title": "Player joins Everton", "url": "naive",
+         "published": "2026-08-07T01:00:00", "taxonomies": ["Men", "News"]},
+        {"title": "Christian Norgaard joins Everton", "url": "aware",
+         "published": "2026-08-07T01:00:00.000Z", "taxonomies": ["Men", "News"]},
+    ]
+    assert [s["url"] for s in filter_miss_suspects(rejects, now)] == ["aware"]
