@@ -2,7 +2,7 @@
 Description=bullet-in watchlist batch (linked-player rotation search -> raw/mart)
 Wants=docker.service network-online.target
 After=docker.service network-online.target
-OnFailure=bullet-in-fail-notify.service
+OnFailure=bullet-in-fail-notify@%n.service
 
 [Service]
 Type=oneshot
