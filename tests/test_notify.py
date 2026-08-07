@@ -239,14 +239,15 @@ def _stale_bbc():
 
 
 def test_build_freshness_alert_zero_candidates_keeps_hint():
-    # 후보 0건 = 수집 끊김 의심 — 이때만 어댑터 힌트가 근거를 얻는다.
-    # Counter 는 0건 소스를 키로 안 만들므로 키 부재 = 0건으로 읽어야 한다.
+    # 후보 0건은 관측 사실만 적는다 — 원인 추정 (수집 끊김 의심) 은 스펙
+    # 2026-08-07 §3.2 로 제거 (arsenal_official 오진 사례). 힌트 줄은 유지.
     checked, records = _stale_bbc()
     alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={}, fetch_errors={})
     field = alert["fields"][0]
-    assert "- 이번 회차 후보 0건 — 수집 끊김 의심" in field["value"]
+    assert "- 이번 회차 후보 0건" in field["value"]
+    assert "수집 끊김 의심" not in field["value"]
     assert "- 원인 후보: 셀렉터 드리프트 · 사이트 개편" in field["value"]
 
 

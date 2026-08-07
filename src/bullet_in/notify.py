@@ -149,7 +149,7 @@ def build_freshness_alert(records, default_hours: float, *,
             lines.append(f"이번 회차 fetch 오류: {fetch_errors[b.source_id][:120]}")
         else:
             if candidates is not None:
-                lines.append("이번 회차 후보 0건 — 수집 끊김 의심")
+                lines.append("이번 회차 후보 0건")
             if hint:
                 lines.append(f"원인 후보: {hint}")
         fields.append({"name": _source_field_name(b.source_id, sources),
