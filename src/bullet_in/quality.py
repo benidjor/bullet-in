@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from statistics import mean, pstdev
@@ -62,6 +63,8 @@ def evaluate_freshness(watermarks: dict[str, datetime | None], now: datetime,
     for sid in sorted(watermarks):
         wm = watermarks[sid]
         thr = float(overrides.get(sid, default_hours))
+        if thr <= 0:
+            continue   # 감시 제외 (freshness_hours: 0) — 이벤트 구동 소스 (스펙 2026-08-07 §3.2)
         if wm is None:
             out.append(SourceFreshness(sid, None, thr, None, False))
             continue
@@ -91,3 +94,31 @@ def candidate_cliffs(today: dict[str, int], previous: dict[str, int]) -> list[st
     추가 이력 조건을 두지 않는다."""
     return sorted(sid for sid, n in previous.items()
                   if n > 0 and today.get(sid, 0) == 0)
+
+
+# 이적성 제목 패턴 — 96h 창 47건 실측에서 오탐 0 (스펙 2026-08-07 §3.3)
+_TRANSFER_TITLE_RE = re.compile(r"\b(joins|signs|transfer|loan)\b", re.IGNORECASE)
+
+
+def filter_miss_suspects(rejects: list[dict], now: datetime,
+                         recent_hours: float = 6.0) -> list[dict]:
+    """Men + News 비채택 기사 중 이적 관련 제목 + 최근 발행만 추린다 (관측 전용).
+
+    6시간 창은 3시간 회차 기준 기사당 최대 2회 발화로 도배를 막는 무상태 설계.
+    발행 시각이 없거나 파싱 불가면 최근 여부를 알 수 없어 제외한다."""
+    out: list[dict] = []
+    for r in rejects:
+        pub = r.get("published")
+        if not pub:
+            continue
+        try:
+            dt = datetime.fromisoformat(pub.replace("Z", "+00:00"))
+            if (now - dt).total_seconds() > recent_hours * 3600:
+                continue
+        except (ValueError, TypeError):
+            # TypeError: naive datetime (오프셋 없는 published) 를 aware now 와 뺄 때
+            # (2026-08-07 재현 — run.py 관측 루프 전멸로 이어짐)
+            continue
+        if _TRANSFER_TITLE_RE.search(r.get("title") or ""):
+            out.append(r)
+    return out

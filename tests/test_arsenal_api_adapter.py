@@ -72,6 +72,27 @@ def test_taxonomy_filter_rules_via_getarticle():
     assert adapter.coverage == {"candidates": 6, "men_tagged": 4, "accepted": 2}
 
 @respx.mock
+def test_men_news_rejects_records_unaccepted_men_articles():
+    # 관측용: Men + News 인데 채택 안 된 기사만 남긴다 (수집 동작 무변경 · 스펙 §3.3)
+    entries = [_sitemap_entry(f"a-{g}") for g in
+               ["aOK1ok1ok1ok", "aNO2no2no2no", "aNO3no3no3no", "aNO4no4no4no"]]
+    _mock_backend(_sitemap(entries), {
+        "aOK1ok1ok1ok": _gql_article("Terms agreed", ["Transfer news", "Men", "News"]),
+        "aNO2no2no2no": _gql_article("Women signing", ["Transfer news", "Women", "News"]),
+        "aNO3no3no3no": _gql_article("Norgaard joins Everton", ["Men", "News"],
+                                     published="2026-08-05T21:09:44.542Z"),
+        "aNO4no4no4no": _gql_article("Transfer video", ["Transfer news", "Men", "Video"],
+                                     article_type="Video")})
+    adapter = ArsenalApiAdapter("arsenal_official", window_hours=24 * 365)
+    items = asyncio.run(adapter.fetch())
+    assert [i.raw_payload["title"] for i in items] == ["Terms agreed"]
+    assert [r["title"] for r in adapter.men_news_rejects] == ["Norgaard joins Everton"]
+    r = adapter.men_news_rejects[0]
+    assert r["url"].endswith("-aNO3no3no3no")
+    assert r["published"] == "2026-08-05T21:09:44.542Z"
+    assert r["taxonomies"] == ["Men", "News"]
+
+@respx.mock
 def test_getarticle_null_is_isolated_and_others_survive(caplog):
     entries = [_sitemap_entry("good-aOK1ok1ok1ok"), _sitemap_entry("gone-aNO1no1no1no")]
     _mock_backend(_sitemap(entries), {

@@ -149,7 +149,7 @@ def build_freshness_alert(records, default_hours: float, *,
             lines.append(f"이번 회차 fetch 오류: {fetch_errors[b.source_id][:120]}")
         else:
             if candidates is not None:
-                lines.append("이번 회차 후보 0건 — 수집 끊김 의심")
+                lines.append("이번 회차 후보 0건")
             if hint:
                 lines.append(f"원인 후보: {hint}")
         fields.append({"name": _source_field_name(b.source_id, sources),
@@ -206,6 +206,33 @@ def build_coverage_alert(breaches: list[str], coverage: dict, *, run_id: str) ->
     return {"title": "🏟️ 공홈 커버리지 경고 — arsenal_official",
             "description": "수집 창 퍼널 불변식 위반 — 조용한 기아 신호",
             "color": COLOR_ANOMALY, "fields": fields}
+
+
+def build_filter_miss_alert(suspects: list[dict], *, run_id: str) -> dict:
+    """공홈 창 후보 중 이적 관련 제목인데 수집되지 않은 기사 알림 (스펙 2026-08-07 §3.3).
+
+    실측 사례 (2026-08-05 Norgaard): 이적 발표에 Transfer news 태그가 빠져
+    태그 기준 수집에서 빠졌다. 원인 추정 없이 제목 · 태그 · 링크만 싣는다."""
+    fields = []
+    for s in suspects:
+        lines = [f"- 태그: {' · '.join(s.get('taxonomies') or []) or '-'}"]
+        pub = s.get("published")
+        if pub:
+            try:
+                dt = datetime.fromisoformat(pub.replace("Z", "+00:00"))
+                lines.append(f"- 발행: {_discord_ts(dt.replace(tzinfo=None), 'R')}")
+            except ValueError:
+                pass
+        if s.get("url"):
+            lines.append(f"- [기사]({s['url']})")
+        fields.append({"name": s.get("title") or "(제목 없음)",
+                       "value": "\n".join(lines), "inline": False})
+    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    return {"title": (f"🔍 공홈 이적 관련 기사 미수집 — {len(suspects)}건"),
+            "description": ("arsenal.com 새 기사 제목에 이적 관련 표현이 있는데 "
+                            "이번 회차에 수집되지 않았습니다.\n"
+                            "현재 수집 기준은 기사 태그 (Transfer news · Contract news) 입니다."),
+            "color": COLOR_ANOMALY, "fields": fields, "url": RUNBOOK_ANOMALY}
 
 
 def build_candidate_alert(candidates: list[dict], *, run_id: str) -> dict:

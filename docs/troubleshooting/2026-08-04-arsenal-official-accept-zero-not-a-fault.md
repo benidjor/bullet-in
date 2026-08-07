@@ -134,3 +134,8 @@ asyncio.run(main())
 - 어댑터: `src/bullet_in/adapters/arsenal_api.py` · 불변식: `src/bullet_in/quality.py` 의 `evaluate_coverage`.
 - 발견 경로 전환: PR #128 (sitemap) · 필터 재설계: PR #68.
 - 선행 사례: `docs/troubleshooting/2026-07-24-arsenal-official-filter-starvation.md`.
+
+## 후기 (2026-08-07)
+
+- "채택 0 은 산술적으로 맞다" 는 2026-08-05 부로 깨졌다 — 이적 발표에 Transfer news 태그가 빠진 실사례 발생.
+- 상세 · 대응은 `2026-08-07-arsenal-official-transfer-tag-omission.md`.

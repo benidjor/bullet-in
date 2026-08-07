@@ -144,3 +144,45 @@ def test_candidate_cliffs_returns_empty_when_no_previous_run():
 def test_candidate_cliffs_sorted_for_stable_alert_order():
     previous = {"skysports": 5, "fmkorea": 10}
     assert candidate_cliffs({}, previous) == ["fmkorea", "skysports"]
+
+
+def test_evaluate_freshness_zero_override_excludes_source():
+    # freshness_hours: 0 = 감시 제외 (스펙 2026-08-07 §3.2) — 이벤트 구동 소스는
+    # 정상 공백 상한이 없어 유한 임계가 성립하지 않는다 (arsenal_official).
+    now = datetime(2026, 8, 7, 6, 0, 0)
+    wm = {"arsenal_official": now - timedelta(hours=360), "bbc_sport": now}
+    records = evaluate_freshness(wm, now, 48.0, {"arsenal_official": 0.0})
+    assert [r.source_id for r in records] == ["bbc_sport"]
+
+
+def test_filter_miss_suspects_pattern_and_recency():
+    # 이적 관련 제목 + 발행 6시간 이내만 — 옛 기사 (lastmod 부활) 와 무관 제목 제외
+    from datetime import datetime, timezone
+    from bullet_in.quality import filter_miss_suspects
+    now = datetime(2026, 8, 6, 0, 0, 0, tzinfo=timezone.utc)
+    rejects = [
+        {"title": "Christian Norgaard joins Everton", "url": "u1",
+         "published": "2026-08-05T21:09:44.542Z", "taxonomies": ["Men", "News"]},
+        {"title": "Match Categories", "url": "u2",
+         "published": "2026-08-05T22:00:00.000Z", "taxonomies": ["Men", "News"]},
+        {"title": "Old signs for Arsenal", "url": "u3",
+         "published": "2019-05-20T13:25:27.000Z", "taxonomies": ["Men", "News"]},
+        {"title": "Player signs new deal", "url": "u4",
+         "published": None, "taxonomies": ["Men", "News"]},
+    ]
+    assert [s["url"] for s in filter_miss_suspects(rejects, now)] == ["u1"]
+
+
+def test_filter_miss_suspects_skips_naive_published_without_raising():
+    # published 가 오프셋 없는 naive ISO 문자열이면 (now - dt) 가 TypeError —
+    # 그 항목만 건너뛰고 나머지는 정상 판정한다 (재현 사례: run.py 관측 루프 전멸 방지)
+    from datetime import datetime, timezone
+    from bullet_in.quality import filter_miss_suspects
+    now = datetime(2026, 8, 7, 6, 0, 0, tzinfo=timezone.utc)
+    rejects = [
+        {"title": "Player joins Everton", "url": "naive",
+         "published": "2026-08-07T01:00:00", "taxonomies": ["Men", "News"]},
+        {"title": "Christian Norgaard joins Everton", "url": "aware",
+         "published": "2026-08-07T01:00:00.000Z", "taxonomies": ["Men", "News"]},
+    ]
+    assert [s["url"] for s in filter_miss_suspects(rejects, now)] == ["aware"]

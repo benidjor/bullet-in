@@ -239,14 +239,15 @@ def _stale_bbc():
 
 
 def test_build_freshness_alert_zero_candidates_keeps_hint():
-    # 후보 0건 = 수집 끊김 의심 — 이때만 어댑터 힌트가 근거를 얻는다.
-    # Counter 는 0건 소스를 키로 안 만들므로 키 부재 = 0건으로 읽어야 한다.
+    # 후보 0건은 관측 사실만 적는다 — 원인 추정 (수집 끊김 의심) 은 스펙
+    # 2026-08-07 §3.2 로 제거 (arsenal_official 오진 사례). 힌트 줄은 유지.
     checked, records = _stale_bbc()
     alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={}, fetch_errors={})
     field = alert["fields"][0]
-    assert "- 이번 회차 후보 0건 — 수집 끊김 의심" in field["value"]
+    assert "- 이번 회차 후보 0건" in field["value"]
+    assert "수집 끊김 의심" not in field["value"]
     assert "- 원인 후보: 셀렉터 드리프트 · 사이트 개편" in field["value"]
 
 
@@ -412,6 +413,22 @@ def test_non_webhook_httpx_log_untouched(caplog):
         logger.info('HTTP Request: GET https://www.fmkorea.com/10167419258 "HTTP/1.1 200 OK"')
     assert "10167419258" in caplog.text
     assert "[REDACTED]" not in caplog.text
+
+
+def test_build_filter_miss_alert_embed_shape():
+    # 관측 사실만 싣는다 — 원인 추정 · 내부 용어 금지 (스펙 2026-08-07 §3.3)
+    suspects = [{"title": "Christian Norgaard joins Everton",
+                 "url": "https://www.arsenal.com/news/x-a7fZT9g6dECY",
+                 "published": "2026-08-05T21:09:44.542Z",
+                 "taxonomies": ["Men", "News", "Main"]}]
+    alert = notify.build_filter_miss_alert(suspects, run_id="3f2a9c12abcd")
+    assert "1건" in alert["title"]
+    f = alert["fields"][0]
+    assert f["name"] == "Christian Norgaard joins Everton"
+    assert "- 태그: Men · News · Main" in f["value"]
+    assert "[기사](https://www.arsenal.com/news/x-a7fZT9g6dECY)" in f["value"]
+    assert "의심" not in alert["description"]   # 원인 추정 어휘 금지
+    assert alert["fields"][-1]["value"] == "run 3f2a9c12"
 
 
 def test_cliff_alert_reports_cycle_outcome_without_claiming_normal():

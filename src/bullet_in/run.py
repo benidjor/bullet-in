@@ -24,7 +24,7 @@ from bullet_in import transfer_stage
 from bullet_in import roster
 from bullet_in.serve.render import write_site, write_ops, unmatched_articles
 from bullet_in.quality import (success_rate, volume_anomalies, evaluate_freshness,
-                               evaluate_coverage, candidate_cliffs)
+                               evaluate_coverage, candidate_cliffs, filter_miss_suspects)
 from bullet_in import notify
 
 GEMINI_MODEL = "gemini-3.1-flash-lite"
@@ -187,6 +187,19 @@ async def main(concurrency: int):
         if breaches:
             notify.send_alert(**notify.build_coverage_alert(
                 breaches, a.coverage, run_id=run_id))
+
+    # 채택 누락 관측 (스펙 2026-08-07 §3.3): 이적 관련 제목인데 비채택이면 알림만 —
+    # 수집 · 필터 판단은 바꾸지 않는다 (제품 결정 대기). 판정 · 발송 실패가 회차를
+    # 멈추지 않게 감싼다 (후보 절벽 알림과 같은 격리 패턴).
+    try:
+        for a in adapters:
+            rejects = getattr(a, "men_news_rejects", None) or []
+            suspects = filter_miss_suspects(rejects, datetime.now(timezone.utc))
+            if suspects:
+                notify.send_alert(**notify.build_filter_miss_alert(suspects, run_id=run_id))
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "관측 알림 판정 실패 — 이번 회차 건너뜀 (수집에는 영향 없음)", exc_info=True)
 
     for it in raw:
         it.content_hash = content_hash(
