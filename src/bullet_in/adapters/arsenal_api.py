@@ -75,6 +75,7 @@ class ArsenalApiAdapter:
         self.source_id = source_id
         self.window_hours = window_hours
         self.coverage: dict = {}
+        self.men_news_rejects: list[dict] = []   # 관측용 — Men + News 인데 비채택 (스펙 2026-08-07 §3.3)
 
     async def _gql(self, client: httpx.AsyncClient, operation: str,
                    query: str, variables: dict) -> dict:
@@ -88,6 +89,7 @@ class ArsenalApiAdapter:
         out: list[RawItem] = []
         men = 0
         urls: list[str] = []
+        self.men_news_rejects = []
         async with httpx.AsyncClient(timeout=20,
                                      headers={"User-Agent": "bullet-in/0.1"}) as c:
             r = await c.get(SITEMAP_URL)
@@ -111,6 +113,12 @@ class ArsenalApiAdapter:
                 if "Men" in (art.get("taxonomies") or []):
                     men += 1
                 if not _accept(art):
+                    tax = art.get("taxonomies") or []
+                    if art.get("articleType") == "News" and "Men" in tax:
+                        self.men_news_rejects.append({
+                            "title": art.get("title"), "url": url,
+                            "published": art.get("publicationDate"),
+                            "taxonomies": tax})
                     continue
                 payload = {"title": art.get("title"),
                            "published": art.get("publicationDate"),

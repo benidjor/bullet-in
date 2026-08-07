@@ -415,6 +415,22 @@ def test_non_webhook_httpx_log_untouched(caplog):
     assert "[REDACTED]" not in caplog.text
 
 
+def test_build_filter_miss_alert_embed_shape():
+    # 관측 사실만 싣는다 — 원인 추정 · 내부 용어 금지 (스펙 2026-08-07 §3.3)
+    suspects = [{"title": "Christian Norgaard joins Everton",
+                 "url": "https://www.arsenal.com/news/x-a7fZT9g6dECY",
+                 "published": "2026-08-05T21:09:44.542Z",
+                 "taxonomies": ["Men", "News", "Main"]}]
+    alert = notify.build_filter_miss_alert(suspects, run_id="3f2a9c12abcd")
+    assert "1건" in alert["title"]
+    f = alert["fields"][0]
+    assert f["name"] == "Christian Norgaard joins Everton"
+    assert "- 태그: Men · News · Main" in f["value"]
+    assert "[기사](https://www.arsenal.com/news/x-a7fZT9g6dECY)" in f["value"]
+    assert "의심" not in alert["description"]   # 원인 추정 어휘 금지
+    assert alert["fields"][-1]["value"] == "run 3f2a9c12"
+
+
 def test_cliff_alert_reports_cycle_outcome_without_claiming_normal():
     """success_rate 가 1 미만인데 '정상 종료' 라고 쓰면 숫자와 말이 어긋난다."""
     embed = notify.build_cliff_alert(

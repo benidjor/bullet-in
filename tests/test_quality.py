@@ -153,3 +153,21 @@ def test_evaluate_freshness_zero_override_excludes_source():
     wm = {"arsenal_official": now - timedelta(hours=360), "bbc_sport": now}
     records = evaluate_freshness(wm, now, 48.0, {"arsenal_official": 0.0})
     assert [r.source_id for r in records] == ["bbc_sport"]
+
+
+def test_filter_miss_suspects_pattern_and_recency():
+    # 이적 관련 제목 + 발행 6시간 이내만 — 옛 기사 (lastmod 부활) 와 무관 제목 제외
+    from datetime import datetime, timezone
+    from bullet_in.quality import filter_miss_suspects
+    now = datetime(2026, 8, 6, 0, 0, 0, tzinfo=timezone.utc)
+    rejects = [
+        {"title": "Christian Norgaard joins Everton", "url": "u1",
+         "published": "2026-08-05T21:09:44.542Z", "taxonomies": ["Men", "News"]},
+        {"title": "Match Categories", "url": "u2",
+         "published": "2026-08-05T22:00:00.000Z", "taxonomies": ["Men", "News"]},
+        {"title": "Old signs for Arsenal", "url": "u3",
+         "published": "2019-05-20T13:25:27.000Z", "taxonomies": ["Men", "News"]},
+        {"title": "Player signs new deal", "url": "u4",
+         "published": None, "taxonomies": ["Men", "News"]},
+    ]
+    assert [s["url"] for s in filter_miss_suspects(rejects, now)] == ["u1"]
