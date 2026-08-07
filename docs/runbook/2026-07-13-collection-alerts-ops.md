@@ -42,6 +42,11 @@
 - **🚨 fmkorea 선수 검색 실패 (빨강)** — 이적설 선수 명단을 이름으로 검색하는 배치에서 그 차례 전원이 실패.
   새로 가져온 글이 0건이고 검색 순서가 전진하지 않아 다음 차례에 같은 선수들을 다시 시도한다.
   사람이 되돌릴 것은 없다.
+- **🔍 공홈 이적 관련 기사 미수집 (주황)** — 관측 전용 알림 (스펙 2026-08-07 §3.3).
+  arsenal_official 창 후보 중 `Men` · `News` 는 있는데 이적 태그 (`Transfer news` · `Contract news`) 가 없어 비채택된 기사 가운데,
+  제목이 이적성 표현 (`joins` · `signs` · `transfer` · `loan`) 이고 발행이 6시간 이내인 것만 추려서 온다.
+  기사별 필드에 태그 · 발행 시각 · 링크만 실리고, 채택 여부 판단은 담지 않는다.
+  제목 클릭은 이 런북으로 연결된다.
 - **실물 캡처** — 개편 수집량 embed: `docs/assets/discord-alert-embed-after.png` · 개편 전: `docs/assets/discord-alert-embed-before.png`.
 
 ## 대응
@@ -59,6 +64,11 @@
   대개 셀렉터 · feed_url 드리프트다.
 - **🚨 선수 검색 실패 알림** — 같은 선수들을 다음 차례가 재시도하므로 한 번은 지켜본다.
   연속으로 오면 fmkorea 접촉 경로 (터널 · 프록시) 를 확인한다.
+- **🔍 채택 누락 알림** — 링크를 열어 기사가 실제 1군 이적 · 계약 공식 발표인지 먼저 확인한다.
+  맞다고 판단해도 이 알림이 수집 여부를 대신 정하지 않는다 — 현재 채택 기준 (Men + 이적 태그) 을 그대로 둘지,
+  `Club` 태그 이적 정리 기사까지 받을지는 제품 판단이다.
+  놓친 기사를 소급 수집할지는 `backfill_arsenal.py` 검토가 선행돼야 한다.
+  실측 사례 · 원인은 `docs/troubleshooting/2026-08-07-arsenal-official-transfer-tag-omission.md` 참조.
 
 ### 알림에 적힌 fmkorea 접촉 시각을 확인할 때
 
@@ -164,5 +174,7 @@ EOF
 ## 참고
 
 - PR #34 · spec/plan `docs/superpowers/{specs,plans}/2026-07-13-slo6-collection-alerts*`.
-- 함정: `docs/troubleshooting/2026-07-13-alert-exception-swallow-gap.md` (예외 삼킴) · `docs/troubleshooting/2026-07-13-sparse-source-counts-trend-bias.md` (희소 표현 추세 왜곡).
+- 채택 누락 관측 알림: `docs/superpowers/specs/2026-08-07-alert-f2-unit-attribution-and-observability-design.md` §3.3.
+- 함정: `docs/troubleshooting/2026-07-13-alert-exception-swallow-gap.md` (예외 삼킴) · `docs/troubleshooting/2026-07-13-sparse-source-counts-trend-bias.md` (희소 표현 추세 왜곡) ·
+  `docs/troubleshooting/2026-08-07-arsenal-official-transfer-tag-omission.md` (채택 필터 태그 누락) .
 - 로드맵: `docs/superpowers/2026-06-28-v1-completion-roadmap.md` (Tier 3 · SLO-6) .

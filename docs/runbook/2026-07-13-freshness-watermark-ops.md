@@ -19,6 +19,11 @@
 - **제목 클릭** — 이 런북으로 연결된다.
 - **무알림** — 모든 소스가 임계 안이거나, 워터마크 자체가 없는 소스뿐인 경우.
   워터마크 없음 ( 기사 0건 ) 은 "신규 추가" 와 "처음부터 죽음" 을 구분할 수 없어 알림에서 제외한다 — 이 케이스는 SLO-6 · 에러 로그가 담당.
+- **감시 제외 소스 ( `freshness_hours: 0` )** — 판정 루프 자체에서 빠진다.
+  stale 이든 아니든 필드에 나타나지 않고, `source_freshness` 이력에도 안 남는다 ( 무알림과 달리 완전히 대상 밖 ) .
+  이벤트 구동이라 정상 공백에 상한이 없는 소스에 쓴다 — 유한한 임계는 어떤 값을 골라도 비수기 정상 공백에서 오탐이 재발한다 ( 스펙 `docs/superpowers/specs/2026-08-07-alert-f2-unit-attribution-and-observability-design.md` §1.2 · §3.2 ) .
+- **필드 문구는 관측 사실만** — "이번 회차 후보 0건" 처럼 경과만 적고, 원인은 추정하지 않는다.
+  2026-08-07 이전에는 "수집 끊김 의심" 을 붙였으나, arsenal_official 이 정상 공백에도 매 회차 발화해 원인 문구를 뺐다.
 - **실물 캡처** — 개편 embed: `docs/assets/discord-alert-embed-after.png` · 개편 전: `docs/assets/discord-alert-embed-before.png`.
 
 ## 대응 — 원인 → 처방 진단표
@@ -45,6 +50,9 @@
   일반 언론 소스의 주말 · 뉴스 공백을 견디는 보수적 기본값이다.
 - **소스별 `freshness_hours` override** — 소스 항목에 키를 추가하면 그 소스만 좁아진다.
   현재 `x_afcstuff: 24` ( X aggregator 는 매일 다건 포스팅 → 24h 무소식이면 이상 ).
+- **`freshness_hours: 0` = 감시 제외** — 좁히는 override 와 달리 판정 자체를 끈다.
+  적용 사례: `arsenal_official` — 1군 이적 · 계약 공식 발표에만 반응하는 이벤트 구동 소스라, 채택 0 이 며칠이고 이어져도 정상일 수 있다.
+  대신 채택 필터가 실제 발표를 놓쳤는지는 `docs/runbook/2026-07-13-collection-alerts-ops.md` 의 채택 누락 관측 알림이 담당한다.
 - **오탐이 잦으면** — 해당 소스의 실제 발행 간격을 `source_freshness` 이력으로 확인하고 override 를 늘린다.
   `SELECT source_id, MAX(age_hours) FROM source_freshness GROUP BY source_id` 로 평시 최대 경과를 본다.
 - **오프시즌** — 이적 뉴스 소스는 시즌 중 대비 확연히 뜸해진다.
@@ -80,6 +88,8 @@ uv run pytest tests/integration/test_source_freshness.py -v  # 테이블 적재 
 ## 참고
 
 - spec · plan: `docs/superpowers/{specs,plans}/2026-07-13-slo5-freshness-watermark*`.
-- 함정: `docs/troubleshooting/2026-07-13-freshness-clock-mixing-gap.md` (시계 혼합 · UTC 고정 경위).
+- 감시 제외 규약 · 문구 정비: `docs/superpowers/specs/2026-08-07-alert-f2-unit-attribution-and-observability-design.md` §3.2.
+- 함정: `docs/troubleshooting/2026-07-13-freshness-clock-mixing-gap.md` (시계 혼합 · UTC 고정 경위) ·
+  `docs/troubleshooting/2026-08-07-arsenal-official-transfer-tag-omission.md` (arsenal_official 감시 제외 경위) .
 - SLO-6 알림 운영: `docs/runbook/2026-07-13-collection-alerts-ops.md`.
 - 로드맵: `docs/superpowers/2026-06-28-v1-completion-roadmap.md` ( Tier 3 · SLO-5 ).
