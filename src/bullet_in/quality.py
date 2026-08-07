@@ -62,6 +62,8 @@ def evaluate_freshness(watermarks: dict[str, datetime | None], now: datetime,
     for sid in sorted(watermarks):
         wm = watermarks[sid]
         thr = float(overrides.get(sid, default_hours))
+        if thr <= 0:
+            continue   # 감시 제외 (freshness_hours: 0) — 이벤트 구동 소스 (스펙 2026-08-07 §3.2)
         if wm is None:
             out.append(SourceFreshness(sid, None, thr, None, False))
             continue

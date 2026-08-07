@@ -144,3 +144,12 @@ def test_candidate_cliffs_returns_empty_when_no_previous_run():
 def test_candidate_cliffs_sorted_for_stable_alert_order():
     previous = {"skysports": 5, "fmkorea": 10}
     assert candidate_cliffs({}, previous) == ["fmkorea", "skysports"]
+
+
+def test_evaluate_freshness_zero_override_excludes_source():
+    # freshness_hours: 0 = 감시 제외 (스펙 2026-08-07 §3.2) — 이벤트 구동 소스는
+    # 정상 공백 상한이 없어 유한 임계가 성립하지 않는다 (arsenal_official).
+    now = datetime(2026, 8, 7, 6, 0, 0)
+    wm = {"arsenal_official": now - timedelta(hours=360), "bbc_sport": now}
+    records = evaluate_freshness(wm, now, 48.0, {"arsenal_official": 0.0})
+    assert [r.source_id for r in records] == ["bbc_sport"]

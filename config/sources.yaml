@@ -16,7 +16,7 @@ sources:
     # 2026-07 리스트 피드 동결 → sitemap 발견 (48h 창) + GetArticle 전환 (spec 2026-07-24).
     # 필터는 어댑터 내 taxonomy 판별 (Transfer news · Contract news + Men)
     config: {}
-    freshness_hours: 168   # 저빈도 소스 (총 6행 · 2026-07-30 실측) — 48h 는 소음
+    freshness_hours: 0     # 신선도 감시 제외 — 이벤트 구동 (1군 발표에만 채택) · 스펙 2026-08-07 §3.2
     enabled: true
   - source_id: bbc_sport
     display_name: BBC Sport
