@@ -27,6 +27,30 @@ RESUMMARY_PROMPT = (
     'ONLY JSON: {{"summary_ko":"...","summary3_ko":["...","...","..."]}}'
     "\n\n제목: {title}\n본문: {body}")
 
+# 세 프롬프트 (TRANSLATE · PARAPHRASE · EXTRACT_PLAYERS) 공통 players 조항 —
+# 근거 조건 · 단계 정의의 정본은 스펙 2026-08-07-player-stage-reextraction-design.md §3.1.
+# 단계 정의는 STAGE_PROMPT 의 한 줄 요약 계열과 어긋나면 안 된다 (두 프롬프트가
+# 서로 다른 정의를 갖지 않게). 포함을 조인 만큼 (언급 인물 제외) 잘못 삼킬 이웃
+# (라운드업 당사자 · 근황 인물 · 잔류 협상) 을 보존 조항으로 함께 적는다.
+PLAYERS_CLAUSE = (
+    "- 이 기사가 직접 다루는 인물만 넣는다. 다음 인물은 넣지 않는다: "
+    "과거 사례 · 비교 · 순위 목록으로만 나열된 인물 (예: 역대 이적료 상위 선수들), "
+    "아스날과 무관한 타 구단 간 소식의 인물, 기사에 없는 인물.\n"
+    "- 단, 여러 아스날 관련 소식을 모은 기사면 각 소식의 당사자는 모두 넣고, "
+    "경기 · 근황 · 부상만 다뤄진 인물도 기사가 직접 다루면 stage 를 other 로 넣는다.\n"
+    "- 아스날 영입 대상 선수의 잔류 · 재계약 · 경쟁 구단 제안 소식도 그 선수의 "
+    "거취 관련이므로 넣는다. stage 는 아스날 건 기준으로 매기고, 기사가 아스날 건의 "
+    "진행을 말하지 않으면 other. 아스날 언급이 없어도 기사의 주제가 한 선수와 현 "
+    "소속 구단 사이의 잔류 · 재계약 건이면 그 선수를 넣고 stage 는 other 로 한다. "
+    "다른 구단이 그 선수의 영입을 추진하는 기사에는 적용하지 않는다.\n"
+    "- stage 는 이 기사가 그 선수에 대해 보도하는 진행 단계다. 기사 밖에서 아는 "
+    "그 선수의 상황으로 답하지 않는다. 이 기사가 그 선수의 진행 단계를 말하지 "
+    "않으면 other.\n"
+    "- stage 값: rumour(근거 약한 소문 · 연결설) · interest(구단의 실제 관심 · "
+    "스카우팅 · 후보 검토) · negotiating(이적료 · 조건 협상 중 · 제안 · 거절) · "
+    "personal_terms(선수-구단 개인 조건 합의) · medical(메디컬 테스트) · "
+    "agreed(구단 간 합의 · 딜 확정 · 임박) · other(이적 무관 · 경기 · 근황 · 단계 불명).\n")
+
 TRANSLATE_PROMPT = (
     "아스날 FC 축구 뉴스를 한국어로 번역·요약한다. 규칙:\n"
     "- title_ko: 한국 스포츠 기사 제목체로 간결하게 (명사형 위주).\n"
@@ -54,10 +78,9 @@ TRANSLATE_PROMPT = (
     "여러 명이면 기사 핵심 인물을 우선한다.\n"
     "- 고유명사는 통용 한글 표기(Arsenal=아스날).\n"
     "- players: 이 기사에서 아스날의 이적 · 거취 · 계약과 관련해 다뤄진 선수 · 감독 "
-    "목록. 아스날과 무관한 타 구단 간 소식의 인물은 넣지 않는다. 각 항목은 "
+    "목록. 각 항목은 "
     '{{"full_name":"영문 풀네임","ko":"이 기사에서 쓴 한글 표기","stage":"단계"}}.\n'
-    "- stage 는 rumour · interest · negotiating · personal_terms · medical · agreed · "
-    "other 중 하나. 경기 · 근황만 다뤄진 인물은 other, 기사에 없는 인물은 넣지 않는다.\n"
+    + PLAYERS_CLAUSE +
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],'
     '"body_ko":"...","players":[{{"full_name":"...","ko":"...","stage":"..."}}]}}'
     "\n\nTitle: {title}\nBody: {body}")
@@ -96,22 +119,27 @@ PARAPHRASE_PROMPT = (
     "'**굵게**', 인용 블록은 '> '. 원문에 없는 소제목을 만들지 않는다. "
     "원문에 없는 장식도 새로 만들지 않는다.\n"
     "- players: 이 기사에서 아스날의 이적 · 거취 · 계약과 관련해 다뤄진 선수 · 감독 "
-    "목록. 아스날과 무관한 타 구단 간 소식의 인물은 넣지 않는다. 각 항목은 "
+    "목록. 각 항목은 "
     '{{"full_name":"영문 풀네임","ko":"이 기사에서 쓴 한글 표기","stage":"단계"}}.\n'
-    "- stage 는 rumour · interest · negotiating · personal_terms · medical · agreed · "
-    "other 중 하나. 경기 · 근황만 다뤄진 인물은 other, 기사에 없는 인물은 넣지 않는다.\n"
+    + PLAYERS_CLAUSE +
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],'
     '"body_ko":"...","players":[{{"full_name":"...","ko":"...","stage":"..."}}]}}'
     "\n\nTitle: {title}\nBody: {body}")
 
+# 재추출 · 백필 경로 전용 — 확정 링크 명단 ({roster}) 을 재료로 줘서 "아스날 영입
+# 대상인가" 판단을 모델의 세계 지식이 아니라 검증된 재료로 근거화한다 (2026-08-08
+# 소표본 실측: 아스날 미언급 잔류 · 재계약 트윗은 문구만으로는 안정적으로 안 잡힘).
+# 수집 시점 경로 (TRANSLATE · PARAPHRASE) 의 명단 배선은 별도 후속 트랙.
 EXTRACT_PLAYERS_PROMPT = (
     "다음 아스날 FC 관련 기사에서 아스날의 이적 · 거취 · 계약과 관련해 "
     "다뤄진 선수 · 감독을 추출한다.\n"
     '각 항목은 {{"full_name":"영문 풀네임","ko":"이 기사에서 쓴 한글 표기",'
     '"stage":"단계"}}.\n'
-    "- stage 는 rumour · interest · negotiating · personal_terms · medical · agreed · "
-    "other 중 하나. 경기 · 근황만 다뤄진 인물은 other, 기사에 없는 인물은 넣지 않는다.\n"
-    "- 아스날과 무관한 타 구단 간 소식의 인물은 넣지 않는다.\n"
+    + PLAYERS_CLAUSE +
+    "- 아스날 이적 링크가 확정된 선수 명단: {roster}.\n"
+    "- 이 명단의 선수를 기사가 직접 다루면 — 잔류 · 재계약, 타 구단의 영입 접근, "
+    "근황 포함 — 기사에 아스날 언급이 없어도 넣는다. stage 는 아스날 건 기준으로 "
+    "매기고, 기사가 아스날 건의 진행을 말하지 않으면 other.\n"
     'ONLY JSON: {{"players":[...]}}'
     "\n\nTitle: {title}\nBody: {body}")
 
@@ -473,9 +501,14 @@ def partition_by_body_level(rows: list[dict]) -> tuple[list[dict], list[dict]]:
         (rewrite if r.get("body_level") == POST_BODY_LEVEL else trans).append(r)
     return rewrite, trans
 
-def extract_players_rows(rows: list[dict], client, model: str) -> dict[str, list]:
-    """백필 전용 (선수, 단계) 쌍 추출 — 번역 없이 players 필드만 (스펙 §7).
-    429 는 그 회차 즉시 중단, 파싱 실패는 행 스킵 (기존 enrich 루프와 동일 규칙)."""
+def extract_players_rows(rows: list[dict], client, model: str,
+                         roster: str = "(없음)") -> dict[str, list]:
+    """백필 · 재추출 전용 (선수, 단계) 쌍 추출 — 번역 없이 players 필드만 (스펙 §7).
+    재료는 body_source → body_excerpt → body_ko 폴백 (재추출 스펙 §3.2) — 트윗처럼
+    원문 본문이 빈 행은 번역 본문이라도 줘야 제목 한 줄 추출 (세계 지식 오염) 을 막는다.
+    roster 는 확정 링크 명단 문자열 ("한글이름(영문)" 나열) — 아스날 미언급 기사의
+    근거 재료 (프롬프트 주석 참조). 429 는 그 회차 즉시 중단, 파싱 실패는 행 스킵
+    (기존 enrich 루프와 동일 규칙)."""
     result: dict[str, list] = {}
     for r in rows:
         h = r["content_hash"]
@@ -484,7 +517,9 @@ def extract_players_rows(rows: list[dict], client, model: str) -> dict[str, list
                 model=model,
                 contents=EXTRACT_PLAYERS_PROMPT.format(
                     title=r["title_original"],
-                    body=r.get("body_source") or r.get("body_excerpt") or ""),
+                    body=r.get("body_source") or r.get("body_excerpt")
+                         or r.get("body_ko") or "",
+                    roster=roster),
                 config={"max_output_tokens": 1024,
                         "response_mime_type": "application/json"})
         except Exception as e:
