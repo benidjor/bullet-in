@@ -1,0 +1,142 @@
+hash	stored	verdict	expected_current	expected_newdef	note
+# verdict: ok=현행 정의 기준 정답 · miss=오분류 · edge=복수 허용 · body=본문 확인 필요
+# expected_newdef: 새 체계 (negotiating넓힘/agreed확정/done완료) 기준 목적지
+# --- interest (20) ---
+1a2cfff7	interest	ok	interest	interest	몽가 경쟁 초기 · dir in 수용
+2637cd61	interest	ok	interest	interest
+93899d04	interest	ok	interest	interest	타구단 · dir none ok
+6fbd962e	interest	miss	rumour	rumour	스왑딜설 일축 = 부인 → 도달 불명 rumour
+264b0752	interest	ok	interest	interest
+e3948770	interest	ok	interest	interest
+ba59d287	interest	ok	interest	interest
+bce55c87	interest	edge	interest|other	interest|other	주제가 레알-비니 재계약 제안 · 규칙 충돌 계열
+1180329e	interest	ok	interest	interest
+ffec815c	interest	ok	interest	interest	복합 기사
+f552be28	interest	edge	interest|rumour	interest|rumour	기대감 보도
+ed9f46f9	interest	ok	interest	interest
+25591d11	interest	ok	interest	interest	대안 후보 규칙 명시
+b57dedc7	interest	ok	interest	interest
+0fa1c374	interest	ok	interest	interest
+00ae52f6	interest	ok	interest	interest
+61f2f088	interest	edge	interest|negotiating	negotiating	무산 회고 · 마지막 단계 모호
+f94584ab	interest	ok	interest	interest
+6327b923	interest	ok	interest	interest	지불 의사만
+0c81e5a6	interest	edge	interest|other	interest|other	재계약 얽힘
+# --- rumour (20 · bbc_gossip 규칙 고정 11 포함) ---
+d30835af	rumour	ok	rumour	rumour	펀딧 추천
+6ef6fe04	rumour	edge	rumour|other	rumour|other	단일 주제 칼럼
+fe031baa	rumour	ok	rumour	rumour	펀딧 추천
+67171944	rumour	ok	rumour	rumour	펀딧 추천
+22423285	rumour	ok	rumour	rumour	gossip 규칙
+73315cbb	rumour	edge	rumour|other	rumour|other	잔류 발언 · out
+4baf27be	rumour	ok	rumour	rumour
+aef0f66a	rumour	ok	rumour	rumour	gossip 규칙
+6d769bd8	rumour	ok	rumour	rumour	gossip 규칙
+b251ca2e	rumour	ok	rumour	rumour	gossip 규칙
+08e340e1	rumour	ok	rumour	rumour	gossip 규칙
+b79ac20c	rumour	ok	rumour	rumour	gossip 규칙
+e1e6841b	rumour	ok	rumour	rumour	gossip 규칙
+d890addb	rumour	ok	rumour	rumour	gossip 규칙
+9c630bef	rumour	miss	negotiating	negotiating	기마랑이스 이적 요청 전달 = 실질 진행 보도
+94b50e9d	rumour	ok	rumour	rumour	gossip 규칙
+a3f49f6f	rumour	edge	rumour|interest	rumour|interest	감독 발언
+b4cabf85	rumour	ok	rumour	rumour	부인 · 도달 불명 규칙
+397dbe90	rumour	ok	rumour	rumour	gossip 규칙
+a184d8db	rumour	ok	rumour	rumour	gossip 규칙
+# --- negotiating (20) ---
+9356f857	negotiating	ok	negotiating	negotiating	dir 오류: 전 아스날 → none 기대 (DB out)
+1bdc581a	negotiating	miss	other|negotiating	done	촐리스 완결 후 회고 (지불 준비였었다)
+10f28eb2	negotiating	edge	negotiating|interest	negotiating
+5123b257	negotiating	ok	negotiating	negotiating
+b48ca35b	negotiating	ok	negotiating	negotiating	무산 회고 → 마지막 단계 규칙
+01e2379f	negotiating	miss	other	other	재계약 협상 → 현행 규칙상 other · 규칙 충돌 계열
+a50aa084	negotiating	ok	negotiating	negotiating
+a6d6b098	negotiating	ok	negotiating	negotiating
+26ced057	negotiating	ok	negotiating	negotiating	dir out ok
+63ee6946	negotiating	ok	negotiating	negotiating
+0d4588aa	negotiating	ok	negotiating	negotiating	타구단
+e5ad5c1a	negotiating	ok	negotiating	negotiating
+71d0e34c	negotiating	ok	negotiating	negotiating	거절 명시
+f3b3cbfe	negotiating	ok	negotiating	negotiating
+419c3296	negotiating	ok	negotiating	negotiating	타구단
+df3ec702	negotiating	ok	negotiating	negotiating
+2cbacf4f	negotiating	ok	negotiating	negotiating
+a5088900	negotiating	ok	negotiating	negotiating	결렬 규칙
+7c73d5ae	negotiating	ok	negotiating	negotiating
+a72f428a	negotiating	edge	negotiating|other	negotiating|other	타구단 · 무산 얽힘
+# --- other (20) ---
+104e643f	other	ok	other	규칙충돌	비니 재계약 합의 = 무산 사가 결말 · 기본 숨김 문제
+138d0743	other	ok	other	other	부상
+64ccfe25	other	ok	other	other	스폰서십
+7f7cb845	other	ok	other	other
+0eaeed4c	other	ok	other	other	분석
+007c90c8	other	ok	other	규칙충돌	비니 재계약
+7729e549	other	ok	other	other
+a25cd664	other	ok	other	other
+235603ae	other	ok	other	other	라운드업성
+c1a802e1	other	ok	other	other
+3d6bd6a3	other	ok	other	other
+f3bb7c7c	other	ok	other	규칙충돌	비니 재계약 체결
+4df540fe	other	ok	other	other	총평
+4c869ed2	other	ok	other	규칙충돌	비니 재계약
+0f9f943a	other	ok	other	other	부상
+a7105812	other	ok	other	other	배경
+37b04ade	other	ok	other	other	근황
+98deadf5	other	ok	other	other	스폰서십
+417409e4	other	ok	other	other	발언
+dbc972df	other	ok	other	other	타구단 재계약
+# --- medical (10 전건) ---
+5d213f2f	medical	edge	medical|agreed	medical|agreed	확정 + 메디컬 예정
+6104ea8a	medical	ok	medical	medical
+8210fbfd	medical	ok	medical	medical	타구단
+0c30eb0b	medical	ok	medical	medical	합의 + 메디컬 마침
+20ec38a6	medical	edge	medical|agreed	medical|agreed	메디컬 완료 + 계약 예정
+079534d1	medical	ok	medical	medical	타구단 · dir none ok
+b3124e2a	medical	ok	medical	medical
+a4f5fc4c	medical	ok	medical	medical	본문엔 소속 없음 · 요약이 "브렌트포드" 를 지어냄 (세계 지식 주입) · dir 은 none→out 오류
+6b6836cc	medical	ok	medical	medical
+5c198629	medical	edge	medical|agreed	medical|agreed	합의 + 메디컬 앞둠
+# --- personal_terms (9 전건) ---
+38704fc8	personal_terms	miss	agreed|negotiating	negotiating	본문 확인: 개인 합의 "근접" (합의 아님) · 서류 진행
+32a1a3b1	personal_terms	ok	personal_terms	personal_terms	5년 계약 합의
+cc2c7b58	personal_terms	edge	agreed|personal_terms	agreed	본문 확인: 구단 간 구두 합의 + 개인 합의 + 메디컬 예정 병존 → 최상 단계는 agreed
+96bff722	personal_terms	miss	interest|negotiating	negotiating	연봉 제시 준비 = 합의 전
+06ca4660	personal_terms	miss	interest|negotiating	negotiating	연봉 계약 준비 = 합의 전
+dee946d9	personal_terms	miss	interest|negotiating	negotiating	연봉 준비 = 합의 전
+09e0aaef	personal_terms	ok	personal_terms	personal_terms	선수-구단 구두 합의
+75ef94fc	personal_terms	ok	personal_terms	personal_terms	개인 조건 원칙적 합의
+3db8cfc4	personal_terms	edge	personal_terms|other	규칙충돌	무산 · 마지막 단계 vs 재계약 충돌
+# --- official (6 전건) ---
+7782fd9e	official	ok	official	official	트로사르 확정 (같은 딜 2회 게시 사례)
+5267e88b	official	ok	official	official	트로사르 합의 (같은 딜 2회 게시 사례)
+928acb73	official	ok	official	official
+41820c3a	official	ok	official	official
+3bf6dd47	official	ok	official	official
+29f891a9	official	ok	official	official
+# --- agreed (20 · RAND(42)) ---
+7a24f142	agreed	ok	agreed	agreed	타구단 합의 · dir none ok
+226b930f	agreed	ok	agreed	agreed	복합 · 주 이적 기마랑이스 합의
+9e4a5c91	agreed	ok	agreed	agreed	합의 명시
+bfbda517	agreed	ok	agreed	agreed	합의 + 메디컬 앞둠
+00f5138a	agreed	ok	agreed	negotiating	임박 (현행 정의 포함 · 새 정의 이동)
+50c684c4	agreed	ok	agreed	negotiating	눈앞 · 예정
+94a50dd2	agreed	ok	agreed	negotiating	합의 다가서는 중
+0c68996c	agreed	ok	agreed	negotiating|agreed	마무리 절차
+b05efdc8	agreed	ok	agreed	agreed	합의 도달
+c786fb9f	agreed	edge	agreed|negotiating	negotiating	협상 진전 · 근접
+43e9488e	agreed	ok	agreed	done	계약 체결 완료 보도
+b89687bb	agreed	ok	agreed	negotiating	눈앞
+9b41c88b	agreed	ok	agreed	agreed	합의 + 메디컬 예정
+a418e338	agreed	edge	agreed|other	done|other	펀딧 평가 얹은 후속
+f5fa1f99	agreed	ok	agreed	negotiating	임박
+ad4e18de	agreed	edge	agreed|negotiating	negotiating	근접 · 지불 전망
+aeb2d493	agreed	ok	agreed	agreed	주 이적 만잠비 (타구단) · dir in 저장 = none 기대 (방향 오류)
+e231fbf6	agreed	miss	interest|rumour	interest	가능성 시사 발언
+c0843529	agreed	edge	agreed|other	무산	비니 잔류 임박 · 무산 계열
+ee28de6e	agreed	ok	agreed	done	타구단 완료 (클럽 레코드 영입)
+# --- 방향 out 축 전건 검토 (50건) ---
+# 오류 확정 5: 6aa79a9d (레알-비니 재계약 제안 → none) · 9356f857 · f057ba44 (전 아스날 토미야스 FA → none) · 4a8397d1 (첼시-로저스 → none) · 745f1094 (레스터-몽가 하이재킹 → none)
+# 경계 1: dc2de396 (알바레스 in + 요케레스 out 혼합 → 혼합 out 규칙 수용) · in 축 오류 1: aeb2d493 (타구단 → none 기대)
+# 확인 완료: ce42d34d 는 본문상 out 정당 (제목 "영입 가능성" 은 오역 · 실제는 내줄 의사)
+# --- 불변량 확인 ---
+# bbc_gossip 이면서 stage != rumour = 0건 (가십 규칙 유지 확인) · official 소스 불변량 유지
