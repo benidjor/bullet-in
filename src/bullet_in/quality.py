@@ -122,3 +122,51 @@ def filter_miss_suspects(rejects: list[dict], now: datetime,
         if _TRANSFER_TITLE_RE.search(r.get("title") or ""):
             out.append(r)
     return out
+
+
+# 명단 이적 축 낡음 관측 (스펙 2026-08-10) — 단계 집합은 article_players.stage 어휘.
+# 완결 직후 후속 보도는 같은 완결 단계 귀속을 계속 만들므로 (메아리), 완료 축
+# 선수의 방아쇠에는 초기 단계만 남긴다 (스펙 §2.1).
+ROSTER_EARLY_STAGES = frozenset({"rumour", "interest", "negotiating",
+                                 "personal_terms"})
+ROSTER_COMPLETION_STAGES = frozenset({"agreed", "medical", "official"})
+ROSTER_PROGRESS_STAGES = ROSTER_EARLY_STAGES | ROSTER_COMPLETION_STAGES
+
+
+def _roster_trigger(transfer_status: str) -> tuple[str, frozenset[str]] | None:
+    if transfer_status == "none":
+        return "start", ROSTER_PROGRESS_STAGES
+    if transfer_status in ("in_done", "out_done"):
+        return "start", ROSTER_EARLY_STAGES
+    if transfer_status in ("in_link", "out_link"):
+        return "finish", ROSTER_COMPLETION_STAGES
+    return None
+
+
+def roster_axis_staleness(cycle_pairs: list[dict],
+                          recent_counts: dict[tuple[int, str], int],
+                          min_recent: int = 2) -> list[dict]:
+    """이번 회차 귀속과 명단 이적 축 값의 어긋남 의심 목록 (관측 전용 · 스펙 §2 · §3).
+
+    cycle_pairs 는 확정 선수의 이번 회차 (player_id · ko_name · transfer_status ·
+    stage) 목록, recent_counts 는 {(player_id, stage): 최근 7일 귀속 건수}.
+    방아쇠 단계 집합 밖의 귀속은 세지 않고, 최근 누적이 min_recent 미만이면
+    단발 오추출 · 단발 루머로 보고 거른다 (무상태 도배 방지의 두 번째 축)."""
+    by_player: dict[int, dict] = {}
+    for p in cycle_pairs:
+        trig = _roster_trigger(p["transfer_status"])
+        if trig is None or p["stage"] not in trig[1]:
+            continue
+        case = by_player.setdefault(p["player_id"], {
+            "player_id": p["player_id"], "ko_name": p["ko_name"],
+            "transfer_status": p["transfer_status"], "kind": trig[0],
+            "new_stages": {}})
+        case["new_stages"][p["stage"]] = case["new_stages"].get(p["stage"], 0) + 1
+    out = []
+    for pid, case in by_player.items():
+        stages = _roster_trigger(case["transfer_status"])[1]
+        total = sum(n for (p, s), n in recent_counts.items()
+                    if p == pid and s in stages)
+        if total >= min_recent:
+            out.append({**case, "recent_total": total})
+    return sorted(out, key=lambda c: c["ko_name"] or "")

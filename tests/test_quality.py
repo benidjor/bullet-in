@@ -186,3 +186,76 @@ def test_filter_miss_suspects_skips_naive_published_without_raising():
          "published": "2026-08-07T01:00:00.000Z", "taxonomies": ["Men", "News"]},
     ]
     assert [s["url"] for s in filter_miss_suspects(rejects, now)] == ["aware"]
+
+
+# ── 명단 이적 축 낡음 관측 (스펙 2026-08-10) ─────────────────────────────
+
+def _pair(pid, name, status, stage):
+    return {"player_id": pid, "ko_name": name,
+            "transfer_status": status, "stage": stage}
+
+
+def test_roster_staleness_fires_on_completion_signal_for_link_player():
+    # 기마랑이스형 — in_link 인데 합의 확정 보도가 붙는다
+    from bullet_in.quality import roster_axis_staleness
+    cases = roster_axis_staleness(
+        [_pair(28, "기마랑이스", "in_link", "agreed")],
+        {(28, "agreed"): 5})
+    assert len(cases) == 1
+    assert cases[0]["kind"] == "finish"
+    assert cases[0]["new_stages"] == {"agreed": 1}
+    assert cases[0]["recent_total"] == 5
+
+
+def test_roster_staleness_fires_on_progress_for_none_player():
+    # 비니시우스형 — 축 값 none 인데 링크 단계 보도가 쌓인다
+    from bullet_in.quality import roster_axis_staleness
+    cases = roster_axis_staleness(
+        [_pair(15, "비니시우스", "none", "interest"),
+         _pair(15, "비니시우스", "none", "negotiating")],
+        {(15, "interest"): 1, (15, "negotiating"): 1})
+    assert len(cases) == 1
+    assert cases[0]["kind"] == "start"
+    assert cases[0]["recent_total"] == 2
+
+
+def test_roster_staleness_silent_on_completion_echo_for_done_player():
+    # 완결 직후 후속 보도의 메아리 — in_done + agreed 는 방아쇠가 아니다
+    from bullet_in.quality import roster_axis_staleness
+    assert roster_axis_staleness(
+        [_pair(28, "기마랑이스", "in_done", "agreed")],
+        {(28, "agreed"): 50}) == []
+
+
+def test_roster_staleness_new_saga_on_done_player_counts_early_only():
+    # 완료 축 선수의 새 이적 건 — 초기 단계는 방아쇠 · 누적에 완결 메아리는 안 섞임
+    from bullet_in.quality import roster_axis_staleness
+    cases = roster_axis_staleness(
+        [_pair(7, "마두에케", "in_done", "interest")],
+        {(7, "interest"): 2, (7, "agreed"): 40})
+    assert len(cases) == 1
+    assert cases[0]["recent_total"] == 2
+
+
+def test_roster_staleness_silent_below_recent_threshold():
+    # 단발 루머 1건 — 최근 7일 누적 2건 미만이면 침묵
+    from bullet_in.quality import roster_axis_staleness
+    assert roster_axis_staleness(
+        [_pair(99, "아무개", "none", "rumour")], {(99, "rumour"): 1}) == []
+
+
+def test_roster_staleness_ignores_other_stage_and_closed_axis():
+    # other 귀속과 종결 축 (other_club 등) 은 판정 대상이 아니다
+    from bullet_in.quality import roster_axis_staleness
+    assert roster_axis_staleness(
+        [_pair(1, "가", "none", "other"),
+         _pair(2, "나", "other_club", "agreed")],
+        {(1, "other"): 9, (2, "agreed"): 9}) == []
+
+
+def test_roster_staleness_sorted_by_name_for_stable_alert_order():
+    from bullet_in.quality import roster_axis_staleness
+    cases = roster_axis_staleness(
+        [_pair(2, "나", "in_link", "agreed"), _pair(1, "가", "in_link", "medical")],
+        {(1, "medical"): 2, (2, "agreed"): 2})
+    assert [c["ko_name"] for c in cases] == ["가", "나"]
