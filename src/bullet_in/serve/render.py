@@ -961,6 +961,11 @@ _TRANSFER_GROUP_OF: dict[str, str] = {
     "link_dropped": "이적 무산", "other_club": "타 클럽행",
 }
 
+# 값이 하나뿐인 그룹 — 색인에서 축 배지가 그룹명을 되풀이하거나 (타 클럽행) 같은 값을
+# 다른 말로 부른다 (이적 무산 그룹의 "링크 소멸"). 그룹 안에서 가릴 것이 없으므로
+# 색인에서는 배지를 생략한다 (2026-08-11). 선수 페이지는 그룹 맥락이 없어 그대로 붙인다.
+_SOLE_VALUE_GROUPS = {g for g, n in Counter(_TRANSFER_GROUP_OF.values()).items() if n == 1}
+
 
 def transfer_badge(status: str | None) -> dict | None:
     """선수 이적 축 배지 {label, cls}. 축이 없으면 (none) 배지를 달지 않는다."""
@@ -1017,7 +1022,9 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
             continue
         paired.sort(key=lambda t: _sort_ts(t[0]))          # 오래된 것부터 (사다리 입력)
         timeline = [{"row": r, "stage": s} for r, s in paired]
-        ladder = stage_ladder(timeline)
+        # 대표 선정의 이름 대조는 성 (ko_name) 으로 한다 — 기사 제목이 성만 쓰는 일이 잦다
+        ko = p.get("ko_name")
+        ladder = stage_ladder(timeline, ko)
         slug = player_slug(p.get("surname") or "", p["id"], dupes)
         if folded[p["id"]] in dupes:
             log.warning("동성 복수 — slug 를 id 로 떨어뜨림: %s → %s",
@@ -1028,11 +1035,10 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
                     "slug": slug,
                     "articles": [r for r, _ in reversed(paired)],
                     "ladder": ladder,
-                    "ended": ended_marker(timeline),
-                    # 현재 단계는 시간축 최신값이다 (사다리 스펙 §6.2) — 사다리는
-                    # 오피셜이 앞이라 첫 줄을 읽으면 뜻이 "가장 진행된 단계" 로 바뀐다.
-                    "stage": next((s for _, s in reversed(paired)
-                                   if _stage.is_displayable(s)), None),
+                    "ended": ended_marker(timeline, ko),
+                    # 카드 배지를 선수 축으로 바꾸는 재료 (아래 render_player)
+                    "_stage_by_hash": {r["content_hash"]: s for r, s in paired},
+                    "stage": current_stage(timeline, p.get("transfer_status")),
                     "count": len(paired),
                     "last_ts": _sort_ts(paired[-1][0])[0]})
     return out
@@ -1041,7 +1047,20 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
 _STAGE_GROUP_OF = {e: label for label, enums in _STAGE_DISPLAY_GROUPS for e in enums}
 
 
-def stage_ladder(entries: list[dict]) -> list[dict]:
+def _rep_key(name: str | None):
+    """사다리 · 종결 줄의 대표 선정 키 — 그 선수를 다룬 기사가 먼저, 그다음 공신력.
+
+    제목에 이름이 없는 기사가 대표가 되면 그 선수와 무관한 줄이 사다리에 올라온다
+    (실측: 뇌르고르 사다리 세 줄이 전부 기마랑이스 기사였다 — 오귀속 기사의 공신력이
+    본인 기사보다 높았다). 귀속 자체를 좁히는 것은 추출 몫이고, 여기서는 같은 묶음
+    안에서 대표를 고를 때만 쓴다."""
+    def key(e):
+        title = e["row"].get("title_ko") or e["row"].get("title_original") or ""
+        return (0 if name and name in title else 1, _ladder_cred(e))
+    return key
+
+
+def stage_ladder(entries: list[dict], name: str | None = None) -> list[dict]:
     """진행 단계 사다리 (사다리 스펙 §4.2) — 표시 묶음 6종마다 대표 기사 하나.
 
     입력은 오래된 것부터 정렬된 [{"row", "stage"}], 출력은 오피셜이 앞이다.
@@ -1068,7 +1087,7 @@ def stage_ladder(entries: list[dict]) -> list[dict]:
         if not b:
             continue
         # 뒤집어 넣어 동률에서 늦은 기사가 이기게 한다 (min 은 안정 선택 — 첫 최소값).
-        rep = min(reversed(b), key=_ladder_cred)
+        rep = min(reversed(b), key=_rep_key(name))
         out.append({"row": rep["row"], "stage": rep["stage"], "count": len(b)})
     return out
 
@@ -1078,13 +1097,61 @@ def _ladder_cred(e):
     return float(t) if t is not None else 99.0
 
 
-def ended_marker(entries: list[dict]) -> dict | None:
+# 종결 단계와 그것을 뒷받침해야 하는 명단 축 값.
+# 오피셜은 종결에 넣지 않는다: 공홈은 합의 때 · 확정 때 각각 올라와 종결을 뜻하지
+# 않고, 사다리 첫 줄 (오피셜) 을 현재 상태로 읽으면 실측 다섯 명이 전부 틀렸다 (§6.2).
+_COMPLETED = {"in_done", "out_done", "loan_in", "loan_out"}
+_TERMINAL_BACKING = {
+    "official": _COMPLETED,
+    "done": _COMPLETED,
+    "collapsed": {"link_dropped", "other_club"},
+}
+
+
+def current_stage(entries: list[dict], transfer_status: str | None = None) -> str | None:
+    """머리 · 색인 카드에 붙는 현재 단계 (사다리 스펙 §6.2 개정 2026-08-11).
+
+    원래는 시간축 최신값만 썼는데, 딜이 끝난 뒤에도 그 선수를 배경으로만 언급한
+    기사가 뒤에 오면 그 기사의 단계가 현재 상태를 덮어썼다 (실측: 재계약으로 끝난
+    비니시우스가 '협상 중' 으로 표시). 그래서 종결 단계 (이적 완료 · 무산) 가 있으면
+    가장 늦은 종결을 현재 상태로 삼는다.
+
+    단, 종결은 **명단 축이 뒷받침할 때만** 쓴다. 명단 축은 사람이 확정한 현재 상태라
+    모델이 낸 기사 단계보다 믿을 만하고, 두 배지가 서로 모순되지 않아야 한다.
+    이 가드가 없으면 상류 오분류 한 건이 배지를 영구히 지배한다 — 실측에서 영입을
+    마친 업슨이 무산으로, 아직 이적하지 않은 코네 · 알바레스가 무산으로 뒤집혔다.
+    뒷받침이 없으면 종전대로 시간축 최신값을 쓴다.
+
+    이적을 마친 선수에게 공홈 발표가 있으면 그것을 먼저 쓴다 — 구단 공식 발표가
+    가장 강한 신호이고, 완료 기사 유무에 따라 어떤 선수는 오피셜 · 어떤 선수는
+    이적 완료로 갈리던 것을 없앤다 (실측 9명 중 6명이 공홈 발표 보유).
+    진행 중인 선수의 공홈 합의 공지가 현재 상태를 가로채던 옛 문제는 명단 축
+    뒷받침 조건이 막는다 (§6.2 의 다섯 명 실측).
+    입력은 오래된 것부터 정렬된 [{"row", "stage"}] 다."""
+    def denied(stage: str | None) -> bool:
+        backing = _TERMINAL_BACKING.get(stage or "")
+        return bool(backing) and transfer_status not in backing
+
+    if transfer_status in _COMPLETED and any(e.get("stage") == "official" for e in entries):
+        return "official"
+    for e in reversed(entries):
+        backing = _TERMINAL_BACKING.get(e.get("stage") or "")
+        if backing and transfer_status in backing:
+            return e["stage"]
+    # 명단이 부정하는 종결은 최신값 경로에서도 뺀다 — 두 배지가 모순되면 안 된다
+    # (영입 완료 선수 옆에 무산, 링크 소멸 선수 옆에 협상 중이 붙던 자리).
+    return next((e["stage"] for e in reversed(entries)
+                 if _stage.is_displayable(e.get("stage")) and not denied(e.get("stage"))),
+                None)
+
+
+def ended_marker(entries: list[dict], name: str | None = None) -> dict | None:
     """무산 (collapsed) 종결 표시 (단계 재정의 스펙 §8) — 사다리 축 밖의 한 줄.
-    대표 선정 규칙은 사다리와 동일 (공신력 높은 순 · 동률이면 늦은 기사)."""
+    대표 선정 규칙은 사다리와 동일 (그 선수를 다룬 기사 우선 · 공신력 · 늦은 기사)."""
     b = [e for e in entries if e.get("stage") == "collapsed"]
     if not b:
         return None
-    rep = min(reversed(b), key=_ladder_cred)
+    rep = min(reversed(b), key=_rep_key(name))
     return {"row": rep["row"], "stage": rep["stage"], "count": len(b)}
 
 
@@ -1095,7 +1162,8 @@ def render_players(entries: list[dict], now: datetime) -> str:
         members = [e for e in entries if transfer_group(e["transfer_status"]) == name]
         members.sort(key=lambda e: e["last_ts"], reverse=True)
         for e in members:
-            e["_badge"] = transfer_badge(e["transfer_status"])
+            e["_badge"] = (None if name in _SOLE_VALUE_GROUPS
+                           else transfer_badge(e["transfer_status"]))
             e["_stage"] = display_stage(e["stage"])
             e["_last"] = fmt_date(to_kst(e["last_ts"]))
         groups.append({"name": name, "collapsed": collapsed, "members": members})
@@ -1108,21 +1176,31 @@ def render_player(entry: dict, sources: dict, now: datetime,
                   outlet_dir: dict | None = None) -> str:
     """선수 페이지 (스펙 §5) — 머리 · 진행 단계 사다리 · 귀속 기사 전량."""
     decorated = {}
+    by_stage = entry.get("_stage_by_hash") or {}
     for a in entry["articles"]:
         d = _decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
         # _decorate 의 _date 는 UTC 라 사다리 · 카드가 머리와 다른 날짜로 보일 수
         # 있다 — 선수 페이지 지역 범위로만 KST 로 보정한다.
         d["_kdate"] = fmt_date(to_kst(_sort_ts(a)[0]))
+        # 카드 배지도 선수 축으로 바꾼다 (2026-08-11). 기사 축을 그대로 쓰면 아스날과
+        # 무관한 딜의 단계가 그 선수의 카드에 붙는다 — 아스날 건이 관심에서 멈춘
+        # 스톤스의 카드에 인터 밀란과의 "이적 합의" 가 뜨던 자리다.
+        # 같은 페이지의 사다리도 선수 축이라 두 표시가 이제 같은 축을 쓴다.
+        ps = by_stage.get(a["content_hash"])
+        d["_stage"] = ps or ""
+        d["_stage_disp"] = display_stage(ps)
         decorated[a["content_hash"]] = d
     nodes = [{"a": decorated[n["row"]["content_hash"]],
               "badge": display_stage(n["stage"]), "count": n["count"]}
              for n in entry["ladder"]]
     ended = entry.get("ended")
     if ended:
-        # 무산 종결 줄 — 같은 tlnode 마크업에 end 플래그만 얹어 단일 루프로 그린다
-        nodes.append({"a": decorated[ended["row"]["content_hash"]],
-                      "badge": display_stage(ended["stage"]),
-                      "count": ended["count"], "end": True})
+        # 무산 종결 줄 — 같은 tlnode 마크업에 end 플래그만 얹어 단일 루프로 그린다.
+        # 맨 위에 둔다 (개정 2026-08-11): 사다리는 위가 가장 진행된 단계라, 끝난 사가의
+        # 종결을 아래에 두면 아직 진행 중인 것처럼 읽힌다 (실측 · 비니시우스 페이지).
+        nodes.insert(0, {"a": decorated[ended["row"]["content_hash"]],
+                         "badge": display_stage(ended["stage"]),
+                         "count": ended["count"], "end": True})
     return _env().get_template("player.html.j2").render(
         e=entry, badge=transfer_badge(entry["transfer_status"]),
         stage=display_stage(entry["stage"]), nodes=nodes,
