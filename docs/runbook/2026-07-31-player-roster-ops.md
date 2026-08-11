@@ -232,6 +232,28 @@ uv run python -m bullet_in.backfill_article_players --limit 5             # 소�
 운영 중 표기 오류나 잘못된 연결이 나오면 아래 절차로 되돌린다.
 원인마다 손대는 지점이 다르니 증상에 맞는 항목을 먼저 찾는다.
 
+### 5.0. 먼저 백업
+
+DB 를 직접 `UPDATE` 하기 전에는 항상 `players` 를 뜬다.
+확정 명령 (`confirm_player`) 으로 고치는 경우에도 뜨는 편이 안전하다.
+
+```bash
+TS=$(date +%Y%m%d_%H%M%S)
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 'cd ~/bullet-in && set -a && . ./.env && set +a
+  read NAME USER PASS <<< "$(python3 -c "import os,urllib.parse as u; p=u.urlparse(os.environ[\"MARIADB_URL\"]); print(p.path.lstrip(\"/\"), p.username, p.password)")"
+  mkdir -p ~/backups
+  docker exec bullet-in-mariadb-1 mariadb-dump -u"$USER" -p"$PASS" --single-transaction --no-tablespaces "$NAME" players \
+    > ~/backups/players_backup_'"$TS"'.sql'
+```
+
+**호스트에서 `mariadb-dump` 를 바로 부르면 안 된다** — VM 호스트에는 클라이언트가 없어서 0바이트 파일만 남고 명령은 조용히 끝난다 (2026-08-12 실측).
+반드시 `docker exec` 를 거치고, 뜬 뒤에 크기와 `INSERT` 줄 수를 확인한다.
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  'ls -lh ~/backups/players_backup_*.sql | tail -1; grep -c "INSERT INTO" ~/backups/players_backup_*.sql | tail -1'
+```
+
 **후보 (`status='candidate'`) 의 표기가 이상할 때** — 고칠 필요가 없다.
 모델이 채워 넣은 `ko_candidate` 는 사람이 대기 목록을 볼 때 참고하는 값일 뿐이다.
 게이트 사전 (`PlayerStore.gate_name_map`) 은 조회 조건에서 후보 상태를 아예 빼므로 이 값이 실제 검출에 쓰이는 일은 없다 (`_DICT_WHERE = "status IN ('confirmed','archived')"`).
