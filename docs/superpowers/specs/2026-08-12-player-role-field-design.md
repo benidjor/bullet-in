@@ -164,10 +164,11 @@
 - 링크가 전부 언급인 선수는 페이지가 만들어지지 않는다.
 - `normalize_pairs` 가 두 값 밖의 역할을 미기입으로 떨어뜨린다.
 
-기존 테스트 둘은 전제가 바뀌므로 갱신한다.
+기존 테스트 셋은 "단계가 `other` 면 화면에서 빠진다" 를 전제로 쓰여 있어 갱신한다.
 
 - `test_build_player_entries_excludes_other_from_list_and_count` — 단계 `other` 는 이제 목록에서 빠지지 않는다.
 - `test_build_player_entries_drops_player_whose_articles_are_all_other` — 판정 기준이 역할로 바뀐다.
+- `test_build_player_entries_header_count_matches_article_list` — 같은 전제를 쓰는 세 번째 테스트다 (계획 작성 중 발견).
 
 ### 6.2. 머지 전 화면 검증
 
