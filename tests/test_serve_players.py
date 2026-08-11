@@ -224,13 +224,68 @@ def test_build_player_entries_stage_prefers_terminal_over_later_mention():
     assert e["stage"] == "collapsed"
 
 
-def test_build_player_entries_stage_uses_latest_terminal_when_several():
+def test_build_player_entries_stage_uses_latest_backed_terminal():
     arts = [_art("h1", 1, "collapsed"), _art("h2", 5, "done")]
     players = [_player(1, "Tzolis", "촐리스", "in_done",
                        [{"content_hash": "h1", "stage": "collapsed"},
                         {"content_hash": "h2", "stage": "done"}])]
     [e] = build_player_entries(arts, players)
-    assert e["stage"] == "done"
+    assert e["stage"] == "done"      # 영입 완료 선수라 무산은 뒷받침이 없다
+
+
+def test_build_player_entries_stage_ignores_terminal_the_roster_denies():
+    # 상류 오분류 한 건이 배지를 영구히 지배하지 않게 하는 가드 — 실측 3명이 근거다
+    # (영입을 마친 업슨이 무산으로 · 아직 이적 안 한 코네 · 알바레스가 무산으로).
+    arts = [_art("h1", 1, "interest"), _art("h2", 5, "collapsed")]
+    links = [{"content_hash": "h1", "stage": "interest"},
+             {"content_hash": "h2", "stage": "collapsed"}]
+    [e] = build_player_entries(arts, [_player(1, "Kone", "코네", "in_link", links)])
+    assert e["stage"] == "interest"          # 명단이 진행 중이라 무산을 안 쓴다
+    [e2] = build_player_entries(arts, [_player(2, "Upson", "업슨", "in_done", links)])
+    assert e2["stage"] == "interest"         # 영입 완료 선수도 마찬가지
+    [e3] = build_player_entries(arts, [_player(3, "Vinicius", "비니시우스",
+                                               "link_dropped", links)])
+    assert e3["stage"] == "collapsed"        # 명단이 뒷받침하면 쓴다
+
+
+def test_build_player_entries_stage_prefers_official_for_completed_player():
+    # 이적을 마친 선수는 공홈 발표를 먼저 쓴다 — 완료 기사 유무에 따라 어떤 선수는
+    # 오피셜 · 어떤 선수는 이적 완료로 갈리던 것을 없앤다 (실측 9명 중 6명이 공홈 보유)
+    arts = [_art("h1", 1, "official"), _art("h2", 5, "done")]
+    links = [{"content_hash": "h1", "stage": "official"},
+             {"content_hash": "h2", "stage": "done"}]
+    [e] = build_player_entries(arts, [_player(1, "Kiwior", "키비오르", "out_done", links)])
+    assert e["stage"] == "official"
+    # 진행 중인 선수의 공홈 합의 공지는 여전히 현재 상태를 가로채지 못한다 (§6.2)
+    [e2] = build_player_entries(arts, [_player(2, "Kone", "코네", "in_link", links)])
+    assert e2["stage"] != "official"
+
+
+def test_stage_ladder_rep_prefers_article_about_the_player():
+    # 오귀속 기사의 공신력이 본인 기사보다 높아도 대표가 되면 안 된다
+    # (실측: 뇌르고르 사다리 세 줄이 전부 기마랑이스 기사였다)
+    entries = [{"row": _row(1, "h1", tier=1) | {"title_ko": "기마랑이스 이적 확정"},
+                "stage": "done"},
+               {"row": _row(2, "h2", tier=1.5) | {"title_ko": "에버튼, 뇌르고르 영입 확정"},
+                "stage": "done"}]
+    [line] = stage_ladder(entries, "뇌르고르")
+    assert line["row"]["content_hash"] == "h2"
+    # 이름을 안 주면 종전대로 공신력 우선
+    [plain] = stage_ladder(entries)
+    assert plain["row"]["content_hash"] == "h1"
+
+
+def test_render_player_cards_use_player_axis_stage():
+    # 선수 페이지 카드 배지는 선수 축이다 — 아스날 건이 관심에서 멈춘 선수의 카드에
+    # 타 구단 딜의 "이적 합의" 가 뜨던 자리 (실측 · 스톤스)
+    arts = [_art("h1", 1, "agreed", "스톤스, 인터 밀란행 임박")]
+    players = [_player(1, "Stones", "스톤스", "other_club",
+                       [{"content_hash": "h1", "stage": "interest"}])]
+    [e] = build_player_entries(arts, players)
+    html = render_player(e, SOURCES, NOW)
+    assert 'data-stage="interest"' in html
+    assert 'data-stage="agreed"' not in html          # 기사 축이 새 나오면 안 된다
+    assert ">이적 합의<" not in html                   # 기사 축 배지도 마찬가지
 
 
 def test_build_player_entries_drops_player_whose_articles_are_all_other():
