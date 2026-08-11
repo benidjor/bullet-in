@@ -194,14 +194,29 @@ def test_build_player_entries_excludes_mention_from_list_and_count():
     assert [a["content_hash"] for a in entry["articles"]] == ["h3", "h1"]
 
 
-def test_build_player_entries_keeps_links_with_no_role():
-    # 역할이 채워지기 전 · 모델이 빠뜨렸을 때 지금 화면이 유지되는지 (스펙 §3.2)
+def test_build_player_entries_falls_back_to_stage_when_role_is_missing():
+    # 역할이 채워지기 전에는 옛 규칙이 그대로 돌아 화면이 바뀌지 않는다 (스펙 §3.2)
     arts = [_art("h1", 1, "interest"), _art("h2", 2, "other")]
     players = [_player(1, "Tzolis", "촐리스", "in_link",
                        [{"content_hash": "h1", "stage": "interest"},
                         {"content_hash": "h2", "stage": "other"}])]
     [e] = build_player_entries(arts, players)
-    assert e["count"] == 2
+    assert [a["content_hash"] for a in e["articles"]] == ["h1"]
+    assert e["count"] == 1
+
+
+def test_build_player_entries_mixes_role_and_stage_rules_per_link():
+    # 역할이 있는 행은 역할로 · 없는 행은 단계로 (스펙 §3.2 전환 규칙)
+    arts = [_art("h1", 1, "agreed"), _art("h2", 2, "other"), _art("h3", 3, "other")]
+    players = [_player(1, "Tzolis", "촐리스", "in_link",
+                       [{"content_hash": "h1", "stage": "agreed",
+                         "role": "mention"},          # 역할로 제외
+                        {"content_hash": "h2", "stage": "other",
+                         "role": "subject"},          # 역할로 포함
+                        {"content_hash": "h3", "stage": "other"}])]   # 단계로 제외
+    [e] = build_player_entries(arts, players)
+    assert [a["content_hash"] for a in e["articles"]] == ["h2"]
+    assert e["count"] == 1
 
 
 def test_build_player_entries_keeps_subject_other_without_ladder_row():
