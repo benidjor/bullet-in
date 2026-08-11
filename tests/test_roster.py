@@ -78,3 +78,16 @@ def test_normalize_pairs_does_not_overwrite_for_other_sources():
            {"full_name": "Someone Else", "ko": "누군가", "stage": "rumour"}]
     out = normalize_pairs(raw, "bbc_sport")
     assert [p["stage"] for p in out] == ["agreed", "rumour"]
+
+
+def test_normalize_pairs_normalizes_role_and_drops_unknown():
+    # 어휘 밖 · 미기입은 None — 서빙이 주역으로 읽어 화면을 지우지 않는다 (스펙 §3.2)
+    raw = [{"full_name": "Christos Tzolis", "ko": "촐리스", "stage": "interest",
+            "role": " Subject "},
+           {"full_name": "Morgan Rogers", "ko": "로저스", "stage": "other",
+            "role": "mention"},
+           {"full_name": "Ben White", "ko": "화이트", "stage": "other",
+            "role": "배경"},
+           {"full_name": "Bukayo Saka", "ko": "사카", "stage": "other"}]
+    assert [p["role"] for p in normalize_pairs(raw)] == [
+        "subject", "mention", None, None]

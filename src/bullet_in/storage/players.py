@@ -12,6 +12,13 @@ _DICT_WHERE = "status IN ('confirmed','archived') AND ko_name IS NOT NULL"
 _PAGE_WHERE = ("category IN ('squad','external') AND transfer_status <> 'none' "
                "AND status <> 'candidate'")
 
+# 귀속 역할 어휘 (역할 필드 스펙 2026-08-12 §3.1) — article_players.role 의 단일 출처.
+# "이 기사의 주인공인가" 를 묻는 축이고, stage 는 "어느 단계인가" 만 맡는다.
+# 두 질문을 stage 하나로 답하던 동안 화면 귀속 807건 중 331건이 남의 기사였다.
+SUBJECT = "subject"
+MENTION = "mention"
+ROLES = frozenset({SUBJECT, MENTION})
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
