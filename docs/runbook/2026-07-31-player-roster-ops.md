@@ -367,6 +367,30 @@ UPDATE players SET transfer_status='none'
 게이트 검출 사전 (`PlayerStore.gate_name_map`) 의 조회 조건은 `status IN ('confirmed','archived')` 라서, archived 행도 계속 잡힌다 — 과거 기사를 나중에 재번역해도 인명 보호가 유지된다.
 전이 후에는 §3.2 방식대로 site 를 다시 만들고 배포한다 (`_render` 를 직접 부르거나, `docs/runbook/2026-07-19-enrich-only-pass.md` §4 스니펫 재사용).
 
+### 6.2. 창 종료 시 완료 축 정리 (2026-08-10 추가)
+
+완료 값 (`in_done` · `out_done`) 은 만료가 없어, 그대로 두면 선수 색인의 "이적 확정" 그룹에 지난 창의 영입 · 방출이 계속 쌓인다.
+2026-08-10 실측에서 2025 여름 창 영입 4명 (요케레스 · 에제 · 마두에케 · 수비멘디) 이 1년 가까이 그 상태로 남아 있었다.
+이적 창이 닫히면 (여름 창은 9월 초 · 겨울 창은 2월 초) 영입 링크를 한꺼번에 archived 로 돌리는 위 절차와 함께 아래를 실행한다.
+
+```sql
+-- 영입 완료 — 축 소멸 (스쿼드 일원으로 잔류 · confirmed 유지)
+UPDATE players SET transfer_status='none'
+  WHERE category='squad' AND transfer_status='in_done';
+
+-- 방출 완료 — 축 소멸 + 보관
+UPDATE players SET transfer_status='none',
+                    status='archived', archived_at=UTC_TIMESTAMP()
+  WHERE category='external' AND transfer_status='out_done' AND status='confirmed';
+```
+
+- `loan_in` · `loan_out` 은 대상이 아니다
+— 임대는 창 종료가 아니라 복귀 시점에 §6 의 임대 복귀 절차로 정리한다.
+- 방출 완료 선수를 `none` 으로 보관하는 것은 "이적 축 이력 종결" 을 뜻한다
+— 매각 이력 자체는 기사와 `article_players` 가 담고 있어 축 값으로 남기지 않는다.
+- 보관을 `out_done` 인 채로 두면 안 되는 이유: 색인 대상 술어 (`_PAGE_WHERE`) 는 archived 를 배제하지 않아, 축 값이 남아 있으면 "이적 확정" 그룹에 계속 노출된다.
+- 이 정리 후 "이적 확정" 그룹은 비고, 다음 창까지 그대로 유지된다.
+
 ## 7. 게이트 런북 §4.2 갱신
 
 `docs/runbook/2026-07-19-translation-quality-gates-ops.md` §4.2 (name_map 검출 사전 등재 절차) 는 YAML `name_map.yaml` 시절 서술이 그대로 남아 있었다.
