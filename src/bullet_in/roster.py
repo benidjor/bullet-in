@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging, re
 from bullet_in import transfer_stage as _stage
 from bullet_in.enrich import _fold_latin
-from bullet_in.storage.players import PlayerStore
+from bullet_in.storage.players import PlayerStore, ROLES
 
 log = logging.getLogger(__name__)
 
@@ -11,6 +11,17 @@ _MAX_PAIRS = 30          # 모델이 폭주 출력을 내도 회차당 처리 �
 _MAX_FULL_NAME = 100     # players.full_name VARCHAR(100)
 _MAX_KO = 50             # players.ko_candidate VARCHAR(50)
 _HANGUL_RE = re.compile(r"[가-힣]")
+
+
+def normalize_role(raw) -> str | None:
+    """추출이 낸 역할 값 정규화 — 어휘 밖은 미기입 (None) 으로 떨어뜨린다.
+
+    미기입은 서빙에서 옛 규칙 (단계 `other` 제외) 으로 판정되므로 (스펙 §3.2
+    전환 규칙), 모델이 값을 빠뜨려도 종전 화면이 유지된다."""
+    if not isinstance(raw, str):
+        return None
+    v = raw.strip().lower()
+    return v if v in ROLES else None
 
 
 def normalize_pairs(raw, source_id: str | None = None) -> list[dict]:
@@ -48,7 +59,8 @@ def normalize_pairs(raw, source_id: str | None = None) -> list[dict]:
         ko = (item.get("ko") or "").strip() or None
         if ko and len(ko) > _MAX_KO:
             ko = None
-        out.append({"full_name": fn, "ko": ko, "stage": stage})
+        out.append({"full_name": fn, "ko": ko, "stage": stage,
+                    "role": normalize_role(item.get("role"))})
     return out
 
 
@@ -88,5 +100,5 @@ def record_article_players(store: PlayerStore, content_hash: str,
             created.append({**p, "player_id": pid})
             log.info("후보 등재: %s (%s) stage=%s 근거=%s",
                      p["ko"] or "?", p["full_name"], p["stage"], content_hash[:8])
-        store.link_article(content_hash, pid, p["stage"])
+        store.link_article(content_hash, pid, p["stage"], p.get("role"))
     return created

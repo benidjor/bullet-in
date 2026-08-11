@@ -247,6 +247,35 @@ def test_page_player_links_shares_the_same_predicate(engine):
     assert links[0]["content_hash"] == "b" * 64
 
 
+def test_link_article_stores_role_and_page_links_return_it(engine):
+    store = PlayerStore(engine)
+    keep = _add_player(engine, full_name="Role Target", surname="RoleTarget",
+                       ko_name="역할대상", category="external", status="confirmed",
+                       transfer_status="in_link")
+    h = "d" * 64
+    store.link_article(h, keep, "other", "mention")
+    store.link_article(h, keep, "interest", "subject")   # 재추출 — 역할도 갱신된다
+    with engine.connect() as c:
+        assert c.execute(text(
+            "SELECT stage, role FROM article_players WHERE content_hash=:h"),
+            {"h": h}).all() == [("interest", "subject")]
+    assert [l["role"] for l in store.page_player_links()
+            if l["content_hash"] == h] == ["subject"]
+
+
+def test_link_article_leaves_role_null_when_not_given(engine):
+    # 기존 호출자 (백필 · 재추출 모듈) 는 역할을 넘기지 않는다 — 미기입으로 남아야 한다
+    store = PlayerStore(engine)
+    keep = _add_player(engine, full_name="No Role", surname="NoRole",
+                       ko_name="역할없음", category="external", status="confirmed",
+                       transfer_status="in_link")
+    store.link_article("e" * 64, keep, "interest")
+    with engine.connect() as c:
+        assert c.execute(text(
+            "SELECT role FROM article_players WHERE content_hash=:h"),
+            {"h": "e" * 64}).scalar_one() is None
+
+
 def test_linked_hashes_ignores_the_target_condition(engine):
     store = PlayerStore(engine)
     staff = _add_player(engine, full_name="Only Staff", surname="Staff",

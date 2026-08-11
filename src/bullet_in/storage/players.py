@@ -12,6 +12,13 @@ _DICT_WHERE = "status IN ('confirmed','archived') AND ko_name IS NOT NULL"
 _PAGE_WHERE = ("category IN ('squad','external') AND transfer_status <> 'none' "
                "AND status <> 'candidate'")
 
+# 귀속 역할 어휘 (역할 필드 스펙 2026-08-12 §3.1) — article_players.role 의 단일 출처.
+# "이 기사의 주인공인가" 를 묻는 축이고, stage 는 "어느 단계인가" 만 맡는다.
+# 두 질문을 stage 하나로 답하던 동안 화면 귀속 807건 중 331건이 남의 기사였다.
+SUBJECT = "subject"
+MENTION = "mention"
+ROLES = frozenset({SUBJECT, MENTION})
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -78,14 +85,18 @@ class PlayerStore:
                              {"fn": full_name}).scalar_one()
 
     def link_article(self, content_hash: str, player_id: int,
-                     stage: str | None) -> None:
-        """추출 쌍 저장 — 재추출 시 단계 · 시각만 갱신하는 멱등 upsert."""
+                     stage: str | None, role: str | None = None) -> None:
+        """추출 쌍 저장 — 재추출 시 단계 · 역할 · 시각만 갱신하는 멱등 upsert.
+        역할이 미기입인 쌍은 그대로 NULL 로 남는다."""
         with self.engine.begin() as c:
             c.execute(text(
-                "INSERT INTO article_players (content_hash,player_id,stage,extracted_at) "
-                "VALUES (:h,:p,:s,:now) ON DUPLICATE KEY UPDATE "
-                "stage=VALUES(stage), extracted_at=VALUES(extracted_at)"),
-                {"h": content_hash, "p": player_id, "s": stage, "now": _utcnow()})
+                "INSERT INTO article_players "
+                "(content_hash,player_id,stage,role,extracted_at) "
+                "VALUES (:h,:p,:s,:r,:now) ON DUPLICATE KEY UPDATE "
+                "stage=VALUES(stage), role=VALUES(role), "
+                "extracted_at=VALUES(extracted_at)"),
+                {"h": content_hash, "p": player_id, "s": stage, "r": role,
+                 "now": _utcnow()})
 
     def articles_for(self, player_id: int) -> list[str]:
         with self.engine.connect() as c:
@@ -170,10 +181,10 @@ class PlayerStore:
                 "ORDER BY id")).mappings().all()]
 
     def page_player_links(self) -> list[dict]:
-        """대상 선수의 기사 귀속 전량 — (선수, 기사, 그 기사에서 그 선수의 단계)."""
+        """대상 선수의 기사 귀속 전량 — (선수, 기사, 그 기사에서 그 선수의 단계 · 역할)."""
         with self.engine.connect() as c:
             return [dict(r) for r in c.execute(text(
-                "SELECT ap.player_id, ap.content_hash, ap.stage "
+                "SELECT ap.player_id, ap.content_hash, ap.stage, ap.role "
                 "FROM article_players ap JOIN players p ON p.id = ap.player_id "
                 f"WHERE {_PAGE_WHERE}")).mappings().all()]
 

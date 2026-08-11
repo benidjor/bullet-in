@@ -69,3 +69,4 @@ CREATE TABLE IF NOT EXISTS article_players (
   stage VARCHAR(32),
   extracted_at DATETIME NOT NULL,
   PRIMARY KEY (content_hash, player_id));
+ALTER TABLE article_players ADD COLUMN IF NOT EXISTS role VARCHAR(16);
