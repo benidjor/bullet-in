@@ -259,3 +259,26 @@ def test_roster_staleness_sorted_by_name_for_stable_alert_order():
         [_pair(2, "나", "in_link", "agreed"), _pair(1, "가", "in_link", "medical")],
         {(1, "medical"): 2, (2, "agreed"): 2})
     assert [c["ko_name"] for c in cases] == ["가", "나"]
+
+
+def test_roster_staleness_fires_on_done_stage_for_link_player():
+    # 단계 재정의 (스펙 2026-08-10 §4) 로 완결 딜이 done 으로 붙는다 — 침묵하면 안 된다
+    from bullet_in.quality import roster_axis_staleness
+    cases = roster_axis_staleness(
+        [_pair(122, "뇌르고르", "out_link", "done")], {(122, "done"): 4})
+    assert len(cases) == 1 and cases[0]["kind"] == "finish"
+
+
+def test_roster_staleness_fires_on_collapsed_stage_for_link_player():
+    # 무산도 축을 정리해야 하는 종결이다 (link_dropped · other_club 전이)
+    from bullet_in.quality import roster_axis_staleness
+    cases = roster_axis_staleness(
+        [_pair(31, "알바레스", "in_link", "collapsed")], {(31, "collapsed"): 3})
+    assert len(cases) == 1 and cases[0]["kind"] == "finish"
+
+
+def test_roster_staleness_silent_on_closing_stage_for_axisless_player():
+    # 축이 없는 선수 (지난 창 정리 완료) 에게 붙는 종결 단계는 회고 보도라 갱신할 것이 없다
+    from bullet_in.quality import roster_axis_staleness
+    assert roster_axis_staleness(
+        [_pair(27, "요케레스", "none", "done")], {(27, "done"): 6}) == []

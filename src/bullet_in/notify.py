@@ -330,7 +330,8 @@ _AXIS_LABELS = {"none": "이적 축 없음", "in_link": "영입 링크",
                 "out_done": "방출 완료"}
 _STAGE_LABELS = {"rumour": "루머", "interest": "관심", "negotiating": "협상",
                  "personal_terms": "개인 합의", "agreed": "합의",
-                 "medical": "메디컬", "official": "오피셜"}
+                 "medical": "메디컬", "official": "오피셜",
+                 "done": "이적 완료", "collapsed": "무산"}
 
 
 def build_roster_staleness_alert(cases: list[dict], *, run_id: str) -> dict:

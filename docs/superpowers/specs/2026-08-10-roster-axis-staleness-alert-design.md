@@ -27,8 +27,10 @@
 
 - 대상: `status='confirmed'` 이고 `transfer_status IN ('none','in_done','out_done')`.
 - 방아쇠 단계:
-  - `none` 선수는 `other` 를 뺀 전 단계 (rumour · interest · negotiating · personal_terms · agreed · medical · official).
+  - `none` 선수는 진행 단계 전부 (rumour · interest · negotiating · personal_terms · agreed · medical · official).
   - `in_done` · `out_done` 선수는 초기 단계만 (rumour · interest · negotiating · personal_terms).
+  - 종결 단계 (done · collapsed) 는 어느 쪽에도 넣지 않는다
+— 축이 이미 정리된 선수에게 붙는 종결 보도는 지난 창 회고라 갱신할 것이 없다.
 - 완료 축 선수에게 완결 단계 (agreed · medical · official) 를 방아쇠에서 빼는 이유
 — 딜 완결 직후의 후속 보도가 같은 단계 귀속을 계속 만든다 (기마랑이스 영입 확정 뒤 분석 기사들이 agreed 로 귀속).
 그것은 낡음이 아니라 방금 갱신한 값의 메아리다.
@@ -39,7 +41,10 @@
 링크 진행 중인 선수에게 딜 완결 신호가 붙는 경우.
 
 - 대상: `status='confirmed'` 이고 `transfer_status IN ('in_link','out_link')`.
-- 방아쇠 단계: agreed · medical · official.
+- 방아쇠 단계: agreed · medical · official · done · collapsed.
+- `done` · `collapsed` 는 기사 단계 재정의 (스펙 2026-08-10 §4) 의 PLAYERS_CLAUSE 동기화로 선수 단위에도 들어오는 값이다
+— 완결 딜이 `done` 으로 붙으면 이 판정이 유일한 감지 경로다.
+`collapsed` 는 무산 · 잔류 확정이라 `link_dropped` · `other_club` · `none` 전이가 따른다.
 
 ## 3. 발화 조건 · 도배 방지 — 무상태
 
@@ -53,6 +58,11 @@
 — 단발 오추출 · 단발 루머 1건에는 울리지 않는다.
 실물 3계열은 전부 이 임계를 즉시 넘는다 (기마랑이스 agreed 50 · 뇌르고르 agreed 9 · 비니시우스 다건).
 - 회차당 알림 1건에 선수별 필드로 묶는다.
+- **알려진 노이즈 (2026-08-11 읽기 전용 dry-run 실측)** — 딜이 완결된 직후 7일 안에 그 선수의 초기 단계 기사가 새로 들어오면, 완결 전에 쌓인 협상 기사가 누적 조건을 채워 발화한다.
+축 값이 언제 바뀌었는지 기록하는 칸이 없어 완결 전후를 가를 수 없다.
+같은 실측에서 회차 크기 (3시간) 로는 발화 0건이라 빈도가 낮다고 보고 수용한다.
+- 같은 dry-run 에서 참 발화 2건 (비니시우스 · 수비멘디) 을 확인했다
+— 명단 정리 세션이 지시받은 7명을 고치고도 놓친 값이라, 판정 자체는 사람 눈보다 넓게 본다.
 - 판정 · 발송 실패는 회차를 멈추지 않는다 (후보 절벽 알림과 같은 try/except 격리).
 
 ## 4. 문구
