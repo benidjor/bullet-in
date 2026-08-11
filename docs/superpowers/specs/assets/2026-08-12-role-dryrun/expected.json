@@ -482,6 +482,91 @@
     }
   },
 
+  "b6281445": {
+    "group": "target",
+    "title": "살리바 부상 아스날, 스톤스·콘사 영입 관심",
+    "basis": "역할 표시 트랙 인계 (스펙 5.2.1). 한 기사에 11명이 붙고 기대값이 주역 2 · 언급 9 로 갈린다. 살리바가 판정선이다 — 기사 전체의 계기이고 비중도 크지만 본인 거취 소식이 아니라 언급이다. '중요하게 등장 = 주역' 으로 읽으면 틀리는 자리다.",
+    "players": {
+      "Ezri Konsa": {"stage": ["interest"], "role": ["subject"]},
+      "John Stones": {"stage": ["interest"], "role": ["subject"]},
+      "William Saliba": {"stage": ["other"], "role": ["mention"]},
+      "Mikel Arteta": {"stage": ["other"], "role": ["mention"]},
+      "Jurrien Timber": {"stage": ["other"], "role": ["mention"]},
+      "Riccardo Calafiori": {"stage": ["other"], "role": ["mention"]},
+      "Piero Hincapie": {"stage": ["other"], "role": ["mention"]},
+      "Ben White": {"stage": ["other"], "role": ["mention"]},
+      "Gabriel Magalhaes": {"stage": ["other"], "role": ["mention"]},
+      "Cristhian Mosquera": {"stage": ["other"], "role": ["mention"]},
+      "Jacobo Ramon": {"stage": ["other"], "role": ["mention"]}
+    },
+    "watch": "콘사의 단계는 이번 개정의 표적이 아니라 관측 항목이다. 지금 negotiating 인데 본문은 「이적료 평가액에서 상당한 격차」 수준이라 interest 가 맞다 — 선수 축이 기사 축보다 앞서 붙는 유형의 실물이고 규모는 단일 선수 기사 107건 중 앞섬 16건이다. v0 이 못 맞히는 것이 정상이며, v1 이 우연히 고치는지 · 악화시키는지만 본다."
+  },
+
+  "a3106ead": {
+    "group": "preserve",
+    "title": "아스날 리스 넬슨, 해외 구단들 영입 관심",
+    "basis": "인계 오분류 27건의 첫 번째 패턴 — 아스날 선수를 다른 구단이 노리는 소식이 other 로 떨어진다. 아스날이 파는 쪽이므로 아스날 건이 맞고 방향은 out 이다. 4.2 의 「아스날과 무관한 딜뿐이면 other」 가 이 유형을 더 밀어내면 개정이 악화시킨 것이다.",
+    "players": {
+      "Reiss Nelson": {"stage": ["interest", "rumour", "negotiating"], "role": ["subject"]}
+    },
+    "watch": "v0 도 못 맞히는 기존 오분류다. 판정은 v1 이 v0 보다 나빠지지 않는 것이며, 고쳐지면 덤이다."
+  },
+
+  "2165c43d": {
+    "group": "preserve",
+    "title": "인터 밀란, 아스날의 케파 아리사발라가 영입 고려",
+    "basis": "같은 패턴의 두 번째 표본. 타 구단이 주어인 제목이라 4.2 조항에 더 취약하다.",
+    "players": {
+      "Kepa Arrizabalaga": {"stage": ["interest", "rumour", "negotiating"], "role": ["subject"]}
+    },
+    "watch": "v0 도 못 맞히는 기존 오분류다."
+  },
+
+  "67ccfccf": {
+    "group": "preserve",
+    "title": "아스날, 레안드로 트로사르 이적 및 일란 멜리에 영입",
+    "basis": "4.3 의 위험을 정면으로 겨냥한다. done 을 「아스날 이적」 으로 한정했는데 그 말이 영입만 뜻하는 것으로 읽히면 트로사르 같은 방출 완료가 other 로 떨어진다. 트로사르는 아스날에서 나간 이적의 완료 보도이므로 done 이 맞다.",
+    "players": {
+      "Leandro Trossard": {"stage": ["done", "official"], "role": ["subject"]},
+      "Illan Meslier": {"stage": ["done", "official", "agreed"], "role": ["subject"]}
+    },
+    "watch": "트로사르는 v0 에서 other 라 기존 오분류이기도 하다. v1 이 done 으로 올리면 개정이 맞게 작동한 것이고, other 를 유지하거나 다른 값으로 흔들리면 4.3 문안이 방출을 배제한 것이다."
+  },
+
+  "83773ef8": {
+    "group": "preserve",
+    "title": "아스날, 모건 로저스 놓친 후 1,700억대 디오망데 영입전 가세",
+    "basis": "인계 오분류의 두 번째 패턴 — 아스날 건이 끝난 뒤의 보도가 other 로 떨어진다. 로저스는 아스날이 놓친 딜이라 collapsed 라는 거처가 있다. 4.2 가 collapsed 를 아스날 건으로 한정했으므로 이 행이 더 밀려나면 안 된다.",
+    "players": {
+      "Morgan Rogers": {"stage": ["collapsed", "other"], "role": ["mention", "subject"]},
+      "Yan Diomande": {"stage": ["interest", "rumour", "negotiating"], "role": ["subject"]},
+      "Julian Alvarez": {"stage": null, "role": ["mention"]}
+    }
+  },
+
+  "880d4f26": {
+    "group": "preserve",
+    "title": "아스날 레전드 리 딕슨, 마커스 래시포드-마일스 루이스-스켈리 스왑딜 제안",
+    "basis": "인계 오분류의 세 번째 패턴 — 펀딧 · 감독 발언 기사가 other 로 떨어진다. 발언도 그 선수 건의 보도이고 두 인물 모두 제목이 내세운 주역이다.",
+    "players": {
+      "Marcus Rashford": {"stage": ["rumour", "interest"], "role": ["subject"]},
+      "Myles Lewis-Skelly": {"stage": ["rumour", "interest"], "role": ["subject"]}
+    },
+    "watch": "v0 도 못 맞히는 기존 오분류다."
+  },
+
+  "4f20bd0a": {
+    "group": "preserve",
+    "title": "비니시우스·알바레스 영입설에 답한 아르테타 감독",
+    "basis": "같은 패턴의 감독 발언 표본. 알바레스가 other 인데 제목이 내세운 영입설 당사자다.",
+    "players": {
+      "Julian Alvarez": {"stage": ["rumour", "interest"], "role": ["subject"]},
+      "Vinicius Junior": {"stage": ["rumour", "interest"], "role": ["subject"]},
+      "Viktor Gyokeres": {"stage": null, "role": ["subject", "mention"]}
+    },
+    "watch": "요케레스는 같은 기사에서 잔류가 공식 확인된 인물이라 경계다."
+  },
+
   "b48ca35b": {
     "group": "preserve",
     "title": "아스날, 모건 로저스 영입 위해 최대 1천억 원 준비했었다",
