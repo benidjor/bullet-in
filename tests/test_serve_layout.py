@@ -154,10 +154,16 @@ def test_facet_counts_journalist_tier_from_registry():
     assert f["journalists"]["stages"] == []   # 미등재 꼬리 없음
 
 def test_facet_counts_includes_stage_excluding_other():
+    # 단계 계수는 방향 in · out 한정 (단계 재정의 스펙 2026-08-10 §8) — none 은 분모 제외
     arts = [
-        {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal", "transfer_stage": "rumour"},
-        {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal", "transfer_stage": "rumour"},
-        {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal", "transfer_stage": "official"},
+        {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal",
+         "transfer_stage": "rumour", "transfer_direction": "in"},
+        {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal",
+         "transfer_stage": "rumour", "transfer_direction": "out"},
+        {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal",
+         "transfer_stage": "rumour", "transfer_direction": "none"},   # 타 구단 딜 → 계수 제외
+        {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal",
+         "transfer_stage": "official", "transfer_direction": "in"},
         {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal", "transfer_stage": "other"},
         {"source_id": "s", "outlet": "BBC", "tier": 1, "team": "arsenal"},   # 미태깅(None)
     ]
@@ -165,8 +171,8 @@ def test_facet_counts_includes_stage_excluding_other():
     assert f["stage"]["rumour"] == 2
     assert f["stage"]["official"] == 1
     assert "other" not in f["stage"]      # other는 집계 제외
-    assert set(f["stage"]) == {"official", "agreed", "medical", "personal_terms",
-                               "negotiating", "interest", "rumour"}
+    assert set(f["stage"]) == {"official", "done", "agreed", "medical", "personal_terms",
+                               "negotiating", "interest", "rumour", "collapsed"}
 
 def test_facet_counts_other_bucket_counts_offmission():
     arts = [
@@ -311,17 +317,27 @@ def test_outlet_display_promoted_and_non_x_rows_unchanged():
     assert outlet_display(row, sources, directory=directory) == "BBC"
 
 
-def test_facet_stage_counts_bbc_gossip_as_rumour():
-    # 가십 루머 롤업 하드코딩은 저장 계층 규칙 (rule_stage) 으로 이동했다
-    # (방향 축 스펙 §5) — facet_counts 는 더 이상 source_id 로 override 하지 않고
-    # 저장값을 그대로 센다. 배포판 실측으로 bbc_gossip 전행이 이미 rumour 로
-    # 저장돼 있어 사이드바 건수는 하드코딩 제거 전후로 동일하다.
+def test_facet_counts_collapsed_ignores_direction():
+    # 무산은 방향 게이트 예외 (단계 재정의 스펙 §8 개정 2026-08-11) — 잔류 확정 ·
+    # 재계약 체결은 방향 none 이라, 게이트를 걸면 무산 필터가 제 내용물을 잃는다.
+    arts = [{"transfer_stage": "collapsed", "transfer_direction": "none"},
+            {"transfer_stage": "collapsed", "transfer_direction": "in"},
+            {"transfer_stage": "agreed", "transfer_direction": "none"}]
+    f = facet_counts(arts, {})
+    assert f["stage"]["collapsed"] == 2      # 방향 무관하게 전건
+    assert f["stage"]["agreed"] == 0         # 다른 단계는 in · out 한정 유지
+
+
+def test_facet_stage_counts_bbc_gossip_excluded_by_direction():
+    # 가십은 규칙 (rule_stage) 으로 rumour · none 저장 — 단계 계수가 in · out 한정으로
+    # 바뀌면서 (단계 재정의 스펙 §8) 방향 none 인 가십은 루머 계수에서 빠진다.
+    # 가십 도달 경로는 가십 밴드 · 전체 목록으로 유지된다.
     arts = [{"source_id": "bbc_gossip", "outlet": None, "tier": 4, "team": "arsenal",
-             "transfer_stage": "rumour"}]
+             "transfer_stage": "rumour", "transfer_direction": "none"}]
     f = facet_counts(arts, {"bbc_gossip": {"display_name": "BBC Football Gossip"}})
-    assert f["stage"]["rumour"] == 1
+    assert f["stage"]["rumour"] == 0
     assert f["stage"]["interest"] == 0
-    assert f["other"] == 0
+    assert f["other"] == 0                # 단계가 있으므로 기타 분모로도 새지 않는다
 
 
 def test_journalist_entry_folds_spaced_korean_alias():

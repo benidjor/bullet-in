@@ -69,12 +69,32 @@ def test_stage_ladder_one_line_per_group_in_progress_order():
     assert [l["count"] for l in lines] == [1, 2]                 # 건수 = 묶음 전체 (대표 포함)
 
 
-def test_stage_ladder_merges_negotiating_and_medical_into_one_line():
-    entries = [{"row": _row(1, "h1", tier=4), "stage": "negotiating"},
+def test_stage_ladder_merges_agreed_and_medical_into_one_line():
+    # 메디컬의 표시 묶음 소속이 협상 중 → 이적 합의로 이동했다 (단계 재정의 스펙 §3)
+    entries = [{"row": _row(1, "h1", tier=4), "stage": "agreed"},
                {"row": _row(2, "h2", tier=4), "stage": "medical"}]
     [line] = stage_ladder(entries)
     assert line["row"]["content_hash"] == "h2"   # 동률 → 늦은 기사 (2026-08-07 개정)
-    assert line["count"] == 2                    # 협상 중 한 줄로 합산
+    assert line["count"] == 2                    # 이적 합의 한 줄로 합산
+
+
+def test_stage_ladder_excludes_collapsed_and_ended_marker_carries_it():
+    # 무산은 진행 단계가 아니라 사다리 축에 넣지 않고 종결 표시로 뗀다 (단계 재정의 스펙 §8)
+    from bullet_in.serve.render import ended_marker
+    entries = [{"row": _row(1, "h1", tier=4), "stage": "negotiating"},
+               {"row": _row(2, "h2", tier=1), "stage": "collapsed"},
+               {"row": _row(3, "h3", tier=4), "stage": "collapsed"}]
+    [line] = stage_ladder(entries)
+    assert line["stage"] == "negotiating"        # collapsed 는 사다리 줄이 아니다
+    end = ended_marker(entries)
+    assert end["stage"] == "collapsed"
+    assert end["row"]["content_hash"] == "h2"    # 대표 규칙 동일 — 공신력 높은 순
+    assert end["count"] == 2
+
+
+def test_ended_marker_is_none_without_collapsed():
+    from bullet_in.serve.render import ended_marker
+    assert ended_marker([{"row": _row(1), "stage": "agreed"}]) is None
 
 
 def test_stage_ladder_rep_is_highest_credibility_and_missing_tier_is_lowest():
@@ -260,6 +280,20 @@ def test_render_player_ladder_line_has_count_and_credibility():
     assert "이후 " not in html                 # 전이형 문구 잔존 방지
     assert "공신력 중" in html                 # tier 2 독자 라벨 — tlsrc 에 병기 (§4.3)
     assert "촐리스 단계 없음" in html          # 단계 없는 기사도 목록에
+
+
+def test_render_player_shows_collapsed_as_ended_row():
+    # 무산 기사는 사다리 줄이 아니라 종결 줄 (tlend) 로 그린다 (단계 재정의 스펙 §8)
+    arts = [_art("h1", 1, "negotiating", "촐리스 협상"),
+            _art("h2", 5, "collapsed", "촐리스 잔류 확정")]
+    players = [_player(1, "Tzolis", "촐리스", "link_dropped",
+                       [{"content_hash": "h1", "stage": "negotiating"},
+                        {"content_hash": "h2", "stage": "collapsed"}])]
+    [e] = build_player_entries(arts, players)
+    html = render_player(e, SOURCES, NOW)
+    assert 'tlnode tlend' in html              # 종결 줄 존재
+    assert html.count('class="tlnode') == 2    # 협상 1줄 + 종결 1줄 — 이중 표기 없음
+    assert "무산" in html
 
 
 def test_render_player_ladder_hides_count_when_single():

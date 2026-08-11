@@ -17,7 +17,6 @@ import argparse, asyncio, logging, os
 from datetime import datetime, timezone
 from pymongo import MongoClient
 from sqlalchemy import create_engine, text
-from bullet_in import transfer_stage
 from bullet_in.adapters.arsenal_api import ArsenalApiAdapter
 from bullet_in.canonical import canonical_url, content_hash
 from bullet_in.credibility import load_registry
@@ -73,12 +72,11 @@ def phase_reverify(apply: bool) -> None:
     mart.ensure_schema()
     arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
     mart.upsert(arts)
-    # 소급 재분류 이후 재실행하면 stage 만 채워지고 정기 분류 대상에서 빠져 direction 은 NULL 로 남으니, 필요하면 런북 3절 재분류로 채울 것.
-    ruled, _ = transfer_stage.rule_stage("arsenal_official")
-    for r in mart.rows_missing_stage():
-        if r["source_id"] == "arsenal_official" and ruled:
-            mart.set_stage(r["content_hash"], ruled)
-    log.info("적재 — 신규 %d · 중복 %d (번역은 정규 회차가 흡수)",
+    # stage 는 여기서 채우지 않는다 — 정기 회차의 규칙 경로가 공홈을 official 로 고정하면서
+    # 방향은 LLM 배치에서 함께 받는다 (run.py 의 stage_ruled). 여기서 stage 만 채우면 그 행이
+    # 분류 대상 (rows_missing_stage) 에서 빠져 direction 이 NULL 로 남고, 단계 필터가 방향
+    # 한정이 된 뒤로는 (단계 재정의 스펙 §8) 오피셜 배지를 달고도 필터에서 사라진다.
+    log.info("적재 — 신규 %d · 중복 %d (번역 · 분류는 정규 회차가 흡수)",
              len(arts), stats["dup_count"])
 
 def main() -> None:

@@ -16,9 +16,11 @@
   font-display:swap; src:url("fonts/Pretendard.subset.woff2") format("woff2");
 }
 
-/* ── 토큰 (§4.1) — 강조색은 red · green · yellow 셋뿐, 나머지는 무채색 ── */
+/* ── 토큰 (§4.1) — 강조색은 red · green · yellow + 이적 완료의 blue, 나머지는 무채색.
+   ash 는 무산 배지 전용 한색 무채 (단계 재정의 2026-08-10 — 관심 · 루머의 dim 과 구분) ── */
 :root{
   --red:#DA020E; --green:#1D7A42; --yellow:#A8710A;
+  --blue:#1D5FA8; --ash:#6d6a75;
   --ink:#16130f; --mut:#6f6960; --dim:#928c82;
   --paper:#fbfaf7; --sunk:#f2efe9; --hair:#ddd8ce; --rule:#16130f;
   --g0-bg:#fbecec; --g1-bg:#f4f1ea;              /* 상위 두 등급 배경 음영 */
@@ -31,6 +33,7 @@
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
     --red:#FF4F57; --green:#54C97C; --yellow:#E0A83C;
+    --blue:#5C9CE6; --ash:#8a8694;
     --ink:#efeae2; --mut:#a49d94; --dim:#7d766d;
     --paper:#131211; --sunk:#1d1b19; --hair:#332f2b; --rule:#efeae2;
     --g0-bg:#2a1614; --g1-bg:#252220;            /* 다크는 음영을 한 단계 벌림 (spec2 §3.2) */
@@ -39,6 +42,7 @@
 }
 html[data-theme="dark"]{
   --red:#FF4F57; --green:#54C97C; --yellow:#E0A83C;
+  --blue:#5C9CE6; --ash:#8a8694;
   --ink:#efeae2; --mut:#a49d94; --dim:#7d766d;
   --paper:#131211; --sunk:#1d1b19; --hair:#332f2b; --rule:#efeae2;
   --g0-bg:#2a1614; --g1-bg:#252220;
@@ -133,6 +137,7 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .stage.filled{background:var(--red);color:#fff;padding:2px 7px;border-radius:2px}
 .stage.red{color:var(--red)} .stage.green{color:var(--green)}
 .stage.yellow{color:var(--yellow)} .stage.gray{color:var(--dim)}
+.stage.blue{color:var(--blue)} .stage.ash{color:var(--ash)}
 .stage.filled.red{color:#fff}
 
 /* ── 카드 공통 ─────────────────────────────────────────────────────── */
@@ -344,6 +349,9 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
 .tltitle:hover{color:var(--red)}
 .tlsrc{font-size:12px;color:var(--mut);white-space:nowrap}
 .tlmore{font-size:11px;color:var(--dim)}
+/* 무산 종결 줄 — 진행 축과 구분되는 점선 경계 (단계 재정의 스펙 §8) */
+.tlnode.tlend{border-top:1px dashed var(--hair)}
+.tlnode.tlend .tltitle{color:var(--mut)}
 .plist{margin-top:4px}
 
 .pchips{margin:8px 0 0;display:flex;flex-wrap:wrap;gap:6px}

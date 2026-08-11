@@ -206,17 +206,21 @@ def tier_label(tier) -> str:
     return f"Tier {tier_key(tier)}"
 
 
-# ── 표시 단계 매핑 (spec1 §5) — 저장 enum 7종을 독자용 6묶음으로 접는다.
-# 저장 enum 은 건드리지 않고 (transfer_stage.py 는 enrich 와 공유) 표시 계층에서만 묶는다.
-# medical 은 건수가 적어 협상 중에 합친다 · 순서는 진행이 많이 된 것부터.
+# ── 표시 단계 매핑 (spec1 §5 · 단계 재정의 스펙 2026-08-10 §3.1) — 저장 enum 9종을
+# 독자용 8묶음으로 접는다. 저장 enum 은 건드리지 않고 (transfer_stage.py 는 enrich 와
+# 공유) 표시 계층에서만 묶는다.
+# medical 은 건수가 적어 이적 합의에 합친다 (협상 중 소속에서 이동 — §3) ·
+# 순서는 진행이 많이 된 것부터 · collapsed 는 종결이라 맨 뒤.
 _DISPLAY_STAGE: dict[str, dict] = {
     "official": {"label": "오피셜", "tone": "red", "filled": True},
+    "done": {"label": "이적 완료", "tone": "blue", "filled": False},
     "agreed": {"label": "이적 합의", "tone": "red", "filled": False},
-    "medical": {"label": "협상 중", "tone": "green", "filled": False},
-    "negotiating": {"label": "협상 중", "tone": "green", "filled": False},
+    "medical": {"label": "이적 합의", "tone": "red", "filled": False},
     "personal_terms": {"label": "개인 합의", "tone": "yellow", "filled": False},
+    "negotiating": {"label": "협상 중", "tone": "green", "filled": False},
     "interest": {"label": "관심", "tone": "gray", "filled": False},
     "rumour": {"label": "루머", "tone": "gray", "filled": False},
+    "collapsed": {"label": "무산", "tone": "ash", "filled": False},
 }
 
 
@@ -226,14 +230,17 @@ def display_stage(enum: str | None) -> dict | None:
     return dict(d) if d else None
 
 
-# 사이드바 단계 필터 — 표시 6묶음 (라벨, 저장 enum 목록). 협상 중이 negotiating · medical 을 함께 건다.
+# 사이드바 단계 필터 — 표시 8묶음 (라벨, 저장 enum 목록). 이적 합의가 agreed · medical 을
+# 함께 건다 (단계 재정의 스펙 2026-08-10 §3 — 메디컬의 소속을 협상 중에서 이동).
 _STAGE_DISPLAY_GROUPS: list[tuple[str, list[str]]] = [
     ("오피셜", ["official"]),
-    ("이적 합의", ["agreed"]),
-    ("협상 중", ["negotiating", "medical"]),
+    ("이적 완료", ["done"]),
+    ("이적 합의", ["agreed", "medical"]),
     ("개인 합의", ["personal_terms"]),
+    ("협상 중", ["negotiating"]),
     ("관심", ["interest"]),
     ("루머", ["rumour"]),
+    ("무산", ["collapsed"]),
 ]
 
 
@@ -281,8 +288,11 @@ def show_summary(tier: float | None) -> bool:
 # 순서: 상위 3등급만 → 아스날 주체 → 공신력 → 영입 단계 → 최신 → 이미지 유무.
 # arsenal.com 배제 규칙은 넣지 않는다 (앞 스펙 §16.1 재측정으로 무효 · spec2 §5.1).
 _TOP_TIERS = {0.0, 1.0, 1.5}
-_LEAD_STAGE_RANK = {"official": 5, "agreed": 4, "medical": 3,
-                    "personal_terms": 2, "negotiating": 1}
+# done 은 종전 체계에서 agreed 로 저장되던 "타 매체 완료 보도" 의 거처라 상위 유지
+# (빠뜨리면 완료 당일 보도가 rank 0 으로 추락) · collapsed 는 결말 카드 문턱
+# (ending_card 의 >= 1) 을 넘도록 negotiating 급 (단계 재정의 2026-08-10 반영).
+_LEAD_STAGE_RANK = {"official": 6, "done": 5, "agreed": 4, "medical": 3,
+                    "personal_terms": 2, "negotiating": 1, "collapsed": 1}
 _TOP_HORIZON_DAYS = 10
 
 
@@ -449,6 +459,17 @@ def filter_stage(row: dict) -> str | None:
     return row.get("transfer_stage")
 
 
+def in_stage_filter(stage: str | None, direction: str | None) -> bool:
+    """단계 필터 (계수 · 목록) 대상인지 — 방향 in · out 한정 (단계 재정의 스펙 §8).
+
+    무산 (collapsed) 은 예외로 방향을 보지 않는다 (§8 개정 2026-08-11): 무산은
+    정의상 아스날 관련 딜의 종결에만 붙는 관점 값이라 "타 구단 딜 제외" 라는
+    한정의 취지가 이미 분류 단계에서 충족돼 있고, 방향까지 걸면 잔류 확정 ·
+    재계약 체결 (실측상 방향 none) 이 자기 필터에서 빠져 배지와 필터 결과가
+    어긋난다. app.js 의 같은 판정과 규칙을 맞춘다."""
+    return stage == "collapsed" or direction in ("in", "out")
+
+
 def facet_counts(articles: list[dict], sources: dict, directory: dict | None = None,
                  registry=None, outlet_dir: dict | None = None) -> dict:
     teams = Counter(a.get("team") or "arsenal" for a in articles)
@@ -476,15 +497,20 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
     tiers = [{"key": tier_key(t), "reader": reader_tier(t), "count": seen.get(tier_key(t), 0)}
              for t in TIER_ORDER]
 
+    # 단계 필터 계수는 방향 in · out (아스날 주체) 한정이다 (단계 재정의 스펙 §8).
+    # 타 구단 딜 (none) 은 분류 · 배지를 유지한 채 필터 분모에서만 빠지고,
+    # 전체 목록 · 팀 facet · 사건 묶음 · 선수 필터로는 계속 도달된다.
+    # 기타 (other · 미분류) 계수는 방향과 무관하다 — 기타 토글의 분모는 그대로다.
     stage_counts = {e: 0 for e, _, _ in _stage.SIDEBAR_STAGES}
     other_count = 0
     for a in articles:
         s = filter_stage(a)
         if s in stage_counts:
-            stage_counts[s] += 1
+            if in_stage_filter(s, a.get("transfer_direction")):
+                stage_counts[s] += 1
         else:
             other_count += 1
-    # 표시 6묶음 — 라벨 · 저장 enum 목록 (data-value) · 합산 건수 (spec1 §5)
+    # 표시 8묶음 — 라벨 · 저장 enum 목록 (data-value) · 합산 건수 (spec1 §5)
     stage_groups = [{"label": label, "value": ",".join(enums),
                      "count": sum(stage_counts.get(e, 0) for e in enums)}
                     for label, enums in _STAGE_DISPLAY_GROUPS]
@@ -788,6 +814,8 @@ def _decorate(row: dict, sources: dict, now: datetime,
     a["url"] = u if re.match(r"^https?://", u) else "#"
     st = filter_stage(row)
     a["_stage"] = st or ""
+    # 단계 필터의 in · out 한정 (스펙 §8) 판정 키 — 카드 data-dir 로 나간다
+    a["_dir"] = row.get("transfer_direction") or ""
     a["_stage_badge"] = _stage.is_displayable(st)
     a["_stage_label"] = _stage.label_for(st)
     a["_stage_class"] = _stage.css_for(st)
@@ -988,7 +1016,8 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
         if not paired:
             continue
         paired.sort(key=lambda t: _sort_ts(t[0]))          # 오래된 것부터 (사다리 입력)
-        ladder = stage_ladder([{"row": r, "stage": s} for r, s in paired])
+        timeline = [{"row": r, "stage": s} for r, s in paired]
+        ladder = stage_ladder(timeline)
         slug = player_slug(p.get("surname") or "", p["id"], dupes)
         if folded[p["id"]] in dupes:
             log.warning("동성 복수 — slug 를 id 로 떨어뜨림: %s → %s",
@@ -999,6 +1028,7 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
                     "slug": slug,
                     "articles": [r for r, _ in reversed(paired)],
                     "ladder": ladder,
+                    "ended": ended_marker(timeline),
                     # 현재 단계는 시간축 최신값이다 (사다리 스펙 §6.2) — 사다리는
                     # 오피셜이 앞이라 첫 줄을 읽으면 뜻이 "가장 진행된 단계" 로 바뀐다.
                     "stage": next((s for _, s in reversed(paired)
@@ -1027,19 +1057,35 @@ def stage_ladder(entries: list[dict]) -> list[dict]:
             continue
         buckets.setdefault(_STAGE_GROUP_OF[e["stage"]], []).append(e)
 
-    def cred(e):
-        t = e["row"].get("tier")
-        return float(t) if t is not None else 99.0
-
     out = []
-    for label, _ in _STAGE_DISPLAY_GROUPS:
+    for label, enums in _STAGE_DISPLAY_GROUPS:
+        if "collapsed" in enums:
+            # collapsed 는 진행 단계가 아니라 사다리 축에 넣지 않는다 — 종결 표시는
+            # ended_marker() 가 따로 만든다 (단계 재정의 스펙 §8). 판정은 표시 라벨이
+            # 아니라 enum 으로 — ended_marker 와 기준을 하나로 맞춘다.
+            continue
         b = buckets.get(label)
         if not b:
             continue
         # 뒤집어 넣어 동률에서 늦은 기사가 이기게 한다 (min 은 안정 선택 — 첫 최소값).
-        rep = min(reversed(b), key=cred)
+        rep = min(reversed(b), key=_ladder_cred)
         out.append({"row": rep["row"], "stage": rep["stage"], "count": len(b)})
     return out
+
+
+def _ladder_cred(e):
+    t = e["row"].get("tier")
+    return float(t) if t is not None else 99.0
+
+
+def ended_marker(entries: list[dict]) -> dict | None:
+    """무산 (collapsed) 종결 표시 (단계 재정의 스펙 §8) — 사다리 축 밖의 한 줄.
+    대표 선정 규칙은 사다리와 동일 (공신력 높은 순 · 동률이면 늦은 기사)."""
+    b = [e for e in entries if e.get("stage") == "collapsed"]
+    if not b:
+        return None
+    rep = min(reversed(b), key=_ladder_cred)
+    return {"row": rep["row"], "stage": rep["stage"], "count": len(b)}
 
 
 def render_players(entries: list[dict], now: datetime) -> str:
@@ -1071,6 +1117,12 @@ def render_player(entry: dict, sources: dict, now: datetime,
     nodes = [{"a": decorated[n["row"]["content_hash"]],
               "badge": display_stage(n["stage"]), "count": n["count"]}
              for n in entry["ladder"]]
+    ended = entry.get("ended")
+    if ended:
+        # 무산 종결 줄 — 같은 tlnode 마크업에 end 플래그만 얹어 단일 루프로 그린다
+        nodes.append({"a": decorated[ended["row"]["content_hash"]],
+                      "badge": display_stage(ended["stage"]),
+                      "count": ended["count"], "end": True})
     return _env().get_template("player.html.j2").render(
         e=entry, badge=transfer_badge(entry["transfer_status"]),
         stage=display_stage(entry["stage"]), nodes=nodes,

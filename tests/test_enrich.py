@@ -227,12 +227,13 @@ def test_classify_demotes_invalid_or_missing_direction_to_none():
     assert out == {"a": ("rumour", "none"), "b": ("rumour", "none")}
 
 
-def test_classify_demotes_official_to_agreed():
-    """프롬프트에 없어도 모델이 official을 뱉으면 agreed로 강등 (spec §4.3 불변량)."""
+def test_classify_demotes_official_to_done():
+    """프롬프트에 없어도 모델이 official을 뱉으면 done으로 강등 — 타 매체의 "오피셜"
+    보도는 새 체계에서 완료 계열이다 (단계 재정의 스펙 2026-08-10 §4)."""
     payload = '[{"content_hash":"h1","stage":"official","direction":"in"}]'
     rows = [{"content_hash": "h1", "title_original": "t", "summary_ko": "s"}]
     out = classify_stage_rows(rows, _StageClient(payload), "m")
-    assert out == {"h1": ("agreed", "in")}
+    assert out == {"h1": ("done", "in")}
 
 
 def test_classify_omits_missing_hashes():
@@ -295,7 +296,8 @@ def test_stage_prompt_keeps_other_for_non_transfer_only():
     2026-08-02 실측 16건 (other 버킷에 남은 이적 기사) 의 경계 유형 보강."""
     from bullet_in.enrich import STAGE_PROMPT
     assert "other 는 이적과 정말 무관한 글에만 쓴다" in STAGE_PROMPT
-    for boundary in ("무산 · 결렬 · 포기 · 잔류 확정 · 이적설 부인",
+    # 잔류 확정은 2026-08-10 재정의로 collapsed 소관이 되어 이 목록에서 빠졌다
+    for boundary in ("무산 · 결렬 · 포기 · 이적설 부인",
                      "몸값 · 이적료 책정 보도",
                      "분쟁 · 법적 절차",
                      "대안 후보군 · 연쇄 반응"):
@@ -319,7 +321,17 @@ def test_stage_prompt_covers_non_arsenal_transfers():
     """타 구단 간 이적 기사도 그 이적의 단계로 분류한다 — 아스날이 주체가 아니라는 이유로
     other · negotiating 으로 새던 오분류 방지 (79b99b1b · 2f556abe 사례)."""
     from bullet_in.enrich import STAGE_PROMPT
-    assert "이적 주체가 아스날이 아니어도" in STAGE_PROMPT
+    assert "이적 주체가 {club} 이 아니어도" in STAGE_PROMPT
+
+def test_stage_prompt_keeps_done_and_collapsed_boundaries():
+    """done · collapsed 신설 경계의 핵심 문장 회귀 가드 (단계 재정의 스펙 §4 · dry-run
+    v1c 채택 — 문장을 고치면 소표본 재검증을 다시 거쳐야 한다, 시소 트러블슈팅 2026-08-08)."""
+    from bullet_in.enrich import STAGE_PROMPT
+    assert "명단은 보조 근거다" in STAGE_PROMPT                       # done 의 시차 원칙 (§5)
+    assert "진행 중인 잔류·재계약 협상은 collapsed 가 아니다" in STAGE_PROMPT
+    assert "거부한다는 방침 보도도 종결이 아니다" in STAGE_PROMPT      # 로메로 유형 차단
+    assert "하이재킹 완결" in STAGE_PROMPT                            # §3.2 재조정 규칙
+    assert "임박·근접 보도는 agreed 가 아니라 negotiating 이다" in STAGE_PROMPT
 
 def test_stage_prompt_lists_directions_and_tie_rule():
     """프롬프트가 방향 3값 정의 · 임대 포괄 · 대등 혼합 out 우선을 담는다 (방향 축 스펙 §4.2)."""
@@ -1216,7 +1228,7 @@ def test_extract_players_rows_returns_pairs_and_stops_on_429(caplog):
 def test_extract_players_prompt_lists_stages():
     from bullet_in.enrich import EXTRACT_PLAYERS_PROMPT
     for stage in ("rumour", "interest", "negotiating", "personal_terms",
-                  "medical", "agreed", "other"):
+                  "medical", "agreed", "done", "collapsed", "other"):
         assert stage in EXTRACT_PLAYERS_PROMPT
     assert "official" not in EXTRACT_PLAYERS_PROMPT
 

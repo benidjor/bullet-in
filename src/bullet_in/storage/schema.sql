@@ -23,6 +23,9 @@ ALTER TABLE articles ADD COLUMN IF NOT EXISTS image_url VARCHAR(1024);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS outlet VARCHAR(128);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS journalist VARCHAR(128);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS team VARCHAR(32) DEFAULT 'arsenal';
+-- transfer_stage 의 collapsed 와 transfer_direction 은 아스날 관점 값이다 (단계 재정의
+-- 스펙 2026-08-10 §9) — 같은 기사가 타 구단 관점에선 다른 값이므로, 분석 · 알림 등
+-- 다른 소비자가 구단 중립 값으로 쓰면 안 된다. 멀티 클럽 확장 시 전 구단 재도출 대상.
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS transfer_stage VARCHAR(32);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS transfer_direction VARCHAR(8);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS images_json TEXT;

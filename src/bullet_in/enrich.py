@@ -39,17 +39,20 @@ PLAYERS_CLAUSE = (
     "- 단, 여러 아스날 관련 소식을 모은 기사면 각 소식의 당사자는 모두 넣고, "
     "경기 · 근황 · 부상만 다뤄진 인물도 기사가 직접 다루면 stage 를 other 로 넣는다.\n"
     "- 아스날 영입 대상 선수의 잔류 · 재계약 · 경쟁 구단 제안 소식도 그 선수의 "
-    "거취 관련이므로 넣는다. stage 는 아스날 건 기준으로 매기고, 기사가 아스날 건의 "
-    "진행을 말하지 않으면 other. 아스날 언급이 없어도 기사의 주제가 한 선수와 현 "
-    "소속 구단 사이의 잔류 · 재계약 건이면 그 선수를 넣고 stage 는 other 로 한다. "
-    "다른 구단이 그 선수의 영입을 추진하는 기사에는 적용하지 않는다.\n"
+    "거취 관련이므로 넣는다. stage 는 아스날 건 기준으로 매기고, 잔류 · 재계약이 "
+    "체결 · 확정된 보도면 collapsed, 기사가 아스날 건의 진행을 말하지 않으면 other. "
+    "아스날 언급이 없어도 기사의 주제가 한 선수와 현 소속 구단 사이의 잔류 · 재계약 "
+    "건이면 그 선수를 넣고 stage 는 같은 기준 (체결 · 확정이면 collapsed · 그 밖은 "
+    "other) 으로 한다. 다른 구단이 그 선수의 영입을 추진하는 기사에는 적용하지 않는다.\n"
     "- stage 는 이 기사가 그 선수에 대해 보도하는 진행 단계다. 기사 밖에서 아는 "
     "그 선수의 상황으로 답하지 않는다. 이 기사가 그 선수의 진행 단계를 말하지 "
     "않으면 other.\n"
     "- stage 값: rumour(근거 약한 소문 · 연결설) · interest(구단의 실제 관심 · "
-    "스카우팅 · 후보 검토) · negotiating(이적료 · 조건 협상 중 · 제안 · 거절) · "
-    "personal_terms(선수-구단 개인 조건 합의) · medical(메디컬 테스트) · "
-    "agreed(구단 간 합의 · 딜 확정 · 임박) · other(이적 무관 · 경기 · 근황 · 단계 불명).\n")
+    "스카우팅 · 후보 검토) · negotiating(이적료 · 조건 협상 중 · 제안 · 거절 · "
+    "합의 임박 · 근접) · personal_terms(선수-구단 개인 조건 합의) · medical(메디컬 테스트) · "
+    "agreed(구단 간 완전 합의 도달 · 딜 확정을 사실로 보도 — 임박은 negotiating) · "
+    "done(이미 완료된 이적의 후속 · 부대 보도) · collapsed(아스날 관련 딜의 종결 — "
+    "잔류 확정 · 재계약 체결 · 결렬 확정) · other(이적 무관 · 경기 · 근황 · 단계 불명).\n")
 
 TRANSLATE_PROMPT = (
     "아스날 FC 축구 뉴스를 한국어로 번역·요약한다. 규칙:\n"
@@ -815,43 +818,63 @@ def resummarize_rows(rows: list[dict], client, model: str) -> dict[str, dict]:
         result[h] = parsed
     return result
 
-# 주의: 아래 단계 목록(rumour·interest·negotiating·personal_terms·medical·agreed·other)은
-# transfer_stage.VALID_STAGES와 동기화되어야 한다. 새 단계를 추가하면 이 프롬프트도
-# 업데이트해야 하며, tests/test_enrich.py::test_stage_prompt_lists_llm_stages_and_excludes_official()에서
+# 주의: 아래 단계 목록(rumour·interest·negotiating·personal_terms·medical·agreed·done·
+# collapsed·other)은 transfer_stage.VALID_STAGES와 동기화되어야 한다. 새 단계를 추가하면
+# 이 프롬프트도 업데이트해야 하며,
+# tests/test_enrich.py::test_stage_prompt_lists_llm_stages_and_excludes_official()에서
 # 불일치를 검출한다.
+# 문안 정본은 스펙 2026-08-10-article-stage-redefinition-design.md §4 — dry-run 채택판
+# (v1c · specs/assets/2026-08-10-stage-dryrun/) 원문 그대로다. 경계 문구를 고칠 때는
+# 소표본 재검증을 거친다 (시소 함정: troubleshooting 2026-08-08).
+# {club} 은 멀티 클럽 확장 대비 파라미터 (스펙 §9) · {roster} 는 완료 명단 재료 자리
+# (이번 개정에서는 미주입 — dry-run v2 기각 · 명단 갱신 뒤 재평가).
 STAGE_PROMPT = (
-    "다음은 아스날 FC 관련 기사 목록이다. 각 기사를 이적 진행 단계로 분류한다.\n"
+    "다음은 {club} 관련 기사 목록이다. 각 기사를 이적 진행 단계로 분류한다.\n"
     "단계 (반드시 아래 영문 값 중 하나로 답한다):\n"
     "- rumour: 근거 약한 소문 · 연결설\n"
-    "- interest: 구단이 실제 관심 표명 · 스카우팅\n"
-    "- negotiating: 구단 간 · 에이전트와 이적료/조건 협상 중 (아직 합의 전 — '합의 도달'이면 agreed)\n"
-    "- personal_terms: 선수와 구단이 개인 조건 (연봉 · 계약 기간) 을 합의 "
-    "(구두 합의라도 당사자가 선수-구단이면 여기)\n"
+    "- interest: 구단이 실제 관심 표명 · 스카우팅 · 후보 검토\n"
+    "- negotiating: 이적료·조건 협상 중 · 제안 · 거절, 그리고 합의 임박·근접·눈앞·마무리 단계 보도 "
+    "(기사가 합의 도달을 사실로 전하지 않는 한 여기다)\n"
+    "- personal_terms: 선수와 구단이 개인 조건 (연봉·계약 기간) 을 합의 "
+    "(구두 합의라도 당사자가 선수-구단이면 여기). 조건 제시 준비·계획·근접은 합의가 아니다 — "
+    "negotiating 또는 interest 로 답한다\n"
     "- medical: 메디컬 테스트 진행 · 통과\n"
-    "- agreed: 구단 간 이적 합의 · 딜 확정/임박 보도 (구두 합의 · 원칙적 합의 · verbal agreement · "
-    "agreement in principle · 'on verge of signing' 포함 · 타 매체의 공식 발표 보도 포함)\n"
+    "- agreed: 구단 간 완전 합의 도달 · 딜 확정을 사실로 보도 (구두 합의 · 원칙적 합의 · "
+    "here we go 류 · 체결 합의를 새 소식으로 전하는 기사). 임박·근접 보도는 agreed 가 아니라 negotiating 이다\n"
+    "- done: 이미 완료된 이적의 후속 · 부대 보도 — 계약 체결 완료 · 등번호 배정 · 입단 소감 · "
+    "완료된 이적의 회고 · 해설 · 손익 분석. 완료 명단 참고: {roster}. "
+    "명단은 보조 근거다 — 기사가 협상·합의의 진행을 새 소식으로 전하면 그 진행 단계로 답한다\n"
+    "- collapsed: {club} 관련 딜의 종결 — 영입 대상의 잔류 확정 · 현 소속 구단과의 재계약 체결 · "
+    "협상 결렬 확정 · 경쟁 구단의 영입 확정, 즉 {club} 의 실패·무산이 기사의 주된 내용일 때. "
+    "타 구단 간 딜의 무산·결렬은 그 딜이 도달했던 마지막 단계로 답한다. "
+    "진행 중인 잔류·재계약 협상은 collapsed 가 아니다. 상대 구단이 협상·매각을 거부한다는 "
+    "방침 보도도 종결이 아니다 — 그 딜의 진행 단계 (interest·negotiating) 로 답한다\n"
     "- other: 이적과 무관하거나 단계를 판단할 수 없음\n"
     "방향 (direction — 반드시 아래 영문 값 중 하나로 답한다):\n"
-    "- in: 아스날로 오는 이적 (임대 영입 포함)\n"
-    "- out: 아스날에서 나가는 이적 (방출 · 매각 · 임대 방출 포함)\n"
+    "- in: {club} 로 오는 이적 (임대 영입 포함)\n"
+    "- out: {club} 에서 나가는 이적 (방출 · 매각 · 임대 방출 포함)\n"
     "- none: 이적 무관 기사 · 방향을 판단할 수 없음\n"
-    "방향은 아스날 기준이다 — 아스날이 이적의 주체가 아니면 (타 구단 간 이적) none 으로 답한다.\n"
-    "이때 단계는 아래 규칙대로 그대로 매긴다 — 방향만 none 이고 단계는 그대로다.\n"
-    "방향은 제목이 내세우는 주된 이적 하나로 정한다 — 요약 말미의 부수 언급"
-    " (예: 영입 기사 끝의 '방출 작업도 진행 중' 한 줄) 은 무시한다.\n"
+    "방향은 {club} 기준이다 — {club} 이 이적의 당사자 (사는 쪽 또는 파는 쪽) 가 아니면 반드시 none 으로 답한다.\n"
+    "{club} 이 관심을 가졌거나 경쟁에서 밀린 딜도 none 이다 — 예: {club} 이 노리던 선수를 다른 구단이 "
+    "영입하면 none, 이미 {club} 을 떠난 선수의 새 소속 이적도 none.\n"
+    "이때 단계는 규칙대로 그대로 매긴다 — 방향만 none 이고 단계는 그대로다.\n"
+    "방향은 제목이 내세우는 주된 이적 하나로 정한다 — 요약 말미의 부수 언급은 무시한다.\n"
     "제목이 영입과 방출을 병기하는 대등 혼합이면 out 으로 답한다.\n"
+    "{club} 이 노리던 선수를 경쟁 구단이 영입 확정한 기사 (하이재킹 완결) 는 collapsed 로 답하고, "
+    "이때만 예외로 방향을 {club} 이 시도했던 축 (영입 경쟁이었으면 in) 으로 답한다.\n"
     "합의 보도는 당사자로 가른다 — 구단과 구단이면 agreed, 선수와 구단이면 personal_terms.\n"
-    "이적 주체가 아스날이 아니어도 (타 구단 간 이적을 다룬 기사) 그 이적의 단계로 분류한다.\n"
+    "이적 주체가 {club} 이 아니어도 (타 구단 간 이적) 그 이적의 단계로 분류한다.\n"
     "other 는 이적과 정말 무관한 글에만 쓴다 — 아래는 모두 이적 기사이므로 단계를 매긴다.\n"
-    "- 무산 · 결렬 · 포기 · 잔류 확정 · 이적설 부인: 그 연결이 도달했던 마지막 단계로 "
-    "분류하고 (예: 협상 결렬이면 negotiating), 도달 단계를 알 수 없으면 rumour\n"
+    "- 타 구단 간 딜의 무산 · 결렬 · 포기 · 이적설 부인: 그 연결이 도달했던 마지막 단계로 분류하고, "
+    "도달 단계를 알 수 없으면 rumour\n"
     "- 몸값 · 이적료 책정 보도: 구단이 영입 의사를 보인 상태면 interest, 그렇지 않으면 rumour\n"
     "- 이적 건에서 파생된 분쟁 · 법적 절차: 그 이적 건의 마지막 알려진 단계\n"
     "- 대안 후보군 · 연쇄 반응: 특정 선수를 후보로 검토한다는 보도면 interest\n"
     "여러 이적을 한 글에 모은 시장 라운드업 · 총평 · 칼럼은 대표 단계가 성립하지 않으므로 other 로 둔다.\n"
     "아래는 선수 이적이 아니므로 단계를 매기지 말고 other 로 둔다.\n"
-    "- 스폰서십 · 유니폼 · 중계권 같은 상업 계약 (계약 체결 · 연장이라도 이적이 아니다)\n"
-    "- 소속 구단과의 재계약 · 계약 연장\n"
+    "- 스폰서십 · 유니폼 · 중계권 같은 상업 계약\n"
+    "- 소속 구단과의 재계약 · 계약 연장 ({club} 과 무관한 구단의 경우 — {club} 영입 대상의 잔류 · "
+    "재계약 체결은 collapsed 다)\n"
     "- 감독 · 스태프 인사\n"
     "- 기사가 아닌 공지 · 안내 · 목록 링크\n"
     "각 기사의 content_hash는 그대로 두고 stage와 direction만 채운다.\n"
@@ -891,9 +914,12 @@ def classify_stage_rows(rows: list[dict], client, model: str,
               "summary": r.get("summary_ko") or ""} for r in batch],
             ensure_ascii=False)
         try:
+            # club 은 확장 전까지 아스날 고정 (스펙 §9) · roster 는 미주입 상태의
+            # 채택판 문안 그대로 (dry-run v1c — 주입은 명단 갱신 뒤 재평가)
             msg = client.models.generate_content(
                 model=model,
-                contents=STAGE_PROMPT.format(items=items),
+                contents=STAGE_PROMPT.format(club="아스날", roster="(제공되지 않음)",
+                                             items=items),
                 config={"max_output_tokens": 2048,
                         "response_mime_type": "application/json"})
         except Exception as e:
@@ -909,8 +935,9 @@ def classify_stage_rows(rows: list[dict], client, model: str,
         for h, (stage, direction) in parsed.items():
             stage = _stage.normalize(stage)
             if stage == "official":
-                # 규칙 경로 전용 불변량 (spec §4.3) — 프롬프트 밖 응답 방어
-                log.warning("LLM이 official 반환 — agreed로 강등 content_hash=%s", h)
-                stage = "agreed"
+                # 규칙 경로 전용 불변량 — 프롬프트 밖 응답 방어. 강등 목적지는
+                # done (타 매체의 "오피셜" 보도는 새 체계에서 완료 계열 — 2026-08-10 스펙 §4)
+                log.warning("LLM이 official 반환 — done으로 강등 content_hash=%s", h)
+                stage = "done"
             result[h] = (stage, _stage.normalize_direction(direction))
     return result
