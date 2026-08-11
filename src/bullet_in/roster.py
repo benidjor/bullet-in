@@ -100,5 +100,5 @@ def record_article_players(store: PlayerStore, content_hash: str,
             created.append({**p, "player_id": pid})
             log.info("후보 등재: %s (%s) stage=%s 근거=%s",
                      p["ko"] or "?", p["full_name"], p["stage"], content_hash[:8])
-        store.link_article(content_hash, pid, p["stage"])
+        store.link_article(content_hash, pid, p["stage"], p.get("role"))
     return created

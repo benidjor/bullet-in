@@ -85,14 +85,18 @@ class PlayerStore:
                              {"fn": full_name}).scalar_one()
 
     def link_article(self, content_hash: str, player_id: int,
-                     stage: str | None) -> None:
-        """추출 쌍 저장 — 재추출 시 단계 · 시각만 갱신하는 멱등 upsert."""
+                     stage: str | None, role: str | None = None) -> None:
+        """추출 쌍 저장 — 재추출 시 단계 · 역할 · 시각만 갱신하는 멱등 upsert.
+        역할을 넘기지 않는 호출자 (백필 · 재추출 모듈) 는 미기입으로 남긴다."""
         with self.engine.begin() as c:
             c.execute(text(
-                "INSERT INTO article_players (content_hash,player_id,stage,extracted_at) "
-                "VALUES (:h,:p,:s,:now) ON DUPLICATE KEY UPDATE "
-                "stage=VALUES(stage), extracted_at=VALUES(extracted_at)"),
-                {"h": content_hash, "p": player_id, "s": stage, "now": _utcnow()})
+                "INSERT INTO article_players "
+                "(content_hash,player_id,stage,role,extracted_at) "
+                "VALUES (:h,:p,:s,:r,:now) ON DUPLICATE KEY UPDATE "
+                "stage=VALUES(stage), role=VALUES(role), "
+                "extracted_at=VALUES(extracted_at)"),
+                {"h": content_hash, "p": player_id, "s": stage, "r": role,
+                 "now": _utcnow()})
 
     def articles_for(self, player_id: int) -> list[str]:
         with self.engine.connect() as c:
@@ -180,7 +184,7 @@ class PlayerStore:
         """대상 선수의 기사 귀속 전량 — (선수, 기사, 그 기사에서 그 선수의 단계)."""
         with self.engine.connect() as c:
             return [dict(r) for r in c.execute(text(
-                "SELECT ap.player_id, ap.content_hash, ap.stage "
+                "SELECT ap.player_id, ap.content_hash, ap.stage, ap.role "
                 "FROM article_players ap JOIN players p ON p.id = ap.player_id "
                 f"WHERE {_PAGE_WHERE}")).mappings().all()]
 
