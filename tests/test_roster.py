@@ -81,7 +81,7 @@ def test_normalize_pairs_does_not_overwrite_for_other_sources():
 
 
 def test_normalize_pairs_normalizes_role_and_drops_unknown():
-    # 어휘 밖 · 미기입은 None — 서빙이 주역으로 읽어 화면을 지우지 않는다 (스펙 §3.2)
+    # 어휘 밖 · 미기입은 None — 서빙이 옛 규칙으로 판정해 종전 화면을 유지한다 (스펙 §3.2)
     raw = [{"full_name": "Christos Tzolis", "ko": "촐리스", "stage": "interest",
             "role": " Subject "},
            {"full_name": "Morgan Rogers", "ko": "로저스", "stage": "other",

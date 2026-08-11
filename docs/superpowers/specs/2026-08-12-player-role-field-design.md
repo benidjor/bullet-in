@@ -107,7 +107,7 @@
 단계가 없으므로 카드 배지는 비고 사다리 줄도 생기지 않는다 — 단계를 주장하지 않는 기사로 보인다.
 
 `PlayerStore.page_player_links` 가 `role` 을 함께 돌려주고 `load_page_players` 가 링크 항목에 실어 넘긴다.
-판정은 Python 쪽에서 하므로 미기입은 `None != "mention"` 으로 자연히 주역이 된다 (SQL 의 NULL 비교를 타지 않는다).
+판정은 SQL 이 아니라 Python 에서 하므로 NULL 비교를 타지 않는다 — 미기입 행의 처리는 §3.2 의 전환 규칙을 따른다.
 
 ## 4. 서빙 파급
 
@@ -213,6 +213,10 @@
 
 배포별 주소로 확인한다 (라이브 도메인은 CDN 캐시).
 판정은 §5.3 의 무변화 확인이다.
+
+**운영 함정** — `page_player_links` 가 `ap.role` 을 SELECT 한다.
+`ensure_schema()` 가 한 번도 돌지 않은 DB 에 재렌더 스니펫만 단독 실행하면 `Unknown column 'ap.role'` 로 실패한다.
+정기 회차는 `ensure_schema` → `write_site` 순서라 안전하다 — 첫 정기 회차 전에는 재렌더 단독 실행을 금지한다.
 
 ## 7. 범위 밖 · 후속
 

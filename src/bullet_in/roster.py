@@ -16,8 +16,8 @@ _HANGUL_RE = re.compile(r"[가-힣]")
 def normalize_role(raw) -> str | None:
     """추출이 낸 역할 값 정규화 — 어휘 밖은 미기입 (None) 으로 떨어뜨린다.
 
-    미기입은 서빙에서 주역으로 읽히므로 (스펙 §3.2), 모델이 값을 빠뜨리거나
-    모르는 낱말을 내도 기사가 화면에서 사라지지 않는 쪽으로 넘어진다."""
+    미기입은 서빙에서 옛 규칙 (단계 `other` 제외) 으로 판정되므로 (스펙 §3.2
+    전환 규칙), 모델이 값을 빠뜨려도 종전 화면이 유지된다."""
     if not isinstance(raw, str):
         return None
     v = raw.strip().lower()

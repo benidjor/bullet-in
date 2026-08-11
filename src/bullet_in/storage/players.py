@@ -87,7 +87,7 @@ class PlayerStore:
     def link_article(self, content_hash: str, player_id: int,
                      stage: str | None, role: str | None = None) -> None:
         """추출 쌍 저장 — 재추출 시 단계 · 역할 · 시각만 갱신하는 멱등 upsert.
-        역할을 넘기지 않는 호출자 (백필 · 재추출 모듈) 는 미기입으로 남긴다."""
+        역할이 미기입인 쌍은 그대로 NULL 로 남는다."""
         with self.engine.begin() as c:
             c.execute(text(
                 "INSERT INTO article_players "

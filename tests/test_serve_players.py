@@ -205,6 +205,19 @@ def test_build_player_entries_falls_back_to_stage_when_role_is_missing():
     assert e["count"] == 1
 
 
+def test_build_player_entries_falls_back_to_stage_when_role_is_out_of_vocab():
+    # 어휘 밖 역할 값도 미기입과 같이 옛 단계 규칙으로 판정한다 (스펙 §3.2 전환 규칙)
+    arts = [_art("h1", 1, "interest"), _art("h2", 2, "other")]
+    players = [_player(1, "Tzolis", "촐리스", "in_link",
+                       [{"content_hash": "h1", "stage": "interest",
+                         "role": "배경"},
+                        {"content_hash": "h2", "stage": "other",
+                         "role": "배경"}])]
+    [e] = build_player_entries(arts, players)
+    assert [a["content_hash"] for a in e["articles"]] == ["h1"]
+    assert e["count"] == 1
+
+
 def test_build_player_entries_mixes_role_and_stage_rules_per_link():
     # 역할이 있는 행은 역할로 · 없는 행은 단계로 (스펙 §3.2 전환 규칙)
     arts = [_art("h1", 1, "agreed"), _art("h2", 2, "other"), _art("h3", 3, "other")]
@@ -235,11 +248,17 @@ def test_build_player_entries_keeps_subject_other_without_ladder_row():
 
 def test_player_chips_skip_mention_links():
     # 기사 카드의 선수 칩도 같은 목록에서 나오므로 잡음 칩이 함께 사라진다 (스펙 §4)
+    # 로저스에게 subject 역할의 기사(h2)를 하나 더 줘서 페이지가 생긴 상태에서
+    # h1 칩만 빠지는지 본다 — h1 링크(mention)만 있으면 paired 가 비어 페이지
+    # 자체가 안 생기고, 그러면 h1 에 칩이 없는 이유가 "mention 을 건너뛰어서"
+    # 가 아니라 "선수 페이지가 없어서" 가 되어 이 테스트의 취지가 흐려진다.
     from bullet_in.serve.render import player_chips
-    arts = [_art("h1", 1, "agreed")]
+    arts = [_art("h1", 1, "agreed"), _art("h2", 2, "agreed")]
     players = [_player(1, "Rogers", "로저스", "other_club",
                        [{"content_hash": "h1", "stage": "agreed",
-                         "role": "mention"}]),
+                         "role": "mention"},
+                        {"content_hash": "h2", "stage": "agreed",
+                         "role": "subject"}]),
                _player(2, "Tzolis", "촐리스", "in_link",
                        [{"content_hash": "h1", "stage": "agreed",
                          "role": "subject"}])]

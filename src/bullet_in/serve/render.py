@@ -14,7 +14,7 @@ from markupsafe import Markup, escape
 from bullet_in import transfer_stage as _stage
 from bullet_in.credibility import norm_alias
 from bullet_in.enrich import attrib_core, roundup_attrib_counts
-from bullet_in.storage.players import MENTION
+from bullet_in.storage.players import MENTION, ROLES
 
 log = logging.getLogger(__name__)
 
@@ -1026,7 +1026,7 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
     for p in players:
         paired = [(by_hash[l["content_hash"]], l["stage"]) for l in p["links"]
                   if l["content_hash"] in by_hash and (
-                      l["stage"] != _stage.OTHER if l.get("role") is None
+                      l["stage"] != _stage.OTHER if l.get("role") not in ROLES
                       else l["role"] != MENTION)]
         if not paired:
             continue
