@@ -181,7 +181,7 @@ class PlayerStore:
                 "ORDER BY id")).mappings().all()]
 
     def page_player_links(self) -> list[dict]:
-        """대상 선수의 기사 귀속 전량 — (선수, 기사, 그 기사에서 그 선수의 단계)."""
+        """대상 선수의 기사 귀속 전량 — (선수, 기사, 그 기사에서 그 선수의 단계 · 역할)."""
         with self.engine.connect() as c:
             return [dict(r) for r in c.execute(text(
                 "SELECT ap.player_id, ap.content_hash, ap.stage, ap.role "
