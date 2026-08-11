@@ -27,8 +27,10 @@
 
 - 대상: `status='confirmed'` 이고 `transfer_status IN ('none','in_done','out_done')`.
 - 방아쇠 단계:
-  - `none` 선수는 `other` 를 뺀 전 단계 (rumour · interest · negotiating · personal_terms · agreed · medical · official).
+  - `none` 선수는 진행 단계 전부 (rumour · interest · negotiating · personal_terms · agreed · medical · official).
   - `in_done` · `out_done` 선수는 초기 단계만 (rumour · interest · negotiating · personal_terms).
+  - 종결 단계 (done · collapsed) 는 어느 쪽에도 넣지 않는다
+— 축이 이미 정리된 선수에게 붙는 종결 보도는 지난 창 회고라 갱신할 것이 없다.
 - 완료 축 선수에게 완결 단계 (agreed · medical · official) 를 방아쇠에서 빼는 이유
 — 딜 완결 직후의 후속 보도가 같은 단계 귀속을 계속 만든다 (기마랑이스 영입 확정 뒤 분석 기사들이 agreed 로 귀속).
 그것은 낡음이 아니라 방금 갱신한 값의 메아리다.
@@ -39,7 +41,10 @@
 링크 진행 중인 선수에게 딜 완결 신호가 붙는 경우.
 
 - 대상: `status='confirmed'` 이고 `transfer_status IN ('in_link','out_link')`.
-- 방아쇠 단계: agreed · medical · official.
+- 방아쇠 단계: agreed · medical · official · done · collapsed.
+- `done` · `collapsed` 는 기사 단계 재정의 (스펙 2026-08-10 §4) 의 PLAYERS_CLAUSE 동기화로 선수 단위에도 들어오는 값이다
+— 완결 딜이 `done` 으로 붙으면 이 판정이 유일한 감지 경로다.
+`collapsed` 는 무산 · 잔류 확정이라 `link_dropped` · `other_club` · `none` 전이가 따른다.
 
 ## 3. 발화 조건 · 도배 방지 — 무상태
 

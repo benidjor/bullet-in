@@ -129,8 +129,13 @@ def filter_miss_suspects(rejects: list[dict], now: datetime,
 # 선수의 방아쇠에는 초기 단계만 남긴다 (스펙 §2.1).
 ROSTER_EARLY_STAGES = frozenset({"rumour", "interest", "negotiating",
                                  "personal_terms"})
-ROSTER_COMPLETION_STAGES = frozenset({"agreed", "medical", "official"})
-ROSTER_PROGRESS_STAGES = ROSTER_EARLY_STAGES | ROSTER_COMPLETION_STAGES
+ROSTER_ADVANCED_STAGES = frozenset({"agreed", "medical", "official"})
+# 딜 종결 어휘 (기사 단계 재정의 스펙 2026-08-10 §4 의 PLAYERS_CLAUSE 동기화분).
+# 링크 선수에게만 방아쇠다 — 축이 없는 선수에게 붙는 종결 단계는 지난 창 회고
+# 보도라 갱신할 것이 없다.
+ROSTER_CLOSING_STAGES = frozenset({"done", "collapsed"})
+ROSTER_PROGRESS_STAGES = ROSTER_EARLY_STAGES | ROSTER_ADVANCED_STAGES
+ROSTER_COMPLETION_STAGES = ROSTER_ADVANCED_STAGES | ROSTER_CLOSING_STAGES
 
 
 def _roster_trigger(transfer_status: str) -> tuple[str, frozenset[str]] | None:
