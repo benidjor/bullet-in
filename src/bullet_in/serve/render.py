@@ -961,6 +961,11 @@ _TRANSFER_GROUP_OF: dict[str, str] = {
     "link_dropped": "이적 무산", "other_club": "타 클럽행",
 }
 
+# 값이 하나뿐인 그룹 — 색인에서 축 배지가 그룹명을 되풀이하거나 (타 클럽행) 같은 값을
+# 다른 말로 부른다 (이적 무산 그룹의 "링크 소멸"). 그룹 안에서 가릴 것이 없으므로
+# 색인에서는 배지를 생략한다 (2026-08-11). 선수 페이지는 그룹 맥락이 없어 그대로 붙인다.
+_SOLE_VALUE_GROUPS = {g for g, n in Counter(_TRANSFER_GROUP_OF.values()).items() if n == 1}
+
 
 def transfer_badge(status: str | None) -> dict | None:
     """선수 이적 축 배지 {label, cls}. 축이 없으면 (none) 배지를 달지 않는다."""
@@ -1029,10 +1034,7 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
                     "articles": [r for r, _ in reversed(paired)],
                     "ladder": ladder,
                     "ended": ended_marker(timeline),
-                    # 현재 단계는 시간축 최신값이다 (사다리 스펙 §6.2) — 사다리는
-                    # 오피셜이 앞이라 첫 줄을 읽으면 뜻이 "가장 진행된 단계" 로 바뀐다.
-                    "stage": next((s for _, s in reversed(paired)
-                                   if _stage.is_displayable(s)), None),
+                    "stage": current_stage(timeline),
                     "count": len(paired),
                     "last_ts": _sort_ts(paired[-1][0])[0]})
     return out
@@ -1078,6 +1080,27 @@ def _ladder_cred(e):
     return float(t) if t is not None else 99.0
 
 
+# 종결 단계 — 이 단계가 한 번 붙으면 그 딜의 이야기는 끝난 것으로 읽는다.
+# 오피셜은 넣지 않는다: 공홈은 합의 때 · 확정 때 각각 올라와 종결을 뜻하지 않고,
+# 사다리 첫 줄 (오피셜) 을 현재 상태로 읽으면 실측 다섯 명이 전부 틀렸다 (§6.2).
+_TERMINAL_STAGES = ("done", "collapsed")
+
+
+def current_stage(entries: list[dict]) -> str | None:
+    """머리 · 색인 카드에 붙는 현재 단계 (사다리 스펙 §6.2 개정 2026-08-11).
+
+    원래는 시간축 최신값만 썼는데, 딜이 끝난 뒤에도 그 선수를 배경으로만 언급한
+    기사가 뒤에 오면 그 기사의 단계가 현재 상태를 덮어썼다 (실측: 재계약으로 끝난
+    비니시우스가 '협상 중' 으로 표시). 종결 단계는 되돌아가지 않으므로 그것이 있으면
+    가장 늦은 종결을 현재 상태로 삼고, 없을 때만 종전대로 시간축 최신값을 쓴다.
+    입력은 오래된 것부터 정렬된 [{"row", "stage"}] 다."""
+    terminal = [e for e in entries if e.get("stage") in _TERMINAL_STAGES]
+    if terminal:
+        return terminal[-1]["stage"]
+    return next((e["stage"] for e in reversed(entries)
+                 if _stage.is_displayable(e.get("stage"))), None)
+
+
 def ended_marker(entries: list[dict]) -> dict | None:
     """무산 (collapsed) 종결 표시 (단계 재정의 스펙 §8) — 사다리 축 밖의 한 줄.
     대표 선정 규칙은 사다리와 동일 (공신력 높은 순 · 동률이면 늦은 기사)."""
@@ -1095,7 +1118,8 @@ def render_players(entries: list[dict], now: datetime) -> str:
         members = [e for e in entries if transfer_group(e["transfer_status"]) == name]
         members.sort(key=lambda e: e["last_ts"], reverse=True)
         for e in members:
-            e["_badge"] = transfer_badge(e["transfer_status"])
+            e["_badge"] = (None if name in _SOLE_VALUE_GROUPS
+                           else transfer_badge(e["transfer_status"]))
             e["_stage"] = display_stage(e["stage"])
             e["_last"] = fmt_date(to_kst(e["last_ts"]))
         groups.append({"name": name, "collapsed": collapsed, "members": members})
@@ -1119,10 +1143,12 @@ def render_player(entry: dict, sources: dict, now: datetime,
              for n in entry["ladder"]]
     ended = entry.get("ended")
     if ended:
-        # 무산 종결 줄 — 같은 tlnode 마크업에 end 플래그만 얹어 단일 루프로 그린다
-        nodes.append({"a": decorated[ended["row"]["content_hash"]],
-                      "badge": display_stage(ended["stage"]),
-                      "count": ended["count"], "end": True})
+        # 무산 종결 줄 — 같은 tlnode 마크업에 end 플래그만 얹어 단일 루프로 그린다.
+        # 맨 위에 둔다 (개정 2026-08-11): 사다리는 위가 가장 진행된 단계라, 끝난 사가의
+        # 종결을 아래에 두면 아직 진행 중인 것처럼 읽힌다 (실측 · 비니시우스 페이지).
+        nodes.insert(0, {"a": decorated[ended["row"]["content_hash"]],
+                         "badge": display_stage(ended["stage"]),
+                         "count": ended["count"], "end": True})
     return _env().get_template("player.html.j2").render(
         e=entry, badge=transfer_badge(entry["transfer_status"]),
         stage=display_stage(entry["stage"]), nodes=nodes,

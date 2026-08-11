@@ -211,6 +211,28 @@ def test_build_player_entries_stage_ignores_ladder_top_official():
     assert e["ladder"][0]["stage"] == "official"   # 사다리 자체는 오피셜이 위
 
 
+def test_build_player_entries_stage_prefers_terminal_over_later_mention():
+    # 딜이 끝난 뒤 그 선수를 배경으로만 언급한 기사가 뒤에 와도 현재 상태를 덮지 않는다
+    # (실측: 재계약으로 끝난 비니시우스가 '협상 중' 으로 표시됐다 · 2026-08-11 개정)
+    arts = [_art("h1", 1, "negotiating"), _art("h2", 3, "collapsed"),
+            _art("h3", 5, "negotiating")]
+    players = [_player(1, "Vinicius", "비니시우스", "link_dropped",
+                       [{"content_hash": "h1", "stage": "negotiating"},
+                        {"content_hash": "h2", "stage": "collapsed"},
+                        {"content_hash": "h3", "stage": "negotiating"}])]
+    [e] = build_player_entries(arts, players)
+    assert e["stage"] == "collapsed"
+
+
+def test_build_player_entries_stage_uses_latest_terminal_when_several():
+    arts = [_art("h1", 1, "collapsed"), _art("h2", 5, "done")]
+    players = [_player(1, "Tzolis", "촐리스", "in_done",
+                       [{"content_hash": "h1", "stage": "collapsed"},
+                        {"content_hash": "h2", "stage": "done"}])]
+    [e] = build_player_entries(arts, players)
+    assert e["stage"] == "done"
+
+
 def test_build_player_entries_drops_player_whose_articles_are_all_other():
     # 이적 얘기가 없는데 이름만 스친 선수 — 색인 56명이 50명으로 줄어든 근거다.
     rows = [{"content_hash": "h1", "published_at": datetime(2026, 8, 1)},
@@ -250,6 +272,29 @@ def test_build_player_entries_falls_back_to_full_name():
 
 
 from bullet_in.serve.render import render_player, render_players
+
+
+def test_render_players_omits_badge_in_single_value_groups():
+    # 타 클럽행 · 이적 무산 그룹은 값이 하나뿐이라 축 배지가 그룹명을 되풀이하거나
+    # 같은 값을 다른 말로 부른다 (링크 소멸) — 색인에서는 생략한다 (2026-08-11).
+    arts = [_art("h1", 1, "rumour"), _art("h2", 2, "collapsed")]
+    players = [_player(1, "Nduka", "은두카", "other_club",
+                       [{"content_hash": "h1", "stage": "rumour"}]),
+               _player(2, "Vinicius", "비니시우스", "link_dropped",
+                       [{"content_hash": "h2", "stage": "collapsed"}])]
+    html = render_players(build_player_entries(arts, players), NOW)
+    assert "타 클럽행" in html and "이적 무산" in html   # 그룹 머리는 남는다
+    assert "링크 소멸" not in html                      # 중복 · 불일치 배지는 없다
+    assert html.count("타 클럽행") == 1                 # 그룹 머리 1회 (배지로 반복 안 함)
+
+
+def test_render_players_keeps_badge_where_group_has_several_values():
+    # 진행 중 그룹은 영입 링크 · 방출 링크가 섞이므로 배지가 정보를 준다
+    arts = [_art("h1", 1, "interest")]
+    players = [_player(1, "Zubimendi", "수비멘디", "out_link",
+                       [{"content_hash": "h1", "stage": "interest"}])]
+    html = render_players(build_player_entries(arts, players), NOW)
+    assert "방출 링크" in html
 
 
 def test_render_players_groups_and_collapses():
@@ -294,6 +339,8 @@ def test_render_player_shows_collapsed_as_ended_row():
     assert 'tlnode tlend' in html              # 종결 줄 존재
     assert html.count('class="tlnode') == 2    # 협상 1줄 + 종결 1줄 — 이중 표기 없음
     assert "무산" in html
+    # 종결 줄이 맨 위다 (개정 2026-08-11) — 아래에 두면 끝난 사가가 진행 중으로 읽힌다
+    assert html.index('tlnode tlend') < html.index('class="tlnode"')
 
 
 def test_render_player_ladder_hides_count_when_single():
