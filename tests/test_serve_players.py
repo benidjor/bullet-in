@@ -167,13 +167,14 @@ def test_build_player_entries_header_count_matches_article_list():
     players = [_player(1, "Tzolis", "촐리스", "in_link",
                        [{"content_hash": "h1", "stage": "rumour"},
                         {"content_hash": "h2", "stage": None},
-                        {"content_hash": "h3", "stage": "other"}])]
+                        {"content_hash": "h3", "stage": "other",
+                         "role": "mention"}])]
     [e] = build_player_entries(arts, players)
     assert e["count"] == len(e["articles"]) == 2
     assert [l["stage"] for l in e["ladder"]] == ["rumour"]
 
 
-def test_build_player_entries_excludes_other_from_list_and_count():
+def test_build_player_entries_excludes_mention_from_list_and_count():
     # 머리 건수와 목록 수가 어긋나면 안 되므로 둘 다 같은 집합에서 나와야 한다.
     rows = [{"content_hash": "h1", "published_at": datetime(2026, 8, 1)},
             {"content_hash": "h2", "published_at": datetime(2026, 8, 2)},
@@ -181,13 +182,54 @@ def test_build_player_entries_excludes_other_from_list_and_count():
     players = [{"id": 1, "full_name": "Christos Tzolis", "surname": "Tzolis",
                 "ko_full_name": None, "ko_name": "촐리스",
                 "transfer_status": "in_link",
-                "links": [{"content_hash": "h1", "stage": "interest"},
-                          {"content_hash": "h2", "stage": "other"},
-                          {"content_hash": "h3", "stage": "agreed"}]}]
+                "links": [{"content_hash": "h1", "stage": "interest",
+                           "role": "subject"},
+                          {"content_hash": "h2", "stage": "agreed",
+                           "role": "mention"},
+                          {"content_hash": "h3", "stage": "agreed",
+                           "role": "subject"}]}]
     entry = build_player_entries(rows, players)[0]
     assert entry["count"] == 2
     assert len(entry["articles"]) == 2
     assert [a["content_hash"] for a in entry["articles"]] == ["h3", "h1"]
+
+
+def test_build_player_entries_keeps_links_with_no_role():
+    # 역할이 채워지기 전 · 모델이 빠뜨렸을 때 지금 화면이 유지되는지 (스펙 §3.2)
+    arts = [_art("h1", 1, "interest"), _art("h2", 2, "other")]
+    players = [_player(1, "Tzolis", "촐리스", "in_link",
+                       [{"content_hash": "h1", "stage": "interest"},
+                        {"content_hash": "h2", "stage": "other"}])]
+    [e] = build_player_entries(arts, players)
+    assert e["count"] == 2
+
+
+def test_build_player_entries_keeps_subject_other_without_ladder_row():
+    # 경쟁 구단 접근 · 잔류 협상 — 주역인데 아스날 축에 담을 단계가 없는 기사 (스펙 §2.3)
+    arts = [_art("h1", 1, "interest"), _art("h2", 2, "other")]
+    players = [_player(1, "Kepa", "케파", "out_link",
+                       [{"content_hash": "h1", "stage": "interest",
+                         "role": "subject"},
+                        {"content_hash": "h2", "stage": "other",
+                         "role": "subject"}])]
+    [e] = build_player_entries(arts, players)
+    assert [a["content_hash"] for a in e["articles"]] == ["h2", "h1"]
+    assert [l["stage"] for l in e["ladder"]] == ["interest"]   # other 는 줄이 없다
+    assert e["stage"] == "interest"                            # 현재 상태도 안 바뀐다
+
+
+def test_player_chips_skip_mention_links():
+    # 기사 카드의 선수 칩도 같은 목록에서 나오므로 잡음 칩이 함께 사라진다 (스펙 §4)
+    from bullet_in.serve.render import player_chips
+    arts = [_art("h1", 1, "agreed")]
+    players = [_player(1, "Rogers", "로저스", "other_club",
+                       [{"content_hash": "h1", "stage": "agreed",
+                         "role": "mention"}]),
+               _player(2, "Tzolis", "촐리스", "in_link",
+                       [{"content_hash": "h1", "stage": "agreed",
+                         "role": "subject"}])]
+    chips = player_chips(build_player_entries(arts, players))
+    assert [c["name"] for c in chips["h1"]] == ["촐리스"]
 
 
 def test_build_player_entries_current_stage_is_time_axis_latest():
@@ -288,15 +330,17 @@ def test_render_player_cards_use_player_axis_stage():
     assert ">이적 합의<" not in html                   # 기사 축 배지도 마찬가지
 
 
-def test_build_player_entries_drops_player_whose_articles_are_all_other():
-    # 이적 얘기가 없는데 이름만 스친 선수 — 색인 56명이 50명으로 줄어든 근거다.
+def test_build_player_entries_drops_player_whose_links_are_all_mention():
+    # 남의 기사에 이름만 스친 선수 — 색인이 부풀지 않게 페이지를 만들지 않는다.
     rows = [{"content_hash": "h1", "published_at": datetime(2026, 8, 1)},
             {"content_hash": "h2", "published_at": datetime(2026, 8, 2)}]
     players = [{"id": 1, "full_name": "Martin Zubimendi", "surname": "Zubimendi",
                 "ko_full_name": None, "ko_name": "수비멘디",
                 "transfer_status": "in_link",
-                "links": [{"content_hash": "h1", "stage": "other"},
-                          {"content_hash": "h2", "stage": "other"}]}]
+                "links": [{"content_hash": "h1", "stage": "agreed",
+                           "role": "mention"},
+                          {"content_hash": "h2", "stage": "done",
+                           "role": "mention"}]}]
     assert build_player_entries(rows, players) == []
 
 

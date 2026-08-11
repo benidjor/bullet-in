@@ -14,6 +14,7 @@ from markupsafe import Markup, escape
 from bullet_in import transfer_stage as _stage
 from bullet_in.credibility import norm_alias
 from bullet_in.enrich import attrib_core, roundup_attrib_counts
+from bullet_in.storage.players import MENTION
 
 log = logging.getLogger(__name__)
 
@@ -995,7 +996,8 @@ def load_page_players(engine=None) -> list[dict]:
     links: dict[int, list[dict]] = {}
     for l in store.page_player_links():
         links.setdefault(l["player_id"], []).append(
-            {"content_hash": l["content_hash"], "stage": l["stage"]})
+            {"content_hash": l["content_hash"], "stage": l["stage"],
+             "role": l["role"]})
     for p in players:
         p["links"] = links.get(p["id"], [])
     return players
@@ -1004,8 +1006,11 @@ def load_page_players(engine=None) -> list[dict]:
 def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict]:
     """선수별 기사 목록 · 진행 단계 사다리 · 현재 단계 (스펙 §5).
 
-    기사 목록은 단계가 other 인 귀속을 뺀 나머지다.
-    이름만 스친 기사가 그 선수의 이적 기사인 것처럼 쌓이던 것을 막기 위한 것이며,
+    기사 목록은 역할이 언급인 귀속을 뺀 나머지다 (역할 필드 스펙 §3.3).
+    단계로 고르던 것을 역할로 바꾼 것인데, 단계는 "이 기사가 그 선수에 대해
+    보도하는 진행 단계" 라 "이 기사의 주인공인가" 와 다른 질문이고, 그 대가로
+    화면 귀속 807건 중 331건이 남의 기사였다 (2026-08-12 실측).
+    역할이 미기입이면 주역으로 읽는다 — 값이 채워지기 전에는 지금 화면이 그대로다.
     머리 건수도 같은 집합에서 나오므로 "머리 = 목록" 등식은 그대로다 (스펙 §5.3).
     서빙 목록에 없는 기사는 링크에서 빠지고, 그 결과 남는 기사가 0건인 선수는
     빈 페이지가 되지 않도록 결과에서 제외한다."""
@@ -1017,7 +1022,7 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
     out = []
     for p in players:
         paired = [(by_hash[l["content_hash"]], l["stage"]) for l in p["links"]
-                  if l["content_hash"] in by_hash and l["stage"] != _stage.OTHER]
+                  if l["content_hash"] in by_hash and l.get("role") != MENTION]
         if not paired:
             continue
         paired.sort(key=lambda t: _sort_ts(t[0]))          # 오래된 것부터 (사다리 입력)
