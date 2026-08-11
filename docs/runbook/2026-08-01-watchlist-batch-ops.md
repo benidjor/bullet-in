@@ -130,6 +130,67 @@ journalctl -u bullet-in-watchlist | grep "워치리스트 배치 완료"
    sudo systemctl restart bullet-in-watchlist.timer
    ```
 
+## 6.1 실행 시각 이동 (낮 배치를 밤으로)
+
+증량과는 별개로, 낮에 도는 두 배치를 밤으로 옮기는 안이다.
+2026-08-11 관찰 33회 실측이 근거다.
+
+### 6.1.1 실측
+
+검색 실패로 한 건도 못 건진 회차 (이하 전멸) 가 33회 중 14회 (42%) 였고 시각대에 쏠려 있었다.
+
+| 시각 (KST) | 전멸 빈도 |
+| --- | --- |
+| 07:30 · 13:30 (낮) | 8회 중 5회꼴 |
+| 01:30 · 19:30 (밤) | 1~2회 |
+
+같은 코드 · 같은 명단 · 같은 60분 가드로 도는데 결과가 갈리므로 시각대 요인으로 본다.
+다만 fmkorea 쪽 부하인지 다른 이유인지는 확인하지 못했다 — 상대 서버 사정이라 우리 로그로는 가릴 수 없다.
+그래서 이 이동은 원인 규명이 아니라 실측에 맞춘 경험적 대응이다.
+
+### 6.1.2 바꿀 값
+
+```
+OnCalendar=*-*-* 10,13,16,19:30:00 UTC
+```
+
+KST 로는 19:30 · 22:30 · 01:30 · 04:30 이다.
+
+- 하루 4회는 그대로라 일순 주기 (§4.3) 는 바뀌지 않는다.
+- 정기 회차 (`00/3` UTC) 대비 +90분 오프셋도 그대로다 — 네 시각 모두 정기 정시 + 90분 지점이다.
+- 정기 회차와 60분 이상 떨어져 있어 접촉 예산 규율 (§7) 도 유지된다.
+
+### 6.1.3 절차
+
+VM systemd 반영이 필요하므로 배포 주체가 있는 회차에 함께 넣는다.
+
+1. `infra/systemd/bullet-in-watchlist.timer` 의 `OnCalendar` 를 위 값으로 바꾸고 `Description` 의 시각 표기도 함께 고친다.
+2. repo 에 커밋한다.
+3. VM 에 반영한다.
+
+   ```bash
+   cd ~/bullet-in && git pull --ff-only
+   sudo cp infra/systemd/bullet-in-watchlist.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl restart bullet-in-watchlist.timer
+   systemctl list-timers bullet-in-watchlist.timer --no-pager
+   ```
+
+4. `list-timers` 의 `NEXT` 가 새 시각인지 확인한다.
+
+### 6.1.4 검증
+
+이동 후 30회 남짓 (약 일주일) 쌓인 뒤 전멸 비율을 다시 센다.
+
+```bash
+journalctl -u bullet-in-watchlist | grep "워치리스트 배치 완료"
+```
+
+각 줄의 `검색 실패` 값이 검색 인원과 같으면 그 회차가 전멸이다.
+비율이 42% 에서 눈에 띄게 내려가지 않으면 시각대 요인이 아니었다는 뜻이므로 원래 시각으로 되돌린다.
+
+되돌릴 때는 `OnCalendar=*-*-* 04/6:30:00 UTC` 로 바꾸고 같은 절차를 반복한다.
+
 ## 7. 수동 실행 · dry-run
 
 ```bash
