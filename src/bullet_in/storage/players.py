@@ -1,7 +1,7 @@
 """선수 명단 저장소 — 인명 사전의 단일 원천 (스펙 §5)."""
 from __future__ import annotations
 from datetime import datetime, timezone
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Engine
 
 # 게이트 · 서빙 사전 술어 — 후보 (자동 등재) 배제 + archived 잔류 (스펙 §3.2 · §8)
@@ -125,6 +125,38 @@ class PlayerStore:
                 "SELECT id, ko_name FROM players WHERE status='confirmed' "
                 "AND transfer_status IN ('in_link','out_link') "
                 "AND ko_name IS NOT NULL ORDER BY id")).all()]
+
+    def cycle_pairs(self, hashes: list[str]) -> list[dict]:
+        """이번 회차에 만진 기사들의 (확정 선수, 단계) 귀속 — 축 낡음 관측 재료
+        (스펙 2026-08-10 §3). 후보 · 보관 선수는 명단 운영 대상이 아니라 뺀다."""
+        if not hashes:
+            return []
+        q = text(
+            "SELECT ap.player_id, p.ko_name, p.transfer_status, ap.stage "
+            "FROM article_players ap JOIN players p ON p.id = ap.player_id "
+            "WHERE ap.content_hash IN :hashes AND p.status = 'confirmed'"
+        ).bindparams(bindparam("hashes", expanding=True))   # text() 의 IN 은 expanding 필수
+        with self.engine.connect() as c:
+            return [dict(r) for r in
+                    c.execute(q, {"hashes": hashes}).mappings().all()]
+
+    def recent_stage_counts(self, player_ids: list[int],
+                            days: int = 7) -> dict[tuple[int, str], int]:
+        """선수별 최근 N일 단계 귀속 계수 (published_at 기준) — 단발 거름용
+        (스펙 2026-08-10 §3)."""
+        if not player_ids:
+            return {}
+        q = text(
+            "SELECT ap.player_id, ap.stage, COUNT(*) "
+            "FROM article_players ap "
+            "JOIN articles a ON a.content_hash = ap.content_hash "
+            "WHERE ap.player_id IN :pids "
+            "AND a.published_at >= UTC_TIMESTAMP() - INTERVAL :days DAY "
+            "GROUP BY ap.player_id, ap.stage"
+        ).bindparams(bindparam("pids", expanding=True))   # text() 의 IN 은 expanding 필수
+        with self.engine.connect() as c:
+            return {(r[0], r[1]): r[2] for r in
+                    c.execute(q, {"pids": player_ids, "days": days}).all()}
 
     def page_players(self) -> list[dict]:
         """선수 페이지 대상 (스펙 §3.1) — 귀속 기사가 없는 선수는 뺀다.

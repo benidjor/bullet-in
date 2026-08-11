@@ -42,6 +42,8 @@ RUNBOOK_FRESHNESS = ("https://github.com/benidjor/bullet-in/blob/main/"
                      "docs/runbook/2026-07-13-freshness-watermark-ops.md")
 RUNBOOK_ANOMALY = ("https://github.com/benidjor/bullet-in/blob/main/"
                    "docs/runbook/2026-07-13-collection-alerts-ops.md")
+RUNBOOK_ROSTER = ("https://github.com/benidjor/bullet-in/blob/main/"
+                  "docs/runbook/2026-07-31-player-roster-ops.md")
 
 
 def _discord_ts(dt: datetime, style: str) -> str:
@@ -320,3 +322,36 @@ def build_watchlist_blackout_alert(*, searched: int, failure_codes: dict,
                         "value": "\n".join(f"- {ln}" for ln in lines),
                         "inline": False}],
             "url": RUNBOOK_ANOMALY}
+
+
+# 명단 이적 축 낡음 관측 알림 (스펙 2026-08-10) — 표기는 사람이 읽는 한국어로.
+_AXIS_LABELS = {"none": "이적 축 없음", "in_link": "영입 링크",
+                "out_link": "방출 링크", "in_done": "영입 완료",
+                "out_done": "방출 완료"}
+_STAGE_LABELS = {"rumour": "루머", "interest": "관심", "negotiating": "협상",
+                 "personal_terms": "개인 합의", "agreed": "합의",
+                 "medical": "메디컬", "official": "오피셜"}
+
+
+def build_roster_staleness_alert(cases: list[dict], *, run_id: str) -> dict:
+    """명단 축 값과 이번 회차 새 기사 단계의 어긋남 의심을 선수별 필드로 펼친다.
+
+    관측만 싣는다 (현재 값 · 새로 붙은 단계 · 최근 7일 누적) — 원인 단정 · 값
+    갱신 판단은 명단 런북 §6 절차로 사람이 한다."""
+    fields = []
+    for c in cases:
+        new_txt = " · ".join(
+            f"{_STAGE_LABELS.get(s, s)} {n}건"
+            for s, n in sorted(c["new_stages"].items()))
+        lines = [f"명단 값: {_AXIS_LABELS.get(c['transfer_status'], c['transfer_status'])}",
+                 f"이번 회차 새 기사 단계: {new_txt}",
+                 f"최근 7일 같은 계열 기사: {c['recent_total']}건"]
+        fields.append({"name": c["ko_name"],
+                       "value": "\n".join(f"- {ln}" for ln in lines),
+                       "inline": False})
+    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    return {"title": f"📋 선수 명단 확인 — 이적 상태 값이 낡았을 수 있음 ({len(cases)}명)",
+            "description": ("확정 선수의 이적 상태 값과 새로 수집된 기사의 단계가 "
+                            "어긋난다. 명단 런북 §6 절차로 값을 확인한다."),
+            "color": COLOR_ANOMALY, "fields": fields, "url": RUNBOOK_ROSTER,
+            "footer": "bullet-in"}

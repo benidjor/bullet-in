@@ -24,7 +24,8 @@ from bullet_in import transfer_stage
 from bullet_in import roster
 from bullet_in.serve.render import write_site, write_ops, unmatched_articles
 from bullet_in.quality import (success_rate, volume_anomalies, evaluate_freshness,
-                               evaluate_coverage, candidate_cliffs, filter_miss_suspects)
+                               evaluate_coverage, candidate_cliffs, filter_miss_suspects,
+                               roster_axis_staleness)
 from bullet_in import notify
 
 GEMINI_MODEL = "gemini-3.1-flash-lite"
@@ -257,6 +258,23 @@ async def main(concurrency: int):
     except Exception:
         logging.getLogger(__name__).warning(
             "추출 쌍 저장 실패 — 이번 회차 건너뜀 (번역 저장에는 영향 없음)", exc_info=True)
+
+    # 명단 축 낡음 관측 (스펙 2026-08-10): 이번 회차에 만진 기사의 귀속이 확정 선수의
+    # 이적 축 값과 어긋나면 알림만 보낸다 — 값 판단은 사람 몫 (명단 런북 §6).
+    # 판정 · 발송 실패가 회차를 멈추지 않게 감싼다 (관측 알림 공통 격리).
+    try:
+        if results:
+            cycle_rows = pstore.cycle_pairs(list(results))
+            recent = pstore.recent_stage_counts(
+                sorted({r["player_id"] for r in cycle_rows}))
+            cases = roster_axis_staleness(cycle_rows, recent)
+            if cases:
+                notify.send_alert(**notify.build_roster_staleness_alert(
+                    cases, run_id=run_id))
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "명단 축 관측 판정 실패 — 이번 회차 건너뜀 (수집 · 번역에는 영향 없음)",
+            exc_info=True)
 
     finals = {h: finalize_translation(v, by_hash.get(h, {}), glossary, name_map, club_map)
               for h, v in results.items()}

@@ -440,3 +440,29 @@ def test_cliff_alert_reports_cycle_outcome_without_claiming_normal():
     body = embed["fields"][0]["value"]
     assert "success_rate 0.889" in body
     assert "정상 종료" not in body
+
+
+def test_build_roster_staleness_alert_embed_shape():
+    cases = [{"player_id": 28, "ko_name": "기마랑이스", "transfer_status": "in_link",
+              "kind": "finish", "new_stages": {"agreed": 2, "medical": 1},
+              "recent_total": 9}]
+    embed = notify.build_roster_staleness_alert(cases, run_id="abcdef123456")
+    assert "1명" in embed["title"]
+    field = embed["fields"][0]
+    assert field["name"] == "기마랑이스"
+    assert "영입 링크" in field["value"]
+    assert "합의 2건" in field["value"] and "메디컬 1건" in field["value"]
+    assert "9건" in field["value"]
+    assert embed["fields"][-1]["value"] == "run abcdef12"
+    assert embed["url"] == notify.RUNBOOK_ROSTER
+
+
+def test_build_roster_staleness_alert_has_no_cause_speculation():
+    # 문구 원칙 (수집 차단 알림과 동일) — 원인 추정 단어를 싣지 않는다
+    cases = [{"player_id": 1, "ko_name": "가", "transfer_status": "none",
+              "kind": "start", "new_stages": {"interest": 1}, "recent_total": 3}]
+    embed = notify.build_roster_staleness_alert(cases, run_id="run12345678")
+    text = embed["title"] + embed["description"] + "".join(
+        f["value"] for f in embed["fields"])
+    for banned in ("차단", "원인", "실패", "오류"):
+        assert banned not in text
