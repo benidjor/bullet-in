@@ -1,0 +1,494 @@
+{
+  "_meta": {
+    "spec": "docs/superpowers/specs/2026-08-12-extraction-scope-revision-design.md",
+    "runbook": "docs/runbook/2026-08-07-extraction-prompt-dryrun-measurement.md",
+    "db": "bulletin_extract",
+    "registered_at": "2026-08-12 (호출 전)",
+    "key": "content_hash 앞 8자",
+    "player_key": "players.full_name (영문) — 채점은 _fold_latin 후 대조. 모델이 ko 필드에 라틴 표기를 써도 가짜 탈락이 안 나게 영문으로 건다 (런북 4절).",
+    "role": "허용값 목록. 두 값이면 경계 — 어느 쪽이든 통과하되 같은 판 2회 일치를 따로 본다.",
+    "stage": "허용값 목록. null 이면 채점 제외 (이 표본에서 단계는 쟁점이 아님).",
+    "must_exclude": "출력에 나오면 안 되는 인물 (영문 풀네임)",
+    "groups": {
+      "target": "고치려는 오답 — 개정이 mention 으로 내려야 하는 귀속과 아스날 밖 종결",
+      "overreach": "개정이 줄이면 안 되는 것 — 제목이 내세운 다인 기사 · 소제목을 받은 대체 후보",
+      "consistent": "현행이 맞는 것 — 개정 후에도 그대로여야",
+      "preserve": "개정이 잘못 삼킬 이웃 — 근황 · 방향 out · collapsed 가 맞는 행"
+    }
+  },
+
+  "9956234a": {
+    "group": "target",
+    "title": "아스날 공격수 트로사르, 1,530만 파운드에 베식타스 이적",
+    "basis": "한 페이지에 두 기사. Telfer 의 트로사르 이적 + Mokbel 의 촐리스 기사 (이름이 들어간 소제목 · 별도 바이라인). 알바레스 · 로저스 · 바르콜라는 한 문단을 셋이 나눠 쓰고, 바르티슈빌리는 소제목 없이 독립 문단 두 문장.",
+    "players": {
+      "Leandro Trossard": {"stage": ["done", "official"], "role": ["subject"]},
+      "Christos Tzolis": {"stage": null, "role": ["subject"]},
+      "Julian Alvarez": {"stage": null, "role": ["mention"]},
+      "Morgan Rogers": {"stage": null, "role": ["mention"]},
+      "Bradley Barcola": {"stage": null, "role": ["mention"]},
+      "Andria Bartishvili": {"stage": null, "role": ["subject", "mention"]}
+    },
+    "watch": "바르티슈빌리가 판마다 뒤집히면 문안에서 '라운드업의 독립 단신' 을 빼고 소제목 · 별도 바이라인만 신호로 남긴다."
+  },
+
+  "a0d49e1a": {
+    "group": "target",
+    "title": "엘리엇 앤더슨 이적에 따른 프리미어리그 미드필더 시장 연쇄 반응",
+    "basis": "소제목 5개. 토날리 · 기마랑이스 · 스콧은 각자 이름이 들어간 절을 받고 (스콧은 「아스날과 맨유가 노리는 알렉스 스콧」), 부아디 · 코네는 마지막 문단의 이름 나열에만 나온다.",
+    "players": {
+      "Sandro Tonali": {"stage": null, "role": ["subject"]},
+      "Bruno Guimaraes": {"stage": null, "role": ["subject"]},
+      "Alex Scott": {"stage": null, "role": ["subject"]},
+      "Ayyoub Bouaddi": {"stage": ["other"], "role": ["mention"]},
+      "Manu Kone": {"stage": ["other"], "role": ["mention"]}
+    }
+  },
+
+  "83f84ae9": {
+    "group": "target",
+    "title": "브루노 기마랑이스, 아스날 이적 원했다…뉴캐슬 단장 밝혀",
+    "basis": "기마랑이스의 아스날 이적을 다룬 기사. 고든 · 토날리는 뉴캐슬 이탈자 나열에만 나오는데 지금 선수 축 done 을 받고 있다 — 08-10 스펙 6.4.1 이 남긴 경계.",
+    "players": {
+      "Bruno Guimaraes": {"stage": ["done", "agreed", "official"], "role": ["subject"]},
+      "Anthony Gordon": {"stage": ["other"], "role": ["mention"]},
+      "Sandro Tonali": {"stage": ["other"], "role": ["mention"]}
+    }
+  },
+
+  "d878c2bb": {
+    "group": "target",
+    "title": "아스날, 18세 유망주 일라이자 업슨과 계약 체결",
+    "basis": "트윗 한 줄. 아스날이 자기 유망주와 맺은 신규 계약이라 이적 딜의 종결이 아니다. 지금 collapsed 인 것이 4.4 가 겨냥한 유일한 단계 오답.",
+    "players": {
+      "Elijah Upson": {"stage": ["other"], "role": ["subject"]}
+    }
+  },
+
+  "64a4c2a2": {
+    "group": "target",
+    "title": "아스날, 이적 시장 행보는 '혁명보다는 진화'",
+    "basis": "소제목 6개짜리 시즌 총평. 로저스는 「아스날이 로저스를 영입하지 못한 이유」 절에 5문단, 기마랑이스는 「수비수 영입과 브루누 영입 가능성」 절. 나머지는 첫 문단과 15번 문단의 이름 나열뿐이다.",
+    "players": {
+      "Morgan Rogers": {"stage": null, "role": ["subject"]},
+      "Bruno Guimaraes": {"stage": null, "role": ["subject"]},
+      "Illan Meslier": {"stage": null, "role": ["mention"]},
+      "Piero Hincapie": {"stage": null, "role": ["mention"]},
+      "Christos Tzolis": {"stage": null, "role": ["mention"]},
+      "Ezri Konsa": {"stage": null, "role": ["mention"]},
+      "Alex Scott": {"stage": null, "role": ["mention"]},
+      "John Stones": {"stage": null, "role": ["mention"]},
+      "Bradley Barcola": {"stage": null, "role": ["mention"]}
+    }
+  },
+
+  "cd10c828": {
+    "group": "target",
+    "title": "비니시우스 영입 불발된 아스날, 대체 자원 물색 나서",
+    "basis": "소제목 3개에 인물 이름이 없다. 촐리스만 2문단이고 나머지는 각 1문단의 후보 나열이다. 무산은 전제로만 깔려 있어 단계는 관심 유지가 정답이다 (08-10 스펙 6.2 의 과잉 경계 표본).",
+    "players": {
+      "Christos Tzolis": {"stage": null, "role": ["subject", "mention"]},
+      "Julian Alvarez": {"stage": null, "role": ["mention"]},
+      "Bradley Barcola": {"stage": null, "role": ["mention"]},
+      "Ezri Konsa": {"stage": null, "role": ["mention"]},
+      "Kenan Yildiz": {"stage": null, "role": ["mention"]},
+      "Reiss Nelson": {"stage": null, "role": ["mention"]}
+    }
+  },
+
+  "be172ff7": {
+    "group": "target",
+    "title": "유럽 10대 부자 구단 여름 이적시장 중간 평가: 아스날 D-",
+    "basis": "구단별 총평. 소제목은 「아스날」 이고 인물 이름이 없다. 일곱 명 모두 한 문단 안의 영입 · 방출 나열이다.",
+    "players": {
+      "Illan Meslier": {"stage": null, "role": ["mention"]},
+      "Piero Hincapie": {"stage": null, "role": ["mention"]},
+      "Leandro Trossard": {"stage": null, "role": ["mention"]},
+      "Christos Tzolis": {"stage": null, "role": ["mention"]},
+      "Bruno Guimaraes": {"stage": null, "role": ["mention"]},
+      "Morgan Rogers": {"stage": null, "role": ["mention"]},
+      "Julian Alvarez": {"stage": null, "role": ["mention"]}
+    }
+  },
+
+  "7105a83f": {
+    "group": "target",
+    "title": "아스날, 브루노 기마랑이스 영입 위해 7천만 파운드 제안 준비",
+    "basis": "기마랑이스는 제목 · 소제목 「에미레이츠행을 원하는 기마랑이스」 · 4문단. 나머지 여덟 명은 마지막 두 문단의 나열이다.",
+    "players": {
+      "Bruno Guimaraes": {"stage": ["negotiating", "interest"], "role": ["subject"]},
+      "Illan Meslier": {"stage": null, "role": ["mention"]},
+      "Piero Hincapie": {"stage": null, "role": ["mention"]},
+      "Christos Tzolis": {"stage": null, "role": ["mention"]},
+      "Ezri Konsa": {"stage": null, "role": ["mention"]},
+      "Morgan Rogers": {"stage": null, "role": ["mention"]},
+      "Julian Alvarez": {"stage": null, "role": ["mention"]},
+      "Bradley Barcola": {"stage": null, "role": ["mention"]},
+      "John Stones": {"stage": null, "role": ["mention"]}
+    }
+  },
+
+  "4df540fe": {
+    "group": "target",
+    "title": "월드컵 여파, 아스널 여름 이적시장 계획에 미칠 영향은?",
+    "basis": "소제목 셋이 전부 스쿼드 선수 (살리바 · 라이스 · 사카) 다. 페이지 대상 선수는 모두 마지막 두 문단의 한 줄 언급이다.",
+    "players": {
+      "Leandro Trossard": {"stage": null, "role": ["mention"]},
+      "Christos Tzolis": {"stage": null, "role": ["mention"]},
+      "Morgan Rogers": {"stage": null, "role": ["mention"]},
+      "Julian Alvarez": {"stage": null, "role": ["mention"]},
+      "Gabriel Martinelli": {"stage": null, "role": ["mention"]}
+    }
+  },
+
+  "ffec815c": {
+    "group": "target",
+    "title": "아스날, 로저스·크루피 영입 추진 및 아르테타와 재계약 논의",
+    "basis": "소제목 3개. 로저스 · 크루피는 제목과 본문 3문단씩이고, 리브라멘토 · 마테우스 페르난데스 · 몽가 · 넬슨 · 뇌르고르는 선수단 개편 문단의 이름 나열이다.",
+    "players": {
+      "Morgan Rogers": {"stage": null, "role": ["subject"]},
+      "Eli Junior Kroupi": {"stage": null, "role": ["subject"]},
+      "Tino Livramento": {"stage": null, "role": ["mention"]},
+      "Mateus Fernandes": {"stage": null, "role": ["mention"]},
+      "Jeremy Monga": {"stage": null, "role": ["mention"]},
+      "Reiss Nelson": {"stage": null, "role": ["mention"]},
+      "Christian Norgaard": {"stage": null, "role": ["mention"]}
+    }
+  },
+
+  "8f398d13": {
+    "group": "target",
+    "title": "아스날, 레알 마드리드의 비니시우스 주니오르 영입 추진",
+    "basis": "소제목이 없다. 비니시우스는 제목과 3문단, 나머지는 문단 1과 3의 후보 나열이다.",
+    "players": {
+      "Vinicius Junior": {"stage": null, "role": ["subject"]},
+      "Illan Meslier": {"stage": null, "role": ["mention"]},
+      "Piero Hincapie": {"stage": null, "role": ["mention"]},
+      "Bruno Guimaraes": {"stage": null, "role": ["mention"]},
+      "Yan Diomande": {"stage": null, "role": ["mention"]},
+      "Bradley Barcola": {"stage": null, "role": ["mention"]}
+    }
+  },
+
+  "9e4a5c91": {
+    "group": "target",
+    "title": "아스날, 클뤼프 브뤼허 공격수 크리스토스 촐리스 영입 임박",
+    "basis": "촐리스는 제목과 첫 문단. 트로사르는 촐리스 영입의 배경으로 두 문단에 나오고, 콘사 · 로저스 · 알바레스 · 바르콜라는 세 번째 문단의 나열이다.",
+    "players": {
+      "Christos Tzolis": {"stage": null, "role": ["subject"]},
+      "Leandro Trossard": {"stage": null, "role": ["mention"]},
+      "Ezri Konsa": {"stage": null, "role": ["mention"]},
+      "Morgan Rogers": {"stage": null, "role": ["mention"]},
+      "Julian Alvarez": {"stage": null, "role": ["mention"]},
+      "Bradley Barcola": {"stage": null, "role": ["mention"]}
+    }
+  },
+
+  "c898d75c": {
+    "group": "overreach",
+    "title": "폴 머슨이 본 모건 로저스의 첼시 이적과 아스날의 행보",
+    "basis": "소제목 셋에 로저스 · 두에 · 바르콜라 · 콘사의 이름이 들어 있다. 대체 후보로 거론된 인물이라도 이름이 박힌 소제목을 받으면 주역이라는 판정선이다 — 이 줄이 무너지면 개정이 과하게 좁힌 것이다.",
+    "players": {
+      "Morgan Rogers": {"stage": null, "role": ["subject"]},
+      "Desire Doue": {"stage": null, "role": ["subject"]},
+      "Bradley Barcola": {"stage": null, "role": ["subject"]},
+      "Ezri Konsa": {"stage": null, "role": ["subject"]},
+      "Leandro Trossard": {"stage": null, "role": ["mention"]},
+      "Christos Tzolis": {"stage": null, "role": ["mention"]}
+    }
+  },
+
+  "8a19cc9e": {
+    "group": "overreach",
+    "title": "아스날, 안토니오 누사·엘리 주니어 크루피·아유브 부아디 영입 관심",
+    "basis": "제목이 세 명을 나란히 내세운다. 귀속이 많은 것이 정상인 기사다.",
+    "players": {
+      "Antonio Nusa": {"stage": null, "role": ["subject"]},
+      "Eli Junior Kroupi": {"stage": null, "role": ["subject"]},
+      "Ayyoub Bouaddi": {"stage": null, "role": ["subject"]}
+    }
+  },
+
+  "e1348256": {
+    "group": "overreach",
+    "title": "아스날, 알렉스 스콧·아유브 부아디 및 브래들리 바르콜라 영입 논의",
+    "basis": "410자 트윗. 제목이 세 명을 내세우고 본문도 그 셋의 논의가 전부다.",
+    "players": {
+      "Alex Scott": {"stage": null, "role": ["subject"]},
+      "Ayyoub Bouaddi": {"stage": null, "role": ["subject"]},
+      "Bradley Barcola": {"stage": null, "role": ["subject"]}
+    }
+  },
+
+  "427e237d": {
+    "group": "overreach",
+    "title": "아스날, 존 스톤스 및 아론 완-비사카 영입 고려 중",
+    "basis": "432자. 제목의 두 명에 더해 원제가 아센시오까지 수비 후보로 나란히 든다.",
+    "players": {
+      "John Stones": {"stage": null, "role": ["subject"]},
+      "Aaron Wan-Bissaka": {"stage": null, "role": ["subject"]},
+      "Raul Asencio": {"stage": null, "role": ["subject", "mention"]}
+    }
+  },
+
+  "30648654": {
+    "group": "overreach",
+    "title": "아스날, 페란 토레스·니코 윌리엄스 영입설 거론",
+    "basis": "396자. 제목의 두 명이 본문의 전부다. 크루피는 원제에만 나오는 세 번째 후보다.",
+    "players": {
+      "Ferran Torres": {"stage": null, "role": ["subject"]},
+      "Nico Williams": {"stage": null, "role": ["subject"]}
+    }
+  },
+
+  "763cf8cb": {
+    "group": "overreach",
+    "title": "아스날, 공격진 보강 위해 로저스·바르콜라·크루피 등 주시",
+    "basis": "본문에서는 넷이 한 문단에 나열되지만 제목이 셋을 내세운다. 제목 신호가 나열 신호를 이기는지 보는 표본이다.",
+    "players": {
+      "Morgan Rogers": {"stage": null, "role": ["subject"]},
+      "Bradley Barcola": {"stage": null, "role": ["subject"]},
+      "Eli Junior Kroupi": {"stage": null, "role": ["subject"]},
+      "Jeremy Monga": {"stage": null, "role": ["subject", "mention"]}
+    }
+  },
+
+  "b251ca2e": {
+    "group": "overreach",
+    "title": "아스날, 존 스톤스·에즈리 콘사 영입 주시 - 금요일 가십",
+    "basis": "가십 라운드업이지만 제목이 두 명을 내세운다.",
+    "players": {
+      "John Stones": {"stage": null, "role": ["subject"]},
+      "Ezri Konsa": {"stage": null, "role": ["subject"]}
+    }
+  },
+
+  "0550b47a": {
+    "group": "overreach",
+    "title": "아스날의 마르틴 수비멘디 영입설과 가브리엘 제주스·마르티넬리 이적설",
+    "basis": "제목이 세 명을 내세운다. 방향이 서로 다른 (영입 · 방출) 다인 기사다.",
+    "players": {
+      "Martin Zubimendi": {"stage": null, "role": ["subject"]},
+      "Gabriel Jesus": {"stage": null, "role": ["subject"]},
+      "Gabriel Martinelli": {"stage": null, "role": ["subject"]}
+    }
+  },
+
+  "94707655": {
+    "group": "overreach",
+    "title": "아스날, 에즈리 콘사 영입 재추진 및 브루노 기마랑이스 영입 임박",
+    "basis": "제목이 두 건을 병기한다. 8,046자로 길지만 둘 다 본문의 주된 소식이다.",
+    "players": {
+      "Ezri Konsa": {"stage": null, "role": ["subject"]},
+      "Bruno Guimaraes": {"stage": null, "role": ["subject"]}
+    }
+  },
+
+  "a418e338": {
+    "group": "consistent",
+    "title": "제이미 캐러거, 아스날의 브루노 기마랑이스 영입에 수비멘디 '끝' 언급",
+    "basis": "역할 표시 스펙 5.2 인계. 구체적인 이적 소식은 기마랑이스 영입이지만 본문 절반이 수비멘디의 입지를 다룬다 — 자기 거취가 논평 대상이면 주역이라는 판정 근거다.",
+    "players": {
+      "Martin Zubimendi": {"stage": null, "role": ["subject"]},
+      "Bruno Guimaraes": {"stage": null, "role": ["subject"]}
+    }
+  },
+
+  "681dfde6": {
+    "group": "consistent",
+    "title": "아스날, 레안드로 트로사르 대체자로 크리스토스 촐리스 영입 추진",
+    "basis": "역할 표시 스펙 5.2 인계. 앞 건과 맞붙는 짝이다 — 요약이 「트로사르의 이탈을 대비해」 라도 트로사르는 대체 대상으로 불려 나온 이름이라 언급이다.",
+    "players": {
+      "Christos Tzolis": {"stage": null, "role": ["subject"]},
+      "Leandro Trossard": {"stage": ["other"], "role": ["mention"]}
+    }
+  },
+
+  "d43f214d": {
+    "group": "consistent",
+    "title": "브루노 기마랑이스 관련 아스날 협상설 부인 외 수요일 가십",
+    "basis": "역할 표시 스펙 5.2 인계. 라운드업 유형이고 그쪽 실측 531건의 다수가 여기다 — 단신마다 당사자는 주역이고 비교로 이름만 나온 선수만 언급이다.",
+    "players": {
+      "Bruno Guimaraes": {"stage": null, "role": ["subject"]},
+      "Bradley Barcola": {"stage": null, "role": ["subject"]},
+      "Yan Diomande": {"stage": null, "role": ["subject", "mention"]},
+      "Vinicius Junior": {"stage": null, "role": ["subject", "mention"]}
+    }
+  },
+
+  "054b82ec": {
+    "group": "consistent",
+    "title": "엘리 쥐니오르크루피, 중족골 골절상으로 아스날 이적설 일단락",
+    "basis": "역할 표시 스펙 5.2 인계의 명확 사례. 로저스는 「한편 모건 로저스는 첼시로 이적하기 전 영입 후보로 거론되었으며」 한 문장이 전부다.",
+    "players": {
+      "Eli Junior Kroupi": {"stage": ["collapsed", "other", "interest"], "role": ["subject"]},
+      "Morgan Rogers": {"stage": null, "role": ["mention"]}
+    }
+  },
+
+  "1697850f": {
+    "group": "consistent",
+    "title": "아스날, 몽가 영입 1차 제안 거절 외 금요일 축구 가십",
+    "basis": "BBC 가십 라운드업. 몽가는 머리 항목이고 바르콜라도 출처가 따로 붙은 자기 단신 한 줄을 가진다 — 라운드업 단신 당사자는 주역이라는 규칙이 여기서 지켜져야 한다.",
+    "players": {
+      "Jeremy Monga": {"stage": null, "role": ["subject"]},
+      "Bradley Barcola": {"stage": null, "role": ["subject"]}
+    }
+  },
+
+  "38bd2fee": {
+    "group": "consistent",
+    "title": "피에로 인카피에, 3,450만 파운드에 아스날 완전 이적 확정",
+    "basis": "단일 선수 · 완료 보도. 아스날 이적이 완료된 뒤의 보도라 4.3 의 done 한정에 걸리지 않아야 한다.",
+    "players": {
+      "Piero Hincapie": {"stage": ["done", "official", "agreed"], "role": ["subject"]}
+    }
+  },
+
+  "289300fe": {
+    "group": "consistent",
+    "title": "아스날, 아틀레티코 마드리드의 훌리안 알바레스 영입 추진",
+    "basis": "단일 선수 · 단계 일치.",
+    "players": {
+      "Julian Alvarez": {"stage": ["interest", "negotiating", "rumour"], "role": ["subject"]}
+    }
+  },
+
+  "6b226726": {
+    "group": "consistent",
+    "title": "아스날, 레스터 시티 유망주 제레미 몽가 영입 주시 - 월요일 가십",
+    "basis": "원제는 「Diomande picks PSG over Liverpool」 이고 번역 제목은 아스날 항목을 머리로 세웠다. 두 제목이 어긋나는 26% 의 실물이며, 둘 다 자기 단신을 가진 주역이다.",
+    "players": {
+      "Jeremy Monga": {"stage": null, "role": ["subject"]},
+      "Yan Diomande": {"stage": ["other"], "role": ["subject"]}
+    }
+  },
+
+  "b80960c5": {
+    "group": "consistent",
+    "title": "아스날, 브루노 기마랑이스 영입 제안 거절당해 - 6월 26일 가십",
+    "basis": "원제는 「Chelsea close in on Lacroix」 다. 같은 유형의 두 번째 표본이고 라크루아는 아스날 건이 아니라 단계가 other 다.",
+    "players": {
+      "Bruno Guimaraes": {"stage": ["negotiating", "interest", "rumour"], "role": ["subject"]},
+      "Maxence Lacroix": {"stage": ["other"], "role": ["subject", "mention"]}
+    }
+  },
+
+  "41a98ca1": {
+    "group": "consistent",
+    "title": "아스날, 로저스 영입 추진 및 콘사 영입 난항",
+    "basis": "제목이 두 건을 병기하고 본문도 네 문단뿐이다. 알바레스는 첫 문단의 곁들임이다.",
+    "players": {
+      "Morgan Rogers": {"stage": null, "role": ["subject"]},
+      "Ezri Konsa": {"stage": null, "role": ["subject"]},
+      "Julian Alvarez": {"stage": null, "role": ["mention"]}
+    }
+  },
+
+  "79b99b1b": {
+    "group": "preserve",
+    "title": "맨유, 아스날 제치고 '월드컵 신성' 마누 코네 영입 합의",
+    "basis": "1.3 에서 문구 대상에서 뺀 유형. 개정이 이 행의 collapsed 를 끌어내리면 로저스 합의 계열까지 함께 떨어진 것이므로 회귀다.",
+    "players": {
+      "Manu Kone": {"stage": ["collapsed"], "role": ["subject"]}
+    }
+  },
+
+  "19454b4c": {
+    "group": "preserve",
+    "title": "맨체스터 시티, 아스날 유망주 미셸 은두카 영입 합의",
+    "basis": "아스날의 재계약 제안을 거절당한 건이라 아스날이 붙잡으려던 딜의 실패다. collapsed 가 맞고 4.4 의 한 문장이 이것까지 끌어내리면 안 된다.",
+    "players": {
+      "Mishel Nduka": {"stage": ["collapsed"], "role": ["subject"]}
+    }
+  },
+
+  "745f1094": {
+    "group": "preserve",
+    "title": "맨시티, 아스날 하이재킹 성공…레스터 윙어 제레미 몽가 영입",
+    "basis": "하이재킹 완결. 08-10 스펙 3.2 가 collapsed 로 확정한 행이다.",
+    "players": {
+      "Jeremy Monga": {"stage": ["collapsed"], "role": ["subject"]}
+    }
+  },
+
+  "4a8397d1": {
+    "group": "preserve",
+    "title": "첼시, 프리미어리그 역대 2위 이적료로 모건 로저스 영입 공식 발표",
+    "basis": "경쟁 구단의 영입 완료. 합의가 아니라 공식 발표라 종결이 분명하다.",
+    "players": {
+      "Morgan Rogers": {"stage": ["collapsed"], "role": ["subject"]}
+    }
+  },
+
+  "d49fd767": {
+    "group": "preserve",
+    "title": "케파 아리사발라가, 아스날 잔류 여부와 이적료 협상 관건",
+    "basis": "389자 · 케파 한 명. 아스날이 파는 쪽 이야기가 살아 있는 근황성 보도라 주역이고, 4.2 의 아스날 기준 조항이 이것을 other 로 밀어내면 안 된다.",
+    "players": {
+      "Kepa Arrizabalaga": {"stage": null, "role": ["subject"]}
+    }
+  },
+
+  "fd6740ed": {
+    "group": "preserve",
+    "title": "아스날, 올여름 가브리엘 마르티넬리 매각 가능성 열어둬",
+    "basis": "139자 · 방향 out 단독 보도.",
+    "players": {
+      "Gabriel Martinelli": {"stage": null, "role": ["subject"]}
+    }
+  },
+
+  "fabb6aa7": {
+    "group": "preserve",
+    "title": "가브리엘 마갈량이스의 무릎 상태와 아스날의 고민",
+    "basis": "마갈량이스의 무릎을 다루는 글이고 마르티넬리는 「그의 동료 가브리엘 마르티넬리 모두 월드컵에서 높은 단계까지 진출하지 않았다」 한 번뿐이다. 제목 기준으로는 잡히는데 실제로는 언급인 반례다.",
+    "players": {
+      "Gabriel Martinelli": {"stage": ["other"], "role": ["mention"]}
+    }
+  },
+
+  "8d5b1d75": {
+    "group": "preserve",
+    "title": "토트넘의 크루피 영입 시도와 아스날의 완-비사카 주시 - 화요일 가십",
+    "basis": "라운드업에서 두 단신의 당사자가 각각 주역이다. 크루피 건은 아스날이 아니라 토트넘 건이라 단계가 other 다.",
+    "players": {
+      "Eli Junior Kroupi": {"stage": ["other"], "role": ["subject"]},
+      "Aaron Wan-Bissaka": {"stage": null, "role": ["subject"]}
+    }
+  },
+
+  "f261f980": {
+    "group": "preserve",
+    "title": "피오 에스포시토 영입 실패한 아스날, 알바레스와 바르콜라 영입에도 난항",
+    "basis": "원제 「After the Vinicius and Rogers shocks」 에 이름이 있어 지금 귀속이 유지되던 행이다. 비니시우스 · 로저스는 배경으로 불려 나온 이름이므로 언급이 맞다.",
+    "players": {
+      "Julian Alvarez": {"stage": null, "role": ["subject"]},
+      "Bradley Barcola": {"stage": null, "role": ["subject"]},
+      "Vinicius Junior": {"stage": null, "role": ["mention"]},
+      "Morgan Rogers": {"stage": null, "role": ["mention"]}
+    }
+  },
+
+  "1fdd71fe": {
+    "group": "preserve",
+    "title": "아스날, 브루노 기마랑이스 영입 합의…이적료 7,500만 파운드",
+    "basis": "합의 보도. 뇌르고르는 같은 회차의 방출 건으로 함께 실렸고, 고든 · 토날리는 뉴캐슬 맥락의 나열이다.",
+    "players": {
+      "Bruno Guimaraes": {"stage": ["agreed", "personal_terms", "medical"], "role": ["subject"]},
+      "Christian Norgaard": {"stage": null, "role": ["subject", "mention"]},
+      "Anthony Gordon": {"stage": ["other"], "role": ["mention"]},
+      "Sandro Tonali": {"stage": ["other"], "role": ["mention"]}
+    }
+  },
+
+  "b48ca35b": {
+    "group": "preserve",
+    "title": "아스날, 모건 로저스 영입 위해 최대 1천억 원 준비했었다",
+    "basis": "465자. 로저스가 주역이고 앤더슨은 이적료 기준점으로 불려 나온 이름이다.",
+    "players": {
+      "Morgan Rogers": {"stage": null, "role": ["subject"]},
+      "Elliot Anderson": {"stage": ["other"], "role": ["mention"]}
+    }
+  }
+}
