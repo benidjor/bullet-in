@@ -43,7 +43,8 @@ def normalize_pairs(raw, source_id: str | None = None) -> list[dict]:
         if ruled_official:
             stage = "official"
         elif stage == "official":
-            stage = "agreed"
+            # 강등 목적지는 기사 단위 경로와 동일하게 done (2026-08-10 스펙 §4)
+            stage = "done"
         ko = (item.get("ko") or "").strip() or None
         if ko and len(ko) > _MAX_KO:
             ko = None

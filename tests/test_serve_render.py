@@ -23,6 +23,10 @@ def test_static_assets_exist_and_nonempty():
     )
     assert "data-outlet" in js and "data-tier" in js   # 카드 필터 계약
     assert "data-stage" in js                          # 단계 필터 계약
+    # 단계 필터의 방향 게이트와 무산 예외 (단계 재정의 스펙 §8) — render.in_stage_filter
+    # 와 규칙이 갈라지면 계수와 목록이 어긋난다
+    assert "data-dir" in js
+    assert "d.stage === 'collapsed' || d.dir === 'in' || d.dir === 'out'" in js
     assert "localStorage" in js                        # 테마 영속
     assert "journalist" in js                          # 기자 필터 계약
     assert "URLSearchParams" in js                     # 필터 상태 URL 직렬화
@@ -51,6 +55,14 @@ def test_index_card_has_data_attrs_and_link():
     assert 'data-tier="2"' in html
     assert 'data-published="2026-06-29T10:00:00"' in html
     assert 'data-confidence="0.5"' in html
+
+
+def test_index_card_carries_direction_attr():
+    # 단계 필터의 in · out 한정 판정 키 (단계 재정의 스펙 §8) — app.js 가 data-dir 로 읽는다
+    html = render_index([_row(transfer_stage="agreed", transfer_direction="in")], SOURCES, NOW)
+    assert 'data-dir="in"' in html
+    html2 = render_index([_row(transfer_stage="agreed")], SOURCES, NOW)   # 방향 미태깅
+    assert 'data-dir=""' in html2
 
 def test_index_prefers_korean_title_and_escapes():
     html = render_index([_row(title_ko=None, title_original="A & B <script>x</script>")], SOURCES, NOW)
@@ -117,7 +129,7 @@ def test_decorate_agreed_stage_badge():
 
 def test_sidebar_and_card_render_agreed():
     html = render_index([_row(transfer_stage="agreed")], SOURCES, NOW)
-    assert 'data-value="agreed"' in html      # 사이드바 필터 체크박스
+    assert 'data-value="agreed,medical"' in html   # 사이드바 필터 체크박스 (agreed + medical 묶음)
     assert "이적 합의" in html                  # 라벨 노출
 
 
@@ -233,7 +245,7 @@ def test_detail_shows_stage_badge():
     a = _row(content_hash="cur", transfer_stage="medical")
     nb = build_neighbors([a], 0, SOURCES, NOW)
     html = render_article(_decorated(a), nb, "cur", SOURCES, NOW)
-    assert "협상 중" in html and 'class="stage green' in html   # medical -> 협상 중 (표시 묶음)
+    assert "이적 합의" in html and 'class="stage red' in html   # medical -> 이적 합의 (표시 묶음 이동)
 
 
 import re as _re

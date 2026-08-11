@@ -2,11 +2,13 @@ import bullet_in.transfer_stage as ts
 
 
 def test_sidebar_stages_order_and_count():
-    # 진행 단계 순 (사다리 스펙 §4.1) — 화면 순서 (render._STAGE_DISPLAY_GROUPS) 가
-    # 정답이고, medical 은 협상 중 묶음의 짝이라 negotiating 바로 뒤에 둔다.
+    # 진행 단계 순 (사다리 스펙 §4.1 · 단계 재정의 스펙 2026-08-10 §3.1) — 화면 순서
+    # (render._STAGE_DISPLAY_GROUPS) 가 정답이고, medical 은 이적 합의 묶음의 짝이라
+    # agreed 바로 뒤에 둔다. collapsed 는 종결이라 맨 뒤다.
     enums = [e for e, _, _ in ts.SIDEBAR_STAGES]
-    assert enums == ["official", "agreed", "negotiating", "medical",
-                     "personal_terms", "interest", "rumour"]
+    assert enums == ["official", "done", "agreed", "medical",
+                     "personal_terms", "negotiating", "interest", "rumour",
+                     "collapsed"]
 
 
 def test_label_and_css_lookup():
@@ -16,6 +18,10 @@ def test_label_and_css_lookup():
     assert ts.label_for("other") == ""   # other는 라벨 없음
     assert ts.label_for("agreed") == "이적 합의"
     assert ts.css_for("agreed") == "s-agree"
+    assert ts.label_for("done") == "이적 완료"
+    assert ts.css_for("done") == "s-done"
+    assert ts.label_for("collapsed") == "무산"
+    assert ts.css_for("collapsed") == "s-collapsed"
 
 
 def test_normalize_keeps_valid_else_other():

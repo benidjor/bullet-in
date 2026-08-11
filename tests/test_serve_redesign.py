@@ -6,14 +6,17 @@ from bullet_in.serve import render as R
 
 # ── Task 1: 표시 단계 매핑 · 독자 등급 라벨 ──────────────────────────────
 
-def test_display_stage_groups_medical_into_negotiating():
+def test_display_stage_groups_medical_into_agreed():
+    # 메디컬 배지는 이적 합의로 접는다 (단계 재정의 스펙 2026-08-10 §3 — 협상 중에서 이동)
     assert R.display_stage("official") == {"label": "오피셜", "tone": "red", "filled": True}
+    assert R.display_stage("done") == {"label": "이적 완료", "tone": "blue", "filled": False}
     assert R.display_stage("agreed") == {"label": "이적 합의", "tone": "red", "filled": False}
-    assert R.display_stage("medical") == {"label": "협상 중", "tone": "green", "filled": False}
+    assert R.display_stage("medical") == {"label": "이적 합의", "tone": "red", "filled": False}
     assert R.display_stage("negotiating") == {"label": "협상 중", "tone": "green", "filled": False}
     assert R.display_stage("personal_terms") == {"label": "개인 합의", "tone": "yellow", "filled": False}
     assert R.display_stage("interest") == {"label": "관심", "tone": "gray", "filled": False}
     assert R.display_stage("rumour") == {"label": "루머", "tone": "gray", "filled": False}
+    assert R.display_stage("collapsed") == {"label": "무산", "tone": "ash", "filled": False}
     assert R.display_stage("other") is None
     assert R.display_stage(None) is None
 

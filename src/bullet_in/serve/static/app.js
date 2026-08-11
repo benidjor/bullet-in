@@ -1,5 +1,5 @@
 // Bullet-in 서빙 인터랙션 — 필터 · 정렬 · 공신력 연동 · 테마.
-// DOM 계약: a.item[data-hash][data-stage][data-tier][data-outlet][data-journalist][data-published][data-confidence][data-text]
+// DOM 계약: a.item[data-hash][data-stage][data-dir][data-tier][data-outlet][data-journalist][data-published][data-confidence][data-text]
 //           사이드바 옵션 input[data-group][data-value][data-tier]
 // URL 계약: ?outlet=&journalist=&tier=&stage=&bucket=other&sort=confidence|views&q=  (다중 선택은 키 반복)
 // 결합 규칙 (§8): (소스 OR 기자) AND 공신력 AND 영입 단계 AND 검색어
@@ -239,8 +239,13 @@ function applyFilters() {
     // 링크 선수 배지 (data-ctx) 가 붙은 글은 기타 숨김 규칙에서 뺀다 — 배지가
     // 존재 이유를 설명하는 글이라, 서버 렌더처럼 여기서도 일반 카드로 다룬다.
     const isOther = (!d.stage || d.stage === 'other') && !d.ctx;
+    // 단계 필터는 방향 in·out (아스날 주체) 한정 — 타 구단 딜 (none) 은 필터 체크 시
+    // 제외되고, 필터가 없을 때의 노출 · 기타 토글 분모는 그대로다 (단계 재정의 스펙 §8).
+    // 무산 (collapsed) 은 방향을 보지 않는다 (§8 개정) — 잔류 확정 · 재계약 체결이
+    // 방향 none 이라 걸러지면 무산 필터가 제 내용물을 잃는다. render.in_stage_filter 와 같은 규칙.
+    const dirOk = d.stage === 'collapsed' || d.dir === 'in' || d.dir === 'out';
     const okStage = isOther ? showOther
-      : (stageEnums.size === 0 || stageEnums.has(d.stage));
+      : (stageEnums.size === 0 || (stageEnums.has(d.stage) && dirOk));
     return okText && okSrc && okTier && okStage;
   };
 

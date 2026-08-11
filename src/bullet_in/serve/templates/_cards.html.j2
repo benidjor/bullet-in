@@ -6,7 +6,7 @@
    선수 페이지 (show_all) 는 귀속 기사 전량을 보여줘야 해서 이 기본 숨김을 끈다
    — 머리 건수와 목록 수가 어긋나면 안 되기 때문 (선수 페이지 스펙 §5.3). #}
 <a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if hidden or (not show_all and not a._stage_disp and not a._ctx) %} style="display:none"{% endif %} href="{{ root }}article/{{ a.content_hash }}.html"
-   data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-tier="{{ a._tier_key }}"{% if a._ctx %} data-ctx="1"{% endif %}
+   data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-dir="{{ a._dir }}" data-tier="{{ a._tier_key }}"{% if a._ctx %} data-ctx="1"{% endif %}
    data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}"
    data-published="{{ a._published_iso }}" data-confidence="{{ a.confidence_score or 0 }}"
    data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">
@@ -20,4 +20,4 @@
 {% endmacro %}
 {% macro relitem(a, rep) %}<a class="relitem" href="article/{{ a.content_hash }}.html"
    data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}" data-tier="{{ a._tier_key }}"
-   data-stage="{{ a._stage }}" data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}"><span class="rt">{{ a._title }}</span><span class="rm">{{ a._outlet }}{% if a._reader_tier %} · {{ a._reader_tier }}{% endif %}{% if a._date and a._date != rep._date %} · {{ a._date }}{% endif %}</span></a>{% endmacro %}
+   data-stage="{{ a._stage }}" data-dir="{{ a._dir }}" data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}"><span class="rt">{{ a._title }}</span><span class="rm">{{ a._outlet }}{% if a._reader_tier %} · {{ a._reader_tier }}{% endif %}{% if a._date and a._date != rep._date %} · {{ a._date }}{% endif %}</span></a>{% endmacro %}

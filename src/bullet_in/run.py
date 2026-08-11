@@ -36,7 +36,8 @@ GEMINI_MODEL = "gemini-3.1-flash-lite"
 SERVING_SELECT_SQL = (
     "SELECT content_hash,url,source_id,title_original,title_ko,summary_ko,"
     "summary3_ko,body_ko,body_source,image_url,images_json,outlet,journalist,team,"
-    "transfer_stage,tier,confidence_score,published_at,published_precision,fetched_at,"
+    "transfer_stage,transfer_direction,tier,confidence_score,published_at,"
+    "published_precision,fetched_at,"
     # 링크 선수 배지 입력 (B안 2026-08-01 · 소속 제외 · 비이적 한정 · 이름 공급 2026-08-02)
     # — 비이적 기사 (other) 이면서 아스날 소속 (squad · manager · director) 확정 인물
     # 연결이 없는 글에 한해, 연결된 영입 링크 선수의 ko_name 을 id 순으로 넘긴다.

@@ -11,8 +11,9 @@
 {% if nodes %}
 <div class="sechead"><h2>진행 단계</h2></div>
 <div class="timeline">
+  {# 무산 (n.end) 은 진행 단계가 아니라 사다리 축 밖의 종결 줄이다 (단계 재정의 스펙 §8) #}
   {% for n in nodes %}
-  <div class="tlnode">
+  <div class="tlnode{{ ' tlend' if n.end }}">
     <span class="tldate">{{ n.a._kdate }}</span>
     {% if n.badge %}<span class="stage {{ n.badge.tone }}{{ ' filled' if n.badge.filled }}">{{ n.badge.label }}</span>{% endif %}
     <a class="tltitle" href="{{ root }}article/{{ n.a.content_hash }}.html">{{ n.a._title }}</a>

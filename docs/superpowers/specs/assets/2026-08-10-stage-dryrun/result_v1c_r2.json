@@ -1,0 +1,162 @@
+{
+ "00f5138a": [
+  "negotiating",
+  "in"
+ ],
+ "50c684c4": [
+  "negotiating",
+  "in"
+ ],
+ "94a50dd2": [
+  "negotiating",
+  "none"
+ ],
+ "b89687bb": [
+  "negotiating",
+  "in"
+ ],
+ "f5fa1f99": [
+  "negotiating",
+  "in"
+ ],
+ "43e9488e": [
+  "done",
+  "in"
+ ],
+ "ee28de6e": [
+  "done",
+  "none"
+ ],
+ "1bdc581a": [
+  "interest",
+  "in"
+ ],
+ "104e643f": [
+  "collapsed",
+  "none"
+ ],
+ "f3bb7c7c": [
+  "collapsed",
+  "none"
+ ],
+ "96bff722": [
+  "negotiating",
+  "in"
+ ],
+ "dee946d9": [
+  "negotiating",
+  "in"
+ ],
+ "7a24f142": [
+  "agreed",
+  "none"
+ ],
+ "b05efdc8": [
+  "agreed",
+  "none"
+ ],
+ "dbc972df": [
+  "other",
+  "none"
+ ],
+ "a72f482a": [
+  "collapsed",
+  "none"
+ ],
+ "c786fb9f": [
+  "negotiating",
+  "in"
+ ],
+ "ad4e18de": [
+  "negotiating",
+  "in"
+ ],
+ "28ae2559": [
+  "collapsed",
+  "in"
+ ],
+ "61f2f088": [
+  "interest",
+  "in"
+ ],
+ "5123b257": [
+  "negotiating",
+  "in"
+ ],
+ "a6d6b098": [
+  "negotiating",
+  "in"
+ ],
+ "71d0e34c": [
+  "negotiating",
+  "in"
+ ],
+ "df3ec702": [
+  "negotiating",
+  "in"
+ ],
+ "a5088900": [
+  "negotiating",
+  "none"
+ ],
+ "2637cd61": [
+  "interest",
+  "in"
+ ],
+ "e3948770": [
+  "interest",
+  "in"
+ ],
+ "25591d11": [
+  "interest",
+  "in"
+ ],
+ "d30835af": [
+  "interest",
+  "in"
+ ],
+ "fe031baa": [
+  "interest",
+  "in"
+ ],
+ "054270c9": [
+  "negotiating",
+  "none"
+ ],
+ "79f20415": [
+  "negotiating",
+  "none"
+ ],
+ "8210fbfd": [
+  "medical",
+  "none"
+ ],
+ "079534d1": [
+  "medical",
+  "none"
+ ],
+ "745f1094": [
+  "collapsed",
+  "in"
+ ],
+ "9356f857": [
+  "negotiating",
+  "none"
+ ],
+ "6aa79a9d": [
+  "negotiating",
+  "none"
+ ],
+ "138d0743": [
+  "other",
+  "none"
+ ],
+ "64ccfe25": [
+  "other",
+  "none"
+ ],
+ "52b02702": [
+  "other",
+  "none"
+ ]
+}

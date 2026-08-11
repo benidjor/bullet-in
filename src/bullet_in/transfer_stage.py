@@ -7,19 +7,23 @@ from __future__ import annotations
 
 # (enum, 한국어 라벨, css 클래스) — 라벨 · 클래스 조회의 단일 출처다.
 # 여기 나열 순서는 화면에 나타나지 않는다 — 사이드바 필터가 그리는 것은
-# render._STAGE_DISPLAY_GROUPS 이고, 그쪽이 negotiating 과 medical 을 협상 중
+# render._STAGE_DISPLAY_GROUPS 이고, 그쪽이 agreed 와 medical 을 이적 합의
 # 하나로 묶는다. 이 주석이 "사이드바 표시 순서" 라고 적혀 있어 실제로 오진을
 # 부른 적이 있다 (docs/troubleshooting/2026-08-04-called-design-a-defect-without-reading-it.md).
 # 2026-08-06 사다리 스펙 §4.1 로 화면 순서 (render._STAGE_DISPLAY_GROUPS) 와 같은
 # 순서로 정합해 두었다 — 사다리의 진행 단계 정렬은 그쪽 목록이 기준이다.
+# done · collapsed 는 2026-08-10 단계 재정의 스펙 §3.1 신설 — 메디컬은 이적 합의
+# 묶음의 짝으로 이동했고, collapsed 는 진행 단계가 아니라 사다리 축에서 빠진다 (§8).
 SIDEBAR_STAGES: list[tuple[str, str, str]] = [
     ("official", "오피셜", "s-off"),
+    ("done", "이적 완료", "s-done"),
     ("agreed", "이적 합의", "s-agree"),
-    ("negotiating", "협상 중", "s-talk"),
     ("medical", "메디컬", "s-med"),
     ("personal_terms", "개인 합의", "s-personal"),
+    ("negotiating", "협상 중", "s-talk"),
     ("interest", "관심", "s-interest"),
     ("rumour", "루머", "s-rum"),
+    ("collapsed", "무산", "s-collapsed"),
 ]
 
 OTHER = "other"
