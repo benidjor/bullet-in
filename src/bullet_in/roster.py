@@ -14,6 +14,8 @@ _HANGUL_RE = re.compile(r"[가-힣]")
 _MIN_KO_KEY = 2          # 한글 이름 후보 길이 하한 (「사카」 같은 2자 표기를 살린다)
 _MIN_LATIN_KEY = 4       # 라틴 후보 길이 하한 — 세 글자 이하는 일반 단어에 걸린다
 _DUP_DISTANCE = 2        # 중복 의심 판정의 이름 편집거리 상한 (스펙 §8.5 의 8쌍이 전부 1 ~ 2)
+_REPLACED_RE = re.compile("대체자")   # 「대체된 선수」 표지 — 「대체 자원」 도 공백을 지우면 걸린다
+_REPLACED_GAP = 6        # 이름 끝에서 「대체자」 까지 허용 간격 (실측: 참 0 · 4자 · 거짓 9 · 14자)
 
 
 def normalize_role(raw) -> str | None:
@@ -62,6 +64,47 @@ def _name_keys(pair: dict, forms: dict | None) -> tuple[set[str], set[str]]:
             {l for l in lat if len(l) >= _MIN_LATIN_KEY})
 
 
+def _sections(body: str | None) -> list[tuple[str, str]]:
+    """(소제목 줄, 그 소제목이 여는 절의 본문) 목록 — 소제목이 없으면 빈 목록."""
+    lines = (body or "").split("\n")
+    out = []
+    for i, ln in enumerate(lines):
+        if not ln.strip().startswith("###"):
+            continue
+        end = next((j for j in range(i + 1, len(lines))
+                    if lines[j].strip().startswith("###")), len(lines))
+        out.append((ln, "\n".join(lines[i + 1:end])))
+    return out
+
+
+def _replaced_target(text: str | None, ko_keys: set[str]) -> bool:
+    """이 줄이 그 인물을 「대체된 선수」 로 부르는가 — 이름 바로 뒤에 「대체자」 가 온다.
+
+    「트로사르 대체자로 촐리스 영입」 · 「촐리스가 트로사르의 완벽한 대체자인 이유」 는
+    둘 다 촐리스 기사이고 트로사르는 비교 기준점이다 (`PLAYERS_CLAUSE` 의 mention 정의가
+    「대체자」 를 직접 지목한다). 이름 뒤 여섯 글자로 한정하는 것은 실측이다 — 트로사르
+    여섯 줄이 0 · 4자이고, 주역이 맞는 마르티넬리 (`0f2fbcd4`) 가 9자 · 기마랑이스
+    (`b57dedc7`) 가 14자다.
+
+    「가장 가까운 이름」 을 찾는 대신 **그 인물의 이름만** 보는 이유는 후보 집합 의존을
+    없애기 위해서다. 가장 가까운 이름을 찾으면 선수 페이지가 없는 인물 (이적 얘기가 없는
+    주전) 이 후보에서 빠져 그 앞 사람을 잘못 집는다.
+
+    **남는 위험** — 「대체자」 가 방출 대체가 아니라 로테이션 백업 뜻으로 쓰이면 그 선수는
+    팀에 남아 있고 기사의 당사자다. 그쪽은 번역이 back-up 을 「백업」 으로 옮기게 해
+    낱말에서 갈랐다 (`TRANSLATE_PROMPT`). 원문이 이미 한국어인 fmkorea 는 그 교정이 닿지
+    않으므로 이 유형이 다시 생길 수 있다."""
+    if not text:
+        return False
+    sq = _squash(text)
+    for m in _REPLACED_RE.finditer(sq):
+        for k in ko_keys:
+            p = sq.rfind(k, 0, m.start())
+            if p >= 0 and m.start() - (p + len(k)) <= _REPLACED_GAP:
+                return True
+    return False
+
+
 def decide_role(article: dict, pair: dict, forms: dict | None = None) -> str:
     """이 기사가 그 인물을 하나의 소식으로 다루는지 (스펙 §5.1).
 
@@ -71,11 +114,14 @@ def decide_role(article: dict, pair: dict, forms: dict | None = None) -> str:
     모델의 subject 는 규칙을 뒤집지 못한다. 모델이 거의 전부를 subject 라 부르므로
     (dry-run 에서 subject 재현율 99% · mention 40%) 올리는 쪽 근거가 없다.
 
+    근거로 못 쓰는 자리가 둘 있다 (2026-08-13 눈검수).
+    소제목은 **그 절 본문에도 이름이 나올 때만** 근거다 — fmkorea 전재가 원문 페이지의
+    관련기사 헤더를 본문에 끌어와, 소제목에만 있고 본문에는 없는 인물이 생긴다 (`ad4e18de`).
+    그리고 이름을 「대체자」 로 부르는 줄은 근거가 아니다 (`_replaced_target`).
+
     **이 값이 채워진 행은 서빙이 옛 규칙 대신 역할로 판정한다** — 잘못된 mention
     은 그 기사를 선수 페이지에서 지운다 (스펙 §5.5 의 실패 방향)."""
     kk, lat = _name_keys(pair, forms)
-    heads = [ln for ln in (article.get("body_ko") or "").split("\n")
-             if ln.strip().startswith("###")]
 
     def hit(text: str | None) -> bool:
         if not text:
@@ -83,8 +129,14 @@ def decide_role(article: dict, pair: dict, forms: dict | None = None) -> str:
         return (any(k in _squash(text) for k in kk)
                 or any(l in _fold_latin(text) for l in lat))
 
-    in_title = hit(article.get("title_ko")) or hit(article.get("title_original"))
-    in_head = any(hit(x) for x in heads)
+    # 번역 제목이 대체 대상으로 부르면 원제도 근거로 쓰지 않는다 — 같은 기사의 두 표현이라
+    # 한쪽만 막으면 다른 쪽이 되살린다 (`b5d9f90a` 원제는 "Trossard's replacement" 다).
+    # 판정을 번역 제목으로만 하는 것은 「대체자」 가 한국어 표지이기 때문이다.
+    title_marked = _replaced_target(article.get("title_ko"), kk)
+    in_title = not title_marked and (hit(article.get("title_ko"))
+                                     or hit(article.get("title_original")))
+    in_head = any(hit(h) and not _replaced_target(h, kk) and hit(sec)
+                  for h, sec in _sections(article.get("body_ko")))
     if not (in_title or in_head):
         return MENTION
     if in_title and not in_head and pair.get("role") == MENTION:
