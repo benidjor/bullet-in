@@ -28,7 +28,8 @@ EXPECTED = json.loads((BASE / "expected.json").read_text())
 EXPECTED.pop("_meta", None)
 DB = "bulletin_extract"
 MODEL = "gemini-3.1-flash-lite"
-PASSES = ("v0_r1", "v0_r2", "v1_r1", "v1_r2")
+PASSES = ("v0_r1", "v0_r2", "v1_r1", "v1_r2", "v1c_r1", "v1c_r2",
+          "v1d_r1", "v1d_r2")
 
 # ---------------------------------------------------------------- 판본 문안
 
@@ -39,6 +40,43 @@ ROLE_CLAUSE = (
     "논평 대상으로 삼는다. mention = 한 문단 안에서 여러 인물과 함께 이름만 "
     "나열되거나 배경 · 과거 비교 · 대체자 · 경쟁자 · 이적료 기준점으로 불려 나온다. "
     "지면에서 차지하는 자리로 정한다 — 그 인물이 중요한 선수인지로 정하지 않는다.\n")
+
+# v1c — v1 실측에서 subject 99% · mention 40% 로 한 방향으로만 부족했다. 두 정의를
+# 나란히 놓으면 subject 신호 넷이 먼저 나와 무게가 그쪽으로 기운다. 순서 판정으로
+# 바꾸고 mention 을 기본값 (④ 그 밖에는) 으로 둔다. 제목 신호에는 단서를 다는데,
+# 없으면 681dfde6 의 트로사르 · b6281445 의 살리바처럼 제목에 이름이 있으나 남의
+# 소식의 배경인 인물이 subject 로 올라간다.
+ROLE_CLAUSE_V1C = (
+    "- role 은 이 기사가 그 인물을 하나의 소식으로 다루는지다. 아래 순서로 판단하고 "
+    "어디에도 해당하지 않으면 mention 이다.\n"
+    "  ① 제목이 그 인물의 이적 · 거취 · 계약을 이 기사의 소식으로 내세우면 subject. "
+    "제목에 이름이 있어도 다른 인물 소식의 배경 · 대체 대상 · 계기로 나오면 해당하지 않는다.\n"
+    "  ② 그 인물 이름이 들어간 소제목이나 별도 바이라인의 절이 있으면 subject.\n"
+    "  ③ 여러 소식을 모은 기사에서 그 인물 몫의 단신이 독립적으로 있거나, 기사가 그 "
+    "인물의 거취를 논평 대상으로 삼으면 subject.\n"
+    "  ④ 그 밖에는 mention 이다 — 그 인물에 관한 서술이 한두 문장뿐이거나, 한 문단 "
+    "안에서 여러 인물과 함께 이름만 나열되거나, 배경 · 과거 비교 · 대체자 · 경쟁자 · "
+    "이적료 기준점으로 불려 나온다.\n"
+    "  지면에서 차지하는 자리로 정한다 — 그 인물이 중요한 선수인지로 정하지 않는다.\n")
+
+# v1d — v1c 는 표적을 살렸으나 (mention 40% → 81%) 과잉 경계 넷을 깨뜨렸다
+# (e1348256 · b251ca2e · 8a19cc9e · c898d75c). 넷 다 제목 · 소제목에 이름이 있는데
+# mention 으로 떨어졌고, 원인은 ④ 를 잔여 규칙으로 두면서 그 안에 "한두 문장뿐이면"
+# 이라는 적극 기준을 함께 넣어 ①~③ 통과자에게도 ④ 가 적용된 것이다. 410자 트윗
+# (e1348256) 은 제목이 내세운 셋이 전원 한 문장이라 그대로 걸렸다.
+# 고치는 곳은 둘 — ①~③ 우선을 명시하고, ④ 에서 문장 수 기준을 뺀다.
+ROLE_CLAUSE_V1D = (
+    "- role 은 이 기사가 그 인물을 하나의 소식으로 다루는지다. 아래 ① ~ ③ 중 "
+    "하나라도 해당하면 subject 이고, 그때는 ④ 를 보지 않는다. 어디에도 해당하지 "
+    "않을 때만 mention 이다.\n"
+    "  ① 제목이 그 인물의 이적 · 거취 · 계약을 이 기사의 소식으로 내세우면 subject. "
+    "제목에 이름이 있어도 다른 인물 소식의 배경 · 대체 대상 · 계기로 나오면 해당하지 않는다.\n"
+    "  ② 그 인물 이름이 들어간 소제목이나 별도 바이라인의 절이 있으면 subject.\n"
+    "  ③ 여러 소식을 모은 기사에서 그 인물 몫의 단신이 독립적으로 있거나, 기사가 그 "
+    "인물의 거취를 논평 대상으로 삼으면 subject.\n"
+    "  ④ 그 밖에는 mention 이다 — 한 문단 안에서 여러 인물과 함께 이름만 나열되거나, "
+    "배경 · 과거 비교 · 대체자 · 경쟁자 · 이적료 기준점으로 불려 나온다.\n"
+    "  지면에서 차지하는 자리로 정한다 — 그 인물이 중요한 선수인지로 정하지 않는다.\n")
 
 # (찾을 것, 바꿀 것) — 전부 정확히 1회 치환돼야 한다. 0회면 상수가 바뀐 것이고
 # 그대로 두면 "개정했는데 효과 없음" 이라는 가짜 결론이 나온다.
@@ -62,8 +100,9 @@ CLAUSE_EDITS = [
 ]
 
 
-def build_v1_prompt() -> str:
-    """현행 EXTRACT_PLAYERS_PROMPT 에서 개정 네 곳만 바꾼 문자열을 만든다."""
+def build_v1_prompt(role_clause: str = ROLE_CLAUSE) -> str:
+    """현행 EXTRACT_PLAYERS_PROMPT 에서 개정 네 곳만 바꾼 문자열을 만든다.
+    v1 과 v1c 의 차이는 role 조항 하나뿐이다 — 나머지 세 곳은 같은 문자열을 쓴다."""
     p = enrich.EXTRACT_PLAYERS_PROMPT
     for old, new in CLAUSE_EDITS:
         if p.count(old) != 1:
@@ -78,7 +117,7 @@ def build_v1_prompt() -> str:
     if p.count(marker) != 1:
         sys.exit("role 조항을 넣을 자리를 못 찾았다.")
     head, tail = p.split(marker, 1)
-    return head + ROLE_CLAUSE + marker + tail
+    return head + role_clause + marker + tail
 
 
 # ---------------------------------------------------------------- 입력 · 실행
@@ -173,7 +212,7 @@ def score(name: str) -> None:
 
 def consistency() -> None:
     """같은 판 2회의 role 판정 일치 — 흔들리는 값은 표시 규칙의 근거로 못 쓴다."""
-    for v in ("v0", "v1"):
+    for v in ("v0", "v1", "v1c", "v1d"):
         a, b = (BASE / f"result_{v}_r1.json", BASE / f"result_{v}_r2.json")
         if not (a.exists() and b.exists()):
             continue
@@ -213,20 +252,24 @@ def main() -> None:
     rows = fetch_rows(engine)
     roster = roster_text(engine)
     v1 = build_v1_prompt()
+    v1c = build_v1_prompt(ROLE_CLAUSE_V1C)
+    v1d = build_v1_prompt(ROLE_CLAUSE_V1D)
+    if len({v1, v1c, v1d}) != 3:
+        sys.exit("판본 문자열이 겹친다 — role 조항 치환이 안 걸렸다.")
+    prompts = {"v0": enrich.EXTRACT_PLAYERS_PROMPT, "v1": v1, "v1c": v1c, "v1d": v1d}
     todo = [n for n in PASSES if not (BASE / f"result_{n}.json").exists()]
     print(f"표본 {len(rows)}건 · 판본 {len(PASSES)} · 남은 판 {len(todo)} "
           f"→ 호출 {len(rows) * len(todo)}회")
     print(f"명단 재료 {roster.count('(')}명 · {len(roster)}자")
     print(f"enrich 모듈 {enrich.__file__}")
-    print(f"v1 프롬프트 길이 {len(v1)}자 (현행 {len(enrich.EXTRACT_PLAYERS_PROMPT)}자)")
+    print(f"프롬프트 길이 — 현행 {len(enrich.EXTRACT_PLAYERS_PROMPT)} · v1 {len(v1)} · v1c {len(v1c)} · v1d {len(v1d)}자")
     if args.plan:
         return
 
     from google import genai
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     for n in PASSES:
-        run_pass(n, enrich.EXTRACT_PLAYERS_PROMPT if n.startswith("v0") else v1,
-                 rows, client, roster)
+        run_pass(n, prompts[n.rsplit("_", 1)[0]], rows, client, roster)
         time.sleep(args.sleep)
 
     print("\n=== 채점 ===")

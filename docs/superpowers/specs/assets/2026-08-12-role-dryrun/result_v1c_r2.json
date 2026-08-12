@@ -1,0 +1,1730 @@
+{
+ "9956234a": [
+  {
+   "full_name": "Leandro Trossard",
+   "ko": "레안드로 트로사르",
+   "stage": "done",
+   "role": "subject"
+  },
+  {
+   "full_name": "Mikel Arteta",
+   "ko": "미켈 아르테타",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Christos Tzolis",
+   "ko": "흐리스토스 촐리스",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "훌리안 알바레스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "모건 로저스",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Bradley Barcola",
+   "ko": "브래들리 바르콜라",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Andria Bartishvili",
+   "ko": "안드리아 바르티슈빌리",
+   "stage": "interest",
+   "role": "subject"
+  }
+ ],
+ "a0d49e1a": [
+  {
+   "full_name": "Sandro Tonali",
+   "ko": "토날리",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bruno Guimaraes",
+   "ko": "기마랑이스",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Alex Scott",
+   "ko": "스콧",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Ayyoub Bouaddi",
+   "ko": "부아디",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Manu Kone",
+   "ko": "코네",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "83f84ae9": [
+  {
+   "full_name": "Bruno Guimaraes",
+   "ko": "브루노 기마랑이스",
+   "stage": "agreed",
+   "role": "subject"
+  }
+ ],
+ "d878c2bb": [
+  {
+   "full_name": "Elijah Upson",
+   "ko": "일라이자 업슨",
+   "stage": "agreed",
+   "role": "subject"
+  }
+ ],
+ "64a4c2a2": [
+  {
+   "full_name": "Christos Tzolis",
+   "ko": "크리스토스 졸리스",
+   "stage": "done",
+   "role": "subject"
+  },
+  {
+   "full_name": "Piero Hincapie",
+   "ko": "피에로 힌카피에",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Illan Meslier",
+   "ko": "일랑 멜리에",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "모건 로저스",
+   "stage": "collapsed",
+   "role": "subject"
+  },
+  {
+   "full_name": "Declan Rice",
+   "ko": "데클란 라이스",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bukayo Saka",
+   "ko": "부카요 사카",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Noni Madueke",
+   "ko": "노니 마두에케",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Eberechi Eze",
+   "ko": "에베레치 에제",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "David Raya",
+   "ko": "다비드 라야",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Mikel Merino",
+   "ko": "미켈 메리노",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Martin Zubimendi",
+   "ko": "마르틴 수비멘디",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "William Saliba",
+   "ko": "윌리엄 살리바",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "John Stones",
+   "ko": "존 스톤스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ezri Konsa",
+   "ko": "에즈리 콘사",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Bradley Barcola",
+   "ko": "브래들리 바르콜라",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Leandro Trossard",
+   "ko": "레안드로 트로사르",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Gabriel Martinelli",
+   "ko": "가브리엘 마르티넬리",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bruno Guimaraes",
+   "ko": "브루누 기마랑이스",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Alex Scott",
+   "ko": "알렉스 스콧",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Martin Odegaard",
+   "ko": "마르틴 외데고르",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "be172ff7": [
+  {
+   "full_name": "Piero Hincapie",
+   "ko": "피에로 힌카피에",
+   "stage": "done",
+   "role": "subject"
+  },
+  {
+   "full_name": "Illan Meslier",
+   "ko": "일랑 멜리에",
+   "stage": "done",
+   "role": "subject"
+  },
+  {
+   "full_name": "Reiss Nelson",
+   "ko": "리스 넬슨",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Christos Tzolis",
+   "ko": "크리스토스 졸리스",
+   "stage": "negotiating",
+   "role": "subject"
+  },
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "모건 로저스",
+   "stage": "collapsed",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bruno Guimaraes",
+   "ko": "브루노 기마랑이스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "훌리안 알바레스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "William Saliba",
+   "ko": "윌리엄 살리바",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "7105a83f": [
+  {
+   "full_name": "Bruno Guimaraes",
+   "ko": "브루노 기마랑이스",
+   "stage": "negotiating",
+   "role": "subject"
+  },
+  {
+   "full_name": "Mikel Arteta",
+   "ko": "미켈 아르테타",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Christos Tzolis",
+   "ko": "크리스토스 촐리스",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Piero Hincapie",
+   "ko": "피에로 힌카피에",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Illan Meslier",
+   "ko": "일랑 멜리에",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "모건 로저스",
+   "stage": "collapsed",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ezri Konsa",
+   "ko": "콘사",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "William Saliba",
+   "ko": "윌리엄 살리바",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "John Stones",
+   "ko": "존 스톤스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "알바레스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bradley Barcola",
+   "ko": "바르콜라",
+   "stage": "interest",
+   "role": "mention"
+  }
+ ],
+ "4df540fe": [
+  {
+   "full_name": "David Raya",
+   "ko": "다비드 라야",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Mikel Merino",
+   "ko": "미켈 메리노",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Martin Zubimendi",
+   "ko": "마르틴 수비멘디",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Noni Madueke",
+   "ko": "노니 마두에케",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Declan Rice",
+   "ko": "데클란 라이스",
+   "stage": "other",
+   "role": "subject"
+  },
+  {
+   "full_name": "Bukayo Saka",
+   "ko": "부카요 사카",
+   "stage": "other",
+   "role": "subject"
+  },
+  {
+   "full_name": "Eberechi Eze",
+   "ko": "에베레치 에제",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "William Saliba",
+   "ko": "윌리엄 살리바",
+   "stage": "other",
+   "role": "subject"
+  },
+  {
+   "full_name": "Gabriel Magalhaes",
+   "ko": "가브리엘 마갈량이스",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ben White",
+   "ko": "벤 화이트",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Jurrien Timber",
+   "ko": "유리엔 팀버",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Riccardo Calafiori",
+   "ko": "리카르도 칼라피오리",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Cristhian Mosquera",
+   "ko": "크리스티안 모스케라",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Christos Tzolis",
+   "ko": "크리스토스 촐리스",
+   "stage": "agreed",
+   "role": "subject"
+  },
+  {
+   "full_name": "Leandro Trossard",
+   "ko": "레안드로 트로사르",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Gabriel Martinelli",
+   "ko": "가브리엘 마르티넬리",
+   "stage": "other",
+   "role": "subject"
+  },
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "훌리안 알바레스",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "모건 로저스",
+   "stage": "interest",
+   "role": "subject"
+  }
+ ],
+ "ffec815c": [
+  {
+   "full_name": "Mikel Arteta",
+   "ko": "아르테타",
+   "stage": "negotiating",
+   "role": "subject"
+  },
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "로저스",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Eli Junior Kroupi",
+   "ko": "크루피",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "알바레스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Gabriel Jesus",
+   "ko": "제수스",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Gabriel Martinelli",
+   "ko": "마르티넬리",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Leandro Trossard",
+   "ko": "트로사르",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ethan Nwaneri",
+   "ko": "은와네리",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Christian Norgaard",
+   "ko": "노르가르",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ben White",
+   "ko": "벤 화이트",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Fabio Vieira",
+   "ko": "파비우 비에이라",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Reiss Nelson",
+   "ko": "넬슨",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Jakub Kiwior",
+   "ko": "키비오르",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Martin Odegaard",
+   "ko": "외데가르드",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Eberechi Eze",
+   "ko": "에제",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Jeremy Monga",
+   "ko": "몽가",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Myles Lewis-Skelly",
+   "ko": "루이스-스켈리",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Mateus Fernandes",
+   "ko": "페르난데스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Tino Livramento",
+   "ko": "리브라멘토",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Jurrien Timber",
+   "ko": "팀버",
+   "stage": "negotiating",
+   "role": "mention"
+  },
+  {
+   "full_name": "Declan Rice",
+   "ko": "라이스",
+   "stage": "negotiating",
+   "role": "mention"
+  }
+ ],
+ "8f398d13": [
+  {
+   "full_name": "Vinícius Júnior",
+   "ko": "비니시우스 주니오르",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "훌리안 알바레스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Yan Diomande",
+   "ko": "얀 디오망데",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bradley Barcola",
+   "ko": "브래들리 바르콜라",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Christos Tzolis",
+   "ko": "크리스토스 촐리스",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "모건 로저스",
+   "stage": "collapsed",
+   "role": "mention"
+  },
+  {
+   "full_name": "Piero Hincapié",
+   "ko": "피에로 인카피에",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Illan Meslier",
+   "ko": "일란 메슬리에",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bruno Guimarães",
+   "ko": "브루누 기마랑이스",
+   "stage": "interest",
+   "role": "mention"
+  }
+ ],
+ "9e4a5c91": [
+  {
+   "full_name": "Christos Tzolis",
+   "ko": "크리스토스 졸리스",
+   "stage": "negotiating",
+   "role": "subject"
+  },
+  {
+   "full_name": "Leandro Trossard",
+   "ko": "레안드로 트로사르",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "William Saliba",
+   "ko": "윌리엄 살리바",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "훌리안 알바레스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "모건 로저스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bradley Barcola",
+   "ko": "브래들리 바르콜라",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ezri Konsa",
+   "ko": "에즈리 콘사",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Declan Rice",
+   "ko": "데클란 라이스",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bukayo Saka",
+   "ko": "부카요 사카",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "c898d75c": [
+  {
+   "full_name": "Desire Doue",
+   "ko": "데지레 두에",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bradley Barcola",
+   "ko": "브래들리 바르콜라",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Leandro Trossard",
+   "ko": "레안드로 트로사르",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ezri Konsa",
+   "ko": "콘사",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Declan Rice",
+   "ko": "데클란 라이스",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "모건 로저스",
+   "stage": "collapsed",
+   "role": "mention"
+  }
+ ],
+ "8a19cc9e": [
+  {
+   "full_name": "Marcus Rashford",
+   "ko": "래시포드",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Antonio Nusa",
+   "ko": "누사",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Eli Junior Kroupi",
+   "ko": "크루피",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ayyoub Bouaddi",
+   "ko": "부아디",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Riccardo Calafiori",
+   "ko": "칼라피오리",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Piero Hincapie",
+   "ko": "힌카피",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Aaron Wan-Bissaka",
+   "ko": "완-비사카",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Jeremy Monga",
+   "ko": "몽가",
+   "stage": "interest",
+   "role": "mention"
+  }
+ ],
+ "e1348256": [
+  {
+   "full_name": "Alex Scott",
+   "ko": "알렉스 스콧",
+   "stage": "negotiating",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ayyoub Bouaddi",
+   "ko": "아유브 부아디",
+   "stage": "negotiating",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bradley Barcola",
+   "ko": "브래들리 바르콜라",
+   "stage": "negotiating",
+   "role": "mention"
+  },
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "훌리안 알바레스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bruno Guimarães",
+   "ko": "브루노 기마랑이스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ezri Konsa",
+   "ko": "에즈리 콘사",
+   "stage": "negotiating",
+   "role": "mention"
+  }
+ ],
+ "427e237d": [
+  {
+   "full_name": "John Stones",
+   "ko": "존 스톤스",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Aaron Wan-Bissaka",
+   "ko": "아론 완-비사카",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Maxence Lacroix",
+   "ko": "막상스 라크루아",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Raul Asencio",
+   "ko": "라울 아센시오",
+   "stage": "interest",
+   "role": "subject"
+  }
+ ],
+ "30648654": [
+  {
+   "full_name": "Ferran Torres",
+   "ko": "페란 토레스",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Nico Williams",
+   "ko": "니코 윌리암스",
+   "stage": "rumour",
+   "role": "subject"
+  },
+  {
+   "full_name": "Eli Junior Kroupi",
+   "ko": "엘리 주니어 크루피",
+   "stage": "interest",
+   "role": "subject"
+  }
+ ],
+ "763cf8cb": [
+  {
+   "full_name": "Mikel Arteta",
+   "ko": "미켈 아르테타",
+   "stage": "other",
+   "role": "subject"
+  },
+  {
+   "full_name": "Bradley Barcola",
+   "ko": "바르콜라",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "로저스",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Eli Junior Kroupi",
+   "ko": "크루피",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Mika Godts",
+   "ko": "미카 고츠",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Jeremy Monga",
+   "ko": "제러미 몽가",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Declan Rice",
+   "ko": "데클란 라이스",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Thomas Partey",
+   "ko": "토마스 파티",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Eberechi Eze",
+   "ko": "에베레치 에제",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Martin Zubimendi",
+   "ko": "마르틴 수비멘디",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "David Raya",
+   "ko": "다비드 라야",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "b251ca2e": [
+  {
+   "full_name": "John Stones",
+   "ko": "존 스톤스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ezri Konsa",
+   "ko": "에즈리 콘사",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "William Saliba",
+   "ko": "윌리엄 살리바",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Yan Diomande",
+   "ko": "얀 디오망데",
+   "stage": "interest",
+   "role": "mention"
+  }
+ ],
+ "0550b47a": [
+  {
+   "full_name": "Ayyoub Bouaddi",
+   "ko": "부아디",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Gabriel Jesus",
+   "ko": "제수스",
+   "stage": "other",
+   "role": "subject"
+  },
+  {
+   "full_name": "Gabriel Martinelli",
+   "ko": "마르티넬리",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Martin Zubimendi",
+   "ko": "수비멘디",
+   "stage": "other",
+   "role": "subject"
+  },
+  {
+   "full_name": "Bradley Barcola",
+   "ko": "바르콜라",
+   "stage": "collapsed",
+   "role": "subject"
+  },
+  {
+   "full_name": "Reiss Nelson",
+   "ko": "넬슨",
+   "stage": "negotiating",
+   "role": "subject"
+  }
+ ],
+ "94707655": [
+  {
+   "full_name": "Vinicius Junior",
+   "ko": "비니시우스 주니오르",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bruno Guimaraes",
+   "ko": "브루노 기마랑이스",
+   "stage": "medical",
+   "role": "subject"
+  },
+  {
+   "full_name": "Christian Norgaard",
+   "ko": "크리스티안 뇌르고르",
+   "stage": "done",
+   "role": "subject"
+  },
+  {
+   "full_name": "Ezri Konsa",
+   "ko": "에즈리 콘사",
+   "stage": "interest",
+   "role": "subject"
+  }
+ ],
+ "a418e338": [
+  {
+   "full_name": "Bruno Guimaraes",
+   "ko": "브루노 기마랑이스",
+   "stage": "negotiating",
+   "role": "subject"
+  },
+  {
+   "full_name": "Martin Zubimendi",
+   "ko": "마르틴 수비멘디",
+   "stage": "other",
+   "role": "subject"
+  },
+  {
+   "full_name": "Mikel Arteta",
+   "ko": "미켈 아르테타",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Declan Rice",
+   "ko": "데클란 라이스",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "681dfde6": [
+  {
+   "full_name": "Christos Tzolis",
+   "ko": "크리스토스 촐리스",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Leandro Trossard",
+   "ko": "레안드로 트로사르",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "d43f214d": [
+  {
+   "full_name": "Bradley Barcola",
+   "ko": "바르콜라",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Yan Diomande",
+   "ko": "얀 디오망데",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bruno Guimaraes",
+   "ko": "브루누 기마랑이스",
+   "stage": "collapsed",
+   "role": "subject"
+  },
+  {
+   "full_name": "Ousmane Diomande",
+   "ko": "우스망 디오망데",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Takehiro Tomiyasu",
+   "ko": "토미야스 타케히로",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "054b82ec": [
+  {
+   "full_name": "Eli Junior Kroupi",
+   "ko": "엘리 쥐니오르크루피",
+   "stage": "collapsed",
+   "role": "subject"
+  },
+  {
+   "full_name": "Mikel Arteta",
+   "ko": "미켈 아르테타",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "모건 로저스",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Christos Tzolis",
+   "ko": "크리스토스 졸리스",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Alvaro Rodriguez",
+   "ko": "알바로 로드리게스",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "1697850f": [
+  {
+   "full_name": "Jeremy Monga",
+   "ko": "제레미 몽가",
+   "stage": "negotiating",
+   "role": "subject"
+  },
+  {
+   "full_name": "Bradley Barcola",
+   "ko": "브래들리 바르콜라",
+   "stage": "interest",
+   "role": "subject"
+  }
+ ],
+ "38bd2fee": [
+  {
+   "full_name": "Piero Hincapie",
+   "ko": "피에로 힌카피에",
+   "stage": "done",
+   "role": "subject"
+  },
+  {
+   "full_name": "Mikel Arteta",
+   "ko": "미켈 아르테타",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "289300fe": [
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "알바레스",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Johan Manzambi",
+   "ko": "요한 만잠비",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Harry Kane",
+   "ko": "해리 케인",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Tarik Muharemovic",
+   "ko": "타리크 무하레모비치",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Adam Wharton",
+   "ko": "아담 워튼",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Alejandro Garnacho",
+   "ko": "알레한드로 가르나초",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Diego Moreira",
+   "ko": "디에고 모레이라",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Radek Vitek",
+   "ko": "라덱 비텍",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ederson",
+   "ko": "에데르송",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Matias Soule",
+   "ko": "마티아스 소울레",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Zion Suzuki",
+   "ko": "스즈키 자이온",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Omar Marmoush",
+   "ko": "오마르 마르무시",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Patrick Berg",
+   "ko": "파트리크 베르그",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Anthony Patterson",
+   "ko": "안토니 패터슨",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Theo Bair",
+   "ko": "테오 베어",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Andy Cannon",
+   "ko": "앤디 캐넌",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "6b226726": [
+  {
+   "full_name": "Yan Diomande",
+   "ko": "얀 디오망데",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Jeremy Monga",
+   "ko": "제레미 몽가",
+   "stage": "interest",
+   "role": "subject"
+  }
+ ],
+ "b80960c5": [
+  {
+   "full_name": "Maxence Lacroix",
+   "ko": "라크루아",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bruno Guimaraes",
+   "ko": "브루노 기마랑이스",
+   "stage": "negotiating",
+   "role": "subject"
+  },
+  {
+   "full_name": "Maxi Araujo",
+   "ko": "막시 아라우호",
+   "stage": "interest",
+   "role": "subject"
+  }
+ ],
+ "41a98ca1": [
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "모건 로저스",
+   "stage": "negotiating",
+   "role": "subject"
+  },
+  {
+   "full_name": "Ezri Konsa",
+   "ko": "에즈리 콘사",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "William Saliba",
+   "ko": "윌리엄 살리바",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Mikel Arteta",
+   "ko": "미켈 아르테타",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "훌리안 알바레스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Dayot Upamecano",
+   "ko": "다요 우파메카노",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "79b99b1b": [
+  {
+   "full_name": "Manu Kone",
+   "ko": "마누 코네",
+   "stage": "collapsed",
+   "role": "subject"
+  },
+  {
+   "full_name": "Michael Carrick",
+   "ko": "마이클 캐릭",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "19454b4c": [
+  {
+   "full_name": "Mishel Nduka",
+   "ko": "미셸 은두카",
+   "stage": "collapsed",
+   "role": "subject"
+  },
+  {
+   "full_name": "Jeremy Monga",
+   "ko": "제러미 몽가",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "745f1094": [
+  {
+   "full_name": "Jeremy Monga",
+   "ko": "제레미 몽가",
+   "stage": "collapsed",
+   "role": "subject"
+  },
+  {
+   "full_name": "Enzo Maresca",
+   "ko": "엔초 마레스카",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Hugo Viana",
+   "ko": "우고 비아나",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "4a8397d1": [
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "로저스",
+   "stage": "collapsed",
+   "role": "subject"
+  },
+  {
+   "full_name": "Xabi Alonso",
+   "ko": "사비 알론소",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Alexander Isak",
+   "ko": "알렉산더 이삭",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "d49fd767": [
+  {
+   "full_name": "Kepa Arrizabalaga",
+   "ko": "케파 아리사발라가",
+   "stage": "other",
+   "role": "subject"
+  }
+ ],
+ "fd6740ed": [
+  {
+   "full_name": "Gabriel Martinelli",
+   "ko": "가브리엘 마르티넬리",
+   "stage": "other",
+   "role": "subject"
+  }
+ ],
+ "fabb6aa7": [
+  {
+   "full_name": "Gabriel Magalhaes",
+   "ko": "가브리엘 마갈량이스",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Kai Havertz",
+   "ko": "카이 하베르츠",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Gabriel Martinelli",
+   "ko": "가브리엘 마르티넬리",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "8d5b1d75": [
+  {
+   "full_name": "Eli Junior Kroupi",
+   "ko": "크루피",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Aaron Wan-Bissaka",
+   "ko": "완-비사카",
+   "stage": "interest",
+   "role": "subject"
+  }
+ ],
+ "f261f980": [
+  {
+   "full_name": "Pio Esposito",
+   "ko": "피오 에스포시토",
+   "stage": "collapsed",
+   "role": "subject"
+  },
+  {
+   "full_name": "Vinicius Junior",
+   "ko": "비니시우스 주니어",
+   "stage": "collapsed",
+   "role": "mention"
+  },
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "모건 로저스",
+   "stage": "collapsed",
+   "role": "mention"
+  },
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "훌리안 알바레스",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Bradley Barcola",
+   "ko": "브래들리 바르콜라",
+   "stage": "interest",
+   "role": "subject"
+  }
+ ],
+ "1fdd71fe": [
+  {
+   "full_name": "Bruno Guimarães",
+   "ko": "브루노 기마랑이스",
+   "stage": "agreed",
+   "role": "subject"
+  },
+  {
+   "full_name": "Anthony Gordon",
+   "ko": "앤서니 고든",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Sandro Tonali",
+   "ko": "산드로 토날리",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Alexander Isak",
+   "ko": "알렉산더 이삭",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Christian Norgaard",
+   "ko": "크리스티안 뇌르고르",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ezri Konsa",
+   "ko": "콘사",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "William Saliba",
+   "ko": "윌리엄 살리바",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Vinícius Júnior",
+   "ko": "비니시우스 주니오르",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "알바레스",
+   "stage": "interest",
+   "role": "mention"
+  },
+  {
+   "full_name": "Bradley Barcola",
+   "ko": "바르콜라",
+   "stage": "interest",
+   "role": "mention"
+  }
+ ],
+ "b6281445": [
+  {
+   "full_name": "William Saliba",
+   "ko": "살리바",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "John Stones",
+   "ko": "스톤스",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Ezri Konsa",
+   "ko": "콘사",
+   "stage": "negotiating",
+   "role": "subject"
+  },
+  {
+   "full_name": "Mikel Arteta",
+   "ko": "아르테타",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Piero Hincapie",
+   "ko": "피에로 힌카피",
+   "stage": "done",
+   "role": "mention"
+  },
+  {
+   "full_name": "Gabriel Magalhaes",
+   "ko": "가브리엘",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Riccardo Calafiori",
+   "ko": "리카르도 칼라피오리",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Cristhian Mosquera",
+   "ko": "크리스티안 모스케라",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Jurrien Timber",
+   "ko": "위리엔 팀버",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Ben White",
+   "ko": "벤 화이트",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Jacobo Ramon",
+   "ko": "자코보 라몬",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "a3106ead": [
+  {
+   "full_name": "Reiss Nelson",
+   "ko": "넬슨",
+   "stage": "other",
+   "role": "subject"
+  }
+ ],
+ "2165c43d": [
+  {
+   "full_name": "Kepa Arrizabalaga",
+   "ko": "케파",
+   "stage": "other",
+   "role": "subject"
+  }
+ ],
+ "67ccfccf": [
+  {
+   "full_name": "Leandro Trossard",
+   "ko": "레안드로 트로사르",
+   "stage": "done",
+   "role": "subject"
+  },
+  {
+   "full_name": "Mikel Arteta",
+   "ko": "미켈 아르테타",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Illan Meslier",
+   "ko": "일랑 멜리에",
+   "stage": "done",
+   "role": "subject"
+  },
+  {
+   "full_name": "David Raya",
+   "ko": "다비드 라야",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Kepa Arrizabalaga",
+   "ko": "케파 아리사발라가",
+   "stage": "other",
+   "role": "mention"
+  },
+  {
+   "full_name": "Gonçalo Ramos",
+   "ko": "곤살루 하무스",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "83773ef8": [
+  {
+   "full_name": "Yan Diomande",
+   "ko": "얀 디오망데",
+   "stage": "interest",
+   "role": "subject"
+  },
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "모건 로저스",
+   "stage": "collapsed",
+   "role": "subject"
+  },
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "훌리안 알바레스",
+   "stage": "other",
+   "role": "subject"
+  }
+ ],
+ "880d4f26": [
+  {
+   "full_name": "Marcus Rashford",
+   "ko": "래시포드",
+   "stage": "other",
+   "role": "subject"
+  },
+  {
+   "full_name": "Myles Lewis-Skelly",
+   "ko": "루이스-스켈리",
+   "stage": "other",
+   "role": "subject"
+  },
+  {
+   "full_name": "Mikel Arteta",
+   "ko": "미켈 아르테타",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "4f20bd0a": [
+  {
+   "full_name": "Julian Alvarez",
+   "ko": "훌리안 알바레스",
+   "stage": "other",
+   "role": "subject"
+  },
+  {
+   "full_name": "Viktor Gyokeres",
+   "ko": "빅토르 요케레스",
+   "stage": "collapsed",
+   "role": "subject"
+  },
+  {
+   "full_name": "Vinicius Junior",
+   "ko": "비니시우스 주니오르",
+   "stage": "other",
+   "role": "subject"
+  },
+  {
+   "full_name": "Max Dowman",
+   "ko": "맥스 다우먼",
+   "stage": "other",
+   "role": "mention"
+  }
+ ],
+ "b48ca35b": [
+  {
+   "full_name": "Morgan Rogers",
+   "ko": "모건 로저스",
+   "stage": "negotiating",
+   "role": "subject"
+  },
+  {
+   "full_name": "Elliot Anderson",
+   "ko": "엘리엇 앤더슨",
+   "stage": "other",
+   "role": "mention"
+  }
+ ]
+}
