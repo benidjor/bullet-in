@@ -320,6 +320,23 @@ def test_build_candidate_alert_lists_each_candidate():
     assert "니코 윌리엄스" in body and "rumour" in body and "https://x.test/a" in body
 
 
+def test_build_candidate_alert_shows_duplicate_suspects():
+    # 자동 병합을 하지 않으므로 사람이 판단할 근거를 카드 안에 한 줄로 붙인다
+    cands = [{"full_name": "Illan Meslier", "ko": "멜리에", "stage": "agreed",
+              "title": "Arsenal sign keeper", "url": None, "player_id": 52,
+              "dup_suspects": [{"id": 7, "full_name": "Ilan Meslier"}]}]
+    alert = build_candidate_alert(cands, run_id="abcd1234-0000")
+    body = str(alert["fields"])
+    assert "중복 의심" in body and "Ilan Meslier" in body and "id 7" in body
+
+
+def test_build_candidate_alert_omits_duplicate_line_when_none():
+    cands = [{"full_name": "Nico Williams", "ko": "니코 윌리엄스", "stage": "rumour",
+              "title": "t", "url": None, "player_id": 41, "dup_suspects": []}]
+    assert "중복 의심" not in str(build_candidate_alert(
+        cands, run_id="abcd1234-0000")["fields"])
+
+
 def test_build_candidate_alert_caps_fields():
     cands = [{"full_name": f"P {i}", "ko": None, "stage": "rumour",
               "title": "t", "url": None, "player_id": i} for i in range(15)]

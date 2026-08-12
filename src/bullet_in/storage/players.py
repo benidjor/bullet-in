@@ -68,6 +68,15 @@ class PlayerStore:
         by_surname = {sn: pids[0] for sn, pids in grouped.items() if len(pids) == 1}
         return by_full, by_surname
 
+    def name_rows(self) -> list[dict]:
+        """명단 표기 전량 — 역할 규칙의 이름 재료 (역할 스펙 §5.1) 이자 중복 후보
+        감지 입력 (§8.5). 후보 · 보관 선수도 포함한다: 귀속은 그들에게도 붙고,
+        중복 의심 8쌍이 대부분 후보 행끼리다."""
+        with self.engine.connect() as c:
+            return [dict(r) for r in c.execute(text(
+                "SELECT id, full_name, surname, ko_name, ko_full_name "
+                "FROM players")).mappings().all()]
+
     def insert_candidate(self, *, full_name: str, first_name: str | None,
                          surname: str, ko_candidate: str | None,
                          first_seen: str | None) -> int:

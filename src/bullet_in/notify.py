@@ -239,11 +239,21 @@ def build_filter_miss_alert(suspects: list[dict], *, run_id: str) -> dict:
 
 def build_candidate_alert(candidates: list[dict], *, run_id: str) -> dict:
     """enrich 자동 발굴 후보 등재 알림 (스펙 §4.2) — 후속 액션은 확정 CLI.
-    Discord embed 필드 상한 (25) 안에서 10명까지 펼치고 나머지는 건수로 접는다."""
+    Discord embed 필드 상한 (25) 안에서 10명까지 펼치고 나머지는 건수로 접는다.
+
+    성이 같고 이름이 비슷한 기존 선수가 있으면 그 줄을 카드 안에 덧붙인다
+    (추출 범위 개정 스펙 §8.5). 별도 알림을 만들지 않는 것은 의도다 — 후보가 없는
+    회차에는 이 알림 자체가 안 나가므로 도배가 되지 않고, 판단 재료가 후보 정보와
+    같은 자리에 있어야 사람이 한 번에 본다. 병합은 확정 CLI 에서 사람이 한다."""
     fields = []
     for c in candidates[:10]:
         name = f"{c.get('ko') or '?'} ({c['full_name']})"
         lines = [f"단계: {c['stage']}", f"근거: {(c.get('title') or '-')[:200]}"]
+        dups = c.get("dup_suspects") or []
+        if dups:
+            lines.append("중복 의심 (병합은 수동): "
+                         + " · ".join(f"{d['full_name']} (id {d['id']})"
+                                      for d in dups))
         if c.get("url"):
             lines.append(f"[기사]({c['url']})")
         fields.append({"name": name,
