@@ -14,10 +14,19 @@
 설계 판단이 데이터 신선도와 무관하면 (위계 시각 표현 등) 재렌더하지 않는다.
 운영 VM 접속은 얻는 것이 분명할 때만 한다.
 
-## 2. VM 에서 articles 덤프
+## 2. VM 에서 덤프
 
 VM 접속은 `ubuntu@155.248.164.17` · 키 `~/.ssh/seoulnow_deploy` (vm-cohost 런북과 동일).
 `mysql` 클라이언트는 컨테이너에 없다 — `mariadb` · `mariadb-dump` 를 쓴다.
+**VM 호스트에도 클라이언트가 없으므로 반드시 `docker exec` 를 거친다** (2026-08-12 실측 · 호스트에서 바로 부르면 0바이트 파일만 남는다).
+
+### 2.1. 무엇을 뜰지 — 화면에 따라 다르다
+
+- **목록 · 상세 페이지만 보면 `articles` 하나로 충분하다.**
+- **선수 페이지 · 선수 색인까지 보려면 `players` 와 `article_players` 가 함께 있어야 한다.**
+`articles` 만 받으면 선수 페이지가 오류 없이 조용히 0건으로 렌더된다 — 화면이 비는 것이 아니라 아예 안 만들어지므로 알아채기 어렵다.
+
+아래 명령의 `articles` 자리에 필요한 테이블을 나열한다.
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 'cd ~/bullet-in && set -a && . ./.env && set +a
@@ -25,6 +34,32 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 'cd ~/bullet-in && set -a &&
   docker exec bullet-in-mariadb-1 mariadb-dump -u"$USER" -p"$PASS" --no-tablespaces "$NAME" articles 2>/dev/null | gzip > /tmp/articles.sql.gz'
 scp -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17:/tmp/articles.sql.gz <스크래치패드>/
 ```
+
+### 2.2. 터널이 이미 열려 있으면 덤프 없이 복사할 수 있다
+
+운영 DB 로 가는 ssh 터널 (`-L 3310:127.0.0.1:3306`) 이 살아 있으면 덤프 · scp · 적재를 건너뛰고 파이썬으로 직접 옮기면 된다.
+맥 호스트에 `mysqldump` 가 없을 때 (2026-08-12 실측) 이 경로가 더 짧다.
+
+```python
+from sqlalchemy import create_engine, text
+src = create_engine("mysql+pymysql://root:bulletin@127.0.0.1:3310/bulletin")   # 터널
+dst = create_engine("mysql+pymysql://root:bulletin@127.0.0.1:3306/bulletin_ops")  # 세션 전용 사본
+for t in ("articles", "players", "article_players"):
+    with src.connect() as s, dst.begin() as d:
+        ddl = s.execute(text(f"SHOW CREATE TABLE {t}")).all()[0][1]
+        d.execute(text(f"DROP TABLE IF EXISTS {t}"))
+        d.execute(text(ddl))
+        rows = [dict(r) for r in s.execute(text(f"SELECT * FROM {t}")).mappings()]
+        if rows:
+            cols = list(rows[0].keys())
+            ins = text(f"INSERT INTO {t} ({','.join(cols)}) "
+                       f"VALUES ({','.join(':' + c for c in cols)})")
+            for i in range(0, len(rows), 500):
+                d.execute(ins, rows[i:i + 500])
+```
+
+대상 DB 는 미리 만들어 둔다 (`docker exec bullet-in-mariadb-1 mariadb -uroot -pbulletin -e "CREATE DATABASE bulletin_ops"`).
+**DB 이름은 세션 전용으로 짓는다** — 다른 세션의 사본 (`bulletin_mock` · `bulletin_extract` 등) 을 덮어쓰지 않기 위해서다.
 
 ## 3. 로컬 별도 DB 에 적재 — 기존 DB 는 건드리지 않는다
 

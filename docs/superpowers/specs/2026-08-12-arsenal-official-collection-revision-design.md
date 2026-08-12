@@ -1,0 +1,154 @@
+# 공홈 수집 개정 설계 (2026-08-12)
+
+구단 공식 발표를 놓치거나 절반만 읽어 오는 두 결함을 한 번에 고친다.
+하나는 2026-08-05 뇌르고르 이적 발표가 태그 누락으로 수집에서 빠진 일이고
+— 다른 하나는 이번 조사 중 새로 드러난 것으로, 수집된 기사조차 첫 문단이 통째로 빠져 있었다.
+선행 기록은 `docs/troubleshooting/2026-08-07-arsenal-official-transfer-tag-omission.md` 와
+`docs/troubleshooting/2026-08-04-arsenal-official-accept-zero-not-a-fault.md` 다.
+
+## 1. 실측 (2026-08-12 · sitemap 전체 619건 전수 조회 · 실패 0)
+
+조회 범위는 arsenal.com sitemap 의 `/news/` 전체이고 발행 구간은 2017-06-01 ~ 2026-08-11 이다.
+
+### 1.1 채택 퍼널
+
+```
+News 602건 · Men 태그 342 · 현재 채택 (Men + Transfer news · Contract news) 9건
+Men 있고 이적 태그 없음 333건 · Men 없고 이적 태그 있음 17건
+```
+
+### 1.2 제목 정규식의 검출력과 오탐
+
+관측 알림이 이미 쓰는 정규식 (`joins` · `signs` · `transfer` · `loan`) 을 333건에 대 봤다.
+
+| 대안 | 추가 검출 | 오탐 |
+| --- | --- | --- |
+| 태그 **또는** 제목 정규식 | 2건 | 1건 — 「Arteta joins Arsenal's all-time managerial greats」 (감독 통산 기록) |
+| 태그 **또는** (제목 정규식 **+** 사람 이름 태그) | 1건 | 0건 |
+
+두 번째 대안은 오탐이 없지만 채택된 9건 중 3건 (33%) 에 사람 이름 태그가 없어 채택 근거로 쓸 수 없다.
+— 없는 것은 「Transfer windows confirmed for 2026/27 season」 · 「Christos Tzolis signs for Arsenal」 · 「Bruno Guimaraes joins Arsenal」 이고, 뒤의 둘은 실제 영입 발표다.
+이름 태그에 기대면 기마랑이스 유형의 발표에서 같은 사고가 났을 때 잡지 못한다.
+
+현재 채택 9건 중 8건이 제목 정규식에도 걸린다.
+걸리지 않는 「Karl Hein to join Werder Bremen」 은 `to join` 이라 정규식 밖이지만 태그로 채택되므로 영향이 없다.
+
+### 1.3 본문 첫 문단 누락 (새 발견)
+
+어댑터의 `_body_payload` 는 TEXT 블록의 `innerText` 만 이어 붙인다.
+링크나 볼드가 든 문단은 `innerText` 가 비어 있고 내용이 `html` · `childNodes` 에만 있어 통째로 빠진다.
+
+실제 채택 기사 + 뇌르고르 12건을 재보니 11건에서 본문이 빠졌고 빠진 것은 대부분 리드 문장이었다.
+
+| 기사 | 현재 | html 기준 | 빠진 문장 |
+| --- | --- | --- | --- |
+| Bruno Guimaraes joins Arsenal | 2,181자 | 2,341자 | `We are delighted to announce that Brazil international Bruno Guimaraes has joined us from Newcastle United on a long-term contract.` |
+| Christian Norgaard joins Everton | 1,630자 | 1,694자 | `Christian Norgaard has joined Everton in a permanent transfer.` |
+| Christos Tzolis signs for Arsenal | 2,853자 | 2,935자 | `We are delighted to announce the signing of Christos Tzolis on a long-term contract.` |
+| Terms agreed with Besiktas | 251자 | 363자 | 본문의 44% |
+| Piero Hincapie joins Arsenal | 1,432자 | 1,765자 | 리드 + 대표팀 이력 2문단 |
+
+이적 사실을 진술하는 문장이 없는 채로 번역 · 요약이 돌고 있었다.
+
+### 1.4 Club 태그 (수용하지 않기로 한 근거)
+
+Men 없이 이적 태그만 있는 17건 중 Club 태그는 4건이고 나머지는 Women 6 · Academy 7 이다.
+Club 4건을 파서 수정본 본문으로 정식 경로에 넣어 본 결과는 이렇다.
+
+- 「Arsenal transfers: All the ins and outs in 2026/27」 은 여자팀 필터에서 탈락한다
+— 본문 앞부분의 `for our men's, women's and academy teams` 를 `pipeline._is_womens_football` 이 여자팀 기사로 판정한다.
+- 남는 것은 방출 명단류 2건인데 `rule_stage` 가 공홈을 `official` 로 고정하므로 목록 정리 기사가 오피셜 배지를 달고 홈 최상단에 선다 (로컬 렌더로 확인).
+- 상시 갱신 기사는 `content_hash` 가 제목 + URL 이라 첫 수집분이 고정되고 이후 갱신이 반영되지 않는다.
+
+## 2. 결정 (2026-08-12 사용자 승인)
+
+- **채택 조건에 제목 정규식을 병행한다** — 태그 조건 또는 제목 정규식.
+- **정규식으로만 채택된 건은 `official` 고정에서 제외한다** — 단계는 LLM 분류에 맡긴다.
+- **본문 파서를 고친다** — `innerText` 가 비면 `html` 에서 태그를 벗겨 쓴다.
+- **기존 7건을 재번역한다** — 배포 뒤 실행.
+- **Club 태그는 수용하지 않는다** — 위 1.4 가 근거.
+- **뇌르고르 발표 기사 1건을 1회성으로 적재한다** — 파서 배포 뒤에 넣어 첫 문단이 온전한 상태로 들어가게 한다.
+
+## 3. 설계
+
+### 3.1 본문 파서
+
+`adapters/arsenal_api.py` 의 `_body_payload` 에서 TEXT 블록을 이어 붙일 때
+`innerText` 가 비어 있으면 같은 블록의 `html` 에서 태그를 제거한 텍스트를 쓴다.
+`innerText` 가 있으면 지금처럼 그대로 쓴다 — 기존 동작은 바뀌지 않는다.
+
+블록 타입 확장은 하지 않는다.
+IMAGE · PROMOTEDARTICLE · DIVIDER 는 지금처럼 본문에서 제외한다.
+
+### 3.2 채택 조건
+
+`_accept` 를 두 갈래로 나눈다.
+
+- **태그 채택** — `articleType == "News"` · `Men` 포함 · `Transfer news` 또는 `Contract news` 포함 (현행 그대로).
+- **제목 채택** — `articleType == "News"` · `Men` 포함 · 제목이 이적 어휘 정규식에 걸림.
+
+정규식은 `quality.filter_miss_suspects` 가 쓰는 것을 그대로 쓴다.
+수집 조건과 "놓쳤다" 고 부르는 알림 조건을 하나로 묶기 위해서다.
+
+상수의 소유는 `quality` 에 둔다 (`_TRANSFER_TITLE_RE` 가 이미 거기 있다).
+어댑터가 그 상수를 가져다 쓰고, 반대 방향으로는 두지 않는다.
+`quality` 는 표준 라이브러리만 쓰는 순수 모듈이라 어느 쪽에서 참조해도 딸려 오는 것이 없는 반면
+— 어댑터에 두면 `quality` 가 httpx 의존을 떠안고 그 테스트까지 무거워진다.
+
+어댑터는 채택 경로를 기사에 실어 보낸다 — 다음 절이 그 값을 쓴다.
+
+### 3.3 단계 규칙
+
+`transfer_stage.rule_stage` 는 지금 소스 이름만 보고 `official` 을 고정한다.
+제목 채택분에는 이 고정을 적용하지 않는다.
+
+근거는 이렇다.
+현재 규칙이 실질적으로 뜻하는 것은 "공홈에서 왔으니 오피셜" 이 아니라 "구단이 이적 뉴스 태그를 붙였으니 오피셜" 이다.
+태그 없이 우리 제목 추측으로 주워 온 기사에는 그 근거가 없다.
+
+로컬 렌더로도 확인해 봤다.
+
+- 오탐 기사는 `official` 이면 빨간 「오피셜」 배지를 달고, LLM 분류에 맡기면 배지가 사라진다.
+- 진짜 발표 (뇌르고르) 는 `official` 이 아니어도 선수 페이지 사다리에서 최상단 · 「이적 완료」 · 「구단 공식」 표기를 그대로 유지한다.
+— 잃는 것은 목록 카드의 「오피셜」 표기 하나다.
+
+손익이 대칭이 아니므로 고정 제외가 유리하다.
+
+## 4. 소급
+
+### 4.1 기존 7건 재번역
+
+파서 배포 후 `arsenal_official` 기존 7건의 본문이 바뀌므로 번역 · 요약을 다시 받는다.
+
+- 호출 수 — 번역 · 요약 7회 (`enrich_rows` 는 행당 1회) · 선수 재추출까지 하면 14회.
+- 비용 — 최근 30일 168회차 · 신규 721건 처리에 월 약 ₩700 (2026-07 실측) 이므로 건당 약 ₩1 · 합계 약 ₩10.
+- 소요 — 15 RPM 한도에서 1~2분이므로 회차 사이 창 한 번으로 끝난다.
+
+### 4.2 뇌르고르 1회성 적재
+
+`backfill_arsenal.py --phase reverify` 는 쓸 수 없다.
+그 경로도 어댑터의 `_accept` 를 통과해야 하는데 이 기사는 태그가 없어 창을 넓혀도 거부된다.
+
+다만 3.2 를 적용하면 제목 채택으로 통과하므로 배포 후에는 `reverify` 의 창을 8월 초까지 넓혀서 적재할 수 있다.
+별도 스크립트를 새로 만들 필요가 없다.
+
+- 대상 — 「Christian Norgaard joins Everton」 1건 (`a7fZT9g6dECY`).
+- 「Arteta praises departing Norgaard」 는 넣지 않는다 — 같은 사건이 카드 두 장으로 나뉘고 정보량이 겹친다.
+- 적재는 `articles` 쓰기이므로 백업 후 정기 회차 사이 창에 한다.
+- 번역 · 분류 · 선수 귀속은 다음 정기 회차가 흡수한다.
+
+## 5. 검증
+
+- 단위 테스트 — 파서가 `innerText` 빈 블록의 `html` 을 읽는지 · `innerText` 가 있으면 그대로 쓰는지.
+- 단위 테스트 — 태그 채택과 제목 채택이 각각 통과하는지 · 둘 다 아닌 것이 거부되는지.
+- 단위 테스트 — 제목 채택분에 `official` 이 고정되지 않는지.
+- 라이브 검증 — 어댑터 단독 `fetch()` 로 48시간 창을 돌려 채택 건수와 본문 길이를 확인한다 (단위 테스트는 모킹이라 못 잡는다).
+- 소급 검증 — 재번역 후 7건의 `body_source` 길이가 늘었는지 · 요약에 이적 사실이 들어갔는지 표본 확인.
+- 화면 검증 — 운영 사본으로 로컬 렌더해 오피셜 건수와 배지를 배포 전에 대조한다.
+
+## 6. 범위 밖
+
+- Club 태그 수용 — 2 의 결정으로 기각하되 근거는 1.4 에 남긴다.
+- 여자팀 필터의 판정 범위 — Club 정리 기사가 걸리는 것은 이 스펙에서 고치지 않는다.
+- 상시 갱신 기사의 재수집 — `content_hash` 설계 변경이 필요해 별도 안건이다.
+- 블록 타입 확장 (표 · 카드) — 지금 필요가 없다.
