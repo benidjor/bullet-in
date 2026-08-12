@@ -162,8 +162,8 @@ def normalize_pairs(raw, source_id: str | None = None,
             # 강등 목적지는 기사 단위 경로와 동일하게 done (2026-08-10 스펙 §4)
             stage = "done"
         ko = (item.get("ko") or "").strip() or None
-        for wrong, right in (glossary or {}).items():
-            if ko:
+        if ko:
+            for wrong, right in (glossary or {}).items():
                 ko = ko.replace(wrong, right)
         if ko and len(ko) > _MAX_KO:
             ko = None

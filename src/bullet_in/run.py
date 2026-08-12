@@ -237,8 +237,7 @@ async def main(concurrency: int):
     rewrite_rows, translate_rows = partition_by_body_level(generatable)
     # 확정 링크 명단 — 아스날 미언급 기사의 판단 근거 (스펙 §6.5). 재추출 경로가 쓰던
     # 재료를 수집 시점 프롬프트에도 준다. 회차마다 한 번 만든다.
-    from bullet_in.reextract_article_players import roster_text
-    roster_material = roster_text(engine)
+    roster_material = pstore.confirmed_link_roster()
     results: dict[str, dict] = {}
     results.update(enrich_rows(translate_rows, client, GEMINI_MODEL,
                                mode="translate", roster=roster_material))

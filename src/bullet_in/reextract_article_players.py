@@ -23,7 +23,6 @@ from __future__ import annotations
 import argparse, json, logging, os
 from pathlib import Path
 import yaml
-from pathlib import Path as _Path
 from sqlalchemy import create_engine, text
 from bullet_in import notify, roster
 from bullet_in.backfill_article_players import append_state, filter_targets, load_state
@@ -42,17 +41,6 @@ _TARGET_SQL = text(
 _ORPHAN_DELETE_SQL = text(
     "DELETE ap FROM article_players ap LEFT JOIN articles a "
     "ON a.content_hash = ap.content_hash WHERE a.content_hash IS NULL")
-
-# 확정 링크 명단 — 추출 프롬프트의 {roster} 재료 (아스날 미언급 기사의 근거)
-_ROSTER_SQL = text(
-    "SELECT ko_name, full_name FROM players WHERE status='confirmed' "
-    "AND transfer_status IN ('in_link','out_link') ORDER BY id")
-
-
-def roster_text(engine) -> str:
-    with engine.connect() as c:
-        rows = c.execute(_ROSTER_SQL).all()
-    return ", ".join(f"{ko}({fn})" if ko else fn for ko, fn in rows) or "(없음)"
 
 
 def main(argv=None) -> None:
@@ -83,11 +71,11 @@ def main(argv=None) -> None:
     pstore = PlayerStore(engine)
     by_hash = {r["content_hash"]: r for r in targets}
     new_candidates: list[dict] = []
-    glossary = (yaml.safe_load(_Path("config/glossary.yaml").read_text())
+    glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
                 or {}).get("replacements", {})
 
     extracted = extract_players_rows(targets, client, GEMINI_MODEL,
-                                     roster=roster_text(engine))
+                                     roster=pstore.confirmed_link_roster())
     done = 0
     for h, raw in extracted.items():
         try:

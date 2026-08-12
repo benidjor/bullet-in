@@ -66,14 +66,12 @@ def main(argv=None) -> None:
     by_hash = {r["content_hash"]: r for r in targets}
     new_candidates: list[dict] = []
 
-    # 지연 import — reextract 가 이 모듈의 state 헬퍼를 쓰므로 모듈 최상단이면 순환한다
-    from bullet_in.reextract_article_players import roster_text
     glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
                 or {}).get("replacements", {})
     # 확정 링크 명단을 재료로 준다 — 미링크 89건 중 35건의 제목에 명단 선수가 있다
     # (스펙 §1.4). 이 재료 없이는 아스날 미언급 기사에서 판단 근거가 입력에 없다.
     extracted = extract_players_rows(targets, client, GEMINI_MODEL,
-                                     roster=roster_text(engine))
+                                     roster=pstore.confirmed_link_roster())
     done = 0
     for h, raw in extracted.items():
         try:
