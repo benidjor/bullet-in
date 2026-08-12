@@ -9,7 +9,7 @@
   <span class="pmeta">기사 {{ e.count }}건 · 최근 보도 {{ last }}</span>
 </div>
 {% if nodes %}
-<div class="sechead"><h2>진행 단계</h2></div>
+<div class="sechead"><h2>진행 단계별 대표 기사</h2></div>
 <div class="timeline">
   {# 무산 (n.end) 은 진행 단계가 아니라 사다리 축 밖의 종결 줄이다 (단계 재정의 스펙 §8) #}
   {% for n in nodes %}

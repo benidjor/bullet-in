@@ -231,7 +231,7 @@ def test_detail_keeps_valid_origin_url():
 def test_index_shows_stage_badge_and_data_attr():
     html = render_index([_row(transfer_stage="negotiating")], SOURCES, NOW)
     assert 'data-stage="negotiating"' in html
-    assert "협상 중" in html
+    assert "제안 · 협상" in html
     assert 'class="stage green' in html
 
 

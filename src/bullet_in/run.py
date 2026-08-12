@@ -68,8 +68,15 @@ CANDIDATE_HISTORY_SQL = ("SELECT candidate_counts FROM pipeline_runs "
 
 
 # 서빙 제외 판정에 쓰는 확정 선수 연결 — 추출이 붙인 기사만 남는다.
+# 역할이 언급인 귀속은 근거로 안 쓴다: 스치는 언급 하나로 아스날이 한 글자도 안 나오는
+# 기사가 남아 있었다 (실측 2건 — 서머빌의 알 힐랄 이적 · 첼시의 차바리아 영입).
+# 미기입 (NULL) 은 옛 판정대로 남긴다 — 값을 만드는 쪽이 응답을 못 내거나 회차가 끊기면
+# 상시로 다시 생기는데, 그때 언급으로 읽으면 본인 기사가 화면에서 조용히 사라진다
+# (선수 목록의 전환 규칙과 같은 취급 · docs/runbook/2026-08-12-serving-rule-swap-with-unfilled-field.md).
 LINKED_HASHES_SQL = ("SELECT DISTINCT ap.content_hash FROM article_players ap "
-                     "JOIN players p ON p.id = ap.player_id WHERE p.status = 'confirmed'")
+                     "JOIN players p ON p.id = ap.player_id "
+                     "WHERE p.status = 'confirmed' "
+                     "AND (ap.role IS NULL OR ap.role <> 'mention')")
 
 # 성 매칭 최소 길이 — 두 글자 성 (고든 · 스콧) 은 다른 낱말에 섞여 오탐한다.
 SURNAME_MIN_LEN = 3
@@ -102,7 +109,7 @@ def _serving_kept(row: dict, terms, names, surnames, linked) -> bool:
     # ③ 제목이 성만 쓴 경우 (동명이인 포함) — 어느 쪽이든 명단 선수 기사다
     if surnames and is_arsenal_relevant(f"{title_o} {title_k}", "", [], surnames):
         return True
-    # ④ 추출이 확정 선수를 붙인 기사 — 추출이 보강되면 여기서 자동으로 살아난다
+    # ④ 추출이 확정 선수를 붙인 기사 — 언급뿐인 귀속은 위 SQL 이 뺀다 (미기입은 남긴다)
     return row.get("content_hash") in linked
 
 

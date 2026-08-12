@@ -103,3 +103,29 @@ def test_serving_rows_keeps_article_linked_to_confirmed_player():
 def test_roster_surnames_skips_single_token_and_short_names():
     """한 어절 이름은 풀네임 매칭 대상 · 두 글자 성은 오탐한다."""
     assert roster_surnames({"얀 디오망데", "우스망 디오망데", "케파", "칼빈 고든"}) == {"디오망데"}
+
+
+def test_linked_hashes_sql_drops_mention_but_keeps_unfilled():
+    """신호 ④ 재료 — 언급 귀속은 근거가 아니고, 미기입은 옛 판정대로 남긴다.
+
+    스치는 언급 하나로 아스날이 한 글자도 안 나오는 기사가 남아 있었다 (실측 2건).
+    미기입을 언급과 같이 읽으면 반대 사고가 난다 — 추출이 응답을 못 낸 회차의 기사가
+    화면에서 조용히 빠진다. 두 성질을 한 번에 확인한다."""
+    from sqlalchemy import create_engine, text
+    from bullet_in.run import LINKED_HASHES_SQL
+    engine = create_engine("sqlite://")
+    with engine.begin() as c:
+        c.execute(text("CREATE TABLE players (id INTEGER, status TEXT)"))
+        c.execute(text("CREATE TABLE article_players "
+                       "(content_hash TEXT, player_id INTEGER, role TEXT)"))
+        c.execute(text("INSERT INTO players VALUES (1,'confirmed'),(2,'confirmed'),(3,'candidate')"))
+        # 운영 스키마는 (content_hash, player_id) 가 PK 라 한 기사에 같은 선수를 두 번
+        # 넣을 수 없다 — 'both' 는 서로 다른 선수 둘로 만든다 (실물과 같은 모양).
+        c.execute(text("INSERT INTO article_players VALUES "
+                       "('subj',1,'subject'),"      # 주역 — 남는다
+                       "('ment',1,'mention'),"      # 언급뿐 — 빠진다
+                       "('null',1,NULL),"           # 미기입 — 옛 판정대로 남는다
+                       "('both',1,'mention'),('both',2,'subject'),"  # 하나라도 주역이면 남는다
+                       "('cand',3,'subject')"))     # 미확정 선수 — 원래대로 안 센다
+        got = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
+    assert got == {"subj", "null", "both"}

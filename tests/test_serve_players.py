@@ -86,7 +86,7 @@ def test_stage_ladder_excludes_collapsed_and_ended_marker_carries_it():
                {"row": _row(3, "h3", tier=4), "stage": "collapsed"}]
     [line] = stage_ladder(entries)
     assert line["stage"] == "negotiating"        # collapsed 는 사다리 줄이 아니다
-    end = ended_marker(entries)
+    end = ended_marker(entries, transfer_status="link_dropped")
     assert end["stage"] == "collapsed"
     assert end["row"]["content_hash"] == "h2"    # 대표 규칙 동일 — 공신력 높은 순
     assert end["count"] == 2
@@ -94,7 +94,21 @@ def test_stage_ladder_excludes_collapsed_and_ended_marker_carries_it():
 
 def test_ended_marker_is_none_without_collapsed():
     from bullet_in.serve.render import ended_marker
-    assert ended_marker([{"row": _row(1), "stage": "agreed"}]) is None
+    assert ended_marker([{"row": _row(1), "stage": "agreed"}],
+                        transfer_status="link_dropped") is None
+
+
+def test_ended_marker_needs_roster_backing():
+    # 종결 줄은 사다리 맨 위에 꽂혀 "이 사가는 끝났다" 를 먼저 말한다 — 명단이 부정하는
+    # 종결을 그리면 같은 페이지의 머리 배지와 반대를 말한다 (실측: 영입을 마친 선수
+    # 페이지에 이적 완료 열흘 전 가십 한 건으로 만든 무산 줄).
+    from bullet_in.serve.render import ended_marker
+    entries = [{"row": _row(1, "h1", tier=4), "stage": "collapsed"}]
+    assert ended_marker(entries, transfer_status="in_done") is None
+    assert ended_marker(entries, transfer_status="in_link") is None
+    assert ended_marker(entries, transfer_status=None) is None
+    for backing in ("link_dropped", "other_club"):
+        assert ended_marker(entries, transfer_status=backing)["stage"] == "collapsed"
 
 
 def test_stage_ladder_rep_is_highest_credibility_and_missing_tier_is_lowest():
