@@ -8,12 +8,14 @@ from bullet_in.serve import render as R
 
 def test_display_stage_groups_medical_into_agreed():
     # 메디컬 배지는 이적 합의로 접는다 (단계 재정의 스펙 2026-08-10 §3 — 협상 중에서 이동)
+    # 개인 합의는 제안 · 협상으로 접는다 (2026-08-13) — 구단 간 합의 전이라 이적 합의로
+    # 접으면 딜이 성사된 것으로 읽힌다 (개인 합의까지 갔다가 무산된 실측 사례가 있다)
     assert R.display_stage("official") == {"label": "오피셜", "tone": "red", "filled": True}
     assert R.display_stage("done") == {"label": "이적 완료", "tone": "blue", "filled": False}
     assert R.display_stage("agreed") == {"label": "이적 합의", "tone": "red", "filled": False}
     assert R.display_stage("medical") == {"label": "이적 합의", "tone": "red", "filled": False}
-    assert R.display_stage("negotiating") == {"label": "협상 중", "tone": "green", "filled": False}
-    assert R.display_stage("personal_terms") == {"label": "개인 합의", "tone": "yellow", "filled": False}
+    assert R.display_stage("negotiating") == {"label": "제안 · 협상", "tone": "green", "filled": False}
+    assert R.display_stage("personal_terms") == {"label": "제안 · 협상", "tone": "green", "filled": False}
     assert R.display_stage("interest") == {"label": "관심", "tone": "gray", "filled": False}
     assert R.display_stage("rumour") == {"label": "루머", "tone": "gray", "filled": False}
     assert R.display_stage("collapsed") == {"label": "무산", "tone": "ash", "filled": False}

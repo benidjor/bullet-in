@@ -208,17 +208,22 @@ def tier_label(tier) -> str:
 
 
 # ── 표시 단계 매핑 (spec1 §5 · 단계 재정의 스펙 2026-08-10 §3.1) — 저장 enum 9종을
-# 독자용 8묶음으로 접는다. 저장 enum 은 건드리지 않고 (transfer_stage.py 는 enrich 와
+# 독자용 7묶음으로 접는다. 저장 enum 은 건드리지 않고 (transfer_stage.py 는 enrich 와
 # 공유) 표시 계층에서만 묶는다.
 # medical 은 건수가 적어 이적 합의에 합친다 (협상 중 소속에서 이동 — §3) ·
+# personal_terms 도 건수가 적어 제안 · 협상에 합친다 (2026-08-13) — 좁힌 정의가
+# 자리잡아 서빙 3건까지 줄었고, 남길 자리를 하나 쓰기에는 드물다. 접는 쪽을
+# 이적 합의가 아니라 제안 · 협상으로 잡은 것은 개인 합의가 구단 간 합의 **전**이기
+# 때문이다 — 이적 합의로 접으면 딜이 성사된 것으로 읽힌다 (실측 반례: 개인 합의까지
+# 갔다가 무산된 비니시우스 75ef94fc).
 # 순서는 진행이 많이 된 것부터 · collapsed 는 종결이라 맨 뒤.
 _DISPLAY_STAGE: dict[str, dict] = {
     "official": {"label": "오피셜", "tone": "red", "filled": True},
     "done": {"label": "이적 완료", "tone": "blue", "filled": False},
     "agreed": {"label": "이적 합의", "tone": "red", "filled": False},
     "medical": {"label": "이적 합의", "tone": "red", "filled": False},
-    "personal_terms": {"label": "개인 합의", "tone": "yellow", "filled": False},
-    "negotiating": {"label": "협상 중", "tone": "green", "filled": False},
+    "personal_terms": {"label": "제안 · 협상", "tone": "green", "filled": False},
+    "negotiating": {"label": "제안 · 협상", "tone": "green", "filled": False},
     "interest": {"label": "관심", "tone": "gray", "filled": False},
     "rumour": {"label": "루머", "tone": "gray", "filled": False},
     "collapsed": {"label": "무산", "tone": "ash", "filled": False},
@@ -231,14 +236,13 @@ def display_stage(enum: str | None) -> dict | None:
     return dict(d) if d else None
 
 
-# 사이드바 단계 필터 — 표시 8묶음 (라벨, 저장 enum 목록). 이적 합의가 agreed · medical 을
-# 함께 건다 (단계 재정의 스펙 2026-08-10 §3 — 메디컬의 소속을 협상 중에서 이동).
+# 사이드바 단계 필터 — 표시 7묶음 (라벨, 저장 enum 목록). 이적 합의가 agreed · medical 을,
+# 제안 · 협상이 negotiating · personal_terms 를 함께 건다 (위 _DISPLAY_STAGE 주석).
 _STAGE_DISPLAY_GROUPS: list[tuple[str, list[str]]] = [
     ("오피셜", ["official"]),
     ("이적 완료", ["done"]),
     ("이적 합의", ["agreed", "medical"]),
-    ("개인 합의", ["personal_terms"]),
-    ("협상 중", ["negotiating"]),
+    ("제안 · 협상", ["negotiating", "personal_terms"]),
     ("관심", ["interest"]),
     ("루머", ["rumour"]),
     ("무산", ["collapsed"]),

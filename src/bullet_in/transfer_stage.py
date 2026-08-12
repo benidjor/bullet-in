@@ -20,7 +20,7 @@ SIDEBAR_STAGES: list[tuple[str, str, str]] = [
     ("agreed", "이적 합의", "s-agree"),
     ("medical", "메디컬", "s-med"),
     ("personal_terms", "개인 합의", "s-personal"),
-    ("negotiating", "협상 중", "s-talk"),
+    ("negotiating", "제안 · 협상", "s-talk"),
     ("interest", "관심", "s-interest"),
     ("rumour", "루머", "s-rum"),
     ("collapsed", "무산", "s-collapsed"),
