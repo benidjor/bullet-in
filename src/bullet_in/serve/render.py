@@ -515,7 +515,7 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
                 stage_counts[s] += 1
         else:
             other_count += 1
-    # 표시 8묶음 — 라벨 · 저장 enum 목록 (data-value) · 합산 건수 (spec1 §5)
+    # 표시 7묶음 — 라벨 · 저장 enum 목록 (data-value) · 합산 건수 (spec1 §5)
     stage_groups = [{"label": label, "value": ",".join(enums),
                      "count": sum(stage_counts.get(e, 0) for e in enums)}
                     for label, enums in _STAGE_DISPLAY_GROUPS]

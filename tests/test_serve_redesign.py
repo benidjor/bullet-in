@@ -6,7 +6,7 @@ from bullet_in.serve import render as R
 
 # ── Task 1: 표시 단계 매핑 · 독자 등급 라벨 ──────────────────────────────
 
-def test_display_stage_groups_medical_into_agreed():
+def test_display_stage_folds_medical_and_personal_terms():
     # 메디컬 배지는 이적 합의로 접는다 (단계 재정의 스펙 2026-08-10 §3 — 협상 중에서 이동)
     # 개인 합의는 제안 · 협상으로 접는다 (2026-08-13) — 구단 간 합의 전이라 이적 합의로
     # 접으면 딜이 성사된 것으로 읽힌다 (개인 합의까지 갔다가 무산된 실측 사례가 있다)

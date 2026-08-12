@@ -163,7 +163,10 @@ if not b or transfer_status not in _TERMINAL_BACKING["collapsed"]:
 정의를 좁혀 라벨에 맞추는 안은 추출 프롬프트 개정과 소급 재추출이 따르고 문구 시소로 중단한 영역을 다시 열게 되어 범위 밖으로 뒀다.
 
 **필터 동작은 안 바뀐다** — `app.js` 는 라벨이 아니라 enum 으로 거른다.
-바꾸는 곳은 표시 계층 세 곳이다 (`transfer_stage.SIDEBAR_STAGES` · `render._DISPLAY_STAGE` · `render._STAGE_DISPLAY_GROUPS`).
+
+바꾸는 곳은 `render._DISPLAY_STAGE` 와 `render._STAGE_DISPLAY_GROUPS` 둘이다.
+`transfer_stage.SIDEBAR_STAGES` 는 저장 어휘의 단일 출처라 건드리지 않는다 — 메디컬이 표시에서는 이적 합의로 접히면서도 그 목록에서는 「메디컬」 로 남아 있는 것과 같은 선례다.
+초안에서는 세 곳을 함께 고쳤는데, 되돌려 렌더한 산출물이 한 바이트도 다르지 않아 (`diff -r`) 화면에 나오지 않는 변경임을 확인하고 뺐다.
 
 ### 3.3. `personal_terms` 를 표시에서 제안 · 협상에 접는다
 
@@ -244,6 +247,9 @@ WHERE p.status = 'confirmed' AND (ap.role IS NULL OR ap.role <> 'mention')
 - **추출 값** — `eeb04231` 콘사의 선수 축 `collapsed` 은 병렬 세션 (추출 규칙 잔여) 몫이다.
 같은 화면 증상의 서로 다른 원인이라 층을 나눠 각자 맡았다.
 - **`_LEAD_STAGE_RANK`** — 톱스토리 정렬은 저장 enum 을 쓰므로 표시 병합과 무관하다.
+- **`transfer_stage.SIDEBAR_STAGES` · `quality` · `notify` 의 단계 어휘** — 저장 · 운영 어휘라 표시 병합을 따라가지 않는다 (§3.2).
+- **옛 공유 링크의 단계 필터** — `?stage=personal_terms` 로 저장된 주소는 체크박스 값이 `negotiating,personal_terms` 가 되어 아무 상자도 켜지 못한다.
+오류 없이 필터만 안 걸리고, `agreed,medical` 병합 때 이미 생긴 성질이라 이번 변경이 만든 것은 아니다.
 
 ## 7. 참조
 

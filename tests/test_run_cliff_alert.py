@@ -118,12 +118,14 @@ def test_linked_hashes_sql_drops_mention_but_keeps_unfilled():
         c.execute(text("CREATE TABLE players (id INTEGER, status TEXT)"))
         c.execute(text("CREATE TABLE article_players "
                        "(content_hash TEXT, player_id INTEGER, role TEXT)"))
-        c.execute(text("INSERT INTO players VALUES (1,'confirmed'),(2,'candidate')"))
+        c.execute(text("INSERT INTO players VALUES (1,'confirmed'),(2,'confirmed'),(3,'candidate')"))
+        # 운영 스키마는 (content_hash, player_id) 가 PK 라 한 기사에 같은 선수를 두 번
+        # 넣을 수 없다 — 'both' 는 서로 다른 선수 둘로 만든다 (실물과 같은 모양).
         c.execute(text("INSERT INTO article_players VALUES "
                        "('subj',1,'subject'),"      # 주역 — 남는다
                        "('ment',1,'mention'),"      # 언급뿐 — 빠진다
                        "('null',1,NULL),"           # 미기입 — 옛 판정대로 남는다
-                       "('both',1,'mention'),('both',1,'subject'),"  # 하나라도 주역이면 남는다
-                       "('cand',2,'subject')"))     # 미확정 선수 — 원래대로 안 센다
+                       "('both',1,'mention'),('both',2,'subject'),"  # 하나라도 주역이면 남는다
+                       "('cand',3,'subject')"))     # 미확정 선수 — 원래대로 안 센다
         got = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
     assert got == {"subj", "null", "both"}

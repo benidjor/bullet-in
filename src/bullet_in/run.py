@@ -109,7 +109,7 @@ def _serving_kept(row: dict, terms, names, surnames, linked) -> bool:
     # ③ 제목이 성만 쓴 경우 (동명이인 포함) — 어느 쪽이든 명단 선수 기사다
     if surnames and is_arsenal_relevant(f"{title_o} {title_k}", "", [], surnames):
         return True
-    # ④ 추출이 확정 선수를 주역으로 붙인 기사 — 추출이 보강되면 여기서 자동으로 살아난다
+    # ④ 추출이 확정 선수를 붙인 기사 — 언급뿐인 귀속은 위 SQL 이 뺀다 (미기입은 남긴다)
     return row.get("content_hash") in linked
 
 
