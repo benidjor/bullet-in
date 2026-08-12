@@ -87,14 +87,14 @@ def decide(art: dict, item: dict, roster: dict, use_roster: bool, veto_role: str
     # 봤으나 명단을 재료로 쓰면 기여가 0 이었다 — 임계값을 0.5 까지 낮춰도 150/156
     # 으로 동일. 짧은 표기에서 한 글자 차이는 0.7 을 못 넘기도 한다 (제수스 ↔ 제주스
     # 0.667 · 촐리스 ↔ 졸리스 0.667). 그래서 폴백을 두지 않는다.
-    def hit(text: str | None, korean: bool = True) -> bool:
+    def hit(text: str | None) -> bool:
         if not text:
             return False
         if any(k in squash(text) for k in kk):
             return True
         return any(l in _fold_latin(text) for l in lat)
 
-    in_title = hit(art["title_ko"]) or hit(art["title_original"], korean=False)
+    in_title = hit(art["title_ko"]) or hit(art["title_original"])
     in_head = any(hit(x) for x in heads)
     role = "subject" if (in_title or in_head) else "mention"
     # 제목만 근거일 때에 한해 모델이 언급이라 하면 내린다. 모델의 subject 는 못 뒤집는다.
