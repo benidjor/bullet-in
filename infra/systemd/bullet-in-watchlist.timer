@@ -1,8 +1,8 @@
 [Unit]
-Description=bullet-in watchlist batch 4x daily (regular +90min, KST 01:30/07:30/13:30/19:30)
+Description=bullet-in watchlist batch 4x daily (regular +90min, KST 19:30/22:30/01:30/04:30)
 
 [Timer]
-OnCalendar=*-*-* 04/6:30:00 UTC
+OnCalendar=*-*-* 10,13,16,19:30:00 UTC
 Persistent=true
 RandomizedDelaySec=300
 
