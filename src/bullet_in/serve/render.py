@@ -1052,7 +1052,7 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
                     "slug": slug,
                     "articles": [r for r, _ in reversed(paired)],
                     "ladder": ladder,
-                    "ended": ended_marker(timeline, ko),
+                    "ended": ended_marker(timeline, ko, p.get("transfer_status")),
                     # 카드 배지를 선수 축으로 바꾸는 재료 (아래 render_player)
                     "_stage_by_hash": {r["content_hash"]: s for r, s in paired},
                     "stage": current_stage(timeline, p.get("transfer_status")),
@@ -1162,11 +1162,19 @@ def current_stage(entries: list[dict], transfer_status: str | None = None) -> st
                 None)
 
 
-def ended_marker(entries: list[dict], name: str | None = None) -> dict | None:
+def ended_marker(entries: list[dict], name: str | None = None,
+                 transfer_status: str | None = None) -> dict | None:
     """무산 (collapsed) 종결 표시 (단계 재정의 스펙 §8) — 사다리 축 밖의 한 줄.
-    대표 선정 규칙은 사다리와 동일 (그 선수를 다룬 기사 우선 · 공신력 · 늦은 기사)."""
+    대표 선정 규칙은 사다리와 동일 (그 선수를 다룬 기사 우선 · 공신력 · 늦은 기사).
+
+    current_stage 와 같은 명단 뒷받침을 요구한다 — 이 줄은 사다리 맨 위에 꽂혀
+    "이 사가는 끝났다" 를 먼저 말하므로, 명단이 부정하는 종결을 그리면 같은 페이지의
+    머리 배지와 정면으로 어긋난다 (실측: 영입을 마친 기마랑이스 페이지에 이적 완료
+    열흘 전 가십 한 건으로 만든 무산 줄, 아직 진행 중인 콘사 페이지에 같은 줄).
+    가드가 빠진 것은 이 함수와 current_stage 의 가드가 서로 다른 PR 에서 들어왔기
+    때문이고, 판정 기준은 _TERMINAL_BACKING 하나로 맞춘다."""
     b = [e for e in entries if e.get("stage") == "collapsed"]
-    if not b:
+    if not b or transfer_status not in _TERMINAL_BACKING["collapsed"]:
         return None
     rep = min(reversed(b), key=_rep_key(name))
     return {"row": rep["row"], "stage": rep["stage"], "count": len(b)}
