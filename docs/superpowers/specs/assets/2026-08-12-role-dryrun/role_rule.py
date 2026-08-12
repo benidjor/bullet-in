@@ -9,7 +9,6 @@ Gemini 를 부르지 않는다. 이미 저장된 추출 출력 (result_*.json) �
     python -u role_rule.py --fails         # 채택안의 오답 전건
 """
 import argparse
-import difflib
 import json
 import os
 import re
@@ -21,7 +20,7 @@ import sqlalchemy as sa
 from bullet_in.enrich import _fold_latin
 
 BASE = Path(__file__).parent
-DB = "bulletin_extract"
+DB = os.environ.get("ROLE_RULE_DB", "bulletin_extract")   # 사본 이름은 세션마다 다르다
 EXTRACTION = "result_v0_r2.json"   # 역할 계산의 입력 (현행 프롬프트 출력)
 VETO = "result_v1_r1.json"         # 거부권 입력 (v1 문안의 role 값)
 
@@ -43,9 +42,12 @@ def load():
     arts, roster = {}, {}
     with eng.connect() as c:
         for h in exp:
-            arts[h] = dict(c.execute(sa.text(
+            row = c.execute(sa.text(
                 "SELECT title_ko, title_original, body_ko FROM articles "
-                "WHERE content_hash LIKE :p"), {"p": h + "%"}).mappings().first())
+                "WHERE content_hash LIKE :p"), {"p": h + "%"}).mappings().first()
+            if row is None:
+                raise SystemExit(f"{DB} 에 기사가 없다: {h} — 사본이 표본보다 오래됐다")
+            arts[h] = dict(row)
         for r in c.execute(sa.text(
                 "SELECT full_name, ko_name, ko_full_name, surname FROM players")).mappings():
             roster[_fold_latin(r["full_name"] or "")] = dict(r)
@@ -81,18 +83,16 @@ def decide(art: dict, item: dict, roster: dict, use_roster: bool, veto_role: str
     paras = [p for p in (art["body_ko"] or "").split("\n") if p.strip()]
     heads = [p for p in paras if p.strip().startswith("###")]
 
+    # 음역 흔들림은 명단 표기가 잡는다. 한글 유사도 폴백 (SequenceMatcher) 을 붙여
+    # 봤으나 명단을 재료로 쓰면 기여가 0 이었다 — 임계값을 0.5 까지 낮춰도 150/156
+    # 으로 동일. 짧은 표기에서 한 글자 차이는 0.7 을 못 넘기도 한다 (제수스 ↔ 제주스
+    # 0.667 · 촐리스 ↔ 졸리스 0.667). 그래서 폴백을 두지 않는다.
     def hit(text: str | None, korean: bool = True) -> bool:
         if not text:
             return False
         if any(k in squash(text) for k in kk):
             return True
-        if any(l in _fold_latin(text) for l in lat):
-            return True
-        if korean:      # 음역 흔들림 (제수스 ↔ 제주스 · 인카피에 ↔ 힌카피에)
-            for w in re.findall(r"[가-힣]{2,}", text):
-                if any(difflib.SequenceMatcher(None, k, w).ratio() >= 0.7 for k in kk):
-                    return True
-        return False
+        return any(l in _fold_latin(text) for l in lat)
 
     in_title = hit(art["title_ko"]) or hit(art["title_original"], korean=False)
     in_head = any(hit(x) for x in heads)
