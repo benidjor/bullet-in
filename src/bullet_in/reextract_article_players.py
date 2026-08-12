@@ -22,6 +22,7 @@
 from __future__ import annotations
 import argparse, json, logging, os
 from pathlib import Path
+import yaml
 from sqlalchemy import create_engine, text
 from bullet_in import notify, roster
 from bullet_in.backfill_article_players import append_state, filter_targets, load_state
@@ -32,24 +33,14 @@ from bullet_in.storage.players import PlayerStore
 log = logging.getLogger(__name__)
 
 _TARGET_SQL = text(
-    "SELECT content_hash, source_id, title_original, body_source, body_excerpt, "
-    "body_ko, url FROM articles WHERE EXISTS (SELECT 1 FROM article_players ap "
-    "WHERE ap.content_hash = articles.content_hash) ORDER BY published_at, id")
+    "SELECT content_hash, source_id, title_original, title_ko, body_source, "
+    "body_excerpt, body_ko, url FROM articles WHERE EXISTS (SELECT 1 FROM "
+    "article_players ap WHERE ap.content_hash = articles.content_hash) "
+    "ORDER BY published_at, id")
 
 _ORPHAN_DELETE_SQL = text(
     "DELETE ap FROM article_players ap LEFT JOIN articles a "
     "ON a.content_hash = ap.content_hash WHERE a.content_hash IS NULL")
-
-# 확정 링크 명단 — 추출 프롬프트의 {roster} 재료 (아스날 미언급 기사의 근거)
-_ROSTER_SQL = text(
-    "SELECT ko_name, full_name FROM players WHERE status='confirmed' "
-    "AND transfer_status IN ('in_link','out_link') ORDER BY id")
-
-
-def roster_text(engine) -> str:
-    with engine.connect() as c:
-        rows = c.execute(_ROSTER_SQL).all()
-    return ", ".join(f"{ko}({fn})" if ko else fn for ko, fn in rows) or "(없음)"
 
 
 def main(argv=None) -> None:
@@ -80,18 +71,20 @@ def main(argv=None) -> None:
     pstore = PlayerStore(engine)
     by_hash = {r["content_hash"]: r for r in targets}
     new_candidates: list[dict] = []
+    glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
+                or {}).get("replacements", {})
 
     extracted = extract_players_rows(targets, client, GEMINI_MODEL,
-                                     roster=roster_text(engine))
+                                     roster=pstore.confirmed_link_roster())
     done = 0
     for h, raw in extracted.items():
         try:
-            pairs = roster.normalize_pairs(raw, by_hash[h].get("source_id"))
+            row = by_hash[h]
+            pairs = roster.normalize_pairs(raw, row.get("source_id"), glossary)
             with engine.begin() as c:
                 c.execute(text("DELETE FROM article_players WHERE content_hash=:h"),
                           {"h": h})
-            for cand in roster.record_article_players(pstore, h, pairs):
-                row = by_hash[h]
+            for cand in roster.record_article_players(pstore, h, pairs, row):
                 cand = {**cand, "title": row.get("title_original"),
                         "url": row.get("url")}
                 new_candidates.append(cand)

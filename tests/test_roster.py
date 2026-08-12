@@ -1,5 +1,5 @@
 """roster 모듈 단위 테스트."""
-from bullet_in.roster import normalize_pairs
+from bullet_in.roster import decide_role, duplicate_suspects, normalize_pairs
 
 
 def test_normalize_pairs_validates_and_normalizes():
@@ -91,3 +91,123 @@ def test_normalize_pairs_normalizes_role_and_drops_unknown():
            {"full_name": "Bukayo Saka", "ko": "사카", "stage": "other"}]
     assert [p["role"] for p in normalize_pairs(raw)] == [
         "subject", "mention", None, None]
+
+
+def test_normalize_pairs_applies_glossary_to_ko():
+    # 추출은 영문 원문을 읽고 한글 표기를 직접 만들어 음역이 회차마다 흔들린다
+    # — 후보 등재 이름이 오표기로 들어가는 것을 사전이 막는다 (스펙 §8.4)
+    raw = [{"full_name": "Christos Tzolis", "ko": "졸리스", "stage": "interest"}]
+    out = normalize_pairs(raw, glossary={"졸리스": "촐리스"})
+    assert out[0]["ko"] == "촐리스"
+
+
+def test_normalize_pairs_without_glossary_keeps_ko():
+    raw = [{"full_name": "Christos Tzolis", "ko": "졸리스", "stage": "interest"}]
+    assert normalize_pairs(raw)[0]["ko"] == "졸리스"
+
+
+# ---------------------------------------------------------------- 역할 규칙
+
+def _article(title_ko="", title_original="", body_ko=""):
+    return {"title_ko": title_ko, "title_original": title_original,
+            "body_ko": body_ko}
+
+
+TZOLIS = {"full_name": "Christos Tzolis", "ko": "촐리스", "stage": "interest",
+          "role": None}
+
+
+def test_decide_role_subject_when_translated_title_has_name():
+    art = _article(title_ko="아스날, 크리스토스 촐리스 영입 합의")
+    assert decide_role(art, TZOLIS) == "subject"
+
+
+def test_decide_role_subject_when_original_title_has_name():
+    art = _article(title_ko="아스날, 그리스 공격수 영입",
+                   title_original="Arsenal sign Christos Tzolis")
+    assert decide_role(art, TZOLIS) == "subject"
+
+
+def test_decide_role_subject_when_subheading_has_name():
+    art = _article(title_ko="아스날 여름 이적시장 총정리",
+                   body_ko="첫 문단\n### 촐리스 영입 배경\n둘째 문단")
+    assert decide_role(art, TZOLIS) == "subject"
+
+
+def test_decide_role_mention_when_name_is_absent_from_title_and_subheadings():
+    art = _article(title_ko="아스날, 브루노 기마랑이스 영입 합의",
+                   title_original="Arsenal agree Guimaraes fee",
+                   body_ko="본문에 촐리스가 나오지만 제목 · 소제목에는 없다")
+    assert decide_role(art, TZOLIS) == "mention"
+
+
+def test_decide_role_model_veto_downgrades_title_only_subject():
+    # 제목만 근거일 때에 한해 모델이 언급이라 하면 내린다 (스펙 §5.1 ④)
+    art = _article(title_ko="촐리스 대체자로 아스날이 노리는 선수는")
+    assert decide_role(art, {**TZOLIS, "role": "mention"}) == "mention"
+
+
+def test_decide_role_model_veto_does_not_apply_to_subheading_evidence():
+    art = _article(title_ko="아스날 여름 이적시장 총정리",
+                   body_ko="### 촐리스 영입 배경\n둘째 문단")
+    assert decide_role(art, {**TZOLIS, "role": "mention"}) == "subject"
+
+
+def test_decide_role_model_subject_cannot_overturn_rule_mention():
+    art = _article(title_ko="아스날, 브루노 기마랑이스 영입 합의")
+    assert decide_role(art, {**TZOLIS, "role": "subject"}) == "mention"
+
+
+def test_decide_role_matches_roster_form_when_model_spelling_differs():
+    # 음역 흔들림은 유사도가 아니라 명단 표기와의 직접 일치가 잡는다 (스펙 §5.1)
+    art = _article(title_ko="아스날, 크리스토스 촐리스 영입 합의")
+    forms = {"full_name": "Christos Tzolis", "surname": "Tzolis",
+             "ko_name": "촐리스", "ko_full_name": "크리스토스 촐리스"}
+    assert decide_role(art, {**TZOLIS, "ko": "졸리스"}, forms) == "subject"
+
+
+def test_decide_role_ignores_spacing_in_korean_names():
+    art = _article(title_ko="아스날, 가브리엘제주스 매각 검토")
+    pair = {"full_name": "Gabriel Jesus", "ko": "가브리엘 제주스",
+            "stage": "other", "role": None}
+    assert decide_role(art, pair) == "subject"
+
+
+def test_decide_role_ignores_diacritics_in_latin_names():
+    art = _article(title_ko="아스날 여름 계획",
+                   title_original="Arsenal open talks for Gyökeres")
+    pair = {"full_name": "Viktor Gyokeres", "ko": "요케레스",
+            "stage": "interest", "role": None}
+    assert decide_role(art, pair) == "subject"
+
+
+def test_decide_role_drops_too_short_latin_candidates():
+    # 세 글자 이하 라틴 후보는 일반 단어에 걸린다 — 후보에서 뺀다
+    art = _article(title_ko="아스날 소식", title_original="Arsenal eye a new deal")
+    pair = {"full_name": "Eye", "ko": "아이", "stage": "other", "role": None}
+    assert decide_role(art, pair) == "mention"
+
+
+# ---------------------------------------------------------------- 중복 후보 감지
+
+def test_duplicate_suspects_flags_same_surname_with_near_first_name():
+    existing = [{"id": 7, "full_name": "Ilan Meslier", "surname": "Meslier"}]
+    assert duplicate_suspects("Illan Meslier", "Meslier", existing) == [
+        {"id": 7, "full_name": "Ilan Meslier"}]
+
+
+def test_duplicate_suspects_flags_nico_and_neco_williams():
+    # 편집거리 2 · 한글 표기까지 같지만 다른 선수다 — 그래서 병합하지 않고 알리기만 한다
+    existing = [{"id": 3, "full_name": "Neco Williams", "surname": "Williams"}]
+    assert [s["id"] for s in
+            duplicate_suspects("Nico Williams", "Williams", existing)] == [3]
+
+
+def test_duplicate_suspects_ignores_different_surname():
+    existing = [{"id": 3, "full_name": "Neco Williams", "surname": "Williams"}]
+    assert duplicate_suspects("Nico Wilson", "Wilson", existing) == []
+
+
+def test_duplicate_suspects_ignores_distant_first_name():
+    existing = [{"id": 3, "full_name": "Harvey White", "surname": "White"}]
+    assert duplicate_suspects("Ben White", "White", existing) == []

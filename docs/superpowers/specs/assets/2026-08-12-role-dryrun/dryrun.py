@@ -21,7 +21,7 @@ import sqlalchemy as sa
 
 from bullet_in import enrich
 from bullet_in.enrich import _fold_latin
-from bullet_in.reextract_article_players import roster_text
+from bullet_in.storage.players import PlayerStore
 
 BASE = Path(__file__).parent
 EXPECTED = json.loads((BASE / "expected.json").read_text())
@@ -250,7 +250,7 @@ def main() -> None:
 
     engine = sa.create_engine(os.environ["MARIADB_URL"].rsplit("/", 1)[0] + "/" + DB)
     rows = fetch_rows(engine)
-    roster = roster_text(engine)
+    roster = PlayerStore(engine).confirmed_link_roster()
     v1 = build_v1_prompt()
     v1c = build_v1_prompt(ROLE_CLAUSE_V1C)
     v1d = build_v1_prompt(ROLE_CLAUSE_V1D)

@@ -235,23 +235,38 @@ async def main(concurrency: int):
         logging.getLogger(__name__).warning(
             "재료 없음 — 제목만 생성 %d건 (본문 · 요약 미생성)", len(title_only))
     rewrite_rows, translate_rows = partition_by_body_level(generatable)
+    # 확정 링크 명단 — 아스날 미언급 기사의 판단 근거 (스펙 §6.5). 재추출 경로가 쓰던
+    # 재료를 수집 시점 프롬프트에도 준다. 회차마다 한 번 만든다.
+    roster_material = pstore.confirmed_link_roster()
     results: dict[str, dict] = {}
-    results.update(enrich_rows(translate_rows, client, GEMINI_MODEL, mode="translate"))
+    results.update(enrich_rows(translate_rows, client, GEMINI_MODEL,
+                               mode="translate", roster=roster_material))
     rewritten, gate_reports = rewrite_rows_guarded(
-        rewrite_rows, client, GEMINI_MODEL, name_map=name_map, club_map=club_map)
+        rewrite_rows, client, GEMINI_MODEL, name_map=name_map, club_map=club_map,
+        roster=roster_material)
     results.update(rewritten)
     results.update(title_only_rows(title_only, client, GEMINI_MODEL))
 
+    by_hash = {r["content_hash"]: r for r in missing}
+    finals = {h: finalize_translation(v, by_hash.get(h, {}), glossary, name_map, club_map)
+              for h, v in results.items()}
+
     # 추출 쌍 반영 (스펙 §4.1 · §4.2): 저장은 번역 채택 여부와 무관 — 원문 근거 추출이고
-    # 재시도 회차의 재추출은 upsert 멱등이다
+    # 재시도 회차의 재추출은 upsert 멱등이다.
+    # finalize_translation 뒤에 둔다 — 역할 규칙이 제목 · 소제목을 재료로 쓰는데,
+    # 재추출 경로는 저장된 본문을 읽으므로 여기서도 저장될 문자열 (표기 교정 사전
+    # 적용분) 을 넘겨야 두 경로의 판정이 갈리지 않는다.
     try:
-        by_hash = {r["content_hash"]: r for r in missing}
         new_candidates: list[dict] = []
         for h, v in results.items():
-            pairs = roster.normalize_pairs(v.get("players"),
-                                           by_hash.get(h, {}).get("source_id"))
-            for cand in roster.record_article_players(pstore, h, pairs):
-                row = by_hash.get(h, {})
+            row = by_hash.get(h, {})
+            pairs = roster.normalize_pairs(v.get("players"), row.get("source_id"),
+                                           glossary)
+            title_ko, _, _, body_ko, _ = finals[h]
+            article = {"title_ko": title_ko,
+                       "title_original": row.get("title_original"),
+                       "body_ko": body_ko}
+            for cand in roster.record_article_players(pstore, h, pairs, article):
                 new_candidates.append({**cand, "title": row.get("title_original"),
                                        "url": row.get("url")})
         if new_candidates:
@@ -277,8 +292,6 @@ async def main(concurrency: int):
             "명단 축 관측 판정 실패 — 이번 회차 건너뜀 (수집 · 번역에는 영향 없음)",
             exc_info=True)
 
-    finals = {h: finalize_translation(v, by_hash.get(h, {}), glossary, name_map, club_map)
-              for h, v in results.items()}
     for h, (title_ko, s_ko, s3_ko, body_ko, _) in finals.items():
         mart.set_translation(h, title_ko, s_ko, s3_ko, body_ko)
     for h, rep in gate_reports.items():

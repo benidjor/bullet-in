@@ -68,6 +68,25 @@ class PlayerStore:
         by_surname = {sn: pids[0] for sn, pids in grouped.items() if len(pids) == 1}
         return by_full, by_surname
 
+    def confirmed_link_roster(self) -> str:
+        """확정 링크 명단 문자열 ("한글이름(영문)" 나열) — 추출 프롬프트의 재료.
+        아스날이 안 나오는 기사에서 영입 대상 여부를 판단할 근거를 모델에게 준다
+        (추출 범위 개정 스펙 §6.5). 회차 경로 · 재추출 · 백필이 같은 것을 쓴다."""
+        with self.engine.connect() as c:
+            rows = c.execute(text(
+                "SELECT ko_name, full_name FROM players WHERE status='confirmed' "
+                "AND transfer_status IN ('in_link','out_link') ORDER BY id")).all()
+        return ", ".join(f"{ko}({fn})" if ko else fn for ko, fn in rows) or "(없음)"
+
+    def name_rows(self) -> list[dict]:
+        """명단 표기 전량 — 역할 규칙의 이름 재료 (역할 스펙 §5.1) 이자 중복 후보
+        감지 입력 (§8.5). 후보 · 보관 선수도 포함한다: 귀속은 그들에게도 붙고,
+        중복 의심 8쌍이 대부분 후보 행끼리다."""
+        with self.engine.connect() as c:
+            return [dict(r) for r in c.execute(text(
+                "SELECT id, full_name, surname, ko_name, ko_full_name "
+                "FROM players")).mappings().all()]
+
     def insert_candidate(self, *, full_name: str, first_name: str | None,
                          surname: str, ko_candidate: str | None,
                          first_seen: str | None) -> int:

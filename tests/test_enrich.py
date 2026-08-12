@@ -1300,7 +1300,8 @@ def test_retry_note_omits_untriggered_injection_axis():
     rows = [{"content_hash": "h1", "title_original": "아스날 영입",
              "body_source": "아스날이 영입을 마무리한다."}]
     rewrite_rows_guarded(rows, client, "m", club_map={"첼시": ["Chelsea"]})
-    note = client.models.prompts[1]
+    # 재생성 호출은 기본 프롬프트 + 사유 note 라 뒤에 덧붙은 부분만 본다
+    note = client.models.prompts[1][len(client.models.prompts[0]):]
     assert "[구단 주입]" in note
     assert "[인명 주입]" not in note
     assert "없음" not in note
@@ -1371,3 +1372,69 @@ def test_rewrite_gate_grounds_injection_on_title_too():
     assert reports["h1"]["names"] == []
     assert reports["h1"]["extra"] == []
     assert reports["h1"]["attempts"] == 1      # 오탐이 없으니 재시도하지 않는다
+
+
+# ---------------------------------------------------------------- 프롬프트 개정 (2026-08-12)
+
+def test_players_clause_scopes_stage_to_arsenal():
+    # 선수 축이 아스날 밖으로 새는 것을 막는다 — 나열 속 타 구단 완료가 실물이었다
+    from bullet_in.enrich import PLAYERS_CLAUSE
+    assert "stage 는 언제나 아스날 건 기준이다" in PLAYERS_CLAUSE
+    assert "아스날과 무관한 딜뿐이면 other" in PLAYERS_CLAUSE
+
+
+def test_players_clause_limits_done_to_arsenal_transfer():
+    from bullet_in.enrich import PLAYERS_CLAUSE
+    assert "done(이미 완료된 아스날 이적의 후속" in PLAYERS_CLAUSE
+    assert "타 구단 간 완료 이적이 문장 안에 나열된 것은 other" in PLAYERS_CLAUSE
+
+
+def test_players_clause_excludes_own_player_contract_from_collapsed():
+    # 아스날이 자기 유망주와 맺는 신규 계약이 종결로 잡히던 유형 (업슨)
+    from bullet_in.enrich import PLAYERS_CLAUSE
+    assert "아스날이 자기 소속 선수와 맺는 신규 · 연장 계약은 종결이 아니다" in PLAYERS_CLAUSE
+
+
+def test_players_clause_defines_role():
+    from bullet_in.enrich import PLAYERS_CLAUSE
+    assert "role 은 이 기사가 그 인물을 하나의 소식으로 다루는지다" in PLAYERS_CLAUSE
+    assert "지면에서 차지하는 자리로 정한다" in PLAYERS_CLAUSE
+
+
+def test_all_three_prompts_ask_for_role():
+    # JSON 뼈대는 조항 밖에 있어 세 프롬프트가 각자 들고 있다 — 한 곳만 고치면 샌다
+    from bullet_in.enrich import (EXTRACT_PLAYERS_PROMPT, PARAPHRASE_PROMPT,
+                                  TRANSLATE_PROMPT)
+    for prompt in (TRANSLATE_PROMPT, PARAPHRASE_PROMPT, EXTRACT_PLAYERS_PROMPT):
+        assert '"role":"subject 또는 mention"' in prompt
+
+
+def test_collection_prompts_carry_confirmed_roster():
+    # 아스날이 안 나오는 기사에서 영입 대상인지 판단할 근거를 수집 시점에도 준다
+    from bullet_in.enrich import (PARAPHRASE_PROMPT, ROSTER_CLAUSE,
+                                  TRANSLATE_PROMPT)
+    for prompt in (TRANSLATE_PROMPT, PARAPHRASE_PROMPT):
+        assert ROSTER_CLAUSE in prompt
+    assert TRANSLATE_PROMPT.format(title="T", body="B", roster="촐리스(Tzolis)")
+
+
+def test_extract_players_rows_raises_output_cap_above_observed_max():
+    # 상한 1024 에서 인물이 많은 기사가 MAX_TOKENS 로 잘려 조용히 누락됐다
+    # (실측: 9명 기사의 출력 1105 토큰 · 6명 기사 1118 토큰)
+    seen = {}
+
+    class _Recorder:
+        models = None
+
+        def generate_content(self, **kw):
+            seen.update(kw["config"])
+
+            class R:
+                text = '{"players":[]}'
+            return R()
+
+    client = _Recorder()
+    client.models = client
+    extract_players_rows([{"content_hash": "h1", "title_original": "T",
+                           "body_source": "B"}], client, "m")
+    assert seen["max_output_tokens"] >= 4096

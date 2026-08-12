@@ -3,6 +3,10 @@ from bullet_in.roster_seed import ROSTER
 from bullet_in.roster import normalize_pairs, record_article_players
 from bullet_in.storage.players import PlayerStore
 
+# 역할 규칙 입력 — 이름이 없는 기사라 규칙은 mention 을 낸다
+_ARTICLE = {"title_ko": "아스날 이적시장 소식", "title_original": "Arsenal news",
+            "body_ko": "본문"}
+
 
 def test_ensure_schema_creates_player_tables(engine):
     # engine 픽스처가 schema.sql 을 적용하므로 테이블 존재 = DDL 반영 증거
@@ -86,8 +90,8 @@ def test_record_article_players_candidate_idempotent(engine):
     pairs = normalize_pairs([{"full_name": "Nico Williams", "ko": "니코 윌리엄스",
                               "stage": "rumour"}])
     h1, h2 = "b" * 64, "c" * 64
-    created1 = record_article_players(store, h1, pairs)
-    created2 = record_article_players(store, h2, pairs)   # 같은 선수 재등장
+    created1 = record_article_players(store, h1, pairs, _ARTICLE)
+    created2 = record_article_players(store, h2, pairs, _ARTICLE)  # 같은 선수 재등장
     assert len(created1) == 1 and created2 == []          # 중복 후보 없음
     pid = created1[0]["player_id"]
     assert sorted(store.articles_for(pid)) == sorted([h1, h2])
@@ -98,7 +102,7 @@ def test_record_article_players_links_existing_by_surname(engine):
     store.seed(ROSTER)
     pairs = normalize_pairs([{"full_name": "Gyokeres", "ko": "요케레스",
                               "stage": "agreed"}])       # 성만 온 출력
-    created = record_article_players(store, "d" * 64, pairs)
+    created = record_article_players(store, "d" * 64, pairs, _ARTICLE)
     assert created == []                                  # 기존 요케레스에 링크, 후보 미생성
 
 
@@ -109,7 +113,7 @@ def test_record_article_players_two_word_unmatched_gets_no_surname_fallback(engi
     store.seed(ROSTER)
     pairs = normalize_pairs([{"full_name": "Harvey White", "ko": "하비 화이트",
                               "stage": "rumour"}])
-    created = record_article_players(store, "e" * 64, pairs)
+    created = record_article_players(store, "e" * 64, pairs, _ARTICLE)
     assert len(created) == 1                              # 신규 후보 생성
     ben_white_id = store.gate_player_id("화이트")
     assert created[0]["player_id"] != ben_white_id         # 기존 화이트와 다른 id
@@ -284,3 +288,48 @@ def test_linked_hashes_ignores_the_target_condition(engine):
     store.link_article("c" * 64, staff, "rumour")
     # 추출은 됐으나 페이지 대상이 아닌 선수만 걸린 기사도 "추출 누락" 이 아니다
     assert "c" * 64 in store.linked_hashes()
+
+
+def test_record_article_players_stores_computed_role(engine):
+    # 모델이 역할을 안 내도 규칙이 값을 만든다 — 제목에 이름이 있으면 subject
+    store = PlayerStore(engine)
+    store.seed(ROSTER)
+    pairs = normalize_pairs([{"full_name": "Bruno Guimaraes", "ko": "기마랑이스",
+                              "stage": "agreed"}])
+    h = "f" * 64
+    record_article_players(store, h, pairs, {
+        "title_ko": "아스날, 기마랑이스 영입 합의",
+        "title_original": "Arsenal agree deal", "body_ko": "본문"})
+    with engine.connect() as c:
+        assert c.execute(text(
+            "SELECT role FROM article_players WHERE content_hash=:h"),
+            {"h": h}).scalar_one() == "subject"
+
+
+def test_record_article_players_uses_roster_form_for_role(engine):
+    # 모델이 낸 표기가 흔들려도 명단 표기가 제목과 직접 일치하면 subject 다
+    store = PlayerStore(engine)
+    store.seed(ROSTER)
+    pairs = normalize_pairs([{"full_name": "Bruno Guimaraes", "ko": "기마랑스",
+                              "stage": "agreed"}])
+    h = "0" * 64
+    record_article_players(store, h, pairs, {
+        "title_ko": "아스날, 기마랑이스 영입 합의",
+        "title_original": "Arsenal agree deal", "body_ko": "본문"})
+    with engine.connect() as c:
+        assert c.execute(text(
+            "SELECT role FROM article_players WHERE content_hash=:h"),
+            {"h": h}).scalar_one() == "subject"
+
+
+def test_record_article_players_reports_duplicate_suspects(engine):
+    # 성이 같고 이름이 비슷한 기존 선수를 알리기만 한다 — 병합은 사람 몫 (스펙 §8.5)
+    store = PlayerStore(engine)
+    store.insert_candidate(full_name="Ilan Meslier", first_name="Ilan",
+                           surname="Meslier", ko_candidate="일란 메슬리에",
+                           first_seen=None)
+    pairs = normalize_pairs([{"full_name": "Illan Meslier", "ko": "멜리에",
+                              "stage": "agreed"}])
+    created = record_article_players(store, "1" * 64, pairs, _ARTICLE)
+    assert len(created) == 1                       # 자동 병합하지 않는다
+    assert [s["full_name"] for s in created[0]["dup_suspects"]] == ["Ilan Meslier"]
