@@ -32,6 +32,11 @@ ALTER TABLE articles ADD COLUMN IF NOT EXISTS images_json TEXT;
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS published_precision VARCHAR(4);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS body_level TINYINT;
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS rewrite_retention FLOAT;
+-- 공홈 채택 경로 ('tag' · 'title') — 단계 규칙이 태그 채택분에만 official 을 고정한다
+-- (공홈 수집 개정 스펙 2026-08-12 §3.3). 분류 패스는 수집 회차와 분리돼 (429 로 밀리면
+-- 다음 회차가 처리) 회차 메모리로는 남길 수 없어 행에 저장한다. 개정 전 적재분의 NULL 은
+-- 전건 태그 채택이라 고정 유지로 읽힌다.
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS accept_path VARCHAR(16);
 CREATE TABLE IF NOT EXISTS pipeline_runs (
   run_id VARCHAR(64) PRIMARY KEY, dag_run_id VARCHAR(128),
   started_at DATETIME, finished_at DATETIME, duration_sec FLOAT,

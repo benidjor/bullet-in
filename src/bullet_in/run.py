@@ -261,7 +261,7 @@ async def main(concurrency: int):
         for h, v in results.items():
             row = by_hash.get(h, {})
             pairs = roster.normalize_pairs(v.get("players"), row.get("source_id"),
-                                           glossary)
+                                           glossary, row.get("accept_path"))
             title_ko, _, _, body_ko, _ = finals[h]
             article = {"title_ko": title_ko,
                        "title_original": row.get("title_original"),
@@ -306,7 +306,8 @@ async def main(concurrency: int):
     llm_rows = []
     stage_ruled: dict[str, str] = {}
     for r in mart.rows_missing_stage():
-        stage_fixed, direction_fixed = transfer_stage.rule_stage(r["source_id"])
+        stage_fixed, direction_fixed = transfer_stage.rule_stage(
+            r["source_id"], r.get("accept_path"))
         if stage_fixed and direction_fixed:
             mart.set_stage(r["content_hash"], stage_fixed, direction_fixed)
             continue

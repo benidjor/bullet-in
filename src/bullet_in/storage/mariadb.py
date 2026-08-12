@@ -34,12 +34,12 @@ class MartStore:
             (content_hash,url,source_id,author,tier,confidence_score,
              title_original,title_ko,summary_ko,body_excerpt,
              summary3_ko,body_ko,body_source,body_level,image_url,images_json,outlet,journalist,team,
-             transfer_stage,
+             transfer_stage,accept_path,
              published_at,published_precision,fetched_at,revision)
           VALUES (:content_hash,:url,:source_id,:author,:tier,:confidence_score,
              :title_original,:title_ko,:summary_ko,:body_excerpt,
              :summary3_ko,:body_ko,:body_source,:body_level,:image_url,:images_json,:outlet,:journalist,:team,
-             :transfer_stage,
+             :transfer_stage,:accept_path,
              :published_at,:published_precision,:fetched_at,:revision)
           ON DUPLICATE KEY UPDATE
              title_ko=IF(articles.content_hash=VALUES(content_hash), articles.title_ko, NULL),
@@ -56,6 +56,7 @@ class MartStore:
              outlet=VALUES(outlet),
              journalist=VALUES(journalist),
              team=VALUES(team),
+             accept_path=VALUES(accept_path),
              published_at=VALUES(published_at),
              published_precision=VALUES(published_precision),
              tier=VALUES(tier),
@@ -84,7 +85,7 @@ class MartStore:
     def rows_missing_translation(self) -> list[dict]:
         with self.engine.connect() as c:
             rows = c.execute(text(
-                "SELECT content_hash,url,source_id,title_original,body_excerpt,"
+                "SELECT content_hash,url,source_id,accept_path,title_original,body_excerpt,"
                 "body_source,body_level,outlet,summary_ko "
                 "FROM articles WHERE title_ko IS NULL")).mappings().all()
         return [dict(r) for r in rows]
@@ -93,7 +94,7 @@ class MartStore:
         rows_missing_translation 과 같은 컬럼을 돌려준다 (같은 함수들이 소비한다)."""
         with self.engine.connect() as c:
             rows = c.execute(text(
-                "SELECT content_hash,url,source_id,title_original,body_excerpt,"
+                "SELECT content_hash,url,source_id,accept_path,title_original,body_excerpt,"
                 "body_source,body_level,outlet,summary_ko "
                 "FROM articles WHERE body_level=1 AND title_ko IS NOT NULL "
                 "ORDER BY content_hash")).mappings().all()
@@ -114,7 +115,7 @@ class MartStore:
     def rows_missing_stage(self) -> list[dict]:
         with self.engine.connect() as c:
             rows = c.execute(text(
-                "SELECT content_hash,source_id,title_original,summary_ko "
+                "SELECT content_hash,source_id,accept_path,title_original,summary_ko "
                 "FROM articles WHERE transfer_stage IS NULL")).mappings().all()
         return [dict(r) for r in rows]
 
