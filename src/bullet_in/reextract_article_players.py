@@ -22,6 +22,8 @@
 from __future__ import annotations
 import argparse, json, logging, os
 from pathlib import Path
+import yaml
+from pathlib import Path as _Path
 from sqlalchemy import create_engine, text
 from bullet_in import notify, roster
 from bullet_in.backfill_article_players import append_state, filter_targets, load_state
@@ -32,9 +34,10 @@ from bullet_in.storage.players import PlayerStore
 log = logging.getLogger(__name__)
 
 _TARGET_SQL = text(
-    "SELECT content_hash, source_id, title_original, body_source, body_excerpt, "
-    "body_ko, url FROM articles WHERE EXISTS (SELECT 1 FROM article_players ap "
-    "WHERE ap.content_hash = articles.content_hash) ORDER BY published_at, id")
+    "SELECT content_hash, source_id, title_original, title_ko, body_source, "
+    "body_excerpt, body_ko, url FROM articles WHERE EXISTS (SELECT 1 FROM "
+    "article_players ap WHERE ap.content_hash = articles.content_hash) "
+    "ORDER BY published_at, id")
 
 _ORPHAN_DELETE_SQL = text(
     "DELETE ap FROM article_players ap LEFT JOIN articles a "
@@ -80,18 +83,20 @@ def main(argv=None) -> None:
     pstore = PlayerStore(engine)
     by_hash = {r["content_hash"]: r for r in targets}
     new_candidates: list[dict] = []
+    glossary = (yaml.safe_load(_Path("config/glossary.yaml").read_text())
+                or {}).get("replacements", {})
 
     extracted = extract_players_rows(targets, client, GEMINI_MODEL,
                                      roster=roster_text(engine))
     done = 0
     for h, raw in extracted.items():
         try:
-            pairs = roster.normalize_pairs(raw, by_hash[h].get("source_id"))
+            row = by_hash[h]
+            pairs = roster.normalize_pairs(raw, row.get("source_id"), glossary)
             with engine.begin() as c:
                 c.execute(text("DELETE FROM article_players WHERE content_hash=:h"),
                           {"h": h})
-            for cand in roster.record_article_players(pstore, h, pairs):
-                row = by_hash[h]
+            for cand in roster.record_article_players(pstore, h, pairs, row):
                 cand = {**cand, "title": row.get("title_original"),
                         "url": row.get("url")}
                 new_candidates.append(cand)

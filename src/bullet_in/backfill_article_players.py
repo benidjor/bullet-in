@@ -14,6 +14,7 @@ hash 만 등재 · state 기록한다. 파싱 실패 행은 state 에 안 남아
 from __future__ import annotations
 import argparse, logging, os
 from pathlib import Path
+import yaml
 from sqlalchemy import create_engine, text
 from bullet_in import notify, roster
 from bullet_in.enrich import extract_players_rows
@@ -23,9 +24,10 @@ from bullet_in.storage.players import PlayerStore
 log = logging.getLogger(__name__)
 
 _TARGET_SQL = text(
-    "SELECT content_hash, source_id, title_original, body_source, body_excerpt, url "
-    "FROM articles WHERE NOT EXISTS (SELECT 1 FROM article_players ap "
-    "WHERE ap.content_hash = articles.content_hash) ORDER BY published_at, id")
+    "SELECT content_hash, source_id, title_original, title_ko, body_source, "
+    "body_excerpt, body_ko, url FROM articles WHERE NOT EXISTS (SELECT 1 FROM "
+    "article_players ap WHERE ap.content_hash = articles.content_hash) "
+    "ORDER BY published_at, id")
 
 
 def load_state(path: Path) -> set[str]:
@@ -64,13 +66,20 @@ def main(argv=None) -> None:
     by_hash = {r["content_hash"]: r for r in targets}
     new_candidates: list[dict] = []
 
-    extracted = extract_players_rows(targets, client, GEMINI_MODEL)
+    # 지연 import — reextract 가 이 모듈의 state 헬퍼를 쓰므로 모듈 최상단이면 순환한다
+    from bullet_in.reextract_article_players import roster_text
+    glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
+                or {}).get("replacements", {})
+    # 확정 링크 명단을 재료로 준다 — 미링크 89건 중 35건의 제목에 명단 선수가 있다
+    # (스펙 §1.4). 이 재료 없이는 아스날 미언급 기사에서 판단 근거가 입력에 없다.
+    extracted = extract_players_rows(targets, client, GEMINI_MODEL,
+                                     roster=roster_text(engine))
     done = 0
     for h, raw in extracted.items():
         try:
-            pairs = roster.normalize_pairs(raw, by_hash[h].get("source_id"))
-            for cand in roster.record_article_players(pstore, h, pairs):
-                row = by_hash[h]
+            row = by_hash[h]
+            pairs = roster.normalize_pairs(raw, row.get("source_id"), glossary)
+            for cand in roster.record_article_players(pstore, h, pairs, row):
                 new_candidates.append({**cand, "title": row.get("title_original"),
                                        "url": row.get("url")})
             append_state(args.state, h)
