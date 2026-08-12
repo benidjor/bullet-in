@@ -43,6 +43,7 @@ fmkorea 도 세어야 한다 (2026-07-30 개정).
 저장 직전 후처리 (표기 사전 · 환각 게이트 4축 · 문단 보정) 는 `enrich.finalize_translation` 한 벌뿐이므로 그것을 import 해서 쓴다.
 여기에 `set_translation` 을 직접 부르면 게이트 경고 로그가 안 남고 400자 초과 문단이 안 쪼개져, 가십 단신 카드가 조용히 깨진다.
 마지막 분류 블록도 run.py 의 현행 분류 패스와 동일한 형태를 유지한다 (규칙 경로 2형태 · 방향 축 스펙 §4).
+**`rule_stage` 에 채택 경로를 함께 넘긴다** (2026-08-12 개정) — 빠뜨리면 공홈에서 제목으로 주워 온 기사까지 `official` 로 굳어, 구단이 이적 뉴스라고 표시하지 않은 기사에 오피셜 배지가 붙는다.
 
 ```bash
 uv run python - <<'EOF'
@@ -91,7 +92,8 @@ print("최종 미번역 잔존:", len(mart.rows_missing_translation()))
 llm_rows = []
 stage_ruled = {}
 for r in mart.rows_missing_stage():
-    stage_fixed, direction_fixed = transfer_stage.rule_stage(r["source_id"])
+    stage_fixed, direction_fixed = transfer_stage.rule_stage(
+        r["source_id"], r.get("accept_path"))
     if stage_fixed and direction_fixed:
         mart.set_stage(r["content_hash"], stage_fixed, direction_fixed)
         continue
