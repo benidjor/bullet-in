@@ -46,13 +46,23 @@ PLAYERS_CLAUSE = (
     "other) 으로 한다. 다른 구단이 그 선수의 영입을 추진하는 기사에는 적용하지 않는다.\n"
     "- stage 는 이 기사가 그 선수에 대해 보도하는 진행 단계다. 기사 밖에서 아는 "
     "그 선수의 상황으로 답하지 않는다. 이 기사가 그 선수의 진행 단계를 말하지 "
-    "않으면 other.\n"
+    "않으면 other. stage 는 언제나 아스날 건 기준이다. 그 인물에 관해 이 기사가 "
+    "전하는 것이 아스날과 무관한 딜뿐이면 other 다 — done 과 collapsed 는 특히 "
+    "그렇다.\n"
+    "- role 은 이 기사가 그 인물을 하나의 소식으로 다루는지다. subject = 제목이 그 "
+    "인물을 내세우거나, 그 인물 이름이 들어간 소제목 · 별도 바이라인의 절이 있거나, "
+    "라운드업에서 그 인물 몫의 단신이 독립적으로 있거나, 기사가 그 인물의 거취를 "
+    "논평 대상으로 삼는다. mention = 한 문단 안에서 여러 인물과 함께 이름만 "
+    "나열되거나 배경 · 과거 비교 · 대체자 · 경쟁자 · 이적료 기준점으로 불려 나온다. "
+    "지면에서 차지하는 자리로 정한다 — 그 인물이 중요한 선수인지로 정하지 않는다.\n"
     "- stage 값: rumour(근거 약한 소문 · 연결설) · interest(구단의 실제 관심 · "
     "스카우팅 · 후보 검토) · negotiating(이적료 · 조건 협상 중 · 제안 · 거절 · "
     "합의 임박 · 근접) · personal_terms(선수-구단 개인 조건 합의) · medical(메디컬 테스트) · "
     "agreed(구단 간 완전 합의 도달 · 딜 확정을 사실로 보도 — 임박은 negotiating) · "
-    "done(이미 완료된 이적의 후속 · 부대 보도) · collapsed(아스날 관련 딜의 종결 — "
-    "잔류 확정 · 재계약 체결 · 결렬 확정) · other(이적 무관 · 경기 · 근황 · 단계 불명).\n")
+    "done(이미 완료된 아스날 이적의 후속 · 부대 보도 — 타 구단 간 완료 이적이 "
+    "문장 안에 나열된 것은 other) · collapsed(아스날 관련 딜의 종결 — 잔류 확정 · "
+    "재계약 체결 · 결렬 확정. 아스날이 자기 소속 선수와 맺는 신규 · 연장 계약은 "
+    "종결이 아니다) · other(이적 무관 · 경기 · 근황 · 단계 불명).\n")
 
 # 확정 링크 명단 조항 — 세 프롬프트가 공유한다 (추출 범위 개정 스펙 §6.5).
 # 아스날이 한 글자도 안 나오는 기사에서 "이 선수가 아스날 영입 대상인가" 를 모델의
@@ -92,10 +102,11 @@ TRANSLATE_PROMPT = (
     "- 고유명사는 통용 한글 표기(Arsenal=아스날).\n"
     "- players: 이 기사에서 아스날의 이적 · 거취 · 계약과 관련해 다뤄진 선수 · 감독 "
     "목록. 각 항목은 "
-    '{{"full_name":"영문 풀네임","ko":"이 기사에서 쓴 한글 표기","stage":"단계"}}.\n'
-    + PLAYERS_CLAUSE +
+    '{{"full_name":"영문 풀네임","ko":"이 기사에서 쓴 한글 표기","stage":"단계",'
+    '"role":"subject 또는 mention"}}.\n'
+    + PLAYERS_CLAUSE + ROSTER_CLAUSE +
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],'
-    '"body_ko":"...","players":[{{"full_name":"...","ko":"...","stage":"..."}}]}}'
+    '"body_ko":"...","players":[{{"full_name":"...","ko":"...","stage":"...","role":"..."}}]}}'
     "\n\nTitle: {title}\nBody: {body}")
 
 PARAPHRASE_PROMPT = (
@@ -133,10 +144,11 @@ PARAPHRASE_PROMPT = (
     "원문에 없는 장식도 새로 만들지 않는다.\n"
     "- players: 이 기사에서 아스날의 이적 · 거취 · 계약과 관련해 다뤄진 선수 · 감독 "
     "목록. 각 항목은 "
-    '{{"full_name":"영문 풀네임","ko":"이 기사에서 쓴 한글 표기","stage":"단계"}}.\n'
-    + PLAYERS_CLAUSE +
+    '{{"full_name":"영문 풀네임","ko":"이 기사에서 쓴 한글 표기","stage":"단계",'
+    '"role":"subject 또는 mention"}}.\n'
+    + PLAYERS_CLAUSE + ROSTER_CLAUSE +
     'ONLY JSON: {{"title_ko":"...","summary_ko":"...","summary3_ko":["...","...","..."],'
-    '"body_ko":"...","players":[{{"full_name":"...","ko":"...","stage":"..."}}]}}'
+    '"body_ko":"...","players":[{{"full_name":"...","ko":"...","stage":"...","role":"..."}}]}}'
     "\n\nTitle: {title}\nBody: {body}")
 
 # 재추출 · 백필 경로 전용 — 번역 없이 players 필드만 뽑는다.
@@ -144,7 +156,7 @@ EXTRACT_PLAYERS_PROMPT = (
     "다음 아스날 FC 관련 기사에서 아스날의 이적 · 거취 · 계약과 관련해 "
     "다뤄진 선수 · 감독을 추출한다.\n"
     '각 항목은 {{"full_name":"영문 풀네임","ko":"이 기사에서 쓴 한글 표기",'
-    '"stage":"단계"}}.\n'
+    '"stage":"단계","role":"subject 또는 mention"}}.\n'
     + PLAYERS_CLAUSE + ROSTER_CLAUSE +
     'ONLY JSON: {{"players":[...]}}'
     "\n\nTitle: {title}\nBody: {body}")
@@ -526,7 +538,7 @@ def extract_players_rows(rows: list[dict], client, model: str,
                     body=r.get("body_source") or r.get("body_excerpt")
                          or r.get("body_ko") or "",
                     roster=roster),
-                config={"max_output_tokens": 1024,
+                config={"max_output_tokens": 4096,
                         "response_mime_type": "application/json"})
         except Exception as e:
             if _is_rate_limit(e):
@@ -546,8 +558,10 @@ def extract_players_rows(rows: list[dict], client, model: str,
     return result
 
 
-def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate"
-                ) -> dict[str, dict]:
+def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate",
+                roster: str = "(없음)") -> dict[str, dict]:
+    """번역 · 요약 · 추출 쌍 생성. roster 는 확정 링크 명단 문자열이며 아스날
+    미언급 기사의 판단 근거로 프롬프트에 실린다 (스펙 §6.5)."""
     prompt = PARAPHRASE_PROMPT if mode == "paraphrase" else TRANSLATE_PROMPT
     result: dict[str, dict] = {}
     for r in rows:
@@ -556,7 +570,8 @@ def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate"
             msg = client.models.generate_content(
                 model=model,
                 contents=prompt.format(title=r["title_original"],
-                                       body=r.get("body_source") or r.get("body_excerpt") or ""),
+                                       body=r.get("body_source") or r.get("body_excerpt") or "",
+                                       roster=roster),
                 config={"max_output_tokens": 8192,
                         "response_mime_type": "application/json"})
         except Exception as e:
@@ -596,7 +611,8 @@ def rewrite_rows_guarded(rows: list[dict], client, model: str,
                          threshold: float = RETENTION_THRESHOLD,
                          max_attempts: int = 3,
                          name_map: dict[str, str] | None = None,
-                         club_map: dict[str, list[str]] | None = None
+                         club_map: dict[str, list[str]] | None = None,
+                         roster: str = "(없음)"
                          ) -> tuple[dict[str, dict], dict[str, dict]]:
     """게시글 본문 재작성 — 게이트 4축에 걸리면 사유를 붙여 재생성하고 최선을 채택한다.
 
@@ -612,7 +628,8 @@ def rewrite_rows_guarded(rows: list[dict], client, model: str,
         # 주입 판정의 근거는 모델에게 준 재료 전부다 — 제목에만 있는 인명 · 수치를
         # 주입으로 오탐하지 않게 한다 (finalize_translation 과 같은 범위).
         grounding = " ".join(filter(None, (r.get("title_original"), source)))
-        base = PARAPHRASE_PROMPT.format(title=r["title_original"], body=source)
+        base = PARAPHRASE_PROMPT.format(title=r["title_original"], body=source,
+                                        roster=roster)
         attempts: list[dict] = []
         rate_limited = False
         for i in range(max_attempts):
