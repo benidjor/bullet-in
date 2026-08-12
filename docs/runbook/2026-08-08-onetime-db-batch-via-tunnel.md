@@ -1,7 +1,7 @@
 # 운영 DB 1회성 재처리 배치 실행 절차 — ssh 터널 · 백업 · 같은 날 대조 (2026-08-08)
 
-머지 전 코드로 운영 DB 를 일괄 재처리해야 할 때의 절차다.
-선수별 단계 재추출 (PR #240 · 522건 · Gemini 호출) 에서 실행한 것을 일반화했다.
+운영 DB 를 일괄 재처리해야 할 때의 절차다.
+선수별 단계 재추출 (PR #240 · 522건 · Gemini 호출) 에서 실행한 것을 일반화했고, 역할 값 소급 (PR #258 · 589 + 93건) 에서 다시 썼다.
 백필 · 소급 재분류처럼 "운영 데이터를 한 번에 고쳐 쓰는" 작업이 대상이다.
 
 ## 1. 실행 위치 — VM 이 아니라 Mac 에서 터널로
@@ -9,16 +9,22 @@
 - VM 체크아웃을 머지 전 브랜치로 바꾸면 안 된다.
 정기 회차가 그 체크아웃을 그대로 실행하므로, 배치가 도는 동안 회차가 뜨면 미머지 코드가 운영에 올라간다.
 - 대신 Mac worktree (개정 코드) 에서 ssh 터널로 운영 MariaDB 에 붙는다.
+- **머지한 뒤에도 이 방식이 낫다** (2026-08-12 추가).
+VM 에서 직접 돌리면 비대화형 셸의 PATH 문제와 실행 환경 준비가 따라붙는데, 터널은 이미 검증된 로컬 환경을 그대로 쓴다.
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy -o ExitOnForwardFailure=yes -f -N \
-  -L 3310:127.0.0.1:3306 ubuntu@155.248.164.17
+  -L 3311:127.0.0.1:3306 ubuntu@155.248.164.17
 set -a; source .env; set +a
-MARIADB_URL="mysql+pymysql://root:<pw>@127.0.0.1:3310/bulletin" \
+MARIADB_URL="mysql+pymysql://root:<pw>@127.0.0.1:3311/bulletin" \
   uv run python -m bullet_in.<배치 모듈> --state <경로> ...
 ```
 
 - Gemini · Discord 키는 로컬 `.env` 의 것을 그대로 쓴다 (운영과 같은 키).
+- **포트는 세션마다 다르게 잡는다** (2026-08-12 추가).
+다른 세션이 이미 3310 을 쓰고 있으면 `Address already in use` 가 나는데, **그 상태에서도 명령은 성공한다** — 남의 터널로 붙기 때문이다.
+그 세션이 터널을 닫으면 배치가 중간에 끊기므로, 실패 메시지를 보면 포트를 바꿔 자기 터널을 연다.
+- 끝나면 터널을 닫는다: `pkill -f "ssh.*<포트>:127.0.0.1:3306"`.
 
 ## 2. 실행 전 3종 — 순서대로
 
@@ -27,7 +33,11 @@ MARIADB_URL="mysql+pymysql://root:<pw>@127.0.0.1:3310/bulletin" \
 ```bash
 ssh <vm> 'TS=$(date +%Y%m%d_%H%M%S) && docker exec bullet-in-mariadb-1 \
   mariadb-dump -uroot -p<pw> bulletin <테이블> > ~/backups/<테이블>_backup_${TS}.sql'
+ssh <vm> 'ls -l ~/backups/ | grep "$(date +%Y%m%d)"'   # 생성 확인
 ```
+
+`ls -l ~/backups/ | tail` 로 확인하면 방금 만든 파일이 안 보일 수 있다 — 목록이 이름순이라 새 파일이 끝에 오지 않는다.
+날짜로 걸러서 본다.
 
 2. **같은 날 before 측정** — 실행 직전에 전체 덤프를 새로 떠서 로컬 사본 (예: `bulletin_before_MMDD`) 으로 복원하고 검증에 쓸 지표를 그 사본에서 잰다.
 옛 사본 · 옛 기준선과 비교하면 개선 폭이 왜곡된다 (서빙 필터 변경 등으로 잣대가 달라져 있다).
@@ -42,6 +52,17 @@ ssh <vm> 'TS=$(date +%Y%m%d_%H%M%S) && docker exec bullet-in-mariadb-1 \
 - state 파일 필수 — 429 중단 시 재실행하면 이어서 처리하고 이미 끝낸 행은 다시 만지지 않는다 (재과금 · 이중 삭제 방지).
 - 파이썬 stdout 은 파이프에서 블록 버퍼라 `print` 진행 메시지가 종료 시점에 몰려 나온다.
 중간 진행은 로그의 HTTP 응답 줄 수나 DB 직접 조회로 본다.
+- **state 파일은 호출이 다 끝난 뒤에야 채워진다** (2026-08-12 추가).
+추출 배치는 대상 전체를 한 번에 호출해 결과를 모은 뒤 DB 반영으로 넘어가므로, 호출 구간 내내 state 는 0행이다.
+진행 확인은 로그의 HTTP 응답 줄 수로 하고, state 행 수는 **반영 단계에 들어간 뒤에야** 진행률이 된다.
+
+```bash
+grep -c "HTTP/1.1 200" <로그>      # 호출 구간의 진행
+wc -l < <state 파일>               # 반영 구간의 진행
+```
+
+- 소요는 실측으로 잡는다 — 2026-08-12 실측은 호출 589건에 14분 (분당 약 43건) 이었고, 런북 §3 의 4.5초 환산보다 훨씬 빨랐다.
+회차 사이 구간에 들어가는지는 실측값으로 계산한다.
 
 ## 4. 검증 — 숫자만 보지 않는다
 
@@ -63,4 +84,5 @@ DB 는 이미 고쳐져 있으므로 pull 은 **이후 신규 데이터의 처�
 
 - VM 동거 부트스트랩 · 회차 수동 규칙: `docs/runbook/2026-07-20-vm-cohost-bootstrap.md` §6.1
 - 소표본 측정 절차: `docs/runbook/2026-08-07-extraction-prompt-dryrun-measurement.md`
+- 시험 실행의 쓸모와 한계: `docs/runbook/2026-08-12-small-run-checks-wiring-not-scale.md`
 - 이번 적용의 스펙 · 결과: `docs/superpowers/specs/2026-08-07-player-stage-reextraction-design.md`
