@@ -140,8 +140,16 @@ def test_decide_role_subject_when_original_title_has_name():
 
 def test_decide_role_subject_when_subheading_has_name():
     art = _article(title_ko="아스날 여름 이적시장 총정리",
-                   body_ko="첫 문단\n### 촐리스 영입 배경\n둘째 문단")
+                   body_ko="첫 문단\n### 촐리스 영입 배경\n아스날이 촐리스 영입에 합의했다")
     assert decide_role(art, TZOLIS) == "subject"
+
+
+def test_decide_role_mention_when_subheading_name_is_absent_from_its_section():
+    # fmkorea 전재가 원문의 관련기사 헤더만 끌어와 소제목에만 이름이 남는다 (`ad4e18de`)
+    art = _article(title_ko="아스날, 브루노 기마랑이스 영입 근접",
+                   body_ko="### 아스날 유망주 촐리스, 도르트문트의 관심 끌어\n"
+                           "아스날은 기마랑이스 영입을 원한다")
+    assert decide_role(art, TZOLIS) == "mention"
 
 
 def test_decide_role_mention_when_name_is_absent_from_title_and_subheadings():
@@ -153,19 +161,58 @@ def test_decide_role_mention_when_name_is_absent_from_title_and_subheadings():
 
 def test_decide_role_model_veto_downgrades_title_only_subject():
     # 제목만 근거일 때에 한해 모델이 언급이라 하면 내린다 (스펙 §5.1 ④)
-    art = _article(title_ko="촐리스 대체자로 아스날이 노리는 선수는")
+    art = _article(title_ko="아스날이 노리는 선수 명단에 촐리스")
     assert decide_role(art, {**TZOLIS, "role": "mention"}) == "mention"
 
 
 def test_decide_role_model_veto_does_not_apply_to_subheading_evidence():
     art = _article(title_ko="아스날 여름 이적시장 총정리",
-                   body_ko="### 촐리스 영입 배경\n둘째 문단")
+                   body_ko="### 촐리스 영입 배경\n아스날이 촐리스 영입에 합의했다")
     assert decide_role(art, {**TZOLIS, "role": "mention"}) == "subject"
 
 
 def test_decide_role_model_subject_cannot_overturn_rule_mention():
     art = _article(title_ko="아스날, 브루노 기마랑이스 영입 합의")
     assert decide_role(art, {**TZOLIS, "role": "subject"}) == "mention"
+
+
+TROSSARD = {"full_name": "Leandro Trossard", "ko": "트로사르", "stage": "done",
+            "role": "subject"}
+
+
+def test_decide_role_mention_when_named_as_the_replaced_player_in_subheading():
+    # 촐리스 영입 기사이고 트로사르는 비교 기준점이다 (`b8055b5b`)
+    art = _article(title_ko="아스날, 클뤼프 브뤼허 윙어 촐리스 영입 합의",
+                   body_ko="### 촐리스가 트로사르의 완벽한 대체자인 이유\n"
+                           "촐리스는 트로사르의 직접적인 대체자로 합류한다")
+    assert decide_role(art, TROSSARD) == "mention"
+
+
+def test_decide_role_mention_when_named_as_the_replaced_player_in_title():
+    # 제목 경로도 같다 — 소제목만 보는 규칙으로는 이 두 건을 못 잡는다 (`681dfde6`)
+    art = _article(title_ko="아스날, 레안드로 트로사르 대체자로 촐리스 영입 추진")
+    assert decide_role(art, TROSSARD) == "mention"
+
+
+def test_decide_role_original_title_cannot_revive_the_replaced_player():
+    # 같은 기사의 두 표현이라 번역 제목이 대체 대상으로 부르면 원제도 근거가 아니다 (`b5d9f90a`)
+    art = _article(title_ko="아스날, 레안드로 트로사르 대체자로 촐리스 영입 공식 발표",
+                   title_original="Officially: Arsenal announce deal for Trossard's replacement")
+    assert decide_role(art, TROSSARD) == "mention"
+
+
+def test_decide_role_subject_for_the_signing_named_after_the_replaced_player():
+    # 같은 줄이라도 「대체자」 뒤에 오는 이름은 영입되는 쪽이다
+    art = _article(title_ko="아스날, 레안드로 트로사르 대체자로 촐리스 영입 추진")
+    assert decide_role(art, TZOLIS) == "subject"
+
+
+def test_decide_role_subject_when_replacement_word_is_far_from_the_name():
+    # 갈라타사라이가 그를 노리는 기사다 — 「대체자」 는 아스날이 찾을 선수를 가리킨다 (`0f2fbcd4`)
+    art = _article(title_ko="갈라타사라이, 마르티넬리 영입 추진…아스날은 대체자 물색이 우선")
+    martinelli = {"full_name": "Gabriel Martinelli", "ko": "마르티넬리",
+                  "stage": "interest", "role": "subject"}
+    assert decide_role(art, martinelli) == "subject"
 
 
 def test_decide_role_matches_roster_form_when_model_spelling_differs():
