@@ -2,8 +2,10 @@
 
 2026-07 사이트 개편으로 목록이 클라이언트 렌더링이라 정적 HTML 파싱이 불가하다.
 프론트엔드가 쓰는 GraphQL 엔드포인트를 직접 호출한다 — 인증 불요 (라이브 실측).
-'sign' 제목 필터 대신 taxonomy 판별: 방출 오피셜 ("joins Besiktas") 도 Transfer news
+채택은 taxonomy 판별이 기본이다: 방출 오피셜 ("joins Besiktas") 도 Transfer news
 태그로 잡히고, 재계약은 Contract news + Men 한정으로 포함한다 (아카데미 차단).
+구단이 태그를 빠뜨리는 일이 있어 (2026-08-05 뇌르고르) 제목 어휘 갈래를 함께 둔다
+— 두 경로의 구분은 단계 규칙이 쓴다 (스펙 2026-08-12 §3.2).
 """
 from __future__ import annotations
 from datetime import datetime, timedelta, timezone
@@ -11,6 +13,7 @@ import logging
 import re
 import httpx
 from bullet_in.models import RawItem
+from bullet_in.quality import TRANSFER_TITLE_RE
 
 log = logging.getLogger(__name__)
 
@@ -53,16 +56,37 @@ ARTICLE_QUERY = """query GetArticle($articleId: String = "", $glideId: String = 
 REQUIRED_TAXONOMY = "Men"
 ANY_TAXONOMIES = {"Transfer news", "Contract news"}
 
-def _accept(article: dict) -> bool:
+_TAG_RE = re.compile(r"<[^>]+>")
+
+def _accept(article: dict) -> str | None:
+    """채택 경로 — 'tag' (구단이 이적 태그를 붙임) · 'title' (제목 어휘) · None (비채택).
+
+    구단이 이적 태그를 빠뜨린 발표가 실재해 (2026-08-05 뇌르고르) 제목 갈래를 둔다.
+    두 경로를 구분해 두는 것은 단계 규칙이 태그 채택분에만 official 을 고정하기
+    때문이다 (공홈 수집 개정 스펙 2026-08-12 §3.2 · §3.3)."""
     tax = set(article.get("taxonomies") or [])
-    return (article.get("articleType") == "News"
-            and REQUIRED_TAXONOMY in tax
-            and bool(ANY_TAXONOMIES & tax))
+    if article.get("articleType") != "News" or REQUIRED_TAXONOMY not in tax:
+        return None
+    if ANY_TAXONOMIES & tax:
+        return "tag"
+    if TRANSFER_TITLE_RE.search(article.get("title") or ""):
+        return "title"
+    return None
+
+def _block_text(block: dict) -> str:
+    """TEXT 블록의 본문 — innerText 가 비면 html 에서 태그를 벗겨 쓴다.
+
+    링크 · 볼드가 든 문단은 innerText 가 비고 내용이 html 에만 있어, 첫 문단을
+    볼드로 강조하는 구단 편집 관행 탓에 리드 문장이 매번 빠졌다 (스펙 §1.3)."""
+    inner = (block.get("innerText") or "").strip()
+    if inner:
+        return inner
+    return _TAG_RE.sub("", block.get("html") or "").strip()
 
 def _body_payload(blocks: list[dict]) -> dict:
     """articleBody 블록 배열 → body 텍스트 · 헤더 이미지 · 저자."""
-    texts = [b["innerText"] for b in blocks
-             if b.get("type") == "TEXT" and b.get("innerText")]
+    texts = [t for b in blocks
+             if b.get("type") == "TEXT" and (t := _block_text(b))]
     header = next((b for b in blocks if b.get("type") == "HEADER"), {})
     return {"body": "\n\n".join(texts),
             "image_url": header.get("image"),
@@ -112,7 +136,8 @@ class ArsenalApiAdapter:
                     continue
                 if "Men" in (art.get("taxonomies") or []):
                     men += 1
-                if not _accept(art):
+                accept_path = _accept(art)
+                if accept_path is None:
                     tax = art.get("taxonomies") or []
                     if art.get("articleType") == "News" and "Men" in tax:
                         self.men_news_rejects.append({
@@ -123,6 +148,7 @@ class ArsenalApiAdapter:
                 payload = {"title": art.get("title"),
                            "published": art.get("publicationDate"),
                            "published_precision": "time",
+                           "accept_path": accept_path,
                            **_body_payload(art.get("articleBody") or [])}
                 out.append(RawItem(source_id=self.source_id, source_type="api",
                                    url=url, fetched_at=now, raw_payload=payload))

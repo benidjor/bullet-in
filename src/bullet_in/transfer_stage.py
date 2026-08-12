@@ -60,12 +60,18 @@ def is_displayable(stage: str | None) -> bool:
     return (stage or "") in _LABEL
 
 
-def rule_stage(source_id: str | None) -> tuple[str | None, str | None]:
+def rule_stage(source_id: str | None,
+               accept_path: str | None = None) -> tuple[str | None, str | None]:
     """소스 조건 규칙 (stage, direction) — 방향 축 스펙 §4.1.
     공홈은 stage 만 고정 (방향은 LLM 몫) · 가십은 둘 다 고정 (LLM 완전 제외).
-    official 은 이 규칙 경로에서만 생성된다 (LLM enum 에서 제외 · 반환 시 강등)."""
+    official 은 이 규칙 경로에서만 생성된다 (LLM enum 에서 제외 · 반환 시 강등).
+
+    accept_path 는 공홈 어댑터의 채택 경로다 (공홈 수집 개정 스펙 2026-08-12 §3.3).
+    'title' 이면 고정하지 않는다 — 이 규칙이 실질적으로 뜻하는 것은 "공홈에서 왔다"
+    가 아니라 "구단이 이적 뉴스 태그를 붙였다" 이고, 우리 제목 추측으로 주워 온
+    기사에는 그 근거가 없다. 개정 전 적재분은 값이 없고 전건 태그 채택이었다."""
     if source_id == "arsenal_official":
-        return "official", None
+        return (None, None) if accept_path == "title" else ("official", None)
     if source_id == "bbc_gossip":
         return "rumour", "none"
     return None, None

@@ -123,7 +123,8 @@ def duplicate_suspects(full_name: str, surname: str,
 
 
 def normalize_pairs(raw, source_id: str | None = None,
-                    glossary: dict[str, str] | None = None) -> list[dict]:
+                    glossary: dict[str, str] | None = None,
+                    accept_path: str | None = None) -> list[dict]:
     """모델 출력 players 필드 검증 — 이름 없는 항목 · 비 dict · 중복은 버리고
     stage 는 enum 정규화.
 
@@ -134,6 +135,9 @@ def normalize_pairs(raw, source_id: str | None = None,
     UPDATE 가 이미 공홈 기사의 stage 를 조건 없이 official 로 덮어쓰고 있어
     여기서도 같은 규칙을 적용해 소급분과 이후 적재분이 갈리지 않게 한다.
     판정은 rule_stage() 를 재사용한다 (arsenal_official 문자열의 단일 출처 유지).
+    accept_path 도 함께 넘겨 기사 단위와 같은 답을 받는다 — 제목 어휘로만 채택된
+    공홈 기사는 official 고정에서 빠지므로 (공홈 수집 개정 스펙 2026-08-12 §3.3)
+    여기서 고정하면 한 기사가 목록 카드와 선수 페이지에서 다른 단계를 말하게 된다.
     스키마 폭 (VARCHAR 100/50) 을 넘는 출력과 배열 폭주는 여기서 걸러 DB 예외를 막는다.
 
     glossary 는 표기 교정 사전 (오표기 → 통용) 이며 ko 에 적용한다 (스펙 §8.4).
@@ -143,7 +147,7 @@ def normalize_pairs(raw, source_id: str | None = None,
     지나므로 여기 한 곳이면 된다."""
     if not isinstance(raw, list):
         return []
-    ruled_official = _stage.rule_stage(source_id)[0] == "official"
+    ruled_official = _stage.rule_stage(source_id, accept_path)[0] == "official"
     out, seen = [], set()
     for item in raw[:_MAX_PAIRS]:
         if not isinstance(item, dict):

@@ -46,6 +46,16 @@ def test_rule_stage_returns_stage_direction_pairs():
     assert ts.rule_stage(None) == (None, None)
 
 
+def test_rule_stage_skips_official_for_title_accepted_articles():
+    # 구단이 이적 태그를 붙인 기사에만 오피셜 근거가 있다 — 우리 제목 추측으로 주워 온
+    # 기사는 LLM 분류에 맡긴다 (공홈 수집 개정 스펙 2026-08-12 §3.3).
+    assert ts.rule_stage("arsenal_official", "tag") == ("official", None)
+    assert ts.rule_stage("arsenal_official", "title") == (None, None)
+    # 개정 전 적재분은 값이 없다 — 전건 태그 채택이었으므로 고정을 유지한다
+    assert ts.rule_stage("arsenal_official", None) == ("official", None)
+    assert ts.rule_stage("bbc_gossip", "title") == ("rumour", "none")
+
+
 def test_normalize_direction_keeps_valid_else_none():
     assert ts.normalize_direction("in") == "in"
     assert ts.normalize_direction("out") == "out"

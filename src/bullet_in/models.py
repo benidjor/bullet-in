@@ -34,6 +34,7 @@ class Article(BaseModel):
     journalist: str | None = None
     team: str = "arsenal"
     transfer_stage: str | None = None
+    accept_path: str | None = None   # 공홈 채택 경로 ('tag' · 'title') — 단계 규칙 입력
     published_at: datetime
     published_precision: str | None = None
     fetched_at: datetime | None = None

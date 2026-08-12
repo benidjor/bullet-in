@@ -17,9 +17,16 @@
 창 크기는 어댑터 상수 `WINDOW_HOURS` (48시간) 이고 생성자 인자 `window_hours` 로만 바꾼다.
 개정 전의 `pages` 인자는 없어졌으므로 옛 스니펫을 그대로 쓰면 `TypeError` 가 난다.
 - `freshness_hours: 0` 으로 신선도 감시에서 제외돼 있다 — 이벤트 구동 소스라 유한 임계가 오발화를 낳는다 (스펙 `2026-08-07-alert-f2-unit-attribution-and-observability-design.md` §3.2).
-- 수집 기사는 전건 규칙 경로로 `transfer_stage = official` 태깅된다.
+- **채택 경로는 둘이다** (2026-08-12 개정 · spec `2026-08-12-arsenal-official-collection-revision-design.md`).
+구단이 이적 태그 (`Transfer news` · `Contract news`) 를 붙인 기사는 `tag`, 태그가 없지만 제목에 이적 어휘가 있는 기사는 `title` 로 채택되고, 그 값이 `articles.accept_path` 에 저장된다.
+제목 갈래를 둔 것은 구단이 태그를 빠뜨린 발표가 실재하기 때문이다 (2026-08-05 뇌르고르 에버튼 이적).
+- 태그 채택분만 규칙 경로로 `transfer_stage = official` 태깅된다.
+제목으로 주워 온 기사는 구단이 이적 뉴스라고 표시한 근거가 없어 단계를 LLM 분류에 맡긴다.
   재계약 기사가 official 배지를 받는 것은 **의도된 동작**이다
   — 근거는 분류 런북 알려진 한계 (`docs/runbook/2026-06-30-transfer-stage-classification-ops.md`).
+- 제목 어휘 정규식의 소유는 `quality.TRANSFER_TITLE_RE` 이고 어댑터가 가져다 쓴다.
+수집 조건과 「놓쳤다」 고 부르는 관측 알림 조건을 하나로 묶기 위해서다
+— 그 결과 알림 (`quality.filter_miss_suspects`) 이 잡던 유형은 이제 수집 단계에서 채택되므로 알림은 조용해진다.
 
 ## 2. 라이브 단독 fetch 검증 (어댑터 · config 변경 시 머지 전 필수)
 
@@ -34,7 +41,7 @@ items = asyncio.run(a.fetch())
 print(f"퍼널 {a.coverage}")            # 후보 · Men · accept
 for it in items:
     p = it.raw_payload
-    print(f"- {p['published'][:10]} | {p['title'][:60]} | body {len(p.get('body') or '')}자")
+    print(f"- {p['published'][:10]} | {p['accept_path']:5s} | {p['title'][:55]} | body {len(p.get('body') or '')}자")
 for r in a.men_news_rejects:           # Men + News 인데 비채택 (관측용)
     print(f"  비채택: {r['title'][:60]} | {r['taxonomies']}")
 EOF
@@ -43,6 +50,7 @@ EOF
 판독:
 
 - 이적창 기간인데 accept 가 0이면 §3 실패 모드를 순서대로 점검한다 (비이적창 0건은 정상일 수 있음).
+- 채택 경로 열이 `title` 뿐이면 태그 축이 죽은 것이다 — 구단이 태그 정책을 바꿨는지 §3.2 로 본다.
 - 후보가 0이면 sitemap 축이 깨진 것이고, 후보는 있는데 accept 가 0이면 채택 조건 축을 본다 — 퍼널 세 숫자로 갈린다.
 - 수집건의 body 가 전부 0자면 본문 쿼리 (`GetArticle`) 축만 깨진 것 — 목록 축과 분리 진단.
 - **body 가 0은 아닌데 원문보다 짧으면 §3.4 를 본다** — 길이만 보고 "본문 정상" 으로 넘기지 않는다.
@@ -126,10 +134,30 @@ uv run python -m bullet_in.backfill_arsenal --phase reverify --apply
 → 전 소스를 fetch 해 fmkorea 2h 규칙 등 타 소스 접촉 제약과 충돌한다.
 - 창은 모듈 상수 `REVERIFY_SINCE` 로 정한다 — 그 시각부터 지금까지를 `window_hours` 로 환산해 어댑터에 넘긴다.
 더 과거를 훑으려면 이 상수를 바꾼다 (개정 전의 `pages` 상향은 더 이상 쓰지 않는다).
+창을 넓힌 만큼 sitemap 창 안 기사마다 `GetArticle` 을 부르므로 라이브 접촉이 그대로 늘어난다
+— 2026-08-12 에 2026-08-01 로 좁혔다 (그전 값은 2026-06-01).
+
+### 4.1. 이미 적재된 기사의 본문 갱신 (`--phase rebody`)
+
+파서를 고쳐도 **이미 들어온 기사의 본문은 저절로 바뀌지 않는다.**
+제목과 URL 이 그대로면 `content_hash` 도 같아 표준 경로가 `duplicate` 로 걸러내기 때문이다 (`dedup.classify`).
+`reverify` 를 다시 돌려도 마찬가지다.
+
+```bash
+uv run python -m bullet_in.backfill_arsenal --phase rebody           # dry-run
+uv run python -m bullet_in.backfill_arsenal --phase rebody --apply
+```
+
+- 저장된 URL 로 건별 `GetArticle` 을 부르므로 접촉 횟수가 대상 행 수와 같다 (sitemap 창을 훑지 않는다).
+- **새 본문이 더 길 때만 갱신한다** — 응답 이상이나 파서 회귀로 기존 본문이 줄어드는 것을 막는다.
+dry-run 이 행별로 `기존 → 새 길이` 와 갱신 · 유지 판정을 찍으므로 적용 전에 눈으로 본다.
+- 갱신한 행은 번역 4필드가 초기화돼 다음 정기 회차가 재번역 · 재요약한다.
+그 사이 회차에서 목록은 원문 제목으로 보인다 (재번역 큐 대기 표시와 같은 폴백).
+- **선수 귀속 (`article_players`) 은 따로다** — 본문이 바뀌었으므로 재추출이 필요하면 `reextract_article_players` 를 별도로 돌린다.
 - 적재는 표준 경로를 그대로 탄다 (content_hash → RawStore → to_articles → upsert).
 **단계는 이 경로에서 채우지 않는다** — 여기서 stage 만 넣으면 그 행이 분류 대상에서 빠져 방향이 NULL 로 남고, 단계 필터가 방향 한정이 된 뒤로는 오피셜 배지를 달고도 화면에서 사라진다 (모듈 주석 참조).
-- **채택 조건을 통과하는 기사만 적재된다** — 태그가 빠진 기사는 창을 아무리 넓혀도 들어오지 않는다.
-2026-08-05 뇌르고르 발표가 그 사례이고, 대응은 스펙 `2026-08-12-arsenal-official-collection-revision-design.md` 에 있다.
+- **채택 조건을 통과하는 기사만 적재된다** — 두 갈래 (§1) 중 어느 쪽에도 안 걸리면 창을 아무리 넓혀도 들어오지 않는다.
+2026-08-05 뇌르고르 발표는 태그가 빠져 안 들어왔고, 제목 갈래가 생긴 뒤 이 경로로 회수했다 (2026-08-12).
 - 멱등: mart 의 URL UNIQUE · content_hash dedup 으로 재실행 안전.
   번역 (title_ko NULL) 은 하루 8회 정규 스케줄이 누적 처리 — 백필에서 enrich 를 돌리지 않는다.
 - 실행 기록 (2026-07-19 · **개정 전 `pages` 기반 절차로 수행**): `pages=30` (약 1,500건 목록 = 5/23 도달) · 컷오프 6/1

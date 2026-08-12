@@ -21,6 +21,22 @@ def test_to_articles_assigns_hash_tier_confidence_and_dedups():
     assert arts[0].tier == 0 and arts[0].confidence_score == 1.0
     assert len(arts[0].content_hash) == 64
 
+def test_to_articles_carries_accept_path():
+    # 채택 경로는 분류 패스가 회차를 건너뛰어도 읽어야 해서 기사에 실어 저장한다
+    raw = [RawItem(source_id="arsenal_official", source_type="api",
+                   url="https://x.test/n", fetched_at=datetime.now(timezone.utc),
+                   raw_payload={"title": "Norgaard joins Everton",
+                                "published": "2026-08-05T21:09:00Z",
+                                "accept_path": "title"}),
+           RawItem(source_id="bbc_sport", source_type="html",
+                   url="https://x.test/b", fetched_at=datetime.now(timezone.utc),
+                   raw_payload={"title": "Gossip", "published": "2026-08-05T21:09:00Z"})]
+    sources = {"arsenal_official": {"source_id": "arsenal_official", "tier": 0},
+               "bbc_sport": {"source_id": "bbc_sport", "tier": 1}}
+    arts, _ = to_articles(raw, sources, seen={})
+    assert [a.accept_path for a in arts] == ["title", None]
+
+
 def test_to_articles_drops_x_item_without_journalist():
     raw = [RawItem(source_id="x_afcstuff", source_type="x",
                    url="https://x.test/t1", fetched_at=datetime.now(timezone.utc),

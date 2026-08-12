@@ -97,7 +97,10 @@ def candidate_cliffs(today: dict[str, int], previous: dict[str, int]) -> list[st
 
 
 # 이적성 제목 패턴 — 96h 창 47건 실측에서 오탐 0 (스펙 2026-08-07 §3.3)
-_TRANSFER_TITLE_RE = re.compile(r"\b(joins|signs|transfer|loan)\b", re.IGNORECASE)
+# 공홈 어댑터의 제목 채택 조건도 이 상수를 쓴다 (공홈 수집 개정 스펙 2026-08-12 §3.2)
+# — 수집 조건과 "놓쳤다" 고 부르는 알림 조건을 하나로 묶기 위해서다.
+# 소유를 여기 두는 것은 이 모듈이 표준 라이브러리만 쓰기 때문이다 (반대 방향 참조 금지).
+TRANSFER_TITLE_RE = re.compile(r"\b(joins|signs|transfer|loan)\b", re.IGNORECASE)
 
 
 def filter_miss_suspects(rejects: list[dict], now: datetime,
@@ -119,7 +122,7 @@ def filter_miss_suspects(rejects: list[dict], now: datetime,
             # TypeError: naive datetime (오프셋 없는 published) 를 aware now 와 뺄 때
             # (2026-08-07 재현 — run.py 관측 루프 전멸로 이어짐)
             continue
-        if _TRANSFER_TITLE_RE.search(r.get("title") or ""):
+        if TRANSFER_TITLE_RE.search(r.get("title") or ""):
             out.append(r)
     return out
 

@@ -14,10 +14,12 @@ def _sitemap(entries):
             + "".join(entries) + "</urlset>")
 
 def _gql_article(title, taxonomies, article_type="News",
-                 published="2026-07-23T12:10:38.401Z", body_texts=("본문",)):
+                 published="2026-07-23T12:10:38.401Z", body_texts=("본문",),
+                 text_blocks=None):
+    """text_blocks 를 주면 TEXT 블록을 그대로 쓴다 (innerText 가 빈 실물 응답 재현용)."""
     blocks = [{"type": "HEADER", "image": "https://assets.arsenal.com/h.webp",
                "author": "Arsenal Media"}]
-    blocks += [{"type": "TEXT", "innerText": t} for t in body_texts]
+    blocks += text_blocks or [{"type": "TEXT", "innerText": t} for t in body_texts]
     return {"title": title, "publicationDate": published,
             "taxonomies": taxonomies, "articleType": article_type,
             "articleBody": blocks}
@@ -52,6 +54,40 @@ def test_accept_maps_payload_with_time_precision():
     assert p["body"] == "Tzolis has signed.\n\nWelcome."
     assert p["image_url"] == "https://assets.arsenal.com/h.webp"
     assert p["authors"] == ["Arsenal Media"]
+    assert p["accept_path"] == "tag"
+
+@respx.mock
+def test_body_uses_html_when_innertext_is_empty():
+    # 볼드 · 링크가 든 문단은 실물 응답에서 innerText 가 비고 내용이 html 에만 있다
+    # (2026-08-12 실측 — 리드 문장이 통째로 빠졌다).
+    _mock_backend(_sitemap(FIXED_NOW_ENTRIES), {
+        "axDM85b0dBUW": _gql_article(
+            "Christos Tzolis signs for Arsenal",
+            ["Men", "News", "Transfer news"],
+            text_blocks=[
+                {"type": "TEXT", "tagName": "P", "innerText": "",
+                 "html": '<p><strong id="e1">Tzolis has signed.</strong></p>'},
+                {"type": "TEXT", "tagName": "P", "innerText": "Welcome.",
+                 "html": "<p>Welcome.</p>"},
+                {"type": "TEXT", "tagName": "P", "innerText": "", "html": ""},
+                {"type": "IMAGE", "innerText": "", "html": "<img src='x'>"}])})
+    items = asyncio.run(ArsenalApiAdapter("arsenal_official", window_hours=24 * 365).fetch())
+    assert items[0].raw_payload["body"] == "Tzolis has signed.\n\nWelcome."
+
+@respx.mock
+def test_title_regex_accepts_men_news_without_transfer_tag():
+    # 구단이 이적 태그를 안 붙인 발표 (2026-08-05 뇌르고르) 를 제목으로 줍는다.
+    entries = [_sitemap_entry(f"a-{g}") for g in
+               ["aOK1ok1ok1ok", "aNO3no3no3no"]]
+    _mock_backend(_sitemap(entries), {
+        "aOK1ok1ok1ok": _gql_article("Norgaard joins Everton", ["Men", "News"],
+                                     published="2026-08-05T21:09:44.542Z"),
+        "aNO3no3no3no": _gql_article("Match report", ["Men", "News"])})
+    adapter = ArsenalApiAdapter("arsenal_official", window_hours=24 * 365)
+    items = asyncio.run(adapter.fetch())
+    assert [i.raw_payload["title"] for i in items] == ["Norgaard joins Everton"]
+    assert items[0].raw_payload["accept_path"] == "title"
+    assert [r["title"] for r in adapter.men_news_rejects] == ["Match report"]
 
 @respx.mock
 def test_taxonomy_filter_rules_via_getarticle():
@@ -79,14 +115,14 @@ def test_men_news_rejects_records_unaccepted_men_articles():
     _mock_backend(_sitemap(entries), {
         "aOK1ok1ok1ok": _gql_article("Terms agreed", ["Transfer news", "Men", "News"]),
         "aNO2no2no2no": _gql_article("Women signing", ["Transfer news", "Women", "News"]),
-        "aNO3no3no3no": _gql_article("Norgaard joins Everton", ["Men", "News"],
+        "aNO3no3no3no": _gql_article("Arteta previews Everton", ["Men", "News"],
                                      published="2026-08-05T21:09:44.542Z"),
         "aNO4no4no4no": _gql_article("Transfer video", ["Transfer news", "Men", "Video"],
                                      article_type="Video")})
     adapter = ArsenalApiAdapter("arsenal_official", window_hours=24 * 365)
     items = asyncio.run(adapter.fetch())
     assert [i.raw_payload["title"] for i in items] == ["Terms agreed"]
-    assert [r["title"] for r in adapter.men_news_rejects] == ["Norgaard joins Everton"]
+    assert [r["title"] for r in adapter.men_news_rejects] == ["Arteta previews Everton"]
     r = adapter.men_news_rejects[0]
     assert r["url"].endswith("-aNO3no3no3no")
     assert r["published"] == "2026-08-05T21:09:44.542Z"

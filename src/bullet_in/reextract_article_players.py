@@ -33,8 +33,8 @@ from bullet_in.storage.players import PlayerStore
 log = logging.getLogger(__name__)
 
 _TARGET_SQL = text(
-    "SELECT content_hash, source_id, title_original, title_ko, body_source, "
-    "body_excerpt, body_ko, url FROM articles WHERE EXISTS (SELECT 1 FROM "
+    "SELECT content_hash, source_id, accept_path, title_original, title_ko, "
+    "body_source, body_excerpt, body_ko, url FROM articles WHERE EXISTS (SELECT 1 FROM "
     "article_players ap WHERE ap.content_hash = articles.content_hash) "
     "ORDER BY published_at, id")
 
@@ -80,7 +80,8 @@ def main(argv=None) -> None:
     for h, raw in extracted.items():
         try:
             row = by_hash[h]
-            pairs = roster.normalize_pairs(raw, row.get("source_id"), glossary)
+            pairs = roster.normalize_pairs(raw, row.get("source_id"), glossary,
+                                           row.get("accept_path"))
             with engine.begin() as c:
                 c.execute(text("DELETE FROM article_players WHERE content_hash=:h"),
                           {"h": h})
