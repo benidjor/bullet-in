@@ -19,6 +19,24 @@ def test_extract_article_body_joins_paragraphs_in_article():
     assert "First para." in out and "Second para." in out
     assert "nav" not in out and "cap" not in out
 
+def test_extract_article_body_drops_related_link_cards():
+    """관련기사 카드는 문단 전체가 <a> 안에 있다 (더 선 · BBC 실측 DOM)."""
+    html = ('<article><p>Arsenal are closing in on Bruno Guimaraes.</p>'
+            '<div class="article-readmore"><a href="/sport/1"><div>'
+            '<p>Arsenal star Ethan Nwaneri attracting transfer interest from Dortmund</p>'
+            '</div></a></div>'
+            '<p>The Gunners have followed him for six years.</p></article>')
+    out = extract_article_body(html)
+    assert "Bruno Guimaraes" in out and "six years" in out
+    assert "Nwaneri" not in out
+
+def test_extract_article_body_keeps_inline_links_in_paragraph():
+    """본문 문단 안의 링크는 남긴다 — 버리는 것은 문단을 감싼 링크뿐이다."""
+    html = ('<article><p>Newcastle captain <a href="/p/bruno">Bruno Guimaraes</a> '
+            'is close to a move.</p></article>')
+    out = extract_article_body(html)
+    assert "Bruno Guimaraes" in out and "close to a move" in out
+
 def test_extract_article_body_truncates():
     html = "<article>" + "<p>" + ("가" * 50) + "</p>" * 1 + "</article>"
     assert len(extract_article_body(html, max_chars=10)) == 10

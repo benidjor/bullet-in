@@ -27,7 +27,13 @@ def extract_og_title(html: str) -> str | None:
 
 def extract_article_body(html: str, max_chars: int = 8000) -> str:
     """임의 도메인 기사 본문을 휴리스틱으로 추출: <article>/<main>/<body> 안의
-    <p> 텍스트를 이어붙인다. 알 수 없는 도메인용 폴백 (등록 소스는 body_selector 사용)."""
+    <p> 텍스트를 이어붙인다. 알 수 없는 도메인용 폴백 (등록 소스는 body_selector 사용).
+
+    문단이 통째로 <a> 안에 들어 있으면 관련기사 · 프로모 카드로 보고 버린다.
+    기사 본문은 문단 안에 링크를 두지 문단 자체를 링크로 감싸지 않는데, 관련기사
+    블록은 카드 전체가 링크라 이 구조로 갈린다 (실측 4개 도메인 — 더 선 ·
+    BBC · 데일리 메일 · 스탠더드). 남겨 두면 다른 기사의 제목이 본문에 섞여
+    들어가 그 기사에 없는 선수가 소제목으로 붙는다."""
     soup = BeautifulSoup(html, "html.parser")
     for t in soup(["script", "style", "nav", "aside", "footer", "header",
                    "figure", "figcaption"]):
@@ -35,7 +41,8 @@ def extract_article_body(html: str, max_chars: int = 8000) -> str:
     root = soup.find("article") or soup.find("main") or soup.body
     if root is None:
         return ""
-    paras = [p.get_text(" ", strip=True) for p in root.find_all("p")]
+    paras = [p.get_text(" ", strip=True) for p in root.find_all("p")
+             if not p.find_parent("a")]
     text = "\n\n".join(p for p in paras if p)
     return text[:max_chars]
 
