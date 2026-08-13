@@ -69,9 +69,30 @@ def rule_stage(source_id: str | None,
     accept_path 는 공홈 어댑터의 채택 경로다 (공홈 수집 개정 스펙 2026-08-12 §3.3).
     'title' 이면 고정하지 않는다 — 이 규칙이 실질적으로 뜻하는 것은 "공홈에서 왔다"
     가 아니라 "구단이 이적 뉴스 태그를 붙였다" 이고, 우리 제목 추측으로 주워 온
-    기사에는 그 근거가 없다. 개정 전 적재분은 값이 없고 전건 태그 채택이었다."""
+    기사에는 그 근거가 없다. 개정 전 적재분은 값이 없고 전건 태그 채택이었다.
+    고정에서 빠진 뒤 모델 판정을 받는 경로는 promote_official 이 잇는다."""
     if source_id == "arsenal_official":
         return (None, None) if accept_path == "title" else ("official", None)
     if source_id == "bbc_gossip":
         return "rumour", "none"
     return None, None
+
+
+def promote_official(stage: str | None, source_id: str | None,
+                     accept_path: str | None) -> str | None:
+    """모델이 완료로 읽은 제목 채택 공홈 기사를 official 로 올린다 (개정 2026-08-13).
+
+    rule_stage 가 제목 채택분의 고정을 뺀 것은 태그가 없으면 구단이 이적 발표라고
+    말한 근거도 없기 때문인데, 태그를 빠뜨린 진짜 발표가 실재해 (뇌르고르 에버튼
+    이적) 그 기사가 화면에서 오피셜 표기를 두 자리 잃었다 — 목록 카드의 배지와
+    선수 페이지 머리 배지다 (후자는 render.current_stage 의 첫 갈래가 official
+    귀속 행을 요구하는데 그 행이 안 만들어져서다).
+
+    태그 하나를 근거 둘로 대신한다 — 구단 홈페이지에서 왔고, 모델이 그 기사를 이적
+    완료로 읽었을 때만 올린다. 제목에 이적 어휘만 우연히 든 기사는 완료 판정을 못
+    받으므로 고정 제외가 막으려던 오탐은 그대로 걸러진다. 문턱을 done 하나로 둔 것은
+    합의 · 협상 보도가 발표가 아니기 때문이다."""
+    if (source_id == "arsenal_official" and accept_path == "title"
+            and stage == "done"):
+        return "official"
+    return stage
