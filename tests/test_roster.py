@@ -17,12 +17,13 @@ def test_normalize_pairs_validates_and_normalizes():
 
 def test_normalize_pairs_official_pin_follows_accept_path():
     raw = [{"full_name": "Christian Norgaard", "ko": "뇌르고르", "stage": "done"},
-           {"full_name": "Someone Else", "ko": "누군가", "stage": "official"}]
+           {"full_name": "Someone Else", "ko": "누군가", "stage": "agreed"}]
     tagged = normalize_pairs(raw, "arsenal_official")
     assert [p["stage"] for p in tagged] == ["official", "official"]
-    # 제목 채택분은 기사 단위와 같게 고정에서 빠진다 (모델 판정 · official 응답은 done 강등)
+    # 제목 채택분은 고정에서 빠지되, 모델이 완료로 읽은 선수는 오피셜로 올라간다
+    # (2026-08-13 개정) — 기사 단위와 같은 판정이라 한 기사가 두 화면에서 갈리지 않는다
     titled = normalize_pairs(raw, "arsenal_official", accept_path="title")
-    assert [p["stage"] for p in titled] == ["done", "done"]
+    assert [p["stage"] for p in titled] == ["official", "agreed"]
 
 
 def test_normalize_pairs_tolerates_non_list():

@@ -56,6 +56,21 @@ def test_rule_stage_skips_official_for_title_accepted_articles():
     assert ts.rule_stage("bbc_gossip", "title") == ("rumour", "none")
 
 
+def test_promote_official_lifts_title_accepted_completion():
+    # 태그 없는 진짜 발표를 되찾는다 (2026-08-13 개정) — 제목으로 주워 온 공홈 기사라도
+    # 모델이 이적 완료로 읽으면 근거가 둘이 되므로 오피셜로 올린다.
+    assert ts.promote_official("done", "arsenal_official", "title") == "official"
+    # 완료가 아닌 판정은 그대로 둔다 — 합의 · 관심 보도는 구단 발표가 아니다
+    assert ts.promote_official("agreed", "arsenal_official", "title") == "agreed"
+    assert ts.promote_official("rumour", "arsenal_official", "title") == "rumour"
+    assert ts.promote_official(None, "arsenal_official", "title") is None
+    # 태그 채택분은 rule_stage 가 이미 고정하므로 이 경로를 지나지 않는다
+    assert ts.promote_official("done", "arsenal_official", "tag") == "done"
+    assert ts.promote_official("done", "arsenal_official", None) == "done"
+    # 타 소스의 완료 보도는 구단 발표가 아니다
+    assert ts.promote_official("done", "bbc_sport", "title") == "done"
+
+
 def test_normalize_direction_keeps_valid_else_none():
     assert ts.normalize_direction("in") == "in"
     assert ts.normalize_direction("out") == "out"

@@ -310,6 +310,7 @@ async def main(concurrency: int):
 
     # 분류 패스 (방향 축 스펙 §4): 규칙 경로 2형태 — 가십은 stage · direction 둘 다
     # 고정 (LLM 제외), 공홈은 stage 만 고정하고 방향은 LLM 배치에서 받는다 (stage 응답은 버림)
+    # 고정에서 빠진 제목 채택 공홈 기사는 모델 답을 받은 뒤 promote_official 이 다시 본다.
     llm_rows = []
     stage_ruled: dict[str, str] = {}
     for r in mart.rows_missing_stage():
@@ -321,8 +322,12 @@ async def main(concurrency: int):
         if stage_fixed:
             stage_ruled[r["content_hash"]] = stage_fixed
         llm_rows.append(r)
+    llm_by_hash = {r["content_hash"]: r for r in llm_rows}
     for h, (stage, direction) in classify_stage_rows(llm_rows, client, GEMINI_MODEL).items():
-        mart.set_stage(h, stage_ruled.get(h, stage), direction)
+        row = llm_by_hash.get(h, {})
+        mart.set_stage(h, transfer_stage.promote_official(
+            stage_ruled.get(h, stage), row.get("source_id"),
+            row.get("accept_path")), direction)
 
     # 말투 백필: 요약에 존댓말이 남은 행을 회차 상한 내에서 재생성 (멱등 — 검출 기반 재선별)
     tone_limit = int(cfg.get("tone_backfill_limit", 20))

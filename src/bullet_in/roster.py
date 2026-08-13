@@ -217,6 +217,8 @@ def normalize_pairs(raw, source_id: str | None = None,
         elif stage == "official":
             # 강등 목적지는 기사 단위 경로와 동일하게 done (2026-08-10 스펙 §4)
             stage = "done"
+        # 제목 채택분의 완료 판정은 기사 단위와 같게 올린다 (개정 2026-08-13)
+        stage = _stage.promote_official(stage, source_id, accept_path)
         ko = (item.get("ko") or "").strip() or None
         if ko:
             for wrong, right in (glossary or {}).items():
