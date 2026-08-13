@@ -83,8 +83,7 @@ class 이름 (`related|promo|readmore`) 으로 거르는 안은 채택하지 않
 호출 86회 · 약 ₩86 · 정기 회차 사이 구간에서 실행했다.
 
 - 본문 교체 43건 (건너뜀 0) · 번역 4필드 초기화 · 곧바로 enrich 전용 패스로 수렴 (잔존 0).
-- 재추출 42건 — 대상을 좁힌 방법은 **state 파일에 대상이 아닌 해시를 미리 채우는 것**이다.
-`reextract_article_players` 는 연결 기사 전건 (659) 이 대상이라 그대로 돌리면 범위를 넘는다.
+- 재추출 42건 — `reextract_article_players` 는 연결 기사 전건 (659) 이 대상이라 state 파일로 범위를 좁혔다 (방법은 `2026-08-11-premerge-screen-check-with-prod-copy.md` §4).
 - 귀속이 없던 1건은 `backfill_article_players` 로 같은 방식을 썼다.
 
 **결과 (백업 사본과 같은 잣대로 전후 대조)**
