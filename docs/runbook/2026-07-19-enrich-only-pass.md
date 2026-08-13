@@ -45,6 +45,15 @@ fmkorea 도 세어야 한다 (2026-07-30 개정).
 마지막 분류 블록도 run.py 의 현행 분류 패스와 동일한 형태를 유지한다 (규칙 경로 2형태 · 방향 축 스펙 §4).
 **`rule_stage` 에 채택 경로를 함께 넘긴다** (2026-08-12 개정) — 빠뜨리면 공홈에서 제목으로 주워 온 기사까지 `official` 로 굳어, 구단이 이적 뉴스라고 표시하지 않은 기사에 오피셜 배지가 붙는다.
 
+**생성 함수에 넘기는 재료도 run.py 와 같아야 한다 (2026-08-13 개정).**
+확정 링크 명단 (`confirmed_link_roster`) 은 아스날이 이름으로 안 나오는 기사를 판단하는 근거이고, 이름 사전 (`gate_name_map`) 과 구단 사전은 재작성 게이트가 지어낸 인명 · 구단을 잡는 축이다.
+빠뜨리면 같은 기사가 회차 경로와 이 패스에서 다르게 판정된다
+— 명단 없이 번역된 행은 아스날 관련 기사인데도 무관 글로 읽히고, 사전 없이 재작성된 행은 인명 게이트가 꺼진 채 통과한다.
+
+**이 패스는 선수 귀속 (`article_players`) 을 만들지 않는다.**
+회차 경로는 번역 직후 같은 블록에서 추출 쌍을 저장하는데 이 스니펫에는 그 단계가 없고, 한 번 번역된 행은 `title_ko IS NULL` 조건에서 빠져 다음 회차가 다시 만지지 않는다.
+그래서 이 패스로 수렴시킨 행의 귀속은 재추출 (`reextract_article_players`) 로 따로 채워야 한다.
+
 ```bash
 uv run python - <<'EOF'
 import os, yaml
@@ -66,8 +75,10 @@ def _cfg(path, key):
 mart = MartStore(create_engine(os.environ["MARIADB_URL"]))
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 glossary = _cfg("config/glossary.yaml", "replacements")
-name_map = PlayerStore(mart.engine).gate_name_map()
+pstore = PlayerStore(mart.engine)
+name_map = pstore.gate_name_map()
 club_map = _cfg("config/club_map.yaml", "clubs")
+roster_material = pstore.confirmed_link_roster()
 for attempt in range(3):
     missing = mart.rows_missing_translation()
     if not missing:
@@ -76,8 +87,11 @@ for attempt in range(3):
     generatable, title_only = partition_generatable(missing)
     rewrite_rows, translate_rows = partition_by_body_level(generatable)
     results = {}
-    results.update(enrich_rows(translate_rows, client, GEMINI_MODEL, mode="translate"))
-    rewritten, gate_reports = rewrite_rows_guarded(rewrite_rows, client, GEMINI_MODEL)
+    results.update(enrich_rows(translate_rows, client, GEMINI_MODEL,
+                               mode="translate", roster=roster_material))
+    rewritten, gate_reports = rewrite_rows_guarded(
+        rewrite_rows, client, GEMINI_MODEL, name_map=name_map, club_map=club_map,
+        roster=roster_material)
     results.update(rewritten)
     results.update(title_only_rows(title_only, client, GEMINI_MODEL))
     for h, v in results.items():
