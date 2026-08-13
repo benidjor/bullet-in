@@ -69,7 +69,7 @@
 이번에 병렬 세션이 같은 사본에서 내 변경이 있는 판과 없는 판을 나란히 돌려 이 델타를 재현했다.
 **절대값이 내 검증과 달라도 델타가 같으면 통과다.**
 
-한 배포에 두 세션의 변경이 함께 실려 이미 섞였을 때 각자의 몫을 가르는 절차는 별도 런북에 있다 (병렬 세션 소유 · 2026-08-13).
+한 배포에 두 세션의 변경이 함께 실려 이미 섞였을 때 각자의 몫을 가르는 절차는 `2026-08-13-separating-two-changes-in-one-render.md` 에 있다.
 
 ## 5. 건수를 넘길 때는 어느 집합인지 함께 적는다
 
@@ -119,3 +119,4 @@ cd <워크트리> && MARIADB_URL=... uv run python <스크립트>
 - 배포 후 CDN 캐시 함정 — 위 문서 §3
 - 이번 회차의 설계와 실측 — `docs/superpowers/specs/2026-08-13-player-display-rules-design.md`
 - 예측이 빗나간 경위 — `docs/troubleshooting/2026-08-13-prediction-missed-because-the-input-was-gone.md`
+- 한 배포에 섞인 두 변경 가르기 — `2026-08-13-separating-two-changes-in-one-render.md`
