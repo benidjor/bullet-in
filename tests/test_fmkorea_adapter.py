@@ -1105,3 +1105,9 @@ def test_korean_byline_does_not_swallow_a_comma_inside_the_article_text():
 
 def test_korean_byline_ignored_when_there_is_no_by_marker():
     assert extract_body_authors("데이비드 온스테인 기자가 전한 소식이다.") == []
+
+
+def test_bracket_outlet_uses_the_registered_canonical_name_for_goal():
+    # 말머리가 접는 이름이 소스 설정 · 등재 정식명과 달라 사이드바가 둘로 갈렸다
+    # (직수집분 176건은 'Goal.com' · 전재글 1건은 'Goal')
+    assert parse_bracket("[골닷컴] 아스날 소식")[0] == "Goal.com"
