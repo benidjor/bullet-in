@@ -422,6 +422,8 @@ VM 저널 14일치 기준으로 `매칭 실패` 345줄 · `카드 없음` 171줄
 **l-② 구현 (PR #282) 과 대 본 결과 겹치는 줄은 사실상 없다.**
 
 - `SERVING_SELECT_SQL` — l-② 는 `journalist` 뒤에 `authors_json` 을 얹는 한 줄만 바꿨다 · 같은 줄에 컬럼을 하나씩 얹는 것이라 해소가 자명하다.
+**착수 시점의 나열은 `outlet,journalist,authors_json,team` 순이다** (PR #282 머지 뒤 기준) · 앞뒤 줄과 `linked_players` 를 만드는 `CASE` 블록은 안 바뀐다.
+`origin_url` 은 그 줄 안 어디에 놓아도 되므로 머지 순서만 맞추면 재작성이 없다.
 - `detail.html.j2` — l-② 는 15행 (기자 칸) 과 55행 (`.ometa`) 이고 **56행의 「원문 기사 보기」 링크는 안 건드렸다.**
 `origin_url` 이 56행의 `href` 로만 간다면 겹치는 줄이 없다 · `.ometa` 안에 트윗 표기를 넣기로 하면 그때만 55행을 함께 본다.
 
