@@ -14,7 +14,10 @@ log = logging.getLogger(__name__)
 def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None) -> list:
     out = []
     for s in cfg["sources"]:
-        if not s.get("enabled", True):
+        # enabled 는 소스를 통째로 없앤다 — load_sources 도 걸러서 언론사 이름 · 공신력 ·
+        # 본문 서빙 범위가 함께 사라지므로, 이미 적재된 기사가 있으면 그 화면이 깨진다.
+        # collect 는 수집만 멈추고 표시 설정을 남긴다 (읽는 쪽은 이 키를 안 본다).
+        if not s.get("enabled", True) or not s.get("collect", True):
             continue
         c = s.get("config", {})
         kind, sid = s["adapter"], s["source_id"]

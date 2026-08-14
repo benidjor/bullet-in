@@ -30,7 +30,7 @@ outlets:
   - {name: BBC,             tier: 1.5, aliases: ["BBC"]}   # 비전담 기준선 — 전담 (Mokbel) 은 기자 tier 1 로 승격
   - {name: The Guardian,    tier: 3,   aliases: ["가디언", "The Guardian"]}
   - {name: Sky Sports,      tier: 2,   aliases: ["스카이 스포츠", "스카이", "Sky Sports"]}   # 비전담 기준선 — 전담 (Sheth) 은 기자 tier 1.5 로 승격
-  - {name: Goal.com,        tier: 4,   aliases: ["골닷컴", "Goal"]}
+  - {name: Goal.com,        tier: 4,   aliases: ["골닷컴", "Goal", "Goal.com"]}   # 정식명도 별칭에 — outlets 는 aliases 만 조회 키가 된다
   - {name: ESPN,            tier: 2,   aliases: ["ESPN"]}
   - {name: The Times,       tier: 2,   aliases: ["더 타임스", "타임스", "타임즈", "The Times"]}
   - {name: Evening Standard,tier: 3,   aliases: ["이브닝 스탠다드", "Evening Standard"]}

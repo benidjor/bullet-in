@@ -53,6 +53,14 @@ sources:
     outlet: Goal.com
     medium: newspaper
     adapter: html
+    # 수집 중단 (2026-08-15) — 공신력 최하이고 주역 귀속 쌍 279 중 202 (72%) 가 같은
+    # 선수 · 하루 차이로 다른 소스 기사와 겹친다. enabled 를 끄면 안 된다: load_sources
+    # 도 걸러서 언론사 이름 · 공신력 · serving 범위가 사라져 이미 적재된 171건이
+    # "goal" 칩 · 미등재 · 본문 발췌로 깨진다 (실측 481장).
+    collect: false
+    # collect 는 감시 루프에서 안 걸러지므로 (load_sources 가 이 키를 안 본다) 수집이
+    # 멈춘 소스가 신선도 판정에 남아 48시간마다 영원히 알린다 — 감시에서 뺀다.
+    freshness_hours: 0
     config:
       # 2026-07 팀 슬러그 갱신 · 정적 서빙 확인 → playwright 에서 전환 (spec §4.1)
       list_url: "https://www.goal.com/en/team/arsenal/news/4dsgumo7d4zupm2ugsvm4zm4d"

@@ -114,3 +114,25 @@ def test_live_config_has_relevance_terms_triple():
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
     c = next(s for s in cfg["sources"] if s["source_id"] == "fmkorea")["config"]
     assert set(c["relevance_terms"]) == {"아스날", "아스널", "arsenal"}
+
+
+def test_factory_skips_sources_marked_not_to_collect():
+    # 수집만 멈추고 표시 설정은 남긴다 — enabled 를 끄면 언론사 이름 · 공신력 ·
+    # 본문 서빙 범위가 함께 사라져 이미 적재된 기사가 깨진다.
+    cfg = {"sources": [
+        {"source_id": "keep", "adapter": "rss", "config": {"feed_url": "a"}},
+        {"source_id": "stopped", "adapter": "rss", "collect": False,
+         "config": {"feed_url": "b"}}]}
+    assert [a.source_id for a in build_adapters(cfg)] == ["keep"]
+
+
+def test_sources_marked_not_to_collect_stay_in_the_display_config():
+    # load_sources 는 collect 를 안 본다 — 그래서 저장된 기사의 표시가 유지된다
+    from bullet_in.score import load_sources
+    import tempfile, pathlib, yaml
+    with tempfile.TemporaryDirectory() as d:
+        p = pathlib.Path(d, "s.yaml")
+        p.write_text(yaml.safe_dump({"sources": [
+            {"source_id": "stopped", "adapter": "rss", "collect": False,
+             "outlet": "Goal.com", "serving": "full", "tier": 4}]}))
+        assert "stopped" in load_sources(p)
