@@ -46,6 +46,16 @@ print(len(entries), sum(e["count"] for e in entries),
 
 **사본은 하나만 쓴다** — 두 판본에 같은 데이터를 먹여야 차이가 코드 몫만 남는다.
 
+**`relevance_terms` 는 소스 최상위가 아니라 `config` 안에 있다** (2026-08-14 추가).
+`sources.yaml` 의 fmkorea 항목에서 최상위로 읽으면 빈 목록이 되는데, 그러면 오류 없이 서빙 신호 ① · ② 가 전부 실패해 **fmkorea 제외가 15 가 아니라 49 로** 나온다.
+그 상태로 재면 서빙 행이 693 이 아니라 659 가 되고 사이드바 계수가 통째로 어긋난다.
+
+```python
+terms = fm_cfg.get("config", {}).get("relevance_terms", [])   # enrich 전용 런북 §4 와 같은 자리
+```
+
+옮겨 적지 말고 그 런북의 스니펫을 그대로 쓰는 것이 낫다 (`docs/troubleshooting/2026-07-19-runbook-snippet-logic-drift.md`).
+
 ## 3. 판독
 
 ```
