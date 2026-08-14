@@ -1007,3 +1007,101 @@ def test_fmkorea_search_failure_codes_reset_between_fetches():
     assert dict(a.search_failure_codes) == {430: 1}
     asyncio.run(a.fetch())
     assert dict(a.search_failure_codes) == {430: 1}   # 누적되지 않는다
+
+
+# --- 본문 바이라인의 저자 전원 (공저 다중 귀속 스펙 §2.2 ②) ---
+
+from bullet_in.adapters.fmkorea import extract_body_authors
+
+
+def test_extract_body_authors_returns_both_coauthors():
+    # 트랙 발단 기사 8651f026 — 온스테인 단독 · McNicholas 단독 둘 다 도달해야 한다
+    body = "By David Ornstein and James McNicholas 아스날이 협상 중이다."
+    assert extract_body_authors(body) == ["David Ornstein", "James McNicholas"]
+
+
+def test_extract_body_authors_returns_three_on_comma_list():
+    body = "By Will Magee, Niall McVeigh and Billy Munday 아스날이"
+    assert extract_body_authors(body) == ["Will Magee", "Niall McVeigh", "Billy Munday"]
+
+
+def test_extract_body_authors_drops_job_title_entry():
+    # 실측 3건 — 두 번째 자리가 사람이 아니라 직함이다
+    body = "By KIERAN GILL, MAIL SPORT REPORTER 아스날이"
+    assert extract_body_authors(body) == ["KIERAN GILL"]
+
+
+def test_extract_body_authors_stops_at_abbreviated_month():
+    # 운영 6건 — 축약형 월이 이름 토큰으로 통과해 'David Ornstein Aug' 로 저장됐다
+    body = "By David Ornstein Aug. 2, 2026 아스날이"
+    assert extract_body_authors(body) == ["David Ornstein"]
+
+
+def test_extract_body_authors_keeps_name_starting_like_a_month():
+    # 함정 — 축약형을 접두로 막으면 Mario 가 Mar + io 로 걸려 이름이 통째로 사라진다
+    body = "By Mario Cortegana Aug 3, 2026 아스날이"
+    assert extract_body_authors(body) == ["Mario Cortegana"]
+
+
+def test_extract_body_authors_returns_empty_without_byline():
+    assert extract_body_authors("아스날이 비니시우스 영입을 추진한다.") == []
+
+
+def test_extract_body_journalist_is_first_of_extracted_authors():
+    body = "By David Ornstein and James McNicholas 아스날이"
+    assert extract_body_journalist(body) == "David Ornstein"
+
+
+PAY_COAUTHOR_BODY = (
+    '<div class="xe_content"><p>비니시우스는 레알에서 8시즌 활약했다 '
+    'By David Ornstein and James McNicholas June 19, 2026 3:19 am 아스날이 영입을 추진한다.</p>'
+    '<p>https://www.nytimes.com/athletic/9/b</p></div>')
+
+
+@respx.mock
+def test_fmkorea_carries_all_body_authors():
+    respx.get("https://www.nytimes.com/athletic/9/b").mock(return_value=httpx.Response(200, text=""))
+    items = asyncio.run(_one_post(PAY_COAUTHOR_BODY).fetch())
+    assert items[0].raw_payload["authors"] == ["David Ornstein", "James McNicholas"]
+    assert items[0].raw_payload["journalist"] == "David Ornstein"
+
+
+@respx.mock
+def test_fmkorea_bracket_journalist_leads_the_author_list():
+    # 말머리 값이 대표라는 기존 규칙을 유지하되 공저자는 목록에 남긴다
+    respx.get("https://www.nytimes.com/athletic/9/b").mock(return_value=httpx.Response(200, text=""))
+    items = asyncio.run(_one_post(PAY_COAUTHOR_BODY, title="[디 애슬레틱 - 온스테인] 아스날").fetch())
+    assert items[0].raw_payload["journalist"] == "온스테인"
+    assert items[0].raw_payload["authors"] == [
+        "온스테인", "David Ornstein", "James McNicholas"]
+
+
+# --- 한글로 옮겨진 바이라인 (2026-08-14 · 사용자 실측으로 발견) ---
+
+def test_extract_body_authors_reads_a_korean_byline():
+    body = "By 데이비드 온스테인 얀 디오망데는 이번 여름 RB 라이프치히를 떠나게 된다면"
+    assert extract_body_authors(body) == ["데이비드 온스테인"]
+
+
+def test_extract_body_authors_reads_every_korean_coauthor():
+    body = ("By 제임스 맥니콜라스, 데이비드 온스테인, 조지 콜킨, 크리스 워 "
+            "브루노 기마랑이스가 마침내 아스날 선수가 되었습니다.")
+    assert extract_body_authors(body) == [
+        "제임스 맥니콜라스", "데이비드 온스테인", "조지 콜킨", "크리스 워"]
+
+
+def test_korean_byline_stops_where_the_article_text_starts():
+    # 마지막 이름에는 본문이 붙어 있다 — 앞 두 어절까지가 이름이다
+    body = "By 데이비드 온스테인, 마리오 코르테가나 비니시우스 주니오르는 레알 마드리드와의"
+    assert extract_body_authors(body) == ["데이비드 온스테인", "마리오 코르테가나"]
+
+
+def test_korean_byline_does_not_swallow_a_comma_inside_the_article_text():
+    # 본문에도 쉼표가 있어서 오른쪽 끝을 경계로 쓰면 문장이 통째로 들어온다
+    body = ("By 데이비드 온스테인 크리센시오 서머빌이 웨스트햄을 떠나 알 힐랄에 합류하는 "
+            "4년 계약을 체결했으며, 이적료는 7,000만 유로다.")
+    assert extract_body_authors(body) == ["데이비드 온스테인"]
+
+
+def test_korean_byline_ignored_when_there_is_no_by_marker():
+    assert extract_body_authors("데이비드 온스테인 기자가 전한 소식이다.") == []

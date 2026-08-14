@@ -198,3 +198,18 @@ def test_authors_splits_pair_on_ampersand():
             '{"@type":"NewsArticle",'
             '"author":{"@type":"Person","name":"Keith Downie &amp; Dharmesh Sheth"}}</script>')
     assert extract_authors(html) == ["Keith Downie", "Dharmesh Sheth"]
+
+def test_authors_splits_pair_on_the_word_and():
+    # Sky Sports 실측 — 'Lyall Thomas and Dharmesh Sheth' 가 한 사람으로 남아
+    # 공저 기사가 두 번째 저자의 기자 필터에서 안 나온다 (공저 귀속 스펙 §2.2 ①)
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle",'
+            '"author":{"@type":"Person","name":"Lyall Thomas and Dharmesh Sheth"}}</script>')
+    assert extract_authors(html) == ["Lyall Thomas", "Dharmesh Sheth"]
+
+def test_authors_keeps_name_containing_and_inside_a_word():
+    # 'and' 를 낱말 경계 없이 자르면 Alexander 같은 이름이 쪼개진다
+    html = ('<script type="application/ld+json">'
+            '{"@type":"NewsArticle",'
+            '"author":{"@type":"Person","name":"Alexander Netherton"}}</script>')
+    assert extract_authors(html) == ["Alexander Netherton"]

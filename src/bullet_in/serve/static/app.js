@@ -1,5 +1,6 @@
 // Bullet-in 서빙 인터랙션 — 필터 · 정렬 · 공신력 연동 · 테마.
 // DOM 계약: a.item[data-hash][data-stage][data-dir][data-tier][data-outlet][data-journalist][data-published][data-confidence][data-text]
+//   data-journalist 는 공저 저자 전원을 '|' 로 이은 다중 값이다 (단독 기사면 값 하나).
 //           사이드바 옵션 input[data-group][data-value][data-tier]
 // URL 계약: ?outlet=&journalist=&tier=&stage=&bucket=other&sort=confidence|views&q=  (다중 선택은 키 반복)
 // 결합 규칙 (§8): (소스 OR 기자) AND 공신력 AND 영입 단계 AND 검색어
@@ -234,7 +235,10 @@ function applyFilters() {
   const match = (d) => {
     const okText = !q || (d.text || '').includes(q);
     const okSrc = !srcActive
-      || outlets.includes(d.outlet) || journalists.includes(d.journalist);
+      || outlets.includes(d.outlet)
+      // data-journalist 는 공저 기사의 저자 전원이라 '|' 로 이어져 있다 — 하나라도
+      // 걸리면 참 (render.article_journalists 와 같은 계약).
+      || (d.journalist || '').split('|').some(j => journalists.includes(j));
     const okTier = tiers.length === 0 || tiers.includes(d.tier);
     // 링크 선수 배지 (data-ctx) 가 붙은 글은 기타 숨김 규칙에서 뺀다 — 배지가
     // 존재 이유를 설명하는 글이라, 서버 렌더처럼 여기서도 일반 카드로 다룬다.

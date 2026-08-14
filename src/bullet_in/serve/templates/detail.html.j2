@@ -12,7 +12,7 @@
 
   <dl class="metagrid">
     <div><dt>언론사</dt><dd>{{ a._outlet }}</dd></div>
-    {% if a.journalist %}<div><dt>기자</dt><dd>{{ a._journalist or a.journalist }}</dd></div>{% endif %}
+    {% if a._authors %}<div><dt>기자</dt><dd>{{ a._authors | join(' · ') }}</dd></div>{% endif %}
     {% if a._reader_tier %}<div><dt>공신력</dt><dd>{{ a._reader_tier|replace('공신력 ', '') }}</dd></div>{% endif %}
     <div><dt>발행 날짜</dt><dd>{{ a._datetime or a._date or a._when }}</dd></div>
   </dl>
@@ -52,7 +52,7 @@
   {% endif %}
 
   <aside class="origin">
-    <div class="ometa"><span>{{ a._outlet }}</span>{% if a.journalist %}<span>{{ a.journalist }}</span>{% endif %}{% if a._date %}<span>{{ a._date }}</span>{% endif %}</div>
+    <div class="ometa"><span>{{ a._outlet }}</span>{% if a._more_authors %}<span>{{ a._authors[0] }} 외 {{ a._more_authors }}명</span>{% elif a.journalist %}<span>{{ a.journalist }}</span>{% endif %}{% if a._date %}<span>{{ a._date }}</span>{% endif %}</div>
     <a class="obtn" href="{{ a.url }}" target="_blank" rel="noopener">원문 기사 보기 ↗</a>
   </aside>
 </article>

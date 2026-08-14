@@ -11,9 +11,10 @@ from bullet_in.fidelity import RETENTION_THRESHOLD
 _SCHEMA = Path(__file__).with_name("schema.sql")
 
 def _article_row(a: Article) -> dict:
-    """Article → upsert 파라미터 행. images 는 JSON 직렬화, 빈 목록은 NULL."""
-    row = a.model_dump(exclude={"images"})
+    """Article → upsert 파라미터 행. images · authors 는 JSON 직렬화, 빈 목록은 NULL."""
+    row = a.model_dump(exclude={"images", "authors"})
     row["images_json"] = json.dumps(a.images) if a.images else None
+    row["authors_json"] = json.dumps(a.authors, ensure_ascii=False) if a.authors else None
     return row
 
 class MartStore:
@@ -33,12 +34,12 @@ class MartStore:
           INSERT INTO articles
             (content_hash,url,source_id,author,tier,confidence_score,
              title_original,title_ko,summary_ko,body_excerpt,
-             summary3_ko,body_ko,body_source,body_level,image_url,images_json,outlet,journalist,team,
+             summary3_ko,body_ko,body_source,body_level,image_url,images_json,outlet,journalist,authors_json,team,
              transfer_stage,accept_path,
              published_at,published_precision,fetched_at,revision)
           VALUES (:content_hash,:url,:source_id,:author,:tier,:confidence_score,
              :title_original,:title_ko,:summary_ko,:body_excerpt,
-             :summary3_ko,:body_ko,:body_source,:body_level,:image_url,:images_json,:outlet,:journalist,:team,
+             :summary3_ko,:body_ko,:body_source,:body_level,:image_url,:images_json,:outlet,:journalist,:authors_json,:team,
              :transfer_stage,:accept_path,
              :published_at,:published_precision,:fetched_at,:revision)
           ON DUPLICATE KEY UPDATE
@@ -55,6 +56,7 @@ class MartStore:
              images_json=VALUES(images_json),
              outlet=VALUES(outlet),
              journalist=VALUES(journalist),
+             authors_json=VALUES(authors_json),
              team=VALUES(team),
              accept_path=VALUES(accept_path),
              published_at=VALUES(published_at),

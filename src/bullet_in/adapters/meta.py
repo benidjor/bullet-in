@@ -124,16 +124,19 @@ def _walk_authors(node) -> list[str]:
             found += _walk_authors(v)
     return found
 
+_AUTHOR_SPLIT_RE = re.compile(r"\s*[,&]\s*|\s+and\s+")
+
 def _normalize_authors(names: list[str]) -> list[str]:
     """저자 목록을 정규화: 빈 문자열 · URL 형태 배제 · 중복 제거 · 순서 보존.
-    HTML 엔티티를 풀고, 결합 저자 (쉼표 · & 구분) 를 개별 저자로 분리한다."""
+    HTML 엔티티를 풀고, 결합 저자 (쉼표 · & · and 구분) 를 개별 저자로 분리한다."""
     out: list[str] = []
     for n in names:
         n = (n or "").strip()
         # HTML 엔티티 (&amp; · &#39; 등) 을 풀기
         n = _html.unescape(n)
-        # Sky Sports: 영어 나열 관례 'A, B & C' 로 공저 결합 (쉼표 · & 모두 구분자)
-        for part in re.split(r"\s*[,&]\s*", n):
+        # Sky Sports: 영어 나열 관례 'A, B & C' · 'A and B' 로 공저 결합.
+        # and 는 앞뒤 공백을 요구한다 — 낱말 안의 and (Alexander) 를 자르지 않기 위함.
+        for part in _AUTHOR_SPLIT_RE.split(n):
             part = part.strip()
             # URL 형태 (article:author 의 SNS 링크 등) 는 저자명이 아니다
             if not part or part.lower().startswith(("http://", "https://")):
@@ -141,6 +144,11 @@ def _normalize_authors(names: list[str]) -> list[str]:
             if part not in out:
                 out.append(part)
     return out
+
+def split_authors(value: str) -> list[str]:
+    """결합 저자 문자열 하나를 개별 저자로 쪼갠다.
+    저장된 합성 journalist ('잭 로서, 사이먼 콜링스') 를 소급할 때도 쓴다."""
+    return _normalize_authors([value])
 
 def extract_authors(html: str) -> list[str]:
     """기사 저자명을 JSON-LD → meta[name=author] 순으로 추출한다.

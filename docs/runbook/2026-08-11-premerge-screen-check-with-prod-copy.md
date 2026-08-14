@@ -78,16 +78,25 @@ cd site_new && python3 -m http.server 8899 --bind 127.0.0.1
 ```python
 import pathlib, re
 base, new = pathlib.Path("site_base"), pathlib.Path("site_new")
-strip = lambda s: re.sub(r'<label class="opt">.*?</label>', '', s, flags=re.S)
+def strip(s):
+    s = re.sub(r'<label class="opt">.*?</label>', '', s, flags=re.S)
+    return re.sub(r"\s+", " ", s)      # 지운 자리에 남는 공백까지 눌러야 한다 (아래)
 diff = [str(f.relative_to(new)) for f in sorted(new.rglob("*.html"))
         if strip((base / f.relative_to(new)).read_text(encoding="utf-8"))
         != strip(f.read_text(encoding="utf-8"))]
 print(len(diff), diff)
 ```
 
+- **지우고 나서 공백을 눌러야 한다** (2026-08-14 추가).
+블록만 들어내면 항목 개수가 다른 만큼 **빈 줄 개수가 달라져** 그 차이로 파일이 걸린다.
+지우는 대상이 이번처럼 개수가 바뀌는 목록 (기자 항목) 이면 특히 그렇다.
+공저자 귀속 회차에서 실제 변경 61건이 이 공백만으로 **684건**으로 나왔고, 눌러 주니 61 이 됐다.
+차이 목록을 열어 보면 남은 것이 빈 줄뿐이라 바로 갈린다.
 - **지운 계수는 따로 센다** — 그 숫자도 확인 대상이다 (2026-08-13 에는 오피셜 7 → 8 · 이적 완료 39 → 38 로 합이 보존되는 것이 판정 근거였다).
 - 렌더 시각 같은 것을 지우려 들면 안 된다 — 이 산출물에는 매번 달라지는 값이 없다.
 전건 변경의 원인은 노이즈가 아니라 **실제로 전 페이지에 들어 있는 값**이다.
+- **새 컬럼을 넣는 변경이면 두 벌이 아니라 세 벌을 렌더한다** — 배포 구간과 소급 구간을 갈라야 한다.
+절차와 실패 사례는 `docs/troubleshooting/2026-08-14-transition-rule-does-not-cover-the-template.md` §4 에 있다.
 
 ## 3. 배포 후 확인의 함정 — CDN 캐시
 

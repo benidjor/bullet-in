@@ -7,6 +7,7 @@ from bullet_in.canonical import canonical_url, content_hash
 from bullet_in.dedup import classify
 from bullet_in.credibility import resolve_tier, norm_alias, Registry
 from bullet_in.score import confidence_from_tier
+from bullet_in.adapters.meta import split_authors
 
 _WOMEN_RE = re.compile(r"women|wsl|여자", re.I)
 
@@ -54,6 +55,22 @@ def select_journalist(item, src: dict, registry: "Registry | None") -> str | Non
             if norm_alias(a) in registry.journalists:
                 return a
     return authors[0] if authors else None
+
+def select_authors(item, journalist: str | None) -> list[str]:
+    """항목의 저자 전원 — 대표를 포함해 등장 순서를 보존하고 중복을 없앤다.
+
+    어댑터가 실은 목록이 있으면 그대로 쓰고, 없으면 대표 문자열을 구분자로 쪼갠다
+    (합성 저장값 '잭 로서, 사이먼 콜링스' 가 이 갈래로 두 이름이 된다).
+    노출 정책은 읽는 쪽이 정한다 — 여기서는 재료를 버리지 않는 것이 일이다."""
+    names = list(item.raw_payload.get("authors") or []) or ([journalist] if journalist else [])
+    out: list[str] = []
+    for raw in names:
+        # 이어 붙은 이름을 한 번 더 쪼갠다 — 옛 규칙으로 저장된 재료 ('A and B' 가 한 칸)
+        # 를 소급할 때도 같은 함수를 쓰기 위해서다.
+        for n in split_authors(raw or ""):
+            if n not in out:
+                out.append(n)
+    return out
 
 def to_articles(raw: list[RawItem], sources: dict[str, dict],
                 seen: dict[str, tuple[str, int, str, int]],
@@ -103,6 +120,7 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
             images=item.raw_payload.get("images") or [],
             outlet=item.raw_payload.get("outlet"),
             journalist=journalist,
+            authors=select_authors(item, journalist),
             team="arsenal",
             accept_path=item.raw_payload.get("accept_path"),
             published_at=_published(item.raw_payload, item.fetched_at),

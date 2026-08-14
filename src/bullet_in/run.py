@@ -35,7 +35,7 @@ GEMINI_MODEL = "gemini-3.1-flash-lite"
 # docs/troubleshooting/2026-07-19-runbook-snippet-logic-drift.md).
 SERVING_SELECT_SQL = (
     "SELECT content_hash,url,source_id,title_original,title_ko,summary_ko,"
-    "summary3_ko,body_ko,body_source,image_url,images_json,outlet,journalist,team,"
+    "summary3_ko,body_ko,body_source,image_url,images_json,outlet,journalist,authors_json,team,"
     "transfer_stage,transfer_direction,tier,confidence_score,published_at,"
     "published_precision,fetched_at,"
     # 링크 선수 배지 입력 (B안 2026-08-01 · 소속 제외 · 비이적 한정 · 이름 공급 2026-08-02)

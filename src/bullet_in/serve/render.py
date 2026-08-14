@@ -360,28 +360,26 @@ def neighbor_window(n: int, idx: int, size: int = 5) -> tuple[int, int]:
     return (start, end)
 
 
-def journalist_entry(row: dict, sources: dict, directory: dict | None) -> dict | None:
-    """기사 1건의 기자 뷰 — 정규화 이름 (필터 · 집계 키) · 표시 라벨 · 등재 여부.
+def _journalist_view(j: str, src: dict, directory: dict | None) -> dict:
+    """이름 하나의 기자 뷰 — 정규화 이름 (필터 · 집계 키) · 표시 라벨 · 등재 여부.
     저장값은 소스마다 형태가 다르다 (fmkorea 한글 말머리 · x 핸들 · html 풀네임)
     → 레지스트리 정식명으로 정규화하지 않으면 같은 기자가 facet 에서 갈라진다."""
-    j = (row.get("journalist") or "").strip()
-    if not j:
-        return None
-    src = sources.get(row.get("source_id")) or {}
     entry = (directory or {}).get(norm_alias(j))
     if entry is None and directory:
         # 공동 바이라인 ("A and B") — 등재 기자가 포함돼 있으면 그 기자를 대표로.
         # 정식명 단어 경계 매치만 인정, 복수 등재 시 바이라인 등장 순서 앞선 기자.
         jl = j.lower()
         best_pos = None
-        for cand in {e["name"]: e for e in directory.values()}.values():
+        for cand in {e["name"]: e for e in directory.values()
+                     if e.get("registered", True)}.values():
             m = re.search(rf"\b{re.escape(cand['name'].lower())}\b", jl)
             if m and (best_pos is None or m.start() < best_pos):
                 entry, best_pos = cand, m.start()
-    if entry:
+    if entry and entry.get("registered", True):
         name, outlet, registered = entry["name"], entry["outlet"], True
     else:
-        name, outlet, registered = j, src.get("outlet"), False
+        # 미등재 — 표기 접기 항목이 있으면 그 표기로 (안건 x · fold_alias_spellings)
+        name, outlet, registered = (entry["name"] if entry else j), src.get("outlet"), False
         # 조직 바이라인 (BBC Sport 등) → outlet 정식명으로 접기 (통칭 라벨은 제외)
         if (outlet and j != src.get("journalist_label")
                 and j.lower() in {(src.get("display_name") or "").lower(),
@@ -392,6 +390,94 @@ def journalist_entry(row: dict, sources: dict, directory: dict | None) -> dict |
     else:
         label = f"{name} ({outlet})"
     return {"name": name, "label": label, "registered": registered}
+
+
+def article_authors(row: dict) -> list[str]:
+    """저장된 저자 전원 — 값이 없으면 빈 목록 (전환 규칙의 입구).
+
+    비어 있는 동안은 현행 규칙 (단일 journalist) 이 그대로 판정하므로, 소급 전
+    배포 구간에 화면이 흔들리지 않는다 (설계 §4.2)."""
+    raw = row.get("authors_json")
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [n.strip() for n in parsed if isinstance(n, str) and n.strip()]
+
+
+def _primary_name(authors: list[str], directory: dict | None) -> str:
+    """저자 목록에서 대표 — 첫 등재 기자 · 없으면 첫 저자 (기존 select_journalist 와 같은 순서)."""
+    for a in authors:
+        if (directory or {}).get(norm_alias(a)):
+            return a
+    return authors[0] if authors else ""
+
+
+def article_journalists(row: dict, sources: dict, directory: dict | None) -> list[dict]:
+    """기사 1건이 도달해야 하는 기자 뷰 전량 — 첫 항목이 대표다.
+
+    공저 기사가 저자 각각의 기자 필터에서 나오게 하는 입구다 (설계 §2.3).
+    대표 선정 순서는 건드리지 않는다 — 소스 통칭 라벨 우선과 조직 바이라인 접기를
+    우회하면 'BBC Sport' 같은 조직 이름이 사이드바 첫 화면으로 올라온다."""
+    src = sources.get(row.get("source_id")) or {}
+    authors = article_authors(row)
+    j = (row.get("journalist") or "").strip()
+    if not j:
+        j = _primary_name(authors, directory)
+    elif j != src.get("journalist_label") and authors and j not in authors:
+        # 저장값이 여러 이름을 이어 붙인 문자열 — 분해된 목록에서 같은 규칙으로 고른다
+        j = _primary_name(authors, directory)
+    if not j:
+        return []
+    out = [_journalist_view(j, src, directory)]
+    if j == src.get("journalist_label"):
+        # 통칭 라벨 소스는 개별 저자를 노출하지 않는다는 기존 결정을 지킨다.
+        # 라운드업의 저장된 저자는 사람이 아니라 매체 이름이라 (BBC Sport ·
+        # Arsenal Media) 공저자로 세면 바이라인이 「BBC Gossip 외 1명」 이 된다.
+        return out
+    for a in authors:
+        view = _journalist_view(a, src, directory)
+        if all(view["name"] != e["name"] for e in out):
+            out.append(view)
+    return out
+
+
+def journalist_entry(row: dict, sources: dict, directory: dict | None) -> dict | None:
+    """기사 1건의 대표 기자 뷰 — 없으면 None."""
+    entries = article_journalists(row, sources, directory)
+    return entries[0] if entries else None
+
+
+def fold_alias_spellings(articles: list[dict], directory: dict | None) -> dict:
+    """미등재 이름의 표기 흔들림을 한 항목으로 접은 조회 맵을 돌려준다 (안건 x).
+
+    `norm_alias` 는 등재 기자 조회 키로만 쓰여서, 대소문자만 다른 같은 사람이
+    사이드바에서 두 항목으로 갈린다 (실측 'JAMES SHARPE' ↔ 'James Sharpe').
+    등재 이름은 directory 가 이미 정식명으로 접으므로 대상이 아니다.
+    살아남는 표기는 기사가 많은 쪽 · 동수면 전부 대문자가 아닌 쪽 · 그다음 사전순이다."""
+    counts: Counter = Counter()
+    for a in articles:
+        names = article_authors(a)
+        j = (a.get("journalist") or "").strip()
+        if j:
+            names = [j] + names
+        for n in dict.fromkeys(names):
+            if not (directory or {}).get(norm_alias(n)):
+                counts[n] += 1
+    groups: dict[str, list[str]] = {}
+    for n in counts:
+        groups.setdefault(norm_alias(n), []).append(n)
+    out = dict(directory or {})
+    for key, names in groups.items():
+        if len(names) < 2:
+            continue
+        win = sorted(names, key=lambda n: (-counts[n], n.isupper(), n))[0]
+        out[key] = {"name": win, "outlet": None, "registered": False}
+    return out
 
 
 def _outlet_tier(key: str, row: dict, sources: dict, registry) -> float | None:
@@ -486,16 +572,21 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
         o_ctr[key] += 1
         o_tier[key] = _outlet_tier(key, a, sources, registry)
 
-    j_ctr: Counter = Counter()
+    # 기자 항목은 어느 기사에서든 대표인 이름에만 만든다 (정책 C · 설계 §2.3).
+    # 계수는 대표 · 공저를 가리지 않고 그 이름이 걸린 기사 전부를 센다 — 공저 기사가
+    # 두 번째 저자의 필터에서도 나오게 하는 것이 이 트랙의 목적이다.
     j_labels: dict = {}
     j_tier: dict = {}
+    reached: list[list[str]] = []
     for a in articles:
-        e = journalist_entry(a, sources, directory)
-        if e is None:
+        entries = article_journalists(a, sources, directory)
+        reached.append([e["name"] for e in entries])
+        if not entries:
             continue
-        j_ctr[e["name"]] += 1
+        e = entries[0]
         j_labels[e["name"]] = e["label"]
         j_tier[e["name"]] = _journalist_tier(a, e, registry)
+    j_ctr: Counter = Counter(n for names in reached for n in names if n in j_labels)
 
     seen = Counter(tier_key(a.get("tier")) for a in articles if a.get("tier") is not None)
     # 사이드바 공신력 — 독자 라벨만 노출 (내부 Tier 문자열 금지 · spec1 §7.1)
@@ -824,9 +915,13 @@ def _decorate(row: dict, sources: dict, now: datetime,
     a["_stage_badge"] = _stage.is_displayable(st)
     a["_stage_label"] = _stage.label_for(st)
     a["_stage_class"] = _stage.css_for(st)
-    e = journalist_entry(row, sources, directory)
-    a["_journalist"] = e["name"] if e else ""   # 카드 data 속성 · 필터 키
-    a["_byline"] = e["label"] if e else None    # 표시 라벨 — 기자 (언론사)
+    entries = article_journalists(row, sources, directory)
+    # 카드 data 속성 · 필터 키 — 공저는 저자 전원을 실어야 각자의 필터에서 걸린다.
+    # 구분자는 linked_players 와 같은 관례를 쓴다 (app.js 가 나눠 읽는다).
+    a["_journalist"] = "|".join(e["name"] for e in entries)
+    a["_byline"] = entries[0]["label"] if entries else None   # 표시 라벨 — 기자 (언론사)
+    a["_authors"] = [e["name"] for e in entries]              # 상세 페이지 전원 나열
+    a["_more_authors"] = max(len(entries) - 1, 0)             # 바이라인 「외 N명」
     # 개편 위계 · 표시 필드 (spec1 §5 · §7.1 · §12 · spec2 §3.1 · §11.1)
     a["_reader_tier"] = reader_tier(row.get("tier"))
     a["_grade"] = grade_class(row.get("tier"))
@@ -1476,6 +1571,10 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
     now = now or datetime.utcnow()
     out = Path(out_dir)
     (out / "article").mkdir(parents=True, exist_ok=True)
+
+    # 미등재 이름의 표기 흔들림 접기 (안건 x) — 전 기사를 봐야 정할 수 있어 여기서 한 번
+    # 만들고, 이미 directory 를 받는 모든 자리 (계수 · 카드 · 상세) 가 같은 맵을 쓴다.
+    directory = fold_alias_spellings(articles, directory)
 
     (out / "index.html").write_text(
         render_index(articles, sources, now, directory=directory, registry=registry,
