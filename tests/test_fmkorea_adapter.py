@@ -1074,3 +1074,34 @@ def test_fmkorea_bracket_journalist_leads_the_author_list():
     assert items[0].raw_payload["journalist"] == "온스테인"
     assert items[0].raw_payload["authors"] == [
         "온스테인", "David Ornstein", "James McNicholas"]
+
+
+# --- 한글로 옮겨진 바이라인 (2026-08-14 · 사용자 실측으로 발견) ---
+
+def test_extract_body_authors_reads_a_korean_byline():
+    body = "By 데이비드 온스테인 얀 디오망데는 이번 여름 RB 라이프치히를 떠나게 된다면"
+    assert extract_body_authors(body) == ["데이비드 온스테인"]
+
+
+def test_extract_body_authors_reads_every_korean_coauthor():
+    body = ("By 제임스 맥니콜라스, 데이비드 온스테인, 조지 콜킨, 크리스 워 "
+            "브루노 기마랑이스가 마침내 아스날 선수가 되었습니다.")
+    assert extract_body_authors(body) == [
+        "제임스 맥니콜라스", "데이비드 온스테인", "조지 콜킨", "크리스 워"]
+
+
+def test_korean_byline_stops_where_the_article_text_starts():
+    # 마지막 이름에는 본문이 붙어 있다 — 앞 두 어절까지가 이름이다
+    body = "By 데이비드 온스테인, 마리오 코르테가나 비니시우스 주니오르는 레알 마드리드와의"
+    assert extract_body_authors(body) == ["데이비드 온스테인", "마리오 코르테가나"]
+
+
+def test_korean_byline_does_not_swallow_a_comma_inside_the_article_text():
+    # 본문에도 쉼표가 있어서 오른쪽 끝을 경계로 쓰면 문장이 통째로 들어온다
+    body = ("By 데이비드 온스테인 크리센시오 서머빌이 웨스트햄을 떠나 알 힐랄에 합류하는 "
+            "4년 계약을 체결했으며, 이적료는 7,000만 유로다.")
+    assert extract_body_authors(body) == ["데이비드 온스테인"]
+
+
+def test_korean_byline_ignored_when_there_is_no_by_marker():
+    assert extract_body_authors("데이비드 온스테인 기자가 전한 소식이다.") == []

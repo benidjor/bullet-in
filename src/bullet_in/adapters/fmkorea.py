@@ -129,6 +129,11 @@ _NAME = rf"{_NAME_TOKEN}(?: +(?:{_NAME_PARTICLE} +)?{_NAME_TOKEN})*"
 # 공저 구분자는 쉼표와 and — 뒤에 다시 이름이 와야 인정한다 (뒤따르는 시각 · 직함 방지).
 _BYLINE_RE = re.compile(rf"\bBy +({_NAME}(?: *(?:,|and) +{_NAME})*)")
 _AUTHOR_SPLIT_RE = re.compile(r"\s*,\s*|\s+and\s+")
+# 한글로 옮겨진 바이라인 — 게시자가 원문 저자를 번역해 적는다 (실측 11건).
+# 한글에는 대소문자가 없어 이름 끝을 알 수 없으므로 이름 토큰으로 못 자른다.
+_KO_BYLINE_RE = re.compile(r"\bBy\s+([가-힣].{0,120})")
+_KO_NAME_MAX_CHARS = 14      # 이름 조각의 길이 상한 (실측 최장 '세바스찬 스태포드-블루어' 13자)
+_KO_SENTENCE_TAIL = re.compile(r"(다|요|죠)$")
 # 직함은 사람이 아니다 — 실측상 이 두 낱말이 비-이름 전부를 덮는다 (설계 §1.4).
 _JOB_TITLE_RE = re.compile(r"REPORTER|CORRESPONDENT", re.I)
 
@@ -149,6 +154,30 @@ def strip_publish_datetime(body: str) -> str:
     return (_SPACES_RE.sub(" ", cleaned) + tail).strip() or body
 
 
+def _korean_body_authors(body: str) -> list[str]:
+    """한글로 옮겨진 바이라인의 저자 전원 — 왼쪽부터 읽어 본문이 시작하는 데서 멈춘다.
+
+    쉼표로 쪼개되 오른쪽 끝을 경계로 쓰면 안 된다 — 본문에도 쉼표가 있어서
+    문장이 통째로 이름으로 들어온다 (실측 '이적료는 7,000만 유로').
+    이름만 있는 조각은 그대로 쓰고, 본문이 붙기 시작한 조각에서 멈추되 그 조각의
+    앞 두 어절을 마지막 저자로 본다 — 음역된 서양 이름이 일관되게 두 어절이다.
+    실측 11건 전건에서 오검출 0 이었다 (사용자 눈검수와 이름까지 일치)."""
+    m = _KO_BYLINE_RE.search(re.sub(r"\s+", " ", body)[:_BYLINE_HEAD_CHARS])
+    if not m:
+        return []
+    out: list[str] = []
+    for part in re.split(r"\s*[,·]\s*", m.group(1)):
+        tokens = part.split()
+        if (1 <= len(tokens) <= 2 and len(part) <= _KO_NAME_MAX_CHARS
+                and not re.search(r"\d", part) and not _KO_SENTENCE_TAIL.search(part)):
+            out.append(part)
+            continue
+        if tokens:
+            out.append(" ".join(tokens[:2]))
+        break
+    return [n for n in dict.fromkeys(out) if n]
+
+
 def extract_body_authors(body: str) -> list[str]:
     """본문 앞머리 바이라인의 저자 전원 — 등장 순서 보존 · 중복 제거.
 
@@ -160,7 +189,7 @@ def extract_body_authors(body: str) -> list[str]:
         return []
     m = _BYLINE_RE.search(body[:_BYLINE_HEAD_CHARS])
     if not m:
-        return []
+        return _korean_body_authors(body)
     out: list[str] = []
     for part in _AUTHOR_SPLIT_RE.split(m.group(1)):
         part = part.strip()
