@@ -939,3 +939,51 @@ def test_filter_stage_returns_stored_value_for_bbc_gossip():
     # 전행 (59건) 이 rule_stage 규칙에 따라 rumour 로 저장돼 있어 화면은 불변이다.
     row = {"source_id": "bbc_gossip", "transfer_stage": "rumour"}
     assert filter_stage(row) == "rumour"
+
+
+# --- 공저 기사의 카드 속성 · 바이라인 (설계 §2.3 · §2.4) ---
+
+_CO_DIR = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"},
+           "david ornstein": {"name": "David Ornstein", "outlet": "The Athletic"}}
+
+
+def test_decorate_card_attr_carries_every_author():
+    row = _row(journalist="David Ornstein", body_ko="본문",
+               authors_json='["David Ornstein", "James McNicholas"]')
+    a = _dec(row, SOURCES, NOW, directory=_CO_DIR)
+    assert a["_journalist"] == "David Ornstein|James McNicholas"
+
+
+def test_decorate_byline_counts_the_other_authors():
+    row = _row(journalist="David Ornstein", body_ko="본문",
+               authors_json='["David Ornstein", "James McNicholas"]')
+    a = _dec(row, SOURCES, NOW, directory=_CO_DIR)
+    assert a["_authors"] == ["David Ornstein", "James McNicholas"]
+    assert a["_more_authors"] == 1
+
+
+def test_decorate_single_author_has_no_other_authors():
+    a = _dec(_row(journalist="Hugo Guillemet", body_ko="본문"), SOURCES, NOW)
+    assert a["_authors"] == ["Hugo Guillemet"] and a["_more_authors"] == 0
+
+
+def test_detail_lists_every_author_in_the_meta_grid():
+    row = _row(journalist="David Ornstein", body_ko="본문",
+               authors_json='["David Ornstein", "James McNicholas"]')
+    a = _dec(row, SOURCES, NOW, directory=_CO_DIR)
+    html = _ra(a, [], "h1", SOURCES, NOW)
+    assert "David Ornstein · James McNicholas" in html
+
+
+def test_detail_origin_block_shows_lead_author_and_the_rest_as_count():
+    row = _row(journalist="David Ornstein", body_ko="본문",
+               authors_json='["David Ornstein", "James McNicholas"]')
+    a = _dec(row, SOURCES, NOW, directory=_CO_DIR)
+    html = _ra(a, [], "h1", SOURCES, NOW)
+    assert "David Ornstein 외 1명" in html
+
+
+def test_detail_origin_block_keeps_the_stored_byline_for_a_single_author():
+    # 배포 시점 무변화 — 소급 전에는 authors 가 비어 있고 원문 블록이 안 흔들려야 한다
+    a = _dec(_row(journalist="온스테인", body_ko="본문"), SOURCES, NOW, directory=_CO_DIR)
+    assert "<span>온스테인</span>" in _ra(a, [], "h1", SOURCES, NOW)

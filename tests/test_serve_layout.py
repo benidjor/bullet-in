@@ -347,3 +347,105 @@ def test_journalist_entry_folds_spaced_korean_alias():
                                                   "outlet": "The Athletic"}})
     assert e == {"name": "David Ornstein", "label": "David Ornstein (The Athletic)",
                  "registered": True}
+
+
+# --- 공저자 다중 귀속 (설계 2026-08-14 · 정책 C) ---
+
+from bullet_in.serve.render import article_journalists, fold_alias_spellings
+
+
+def _art(**kw):
+    # tier 를 두지 않는다 — registry 없이 재는 테스트라 전원 미등재 꼬리로 모인다
+    base = {"source_id": "bbc_sport", "team": "arsenal"}
+    base.update(kw)
+    return base
+
+
+def test_article_journalists_reaches_every_author():
+    row = _art(journalist="David Ornstein",
+               authors_json='["David Ornstein", "James McNicholas"]')
+    assert [e["name"] for e in article_journalists(row, JSOURCES, DIR)] == [
+        "David Ornstein", "James McNicholas"]
+
+
+def test_article_journalists_picks_registered_author_when_journalist_missing():
+    row = _art(journalist=None, authors_json='["Kaya Kaynak", "\\uc628\\uc2a4\\ud14c\\uc778"]')
+    entries = article_journalists(row, JSOURCES, DIR)
+    assert entries[0]["name"] == "David Ornstein"     # 등재 기자가 대표
+    assert [e["name"] for e in entries] == ["David Ornstein", "Kaya Kaynak"]
+
+
+def test_article_journalists_decomposes_composite_stored_value():
+    row = _art(source_id="goal", journalist="Sam Blitz and Nick Wright",
+               authors_json='["Sam Blitz", "Nick Wright"]')
+    assert [e["name"] for e in article_journalists(row, JSOURCES, DIR)] == [
+        "Sam Blitz", "Nick Wright"]
+
+
+def test_article_journalists_keeps_source_label_as_representative():
+    # 통칭 라벨 우선 규칙을 우회하면 조직 바이라인이 사이드바 첫 화면으로 올라온다
+    row = _art(source_id="arsenal_official", journalist="Arsenal Official",
+               authors_json='["Some Writer", "Other Writer"]')
+    entries = article_journalists(row, JSOURCES, DIR)
+    assert entries[0]["name"] == "Arsenal Official"
+
+
+def test_article_journalists_falls_back_to_single_journalist_without_authors():
+    # 전환 규칙 — authors_json 이 비면 현행 규칙 그대로 판정한다
+    row = _art(journalist="온스테인")
+    assert [e["name"] for e in article_journalists(row, JSOURCES, DIR)] == ["David Ornstein"]
+
+
+def test_article_journalists_empty_when_no_byline_at_all():
+    assert article_journalists(_art(journalist=None), JSOURCES, DIR) == []
+
+
+def test_facet_counts_makes_no_item_for_coauthor_only_name():
+    # 정책 C — 항목은 어느 기사에서든 대표인 이름에만 생긴다
+    arts = [_art(journalist="David Ornstein",
+                 authors_json='["David Ornstein", "James McNicholas"]')]
+    f = facet_counts(arts, JSOURCES, directory=DIR)
+    last = f["journalists"]["stages"][-1]
+    assert [i["value"] for i in last["unregistered"]] == ["David Ornstein"]
+
+
+def test_facet_counts_counts_article_for_coauthor_that_leads_elsewhere():
+    arts = [_art(journalist="David Ornstein",
+                 authors_json='["David Ornstein", "Kaya Kaynak"]'),
+            _art(source_id="goal", journalist="Kaya Kaynak")]
+    f = facet_counts(arts, JSOURCES, directory=DIR)
+    counts = {i["value"]: i["count"]
+              for i in f["journalists"]["stages"][-1]["unregistered"]}
+    assert counts == {"David Ornstein": 1, "Kaya Kaynak": 2}
+
+
+def test_fold_alias_spellings_merges_case_variants_of_unregistered_name():
+    arts = [_art(source_id="goal", journalist="JAMES SHARPE"),
+            _art(source_id="goal", journalist="James Sharpe")]
+    folded = fold_alias_spellings(arts, DIR)
+    f = facet_counts(arts, JSOURCES, directory=folded)
+    counts = {i["value"]: i["count"]
+              for i in f["journalists"]["stages"][-1]["unregistered"]}
+    assert counts == {"James Sharpe": 2}
+
+
+def test_fold_alias_spellings_leaves_registered_names_alone():
+    arts = [_art(journalist="온스테인"), _art(journalist="David Ornstein")]
+    folded = fold_alias_spellings(arts, DIR)
+    f = facet_counts(arts, JSOURCES, directory=folded)
+    counts = {i["value"]: i["count"]
+              for i in f["journalists"]["stages"][-1]["unregistered"]}
+    assert counts == {"David Ornstein": 2}
+
+
+def test_article_journalists_adds_no_coauthor_for_a_source_label():
+    # 라운드업의 저장된 저자는 사람이 아니라 매체 이름이라 「외 1명」 이 되면 안 된다
+    row = _art(source_id="arsenal_official", journalist="Arsenal Official",
+               authors_json='["Arsenal Media"]')
+    assert [e["name"] for e in article_journalists(row, JSOURCES, DIR)] == ["Arsenal Official"]
+
+
+def test_article_journalists_keeps_an_organisation_that_is_the_only_byline():
+    row = _art(source_id="bbc_sport", journalist="BBC Sport",
+               authors_json='["BBC Sport"]')
+    assert [e["name"] for e in article_journalists(row, JSOURCES, DIR)] == ["BBC"]
