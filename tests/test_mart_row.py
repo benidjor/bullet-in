@@ -16,3 +16,11 @@ def test_article_row_serializes_images_json():
 
 def test_article_row_empty_images_is_null():
     assert _article_row(_article())["images_json"] is None
+
+def test_article_row_serializes_authors_json():
+    row = _article_row(_article(authors=["David Ornstein", "James McNicholas"]))
+    assert json.loads(row["authors_json"]) == ["David Ornstein", "James McNicholas"]
+    assert "authors" not in row  # SQL 파라미터에 미지의 키 금지
+
+def test_article_row_empty_authors_is_null():
+    assert _article_row(_article())["authors_json"] is None

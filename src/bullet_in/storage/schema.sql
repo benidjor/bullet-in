@@ -29,6 +29,9 @@ ALTER TABLE articles ADD COLUMN IF NOT EXISTS team VARCHAR(32) DEFAULT 'arsenal'
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS transfer_stage VARCHAR(32);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS transfer_direction VARCHAR(8);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS images_json TEXT;
+-- 저자 전원 (대표 포함) — 공저 기사가 저자 각각의 기자 필터에 도달하게 하는 입력.
+-- journalist 는 대표 1명으로 남는다 (카드 표기 · tier 판정이 단일 값을 쓴다).
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS authors_json TEXT;
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS published_precision VARCHAR(4);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS body_level TINYINT;
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS rewrite_retention FLOAT;

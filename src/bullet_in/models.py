@@ -31,7 +31,8 @@ class Article(BaseModel):
     image_url: str | None = None
     images: list[str] = []
     outlet: str | None = None
-    journalist: str | None = None
+    journalist: str | None = None      # 대표 1명 — 카드 · tier 판정이 쓰는 단일 값
+    authors: list[str] = []            # 대표를 포함한 저자 전원 (공저 기자 필터 도달용)
     team: str = "arsenal"
     transfer_stage: str | None = None
     accept_path: str | None = None   # 공홈 채택 경로 ('tag' · 'title') — 단계 규칙 입력

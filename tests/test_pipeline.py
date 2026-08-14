@@ -410,3 +410,31 @@ def test_cross_run_outlet_body_not_replaced_by_post_body():
     arts, stats = to_articles(raw, sources, seen=seen)
     assert arts == []
     assert stats["blocked_count"] == 1
+
+
+# --- 공저자 다중 귀속 — 저자 전원을 mart 로 넘긴다 (설계 §2.1 · §2.2) ---
+
+def test_to_articles_carries_all_authors():
+    item = RawItem(source_id="skysports", source_type="html", url="https://s.test/1",
+                   fetched_at=datetime(2026, 8, 14, tzinfo=timezone.utc),
+                   raw_payload={"title": "Arsenal agree deal",
+                                "authors": ["Sam Blitz", "Nick Wright"]})
+    arts, _ = to_articles([item], {"skysports": {"tier": 2}}, seen={})
+    assert arts[0].authors == ["Sam Blitz", "Nick Wright"]
+
+
+def test_to_articles_splits_stored_composite_journalist_without_authors():
+    # x · fmkorea 처럼 authors 가 없는 소스 — 저장 문자열을 구분자로 쪼갠다
+    item = RawItem(source_id="x_afcstuff", source_type="x", url="https://x.test/1",
+                   fetched_at=datetime(2026, 8, 14, tzinfo=timezone.utc),
+                   raw_payload={"title": "아스날 소식", "journalist": "잭 로서, 사이먼 콜링스"})
+    arts, _ = to_articles([item], {"x_afcstuff": {"tier": 2}}, seen={})
+    assert arts[0].authors == ["잭 로서", "사이먼 콜링스"]
+
+
+def test_to_articles_leaves_authors_empty_without_any_byline():
+    item = RawItem(source_id="skysports", source_type="html", url="https://s.test/2",
+                   fetched_at=datetime(2026, 8, 14, tzinfo=timezone.utc),
+                   raw_payload={"title": "Arsenal agree deal"})
+    arts, _ = to_articles([item], {"skysports": {"tier": 2}}, seen={})
+    assert arts[0].authors == []

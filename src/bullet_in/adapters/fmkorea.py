@@ -109,17 +109,28 @@ def parse_bracket(title: str) -> tuple[str | None, str | None, bool]:
 _BYLINE_HEAD_CHARS = 200
 _MONTHS = ("January|February|March|April|May|June|July|August|September|"
            "October|November|December")
+# 축약형까지 넣어야 'Aug. 2, 2026' 같은 표기가 걸린다 (운영 6건이 'David Ornstein Aug'
+# 로 저장돼 있었다). 3월 · 5월 · 6월 · 7월은 축약형이 전체 철자와 같아 목록에 없다.
+_MONTHS_SHORT = "Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec"
+_MONTH_ANY = rf"(?:{_MONTHS}|{_MONTHS_SHORT})"
 # 충실도 게이트도 같은 규칙으로 숫자 집계에서 발행 표기를 뺀다 (fidelity.py 가 import).
 PUBLISH_DT_RE = re.compile(
-    rf"(?:{_MONTHS})\s+\d{{1,2}}\s*,?\s*\d{{4}}|(?:Updated\s+)?\d{{1,2}}:\d{{2}}\s*[ap]m",
+    rf"{_MONTH_ANY}\.?\s+\d{{1,2}}\s*,?\s*\d{{4}}|(?:Updated\s+)?\d{{1,2}}:\d{{2}}\s*[ap]m",
     re.I)
 _SPACES_RE = re.compile(r"[ \t]{2,}")
-# 이름 토큰은 대문자로 시작 · 월 이름과 'Updated' 는 제외 (바이라인 뒤 날짜에서 끊기 위함).
+# 이름 토큰은 대문자로 시작 · '뒤에 숫자가 오는 월 이름' 과 'Updated' 는 제외
+# (바이라인 뒤 날짜에서 끊기 위함).
+# 월을 접두로 막으면 안 된다 — Mario 가 Mar + io 로 걸려 사람 이름이 통째로 사라진다.
+# 날짜가 뒤따르는지까지 봐야 Aug. 2 는 빠지고 Mario · August (사람 이름) 는 남는다.
 # 토큰 사이 구분자는 공백만 — 개행을 넘으면 다음 줄의 'Published' 가 이름에 붙는다 (실측 3건).
-_NAME_TOKEN = rf"(?!(?:{_MONTHS}|Updated)\b)[A-Z][\w'’\-]*"
+_NAME_TOKEN = rf"(?!(?:{_MONTH_ANY}\.?\s+\d|Updated\b))[A-Z][\w'’\-]*"
 _NAME_PARTICLE = r"(?:de|van|von|der|del|di|da|le|la)"
-_BYLINE_RE = re.compile(
-    rf"\bBy +({_NAME_TOKEN}(?: +(?:{_NAME_PARTICLE} +)?{_NAME_TOKEN})*)")
+_NAME = rf"{_NAME_TOKEN}(?: +(?:{_NAME_PARTICLE} +)?{_NAME_TOKEN})*"
+# 공저 구분자는 쉼표와 and — 뒤에 다시 이름이 와야 인정한다 (뒤따르는 시각 · 직함 방지).
+_BYLINE_RE = re.compile(rf"\bBy +({_NAME}(?: *(?:,|and) +{_NAME})*)")
+_AUTHOR_SPLIT_RE = re.compile(r"\s*,\s*|\s+and\s+")
+# 직함은 사람이 아니다 — 실측상 이 두 낱말이 비-이름 전부를 덮는다 (설계 §1.4).
+_JOB_TITLE_RE = re.compile(r"REPORTER|CORRESPONDENT", re.I)
 
 
 def strip_publish_datetime(body: str) -> str:
@@ -138,15 +149,33 @@ def strip_publish_datetime(body: str) -> str:
     return (_SPACES_RE.sub(" ", cleaned) + tail).strip() or body
 
 
-def extract_body_journalist(body: str) -> str | None:
-    """본문 앞머리 바이라인의 기자명 — 본문은 건드리지 않는다.
+def extract_body_authors(body: str) -> list[str]:
+    """본문 앞머리 바이라인의 저자 전원 — 등장 순서 보존 · 중복 제거.
 
-    journalist 컬럼은 단일 문자열이라 공저는 첫 저자만 남긴다.
-    정규식은 넓히지 않는다 — 엉뚱한 이름이 들어가면 tier 가 잘못 오른다."""
+    fmkorea 전재글은 원문 바이라인이 journalist 컬럼이 아니라 본문 앞머리에만 있다.
+    그래서 공저 기사가 저자 각각의 기자 필터에 도달하려면 여기서 전원을 읽어야 한다.
+    정규식은 넓히지 않는다 — 새 오염이 나오면 문구가 아니라 '등재 기자만 채택' 으로
+    좁힌다 (설계 §2.2 · 경계 사례를 문구로 가르려다 시소에 걸린 전례가 있다)."""
     if not body:
-        return None
+        return []
     m = _BYLINE_RE.search(body[:_BYLINE_HEAD_CHARS])
-    return m.group(1) if m else None
+    if not m:
+        return []
+    out: list[str] = []
+    for part in _AUTHOR_SPLIT_RE.split(m.group(1)):
+        part = part.strip()
+        if part and not _JOB_TITLE_RE.search(part) and part not in out:
+            out.append(part)
+    return out
+
+
+def extract_body_journalist(body: str) -> str | None:
+    """본문 앞머리 바이라인의 대표 기자 1명 — 본문은 건드리지 않는다.
+
+    journalist 컬럼은 단일 문자열이라 첫 저자만 남긴다.
+    저자 전원은 authors 로 따로 실린다 (extract_body_authors)."""
+    authors = extract_body_authors(body)
+    return authors[0] if authors else None
 
 
 _REPOST_BLOCK_TEXT = "퍼가기가 금지된"
@@ -351,7 +380,12 @@ class FmkoreaAdapter:
                 self.relevance_dropped += 1
                 log.info("fmkorea 무관 글 필터 탈락 — title=%s url=%s", title, url)
                 continue
-            journalist = journalist or extract_body_journalist(body)
+            authors = extract_body_authors(body)
+            if journalist:
+                # 말머리 값이 대표 — 본문 공저자는 목록에만 남긴다 (기존 우선순위 유지)
+                authors = [journalist] + [a for a in authors if a != journalist]
+            else:
+                journalist = authors[0] if authors else None
             body_level = material_level if body else 0
             if pub is None:
                 post_dt = _post_published(html)
@@ -364,6 +398,7 @@ class FmkoreaAdapter:
                 raw_payload={"title": title, "body": body, "body_level": body_level,
                              "lang": lang,
                              "outlet": outlet, "journalist": journalist,
+                             "authors": authors,
                              "image_url": image, "images": images, **extra}))
         return out
 
