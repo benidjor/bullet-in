@@ -110,3 +110,5 @@ skysports: 11건 · authors 채움 8건
 - 같은 계열 (라이브만 잡는 외부 의존 결함): `docs/troubleshooting/2026-06-12-live-source-selector-drift.md` — 그쪽은 셀렉터 자체가 깨짐, 이쪽은 셀렉터는 맞고 값이 규격 밖.
 - 가정 파기 선례: `docs/troubleshooting/2026-07-15-guardian-api-body-image-elements.md` — 문서화된 API 의 필드 가정이 라이브에서 파기된 사례.
 - 운영: `docs/runbook/2026-07-16-journalist-backfill-ops.md`.
+- 다른 계열 (파서를 아예 안 부르거나 재료를 버려서 못 읽는 경우): `docs/troubleshooting/2026-08-15-unknown-author-means-we-could-not-read-it.md`
+— 이 문서가 「파서가 규격을 못 읽는다」 라면 그쪽은 「읽을 자리에 파서가 없다」 다.
