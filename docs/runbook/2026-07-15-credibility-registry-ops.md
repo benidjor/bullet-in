@@ -13,6 +13,14 @@ PR #45 에서 소스 tier 재조정 · 기자 5건 정비 · README 공신력 �
 
 - 동적 소스 판정 순서: 기자 먼저 → 아웃렛 → 기본 4 (x_afcstuff 는 config `fallback_tier` · fmkorea 는 코드 상수).
 - README 표는 config 의 파생 뷰: config 를 바꾸면 README 표도 **같은 PR 에서** 갱신한다.
+- **아웃렛은 `aliases` 만 조회 키가 된다 — `name` 은 안 들어간다** (2026-08-15 추가).
+기자는 `load_registry` 가 `name` 도 키로 넣어 주는데 아웃렛은 안 넣는다.
+그래서 정식명이 그대로 들어온 값은 공신력 조회가 실패해 미등재로 떨어진다.
+**등재할 때 정식명을 `aliases` 에도 넣는다** — 기존 항목 대부분이 이미 그렇게 돼 있다 (`The Guardian` · `Sky Sports` · `The Times`).
+- **매체 이름을 정하는 자리가 셋이라 서로 어긋날 수 있다** (2026-08-15 추가).
+`config/sources.yaml` 의 `outlet` (직접 수집분) · `adapters/fmkorea.OUTLET_MAP` (전재글 말머리) · 여기 `outlets` 의 정식명 셋이 **같은 표기여야 한다.**
+어긋나면 같은 매체가 사이드바에서 두 항목으로 갈린다 — 실물로 `Goal` 1건과 `Goal.com` 176건이 나란히 서 있었다 (2026-08-15 정정).
+새 매체를 더하거나 말머리 매핑을 손댈 때 셋을 함께 본다.
 
 ## 2. 신규 기자 · ITK 등재 체크리스트
 
