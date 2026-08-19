@@ -16,6 +16,8 @@
 - **소스당 필드** — 경과 시간 · 적용 임계, 마지막 수집 시각 (Discord 상대시간 · 절대시간), 이번 회차 후보 건수, 어댑터 기반 원인 후보 한 줄 (힌트 매핑이 있는 어댑터만), 다음 재알림 안내.
   `기본 임계` 필드 ( `전역 48h` ) 와 필드의 임계가 다르면 그 소스는 override 적용 상태다.
 - **후보 건수는 진단 재료다** — 후보가 있으면 "경로는 응답하나 새 글이 없습니다" 로 적고, 어댑터 힌트는 후보 0건일 때만 붙는다.
+  **다만 그 문구를 그대로 믿지 말 것** — 워터마크는 저장 결과를 보므로, 수집은 되는데 다른 행으로 흡수되는 소스는 새 글이 있어도 「없습니다」 로 나간다.
+  소스가 죽었다고 판단하기 전에 원본 저장소부터 본다 (아래 진단표 첫 줄 · `docs/troubleshooting/2026-08-20-live-source-marked-stale-by-watermark.md`).
   2026-08-14 개정 전에는 이 계수가 발송 조건이었다 ( 후보가 있으면 알림 자체를 막았다 ).
   그래서 `x_ornstein` 이 13일째 새 글을 못 가져오는데도 알림이 한 번도 안 나갔다 — 경위는 `docs/troubleshooting/2026-08-15-alert-suppression-becomes-silence.md`.
 - **재알림은 48시간 고정 간격** — 임계를 넘은 회차에 한 번 알리고, 그 뒤 경과가 48h 씩 늘 때마다 다시 알린다.
@@ -23,6 +25,10 @@
   간격은 임계와 독립이다 — 임계의 배수로 두면 임계가 큰 저빈도 소스에서 재알림이 영영 안 온다.
 - **임계를 고친 회차는 한 번 몰린다** — 직전 회차 판정을 새 임계로 다시 쓸 수 없어, 그 시점에 stale 인 소스가 전부 한 번씩 알린다.
   `config/sources.yaml` 의 임계를 손댄 배포에서는 이것이 정상이다.
+- **그 배포 직후에만 재알림이 48시간보다 빨리 올 수 있다** — 간격을 마지막 알림이 아니라 임계를 넘은 시점부터 세기 때문이다.
+  임계를 고쳐 끼어든 첫 알림은 그 눈금에 안 맞으므로, 다음 알림까지가 최소 0시간에서 최대 48시간 사이로 짧아진다.
+  2026-08-20 배포 실측 — `x_ornstein` 경과 438h · 임계 120h 라 다음 눈금이 456h 였고 두 번째 알림이 18시간 뒤에 왔다 (그 하루만 소스당 2건 · 이후로는 48시간 간격).
+  **도배로 읽지 말 것** — 임계를 손댄 배포에서 한 번만 나오는 모양이다.
 - **메타** — `회차` 필드의 run_id 앞 8자로 `pipeline_runs` · `source_freshness` 회차를 특정하고, embed 하단 시각은 검사 시각 (UTC) 이다.
 - **제목 클릭** — 이 런북으로 연결된다.
 - **무알림** — 모든 소스가 임계 안이거나, 재알림 간격이 아직 안 찼거나, 워터마크 자체가 없는 소스뿐인 경우.
@@ -43,6 +49,7 @@
 
 | 원인 | 확인 방법 | 처방 |
 |---|---|---|
+| **수집은 되는데 다른 행으로 흡수됨** | Mongo `raw_items` 에서 그 소스의 마지막 수집 시각을 본다 → 최근이면 소스는 살아 있다 | 알림이 틀린 것이라 소스를 고칠 것이 없다 · `docs/troubleshooting/2026-08-20-live-source-marked-stale-by-watermark.md` |
 | 셀렉터 드리프트 ( 사이트 개편 ) | 어댑터 단독 `fetch()` 라이브 실행 → 0건이면 `list_url` 을 브라우저로 열어 구조 대조 | `config/sources.yaml` 셀렉터 수정 · `docs/troubleshooting/2026-06-12-live-source-selector-drift.md` |
 | 피드 · 검색 URL 변경 | `list_url` · `search_url` 직접 접속 → 404 · 리다이렉트 확인 | `feed_url` · `list_url` 갱신 |
 | X 쿠키 만료 | 파이프라인 로그의 x_playwright 로그인 오류 · `x_cookies.json` 수정 시각 | 쿠키 재주입 — `docs/runbook/2026-07-03-afcstuff-playwright-adapter-ops.md` |
@@ -125,6 +132,7 @@ uv run pytest tests/integration/test_source_freshness.py -v  # 테이블 적재 
 
 - spec · plan: `docs/superpowers/{specs,plans}/2026-07-13-slo5-freshness-watermark*`.
 - 감시 제외 규약 · 문구 정비: `docs/superpowers/specs/2026-08-07-alert-f2-unit-attribution-and-observability-design.md` §3.2.
+- 살아 있는 소스가 stale 로 찍히는 경위 · 원본 대조 절차: `docs/troubleshooting/2026-08-20-live-source-marked-stale-by-watermark.md`.
 - 임계 재조정 · 억제 제거 · 재알림 간격의 설계 근거: `docs/superpowers/specs/2026-08-14-slo5-freshness-alert-blind-spot-design.md`.
 - 함정: `docs/troubleshooting/2026-07-13-freshness-clock-mixing-gap.md` (시계 혼합 · UTC 고정 경위) ·
   `docs/troubleshooting/2026-08-07-arsenal-official-transfer-tag-omission.md` (arsenal_official 감시 제외 경위) .
