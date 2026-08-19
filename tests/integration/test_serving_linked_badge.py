@@ -49,9 +49,10 @@ def _setup(engine, links):
                            "transfer_stage) VALUES (:h, :u, 'fmkorea', :s)"),
                       {"h": h, "u": f"https://ex.test/{i}", "s": stage})
             for n in names:
+                # role 은 NOT NULL 이다 — 배지 판정과 무관하므로 주역으로 채운다
                 c.execute(text("INSERT INTO article_players "
-                               "(content_hash, player_id, extracted_at) "
-                               "VALUES (:h, :p, NOW())"),
+                               "(content_hash, player_id, role, extracted_at) "
+                               "VALUES (:h, :p, 'subject', NOW())"),
                           {"h": h, "p": _pid(engine, n)})
 
 

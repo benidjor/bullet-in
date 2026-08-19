@@ -78,3 +78,8 @@ CREATE TABLE IF NOT EXISTS article_players (
   extracted_at DATETIME NOT NULL,
   PRIMARY KEY (content_hash, player_id));
 ALTER TABLE article_players ADD COLUMN IF NOT EXISTS role VARCHAR(16);
+-- 역할 미기입을 저장 단계에서 막는다 — 서빙은 이 값 하나로 선수 페이지 목록을
+-- 가르므로, 비어 들어오면 주역으로 읽든 언급으로 읽든 화면이 조용히 틀어진다.
+-- 값을 만드는 규칙 (roster.decide_role) 이 항상 주역 · 언급 중 하나를 돌려주고
+-- 운영 2,889쌍에 미기입이 0 이라 이 제약은 기존 행을 건드리지 않는다.
+ALTER TABLE article_players MODIFY IF EXISTS role VARCHAR(16) NOT NULL;

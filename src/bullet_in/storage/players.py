@@ -104,9 +104,12 @@ class PlayerStore:
                              {"fn": full_name}).scalar_one()
 
     def link_article(self, content_hash: str, player_id: int,
-                     stage: str | None, role: str | None = None) -> None:
+                     stage: str | None, role: str) -> None:
         """추출 쌍 저장 — 재추출 시 단계 · 역할 · 시각만 갱신하는 멱등 upsert.
-        역할이 미기입인 쌍은 그대로 NULL 로 남는다."""
+
+        역할은 필수다 — 컬럼이 NOT NULL 이라 값을 안 넘기면 저장이 실패한다.
+        서빙이 이 값 하나로 선수 페이지 목록을 가르므로, 비워 두면 화면이 조용히
+        틀어지는 대신 여기서 터지게 둔다 (안건 f-③)."""
         with self.engine.begin() as c:
             c.execute(text(
                 "INSERT INTO article_players "

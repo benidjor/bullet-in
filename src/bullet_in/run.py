@@ -75,8 +75,7 @@ CANDIDATE_HISTORY_SQL = ("SELECT candidate_counts FROM pipeline_runs "
 # (선수 목록의 전환 규칙과 같은 취급 · docs/runbook/2026-08-12-serving-rule-swap-with-unfilled-field.md).
 LINKED_HASHES_SQL = ("SELECT DISTINCT ap.content_hash FROM article_players ap "
                      "JOIN players p ON p.id = ap.player_id "
-                     "WHERE p.status = 'confirmed' "
-                     "AND (ap.role IS NULL OR ap.role <> 'mention')")
+                     "WHERE p.status = 'confirmed' AND ap.role <> 'mention'")
 
 # 성 매칭 최소 길이 — 두 글자 성 (고든 · 스콧) 은 다른 낱말에 섞여 오탐한다.
 SURNAME_MIN_LEN = 3
