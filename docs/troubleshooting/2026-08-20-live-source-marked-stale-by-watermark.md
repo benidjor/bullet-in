@@ -134,3 +134,4 @@ dedup.classify  →  new_body_level > last_level 이면 upgrade · 아니면 blo
 - 이 알림을 고친 설계 — `docs/superpowers/specs/2026-08-14-slo5-freshness-alert-blind-spot-design.md` (PR #290 으로 구현).
 - 억제가 침묵이 된 경위 (같은 알림의 앞 사건) — `docs/troubleshooting/2026-08-15-alert-suppression-becomes-silence.md`.
 - 트윗을 기사로 흡수하는 설계 — `docs/superpowers/specs/2026-08-14-tweet-article-absorption-design.md`.
+- 같은 구조가 서빙 쪽에도 있다 — `docs/troubleshooting/2026-08-20-rendered-values-are-not-raw-data.md` (재려는 것과 실제로 세는 값이 다른 층에 있어 같은 대상을 네 번 다르게 셌다).
