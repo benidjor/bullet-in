@@ -1,0 +1,4 @@
+# 새 worktree 로 복사할 gitignored 파일 (Claude Code 가 처리)
+# 이 프로젝트는 dotenv 를 안 쓰고 셸 export 를 하므로 .env 가 없으면 워크트리에서 운영 작업이 안 된다.
+.env
+x_cookies.json
