@@ -131,10 +131,18 @@ _NAME = rf"{_NAME_TOKEN}(?: +(?:{_NAME_PARTICLE} +)?{_NAME_TOKEN})*"
 # 공저 구분자는 쉼표와 and — 뒤에 다시 이름이 와야 인정한다 (뒤따르는 시각 · 직함 방지).
 _BYLINE_RE = re.compile(rf"\bBy +({_NAME}(?: *(?:,|and) +{_NAME})*)")
 _AUTHOR_SPLIT_RE = re.compile(r"\s*,\s*|\s+and\s+")
-# 한글로 옮겨진 바이라인 — 게시자가 원문 저자를 번역해 적는다 (실측 11건).
+# 한글로 옮겨진 바이라인 — 게시자가 원문 저자를 번역해 적는다.
 # 한글에는 대소문자가 없어 이름 끝을 알 수 없으므로 이름 토큰으로 못 자른다.
-# 표지는 'By' 와 '글:' 둘이다 — '글' 은 흔한 낱말이라 콜론이 있을 때만 근거로 쓴다.
+# 형태가 둘로 갈린다 (운영 본문 눈검수 2026-08-19).
+# → 표지만 있고 이름이 어디서 끝나는지 모르는 것 ('By' · '글:') 은 왼쪽부터 읽어
+#   본문이 시작하는 데서 멈춘다.
+# → 괄호 · 콜론 · 하이픈은 이름의 끝을 알려 준다. 이때는 잡힌 조각이 전부 이름이어야
+#   하고 하나라도 아니면 바이라인이 아니다 — 괄호 안 편집자 주와 그렇게 갈린다.
+# '글' 은 흔한 낱말이라 콜론이 있을 때만 근거로 쓴다.
 _KO_BYLINE_RE = re.compile(r"(?:\bBy\s+|글\s*[:：]\s*)([가-힣].{0,120})")
+_KO_PAREN_RE = re.compile(r"^\s*[\(（]([^)）]{2,80})[\)）]")
+_KO_COLON_RE = re.compile(r"^\s*([가-힣][가-힣 ·]{1,30})\s*[:：]\s")
+_KO_DASH_RE = re.compile(r"^\s*[A-Za-z][A-Za-z .'’]{2,25}\s*[-–—]\s*([가-힣][가-힣 ·]{1,40})")
 _KO_NAME_MAX_CHARS = 14      # 이름 조각의 길이 상한 (실측 최장 '세바스찬 스태포드-블루어' 13자)
 _KO_SENTENCE_TAIL = re.compile(r"(다|요|죠)$")
 # 직함은 사람이 아니다 — 실측상 이 두 낱말이 비-이름 전부를 덮는다 (설계 §1.4).
@@ -157,22 +165,52 @@ def strip_publish_datetime(body: str) -> str:
     return (_SPACES_RE.sub(" ", cleaned) + tail).strip() or body
 
 
-def _korean_body_authors(body: str) -> list[str]:
-    """한글로 옮겨진 바이라인의 저자 전원 — 왼쪽부터 읽어 본문이 시작하는 데서 멈춘다.
+def _looks_like_a_name(part: str) -> bool:
+    """이름 조각의 모양 — 한두 어절 · 짧음 · 숫자 없음 · 종결어미 없음."""
+    tokens = part.split()
+    return (1 <= len(tokens) <= 2 and len(part) <= _KO_NAME_MAX_CHARS
+            and not re.search(r"\d", part) and not _KO_SENTENCE_TAIL.search(part))
 
-    쉼표로 쪼개되 오른쪽 끝을 경계로 쓰면 안 된다 — 본문에도 쉼표가 있어서
-    문장이 통째로 이름으로 들어온다 (실측 '이적료는 7,000만 유로').
+
+def _bounded_korean_authors(head: str) -> list[str]:
+    """끝을 알려 주는 표지 (괄호 · 콜론 · 하이픈) 가 감싼 저자 전원.
+
+    감싼 조각이 **전부** 이름 모양이어야 채택한다.
+    괄호에는 편집자 주도 들어오고 (`(이 기사는 원래 6월 26일에 …)`) 콜론 앞에는
+    기사 제목도 오므로, 하나라도 어긋나면 통째로 버리는 쪽이 맞다."""
+    for rx in (_KO_PAREN_RE, _KO_COLON_RE, _KO_DASH_RE):
+        m = rx.match(head)
+        if not m:
+            continue
+        parts = [p.strip() for p in re.split(r"\s*[,·]\s*", m.group(1)) if p.strip()]
+        # 하이픈 뒤는 이름과 본문이 붙어 있다 — 앞 두 어절까지가 이름이다
+        if rx is _KO_DASH_RE and parts:
+            parts = [" ".join(parts[0].split()[:2])]
+        if parts and all(_looks_like_a_name(p) for p in parts):
+            return list(dict.fromkeys(parts))
+    return []
+
+
+def _korean_body_authors(body: str) -> list[str]:
+    """한글로 옮겨진 바이라인의 저자 전원.
+
+    이름의 끝을 알려 주는 표지 (괄호 · 콜론 · 하이픈) 가 있으면 그것을 먼저 쓴다.
+    없으면 왼쪽부터 읽어 본문이 시작하는 데서 멈춘다 — 쉼표로 쪼개되 오른쪽 끝을
+    경계로 쓰면 본문에도 쉼표가 있어 문장이 통째로 이름으로 들어온다
+    (실측 '이적료는 7,000만 유로').
     이름만 있는 조각은 그대로 쓰고, 본문이 붙기 시작한 조각에서 멈추되 그 조각의
-    앞 두 어절을 마지막 저자로 본다 — 음역된 서양 이름이 일관되게 두 어절이다.
-    실측 11건 전건에서 오검출 0 이었다 (사용자 눈검수와 이름까지 일치)."""
-    m = _KO_BYLINE_RE.search(re.sub(r"\s+", " ", body)[:_BYLINE_HEAD_CHARS])
+    앞 두 어절을 마지막 저자로 본다 — 음역된 서양 이름이 일관되게 두 어절이다."""
+    head = re.sub(r"\s+", " ", body)[:_BYLINE_HEAD_CHARS]
+    bounded = _bounded_korean_authors(head)
+    if bounded:
+        return bounded
+    m = _KO_BYLINE_RE.search(head)
     if not m:
         return []
     out: list[str] = []
     for part in re.split(r"\s*[,·]\s*", m.group(1)):
         tokens = part.split()
-        if (1 <= len(tokens) <= 2 and len(part) <= _KO_NAME_MAX_CHARS
-                and not re.search(r"\d", part) and not _KO_SENTENCE_TAIL.search(part)):
+        if _looks_like_a_name(part):
             out.append(part)
             continue
         if tokens:

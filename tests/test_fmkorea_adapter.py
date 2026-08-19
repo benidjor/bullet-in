@@ -1220,3 +1220,52 @@ def test_geul_without_a_colon_is_not_a_byline():
     """'글' 은 흔한 낱말이라 콜론이 없으면 근거로 쓰지 않는다."""
     from bullet_in.adapters.fmkorea import extract_body_authors
     assert extract_body_authors("이 글 아스날 팬이라면 꼭 보세요") == []
+
+
+# --- 한글 바이라인의 나머지 형태 (2026-08-19 · 저장된 본문 눈검수) ------------
+# 'By' · '글:' 말고도 게시자가 쓰는 형태가 셋 더 있었다 (운영 11건).
+# 괄호 · 콜론 · 하이픈은 이름의 끝을 알려 주므로 잡힌 조각이 전부 이름이어야 하고,
+# 하나라도 이름 모양이 아니면 바이라인이 아니다 (괄호 안 편집자 주와 갈린다).
+
+def test_parenthesised_korean_byline_at_the_head():
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    body = "(데이비드 온스테인, 제이콥 탠스웰) 알 힐랄이 아스톤 빌라의 공격수에게 제안했다."
+    assert extract_body_authors(body) == ["데이비드 온스테인", "제이콥 탠스웰"]
+
+
+def test_parenthesised_byline_takes_all_three_names():
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    body = "(사이먼 존슨, 제임스 혼캐슬, 데이비드 온스테인) 첼시 수비수 찰로바가"
+    assert extract_body_authors(body) == ["사이먼 존슨", "제임스 혼캐슬", "데이비드 온스테인"]
+
+
+def test_parenthesised_editors_note_is_not_a_byline():
+    # 실물 오검출 — 괄호 안이 편집자 주다 (숫자 · 종결어미 · 긴 어절)
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    body = ("(이 기사는 원래 6월 26일에 게재됐으며, 기마랑이스가 이적 의사를 "
+            "전달했다는 소식이 나온 뒤 업데이트됐다.) 아스날은")
+    assert extract_body_authors(body) == []
+
+
+def test_name_followed_by_a_colon_at_the_head():
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    body = "플로리안 플라텐버그: 바이어 레버쿠젠은 현재 아스날의 관심을 받고 있는"
+    assert extract_body_authors(body) == ["플로리안 플라텐버그"]
+
+
+def test_outlet_dash_name_at_the_head():
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    body = "The Athletic-데이비드 온스테인 맨체스터 유나이티드는 브루노 페르난데스가"
+    assert extract_body_authors(body) == ["데이비드 온스테인"]
+
+
+def test_a_sentence_opening_with_a_colon_is_not_a_byline():
+    # 콜론 앞이 이름 모양이 아니면 근거가 아니다
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    assert extract_body_authors("이번 이적시장 정리: 아스날은 미드필더를 원한다") == []
+
+
+def test_lineup_parenthesis_is_not_a_byline():
+    # 실물 본문 앞머리 — 포메이션 표기가 괄호로 시작한다
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    assert extract_body_authors("아스날 (4-2-3-1): 라야 7; 화이트 7, 모스케라 7") == []
