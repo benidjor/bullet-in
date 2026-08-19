@@ -133,7 +133,8 @@ _BYLINE_RE = re.compile(rf"\bBy +({_NAME}(?: *(?:,|and) +{_NAME})*)")
 _AUTHOR_SPLIT_RE = re.compile(r"\s*,\s*|\s+and\s+")
 # 한글로 옮겨진 바이라인 — 게시자가 원문 저자를 번역해 적는다 (실측 11건).
 # 한글에는 대소문자가 없어 이름 끝을 알 수 없으므로 이름 토큰으로 못 자른다.
-_KO_BYLINE_RE = re.compile(r"\bBy\s+([가-힣].{0,120})")
+# 표지는 'By' 와 '글:' 둘이다 — '글' 은 흔한 낱말이라 콜론이 있을 때만 근거로 쓴다.
+_KO_BYLINE_RE = re.compile(r"(?:\bBy\s+|글\s*[:：]\s*)([가-힣].{0,120})")
 _KO_NAME_MAX_CHARS = 14      # 이름 조각의 길이 상한 (실측 최장 '세바스찬 스태포드-블루어' 13자)
 _KO_SENTENCE_TAIL = re.compile(r"(다|요|죠)$")
 # 직함은 사람이 아니다 — 실측상 이 두 낱말이 비-이름 전부를 덮는다 (설계 §1.4).
@@ -351,8 +352,9 @@ class FmkoreaAdapter:
     async def _process(self, c: httpx.AsyncClient,
                        matched: list[tuple[str, str]]) -> list[RawItem]:
         """글별 fetch → 말머리 파싱 → 페이월/무료 라우팅 → RawItem."""
-        from bullet_in.adapters.meta import (extract_og_image, extract_article_body,
-                                             extract_body_images, extract_published_at)
+        from bullet_in.adapters.meta import (extract_authors, extract_og_image,
+                                             extract_article_body, extract_body_images,
+                                             extract_published_at)
         now, out = datetime.now(timezone.utc), []
         for i, (title, url) in enumerate(matched):
             if i:
@@ -372,6 +374,10 @@ class FmkoreaAdapter:
             if orig is None or outlet is None:
                 log.warning("fmkorea 원문/말머리 해소 실패 — 스킵 url=%s", url)
                 continue
+            # 원문 본문을 채택하면 게시글 본문이 사라지므로 바이라인을 그 전에 읽어 둔다.
+            # 게시자가 저자를 한글로 옮겨 적은 표기가 여기에만 있다 ('글: 로리 휘트웰, 베렌 크로스').
+            post_authors = extract_body_authors(_body_text(html, self.body_selector))
+            origin_authors: list[str] = []
             if outlet in PAYWALLED_OUTLETS:
                 body = _body_text(html, self.body_selector)
                 if _is_repost_blocked(html):
@@ -395,6 +401,9 @@ class FmkoreaAdapter:
                     # 원문 차단 (실측 26건 중 25건이 406 · 403 · 페이월) — 게시글 본문으로 폴백.
                     log.info("fmkorea 원문 접속 실패 — 게시글 본문 채택 url=%s", orig)
                 else:
+                    # 저자는 본문 채택 여부와 무관하다 — 원문이 오류 안내여서 등급이
+                    # 1 로 내려가도 페이지의 구조화 정보에는 저자가 남아 있다.
+                    origin_authors = extract_authors(ro.text)
                     origin_body = extract_article_body(ro.text)
                     if origin_body_usable(origin_body):
                         body, lang, material_level = origin_body, "en", 2
@@ -412,6 +421,10 @@ class FmkoreaAdapter:
                 log.info("fmkorea 무관 글 필터 탈락 — title=%s url=%s", title, url)
                 continue
             authors = extract_body_authors(body)
+            if not authors:
+                # 회수는 빈 자리만 채운다 — 이미 저자를 얻고 있던 기사의 대표를 바꾸면
+                # 화면의 바이라인이 함께 움직인다.
+                authors = origin_authors or post_authors
             if journalist:
                 # 말머리 값이 대표 — 본문 공저자는 목록에만 남긴다 (기존 우선순위 유지)
                 authors = [journalist] + [a for a in authors if a != journalist]

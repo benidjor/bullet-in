@@ -1111,3 +1111,112 @@ def test_bracket_outlet_uses_the_registered_canonical_name_for_goal():
     # 말머리가 접는 이름이 소스 설정 · 등재 정식명과 달라 사이드바가 둘로 갈렸다
     # (직수집분 176건은 'Goal.com' · 전재글 1건은 'Goal')
     assert parse_bracket("[골닷컴] 아스날 소식")[0] == "Goal.com"
+
+
+# --- 저자 회수 (안건 y · 2026-08-19) -----------------------------------------
+# 원문 페이지를 받아 놓고 저자만 안 읽던 자리 (A) 와 원문 본문을 채택하며 게시글
+# 바이라인을 버리던 자리 (B) 를 각각 막는다.
+
+LDJSON_ART = (
+    '<html><head><script type="application/ld+json">'
+    '{"@type":"NewsArticle","author":[{"@type":"Person","name":"Sami Mokbel"},'
+    '{"@type":"Person","name":"Owynn Palmer-Atkin"}]}'
+    '</script></head><body><article><p>' + "Arsenal have secured a significant victory in ongoing "
+    "transfer negotiations this summer window. The club completed the acquisition of a key midfielder "
+    "who brings valuable experience and technical skills to strengthen the squad for the season ahead. "
+    "This strategic signing reinforces the position of the club in the Premier League competition." +
+    '</p></article></body></html>')
+
+KO_BYLINE_POST = ('<div class="xe_content"><p>글: 로리 휘트웰, 베렌 크로스</p>'
+                  '<p>아스날 관련 소식이다.</p>'
+                  '<p>https://ex.test/a</p></div>')
+
+
+def _one_post_adapter():
+    return FmkoreaAdapter(source_id="fmkorea",
+                          search_url="https://fm.test/s?t={target}&kw={keyword}",
+                          search_keywords=[{"keyword": "kw1", "target": "title"}],
+                          base_url="https://www.fmkorea.com")
+
+
+def _mock_bbc_post(post_html: str, origin_html: str) -> None:
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(
+        return_value=httpx.Response(200, text=(
+            '<a class="hx" href="/index.php?document_srl=111">[BBC] 아스날 A</a>')))
+    respx.get("https://www.fmkorea.com/111").mock(
+        return_value=httpx.Response(200, text=post_html))
+    respx.get("https://ex.test/a").mock(
+        return_value=httpx.Response(200, text=origin_html))
+
+
+@respx.mock
+def test_origin_structured_authors_are_read_when_the_body_has_no_byline():
+    """경로 A — 원문 응답에서 구조화 저자를 읽는다 (실물 BBC `cwy42yqwk30o`)."""
+    _mock_bbc_post(FREE_BODY, LDJSON_ART)
+    item = asyncio.run(_one_post_adapter().fetch())[0]
+    assert item.raw_payload["authors"] == ["Sami Mokbel", "Owynn Palmer-Atkin"]
+    assert item.raw_payload["journalist"] == "Sami Mokbel"
+    assert item.raw_payload["body_level"] == 2
+
+
+@respx.mock
+def test_origin_structured_authors_survive_a_body_level_downgrade():
+    """원문 본문이 오류 안내여도 저자는 얻는다 — 본문 등급은 그대로 1 이다."""
+    ld_error = ERROR_PAGE.replace(
+        "<html>",
+        '<html><head><script type="application/ld+json">'
+        '{"@type":"NewsArticle","author":{"@type":"Person","name":"Gary Jacob"}}'
+        '</script></head>')
+    _mock_bbc_post(FREE_BODY, ld_error)
+    item = asyncio.run(_one_post_adapter().fetch())[0]
+    assert item.raw_payload["authors"] == ["Gary Jacob"]
+    assert item.raw_payload["body_level"] == 1
+    assert "아스날 본문." in item.raw_payload["body"]
+
+
+@respx.mock
+def test_post_byline_is_read_before_the_origin_body_replaces_it():
+    """경로 B — 원문 채택으로 사라질 게시글 바이라인을 미리 읽어 둔다."""
+    _mock_bbc_post(KO_BYLINE_POST, FREE_ART)
+    item = asyncio.run(_one_post_adapter().fetch())[0]
+    assert item.raw_payload["authors"] == ["로리 휘트웰", "베렌 크로스"]
+    assert item.raw_payload["journalist"] == "로리 휘트웰"
+    assert item.raw_payload["body_level"] == 2          # 본문은 원문 그대로다
+
+
+@respx.mock
+def test_recovered_authors_never_override_an_existing_byline():
+    """이미 얻고 있던 저자는 그대로다 — 회수는 빈 자리만 채운다."""
+    byline_art = LDJSON_ART.replace("<article><p>", "<article><p>By Nick Wright. ")
+    _mock_bbc_post(FREE_BODY, byline_art)
+    item = asyncio.run(_one_post_adapter().fetch())[0]
+    assert item.raw_payload["authors"] == ["Nick Wright"]
+
+
+@respx.mock
+def test_bracket_journalist_still_wins_over_recovered_authors():
+    """말머리 기자가 대표라는 기존 우선순위는 안 바뀐다."""
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(
+        return_value=httpx.Response(200, text=(
+            '<a class="hx" href="/index.php?document_srl=111">'
+            '[BBC - 파브리시오 로마노] 아스날 A</a>')))
+    respx.get("https://www.fmkorea.com/111").mock(
+        return_value=httpx.Response(200, text=FREE_BODY))
+    respx.get("https://ex.test/a").mock(
+        return_value=httpx.Response(200, text=LDJSON_ART))
+    item = asyncio.run(_one_post_adapter().fetch())[0]
+    assert item.raw_payload["journalist"] == "파브리시오 로마노"
+    assert item.raw_payload["authors"][0] == "파브리시오 로마노"
+    assert "Sami Mokbel" in item.raw_payload["authors"]
+
+
+def test_korean_byline_reads_the_geul_marker():
+    """게시자가 'By' 대신 '글:' 로 적는다 (실물 '글: 로리 휘트웰, 베렌 크로스')."""
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    assert extract_body_authors("글: 로리 휘트웰, 베렌 크로스") == ["로리 휘트웰", "베렌 크로스"]
+
+
+def test_geul_without_a_colon_is_not_a_byline():
+    """'글' 은 흔한 낱말이라 콜론이 없으면 근거로 쓰지 않는다."""
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    assert extract_body_authors("이 글 아스날 팬이라면 꼭 보세요") == []
