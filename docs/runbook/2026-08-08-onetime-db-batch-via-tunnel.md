@@ -181,3 +181,41 @@ ssh -i ~/.ssh/seoulnow_deploy -o ExitOnForwardFailure=yes -f -N \
 
 - 상태 코드를 그대로 적는다 — 저자 회수에서 BeSoccer 406 · 텔레그래프 402 · 스카이 독일 403 처럼 매체마다 갈렸다.
 - 회수 못 한 것을 「불가」 로 묶을 때는 **무엇을 확인했는지**를 함께 적는다.
+
+### 8.5. 자동으로 못 얻는 값을 사람이 읽어 넣을 때
+
+원문이 자동 접근을 막지만 사람 브라우저에는 열리는 경우가 있다 (`docs/troubleshooting/2026-08-20-origin-block-reason-is-in-the-body-not-the-status.md`).
+그때는 **판정을 우회하지 않고 사람이 읽어 준 값을 넣는다.**
+저자 회수에서 텔레그래프 11건을 이 방식으로 전건 채웠다 (외부 접속 0 · 과금 0).
+
+**목록을 줄 때 주소를 그대로 준다.**
+제목만 주면 사람이 다시 찾아야 한다.
+추적 인자가 붙은 주소는 잘라서 준다 (`?WT.mc_id=…` 는 없어도 열린다).
+이미 확인된 것과 남은 것을 갈라 보여 주면 같은 페이지를 두 번 열지 않는다.
+
+**받은 값은 URL 로 대조해 넣는다 — 해시를 추정하지 않는다.**
+
+```python
+CONFIRMED = {"<url 의 고유 조각>": ["기자명"], ...}
+hit = next((k for k in CONFIRMED if k in row["url"]), None)
+```
+
+제목이 비슷한 기사가 실제로 있다 — 「비니시우스 record contract」 와 「비니시우스 numbers add up」 은 별개 기사인데,
+한 번 같은 것으로 뭉뚱그렸다가 dry-run 의 「확인 안 된 행」 에서 걸러 냈다.
+
+**짝을 못 찾은 행은 비워 둔다.**
+dry-run 이 「대상 N · 채울 것 M · 확인 안 된 행 N-M」 을 찍게 하고, 그 차이가 0 이 아니면 사람에게 되묻는다.
+추측으로 채우면 틀린 기자명이 화면에 붙고, 그건 값이 없는 것보다 나쁘다.
+
+**넣기 전에 그 이름이 기존 표기와 하나로 합쳐지는지 본다.**
+
+```python
+from bullet_in.credibility import journalist_directory
+from bullet_in.serve.render import norm_alias
+journalist_directory("config/credibility.yaml").get(norm_alias("Sam Dean"))
+```
+
+같은 기자가 X 핸들 · 한글 · 영문으로 흩어져 있을 수 있다.
+저자 회수에서 넷 중 둘 (`Sam Dean` · `Matt Law`) 은 등재돼 있어 `@SamJDean` · `@Matt_Law_DT` 와 자동으로 합쳐졌다.
+미등재인 둘 (`Sam Wallace` · `Dominic King`) 은 별개 항목으로 남았다.
+**합쳐질지 새 항목으로 남을지 미리 알면 「왜 항목이 늘었나」 를 나중에 조사하지 않는다.**
