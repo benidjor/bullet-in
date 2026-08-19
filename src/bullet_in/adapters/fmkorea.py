@@ -414,10 +414,11 @@ class FmkoreaAdapter:
                 continue
             # 원문 본문을 채택하면 게시글 본문이 사라지므로 바이라인을 그 전에 읽어 둔다.
             # 게시자가 저자를 한글로 옮겨 적은 표기가 여기에만 있다 ('글: 로리 휘트웰, 베렌 크로스').
-            post_authors = extract_body_authors(_body_text(html, self.body_selector))
+            post_body = _body_text(html, self.body_selector)
+            post_authors = extract_body_authors(post_body)
             origin_authors: list[str] = []
             if outlet in PAYWALLED_OUTLETS:
-                body = _body_text(html, self.body_selector)
+                body = post_body
                 if _is_repost_blocked(html):
                     # E안: 본문은 재작성해 서빙하되 게시글 이미지는 복제하지 않는다
                     # — 이미지는 재작성이 불가능해 리스크의 성격이 다르다.
@@ -452,7 +453,7 @@ class FmkoreaAdapter:
                         log.info("fmkorea 원문이 오류 안내로 보임 (%d자) — 게시글 본문 채택 url=%s",
                                  len((origin_body or "").strip()), orig)
                 if material_level == 1:
-                    body = _body_text(html, self.body_selector)
+                    body = post_body
             body = strip_publish_datetime(body)
             if not self._relevant(title, body):
                 self.relevance_dropped += 1
