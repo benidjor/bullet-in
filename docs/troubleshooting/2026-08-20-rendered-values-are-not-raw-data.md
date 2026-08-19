@@ -125,4 +125,4 @@ grep -o 'data-journalist="[^"]*"' all.html | sed 's/.*="//;s/"//' | tr '|' '\n' 
 - `docs/troubleshooting/2026-08-14-suspect-the-yardstick-not-the-data.md` — 값이 예상을 벗어났을 때의 잣대 점검
 - `docs/troubleshooting/2026-08-15-verification-that-silently-passes.md` — 「없음」 을 확인하는 검사가 조용히 통과하는 문제
 - `docs/runbook/2026-08-11-premerge-screen-check-with-prod-copy.md` §5 — 사본 없이 배포 산출물로 화면 규모를 재는 절차
-- `docs/troubleshooting/2026-08-20-live-source-marked-stale-by-watermark.md` — 같은 구조가 수집 쪽에도 있다 (신선도가 재려는 것은 「소식을 받았는가」 인데 실제로 세는 값은 「그 소스 이름으로 마지막에 저장된 때」 다)
+- `docs/troubleshooting/2026-08-20-live-source-marked-stale-by-watermark.md` — 같은 구조의 수집 판 · 신선도가 재려는 것은 「소식을 받았는가」 인데 세는 값은 「그 이름으로 마지막에 저장된 때」 다
