@@ -25,7 +25,7 @@ from bullet_in import roster
 from bullet_in.serve.render import write_site, write_ops, unmatched_articles
 from bullet_in.quality import (success_rate, volume_anomalies, evaluate_freshness,
                                evaluate_coverage, candidate_cliffs, filter_miss_suspects,
-                               roster_axis_staleness)
+                               roster_axis_staleness, freshness_alert_split)
 from bullet_in import notify
 
 GEMINI_MODEL = "gemini-3.1-flash-lite"
@@ -376,14 +376,24 @@ async def main(concurrency: int):
                  for sid, s in sources.items() if "freshness_hours" in s}
     checked_at = mart.db_now()
     wm = mart.source_watermarks()
+    prev_freshness = mart.previous_freshness()   # 이번 회차 행을 넣기 전에 읽는다
     records = evaluate_freshness({sid: wm.get(sid) for sid in sources},
                                  checked_at, default_hours, overrides)
     mart.record_freshness(run_id, checked_at, records)
-    if notify.freshness_alert_targets(records, candidate_counts, errors):
+    fresh_targets, fresh_holds = freshness_alert_split(records, prev_freshness)
+    if fresh_targets:
         notify.send_alert(**notify.build_freshness_alert(
-            records, default_hours, sources=sources, run_id=run_id,
-            checked_at=checked_at, candidates=candidate_counts,
+            records, default_hours, targets=fresh_targets, sources=sources,
+            run_id=run_id, checked_at=checked_at, candidates=candidate_counts,
             fetch_errors=errors))
+    # 안 보낸 이유를 남긴다 — 종전에는 대상이 비면 아무 기록 없이 넘어가 "왜 알림이
+    # 안 나갔는가" 를 저널로 답할 수 없었다 (스펙 2026-08-14 §5.4).
+    logging.getLogger(__name__).info(
+        "신선도 판정: 감시 %d소스 · stale %d · 발송 %d · 재알림 대기 %d%s",
+        len(records), sum(1 for r in records if r.stale),
+        len(fresh_targets), len(fresh_holds),
+        "".join(f" [{h.source_id} {h.age_hours:.1f}h — 다음 알림까지 {h.hours_to_next:g}h]"
+                for h in fresh_holds))
 
     summary = {"new_or_changed": len(arts), "errors": errors,
                "success_rate": success_rate(len(adapters), len(errors)),

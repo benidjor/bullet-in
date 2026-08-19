@@ -3,6 +3,8 @@ import logging, os, re
 import httpx
 from datetime import datetime, timezone
 
+from bullet_in.quality import FRESHNESS_REALERT_HOURS
+
 logger = logging.getLogger(__name__)
 
 
@@ -107,38 +109,24 @@ def _source_field_name(source_id: str, sources: dict) -> str:
     return f"{name} ({source_id})" if name else source_id
 
 
-def freshness_alert_targets(records, candidates: dict | None,
-                            fetch_errors: dict | None) -> list:
-    """stale 중 조치 신호만 추린다 — 후보 0건 (수집 끊김 의심) 또는 fetch 오류.
-
-    후보가 있는 stale 은 경로 정상 · 신규 없음이라 조치할 것이 없고, 매 회차
-    반복 발화가 알림 피로만 만든다 (2026-07-31 guardian 실사례 — 진단 문서 §4.1 의
-    "후보는 있으나 전부 중복 = 알릴 필요 없음" 을 발송 조건으로 반영).
-    candidates=None 이면 계수 없이 종전대로 stale 전부를 돌려준다."""
-    breaches = [r for r in records if r.stale]
-    if candidates is None:
-        return breaches
-    fe = fetch_errors or {}
-    return [b for b in breaches
-            if fe.get(b.source_id) or candidates.get(b.source_id, 0) == 0]
-
-
 def build_freshness_alert(records, default_hours: float, *,
-                          sources: dict, run_id: str,
+                          targets: list, sources: dict, run_id: str,
                           checked_at: datetime,
                           candidates: dict | None = None,
                           fetch_errors: dict | None = None) -> dict:
-    """전체 판정 레코드를 받아 조치 신호 소스만 필드로 펼친다.
+    """전체 판정 레코드를 받아 이번 회차 발송 대상만 필드로 펼친다.
 
+    targets 는 quality.freshness_alert_split 이 고른 발송분이다 — stale 전부가 아니라
+    임계를 새로 넘었거나 재알림 간격이 돌아온 소스다. 나머지 stale 은 설명의 대기
+    계수로만 남긴다.
     candidates 는 이번 회차에 어댑터가 찾은 소스별 후보 건수 (dedup 전) — 키 부재 = 0건.
-    필드 대상은 freshness_alert_targets 와 동일: 후보 0건 또는 fetch 오류.
-    경로 정상 stale 은 설명의 생략 계수로만 남긴다. 어댑터 힌트 (셀렉터 드리프트 등) 는
-    후보 0건일 때만 근거가 있다 (2026-07-30 실측, docs/troubleshooting/
+    후보 계수는 발송 조건이 아니라 진단 재료다 (스펙 2026-08-14 §4.1): 후보가 있으면
+    경로는 응답한다는 사실을 적고, 어댑터 힌트 (셀렉터 드리프트 등) 는 후보 0건일 때만
+    근거가 있다 (2026-07-30 실측, docs/troubleshooting/
     2026-07-30-silent-drops-and-blind-alerts.md §4).
-    candidates=None 이면 계수 없이 종전대로 stale 전부 + 힌트."""
+    candidates=None 이면 계수 없이 힌트만 붙인다."""
     breaches = [r for r in records if r.stale]
-    targets = freshness_alert_targets(records, candidates, fetch_errors)
-    skipped = len(breaches) - len(targets)
+    waiting = len(breaches) - len(targets)
     no_wm = sum(1 for r in records if r.last_fetched_at is None)
     ok = len(records) - len(breaches) - no_wm
     fields = []
@@ -150,10 +138,14 @@ def build_freshness_alert(records, default_hours: float, *,
         if (fetch_errors or {}).get(b.source_id):
             lines.append(f"이번 회차 fetch 오류: {fetch_errors[b.source_id][:120]}")
         else:
-            if candidates is not None:
+            n = None if candidates is None else candidates.get(b.source_id, 0)
+            if n:
+                lines.append(f"이번 회차 후보 {n}건 — 경로는 응답하나 새 글이 없습니다")
+            elif n is not None:
                 lines.append("이번 회차 후보 0건")
-            if hint:
+            if hint and not n:
                 lines.append(f"원인 후보: {hint}")
+        lines.append(f"{FRESHNESS_REALERT_HOURS:g}시간 더 지나면 다시 알립니다")
         fields.append({"name": _source_field_name(b.source_id, sources),
                        "value": "\n".join(f"- {ln}" for ln in lines),
                        "inline": False})
@@ -163,7 +155,7 @@ def build_freshness_alert(records, default_hours: float, *,
     return {"title": f"🕰️ 신선도 경고 — 오래된 소스 {len(targets)}건",
             "description": (f"감시 {len(records)}소스: stale {len(breaches)} · "
                             f"정상 {ok} · 워터마크 없음 {no_wm}"
-                            + (f" · 경로 정상 생략 {skipped}" if skipped else "")),
+                            + (f" · 재알림 대기 {waiting}" if waiting else "")),
             "color": COLOR_ANOMALY, "fields": fields,
             "url": RUNBOOK_FRESHNESS,
             "timestamp": checked_at.replace(tzinfo=timezone.utc).isoformat(),

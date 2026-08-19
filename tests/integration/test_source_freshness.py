@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import text
 from bullet_in.models import Article
 from bullet_in.quality import evaluate_freshness
@@ -42,3 +42,22 @@ def test_record_freshness_empty_records_is_noop(engine):
     with engine.connect() as c:
         n = c.execute(text("SELECT COUNT(*) FROM source_freshness")).scalar_one()
     assert n == 0
+
+
+def test_previous_freshness_returns_latest_cycle_only(engine):
+    store = MartStore(engine)
+    older = datetime(2026, 8, 19, 3, 0)
+    newer = datetime(2026, 8, 19, 6, 0)
+    store.record_freshness("run-old", older, evaluate_freshness(
+        {"x_ornstein": older - timedelta(hours=423)}, older, 120.0))
+    store.record_freshness("run-new", newer, evaluate_freshness(
+        {"x_ornstein": newer - timedelta(hours=426),
+         "bbc_sport": newer - timedelta(hours=2)}, newer, 120.0))
+    prev = store.previous_freshness()
+    assert sorted(prev) == ["bbc_sport", "x_ornstein"]
+    assert round(prev["x_ornstein"]["age_hours"]) == 426
+    assert prev["x_ornstein"]["threshold_hours"] == 120.0
+
+
+def test_previous_freshness_empty_on_first_cycle(engine):
+    assert MartStore(engine).previous_freshness() == {}

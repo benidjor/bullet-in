@@ -178,6 +178,18 @@ class MartStore:
                   "thr": r.threshold_hours, "stale": r.stale}
                  for r in records])
 
+    def previous_freshness(self) -> dict[str, dict]:
+        """직전 회차의 소스별 판정 행 (재알림 간격 전이 판정용 · 첫 회차면 빈 dict).
+
+        이번 회차 행을 넣기 전에 불러야 한다 — record_freshness 뒤에 부르면 방금
+        넣은 행이 '직전' 으로 잡혀 전이가 영영 안 생긴다."""
+        with self.engine.connect() as c:
+            rows = c.execute(text(
+                "SELECT source_id, age_hours, threshold_hours FROM source_freshness "
+                "WHERE run_id = (SELECT run_id FROM source_freshness "
+                "ORDER BY checked_at DESC LIMIT 1)")).mappings().all()
+        return {r["source_id"]: dict(r) for r in rows}
+
     def ops_snapshot(self, chart_runs: int = 30, trend_runs: int = 12) -> dict:
         """운영 뷰 (ops.html) 집계 스냅샷. 지표 정의는 spec §5 표가 기준.
         pending 은 rows_missing_translation/stage 와 동일 술어로 카운트."""

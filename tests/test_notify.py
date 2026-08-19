@@ -100,9 +100,14 @@ def _freshness_inputs():
     return checked, records
 
 
+def _stale_of(records):
+    return [r for r in records if r.stale]
+
+
 def test_build_freshness_alert_title_overview_and_meta():
     checked, records = _freshness_inputs()
-    alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
+    alert = notify.build_freshness_alert(records, 48, targets=_stale_of(records),
+                                         sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked)
     assert alert["title"] == "🕰️ 신선도 경고 — 오래된 소스 1건"
     assert alert["description"] == "감시 3소스: stale 1 · 정상 1 · 워터마크 없음 1"
@@ -114,7 +119,8 @@ def test_build_freshness_alert_title_overview_and_meta():
 
 def test_build_freshness_alert_stale_field_detail():
     checked, records = _freshness_inputs()
-    alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
+    alert = notify.build_freshness_alert(records, 48, targets=_stale_of(records),
+                                         sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked)
     [field] = [f for f in alert["fields"] if f["name"].startswith("afcstuff")]
     assert field["name"] == "afcstuff (aggregator) (x_afcstuff)"
@@ -128,7 +134,8 @@ def test_build_freshness_alert_stale_field_detail():
 
 def test_build_freshness_alert_common_fields():
     checked, records = _freshness_inputs()
-    alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
+    alert = notify.build_freshness_alert(records, 48, targets=_stale_of(records),
+                                         sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked)
     assert {"name": "기본 임계", "value": "전역 48h", "inline": True} in alert["fields"]
     assert {"name": "회차", "value": "run 3f2a9c12", "inline": True} in alert["fields"]
@@ -138,7 +145,7 @@ def test_build_freshness_alert_common_fields():
 def test_build_freshness_alert_fallbacks_unknown_adapter_no_display_name():
     checked = datetime(2026, 7, 13, 6, 0, 0)
     records = [SourceFreshness("mystery", checked - timedelta(hours=50), 48.0, 50.0, True)]
-    alert = notify.build_freshness_alert(records, 48,
+    alert = notify.build_freshness_alert(records, 48, targets=records,
                                          sources={"mystery": {"adapter": "weird"}},
                                          run_id="rrrrrrrrrrrr", checked_at=checked)
     field = alert["fields"][0]
@@ -242,7 +249,8 @@ def test_build_freshness_alert_zero_candidates_keeps_hint():
     # 후보 0건은 관측 사실만 적는다 — 원인 추정 (수집 끊김 의심) 은 스펙
     # 2026-08-07 §3.2 로 제거 (arsenal_official 오진 사례). 힌트 줄은 유지.
     checked, records = _stale_bbc()
-    alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
+    alert = notify.build_freshness_alert(records, 48, targets=records,
+                                         sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={}, fetch_errors={})
     field = alert["fields"][0]
@@ -251,40 +259,45 @@ def test_build_freshness_alert_zero_candidates_keeps_hint():
     assert "- 원인 후보: 셀렉터 드리프트 · 사이트 개편" in field["value"]
 
 
-def test_build_freshness_alert_candidates_present_omits_field():
-    # 후보는 있으나 전부 기존 기사 = 경로 정상 — 조치 신호가 아니라 필드에서 뺀다
-    # (2026-07-31 guardian 사례: 문구만 바꾸니 같은 알림이 하루 8회 반복됐다)
+def test_build_freshness_alert_candidates_present_is_diagnosis_not_suppression():
+    # 후보가 있어도 알린다 — 그 계수는 발송 조건이 아니라 진단 재료다 (스펙 §4.1).
+    # 종전에는 이 조건이 발송을 막아 x_ornstein 이 13일째 죽어도 침묵했다.
     checked, records = _stale_bbc()
-    alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
+    alert = notify.build_freshness_alert(records, 48, targets=records,
+                                         sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={"bbc_sport": 4}, fetch_errors={})
-    assert alert["title"] == "🕰️ 신선도 경고 — 오래된 소스 0건"
-    assert "경로 정상 생략 1" in alert["description"]
-    assert not [f for f in alert["fields"] if f["name"].startswith("BBC")]
+    assert alert["title"] == "🕰️ 신선도 경고 — 오래된 소스 1건"
+    field = alert["fields"][0]
+    assert "- 이번 회차 후보 4건 — 경로는 응답하나 새 글이 없습니다" in field["value"]
+    assert "원인 후보" not in field["value"]   # 후보가 있으면 셀렉터 힌트는 근거가 없다
 
 
-def test_freshness_alert_targets_only_actionable():
-    # 알림 발송 판단용 — 후보 0건 · fetch 오류만 대상, 경로 정상 stale 은 제외
+def test_build_freshness_alert_counts_held_sources_in_description():
+    # 재알림 간격이 안 찬 stale 은 필드에서 빠지고 조망 줄에 계수로만 남는다
     checked, records = _stale_bbc()
-    assert notify.freshness_alert_targets(records, {"bbc_sport": 4}, {}) == []
-    assert [b.source_id for b in
-            notify.freshness_alert_targets(records, {}, {})] == ["bbc_sport"]
-    assert [b.source_id for b in
-            notify.freshness_alert_targets(records, {"bbc_sport": 4},
-                                           {"bbc_sport": "HTTP 503"})] == ["bbc_sport"]
+    alert = notify.build_freshness_alert(records, 48, targets=[],
+                                         sources=_FRESH_SOURCES,
+                                         run_id="3f2a9c12abcd", checked_at=checked,
+                                         candidates={}, fetch_errors={})
+    assert alert["title"] == "🕰️ 신선도 경고 — 오래된 소스 0건"
+    assert "재알림 대기 1" in alert["description"]
 
 
-def test_freshness_alert_targets_legacy_returns_all_stale():
-    # candidates 미전달 (종전 호출) — stale 전부가 대상
-    checked, records = _freshness_inputs()
-    assert [b.source_id for b in
-            notify.freshness_alert_targets(records, None, None)] == ["x_afcstuff"]
+def test_build_freshness_alert_states_realert_interval():
+    checked, records = _stale_bbc()
+    alert = notify.build_freshness_alert(records, 48, targets=records,
+                                         sources=_FRESH_SOURCES,
+                                         run_id="3f2a9c12abcd", checked_at=checked,
+                                         candidates={}, fetch_errors={})
+    assert "- 48시간 더 지나면 다시 알립니다" in alert["fields"][0]["value"]
 
 
 def test_build_freshness_alert_fetch_error_shows_error_not_hint():
     # 회차 fetch 가 예외로 끝난 소스 — 실제 오류 문구가 원인이고 힌트는 추측이다
     checked, records = _stale_bbc()
-    alert = notify.build_freshness_alert(records, 48, sources=_FRESH_SOURCES,
+    alert = notify.build_freshness_alert(records, 48, targets=records,
+                                         sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={},
                                          fetch_errors={"bbc_sport": "HTTP 503"})
