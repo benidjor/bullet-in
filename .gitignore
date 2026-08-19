@@ -12,5 +12,7 @@ dbt/dbt_packages/
 dbt/.user.yml
 site/
 .worktrees/
+.claude/worktrees/
+_workspace/
 .superpowers/
 backfill_players_state.txt
