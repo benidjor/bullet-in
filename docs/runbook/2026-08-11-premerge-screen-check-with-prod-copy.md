@@ -193,9 +193,60 @@ uv run python -m bullet_in.<배치 모듈> --state state_subset.txt
 - 배치 코드를 고치지 않으므로 이미 검증된 경로를 그대로 실행한다.
 - `--dry-run` 으로 대상 수를 먼저 확인한다 — 여기서 숫자가 틀리면 state 파일을 잘못 만든 것이다.
 
-## 5. 참조
+## 5. 사본이 필요 없는 경우 — 배포 산출물 한 장으로 재기 (2026-08-20 추가)
+
+**화면에 이미 나가 있는 것의 규모를 재는 일이라면 운영 사본도 터널도 필요 없다.**
+VM 이 만든 `site/all.html` 한 장에 사이드바 계수와 카드 전량이 함께 들어 있다.
+
+### 5.1. 언제 이 방법으로 충분한가
+
+- **재려는 것이 배포된 화면의 현재 상태일 때** — 어긋난 건수 · 항목 종수 · 숨겨진 카드 수 등.
+- **코드를 안 바꿨을 때** — 새 규칙의 결과를 보려면 사본에 렌더해야 하므로 §2 절차를 쓴다.
+
+**사본이 필요한 경우와 갈리는 지점은 「지금 화면」 이냐 「바꾼 뒤 화면」 이냐다.**
+
+### 5.2. 절차
+
+```bash
+# ① 산출물 한 장만 받는다 (회차 시각도 함께 확인)
+ssh <vm> 'cd ~/bullet-in && git log --oneline -1 && ls -la site/all.html'
+scp <vm>:'~/bullet-in/site/all.html' /tmp/<세션전용>/all.html
+```
+
+카드와 사이드바를 같은 파일에서 뽑아 대조한다.
+
+```bash
+# ② 카드 — data-* 속성이 필터 판정의 입력이다
+grep -o 'data-outlet="[^"]*"' all.html | sort | uniq -c | sort -rn | head
+
+# ③ 사이드바 계수
+grep -o 'data-group="outlet" data-value="[^"]*"[^>]*>[^<]*<span class="ct">[0-9]*' all.html
+
+# ④ 서버가 숨긴 카드 수 — 화면 규칙으로 센 값과 맞아야 측정을 믿을 수 있다
+grep -c 'style="display:none"' all.html
+```
+
+### 5.3. 이 방법의 함정
+
+- **`index.html` 로 재면 안 된다** — 사이드바 계수는 전체 기사인데 index 는 카드를 사건 블록 안에 접어 둔다.
+접힌 카드도 필터 대상이라, 안 세면 그만큼이 「도달 불가」 로 잘못 잡힌다.
+- **관련 기사 (`relitem`) 는 태그가 여러 줄에 걸쳐 있다** — 한 줄 `grep` 으로 세면 통째로 놓친다.
+- **HTML 속성은 원자료가 아니다** — 대표 선정 · 별칭 접기 · 소스 폴백을 이미 거친 값이다.
+저장값 기준 수치가 필요하면 DB 를 조회한다 (`2026-08-20-rendered-values-are-not-raw-data.md`).
+- **VM 은 KST 로 돈다** — 산출물 파일 시각도 KST 다.
+UTC 로 적힌 시각과 회차를 견줄 때는 +9 를 한다.
+
+### 5.4. 저장값만 고쳤을 때의 반영 시점
+
+`articles` 의 표시용 컬럼 (`outlet` 등) 만 고쳤다면 **배포가 필요 없다.**
+다음 정기 회차가 렌더하면서 화면에 반영된다.
+
+**확인은 절대값이 아니라 증감으로 한다** — 정정은 저장값에 하고 확인은 화면에서 하므로 층이 다르고, 저장값이 빈 행의 소스 폴백이 화면 계수에 함께 잡힌다.
+
+## 6. 참조
 
 - 로컬 DB 로는 선수 페이지가 안 나오는 이유: 세션 메모리 `local-mart-cannot-render-player-pages`
 - 재생성 스니펫 정본: `docs/runbook/2026-07-19-enrich-only-pass.md` §4
 - 1회성 배치 절차: `docs/runbook/2026-08-08-onetime-db-batch-via-tunnel.md`
 - 이번 회차의 실측: `docs/superpowers/specs/2026-08-10-article-stage-redefinition-design.md` §6.5
+- 층마다 값이 달라지는 문제: `docs/troubleshooting/2026-08-20-rendered-values-are-not-raw-data.md`
