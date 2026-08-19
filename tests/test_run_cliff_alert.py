@@ -105,12 +105,12 @@ def test_roster_surnames_skips_single_token_and_short_names():
     assert roster_surnames({"얀 디오망데", "우스망 디오망데", "케파", "칼빈 고든"}) == {"디오망데"}
 
 
-def test_linked_hashes_sql_drops_mention_but_keeps_unfilled():
-    """신호 ④ 재료 — 언급 귀속은 근거가 아니고, 미기입은 옛 판정대로 남긴다.
+def test_linked_hashes_sql_drops_mention():
+    """신호 ④ 재료 — 스치는 언급뿐인 귀속은 근거가 아니다.
 
-    스치는 언급 하나로 아스날이 한 글자도 안 나오는 기사가 남아 있었다 (실측 2건).
-    미기입을 언급과 같이 읽으면 반대 사고가 난다 — 추출이 응답을 못 낸 회차의 기사가
-    화면에서 조용히 빠진다. 두 성질을 한 번에 확인한다."""
+    언급 하나로 아스날이 한 글자도 안 나오는 기사가 남아 있었다 (실측 2건).
+    미기입을 함께 남기던 조건은 걷어냈다 — 역할이 NOT NULL 이라 그 값이 들어올 수
+    없고, 남겨 두면 제약이 깨졌을 때 화면에서 조용히 넘어간다 (안건 f-③)."""
     from sqlalchemy import create_engine, text
     from bullet_in.run import LINKED_HASHES_SQL
     engine = create_engine("sqlite://")
@@ -124,8 +124,7 @@ def test_linked_hashes_sql_drops_mention_but_keeps_unfilled():
         c.execute(text("INSERT INTO article_players VALUES "
                        "('subj',1,'subject'),"      # 주역 — 남는다
                        "('ment',1,'mention'),"      # 언급뿐 — 빠진다
-                       "('null',1,NULL),"           # 미기입 — 옛 판정대로 남는다
                        "('both',1,'mention'),('both',2,'subject'),"  # 하나라도 주역이면 남는다
                        "('cand',3,'subject')"))     # 미확정 선수 — 원래대로 안 센다
         got = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
-    assert got == {"subj", "null", "both"}
+    assert got == {"subj", "both"}

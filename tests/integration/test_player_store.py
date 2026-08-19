@@ -1,3 +1,4 @@
+import pytest
 from sqlalchemy import text
 from bullet_in.roster_seed import ROSTER
 from bullet_in.roster import normalize_pairs, record_article_players
@@ -75,8 +76,8 @@ def test_link_article_upsert_is_idempotent(engine):
     store.seed(ROSTER)
     pid = store.gate_player_id("기마랑이스")
     h = "a" * 64
-    store.link_article(h, pid, "interest")
-    store.link_article(h, pid, "agreed")     # 재추출 — 단계만 갱신
+    store.link_article(h, pid, "interest", "subject")
+    store.link_article(h, pid, "agreed", "subject")     # 재추출 — 단계만 갱신
     with engine.connect() as c:
         rows = c.execute(text(
             "SELECT stage FROM article_players WHERE content_hash=:h"), {"h": h}).all()
@@ -225,7 +226,7 @@ def test_page_players_applies_target_condition(engine):
                          ko_name="무기사", category="external", status="confirmed",
                          transfer_status="in_link")
     for pid in (keep, staff, no_axis, cand, archived_kept):
-        store.link_article("a" * 64, pid, "interest")
+        store.link_article("a" * 64, pid, "interest", "subject")
     ids = {p["id"] for p in store.page_players()}
     assert keep in ids
     assert archived_kept in ids       # 사유가 값에 남은 보관 선수는 노출 (스펙 §3.1)
@@ -243,8 +244,8 @@ def test_page_player_links_shares_the_same_predicate(engine):
     staff = _add_player(engine, full_name="Link Boss", surname="Boss",
                         ko_name="감독", category="manager", status="confirmed",
                         transfer_status="in_link")
-    store.link_article("b" * 64, keep, "agreed")
-    store.link_article("b" * 64, staff, "agreed")
+    store.link_article("b" * 64, keep, "agreed", "subject")
+    store.link_article("b" * 64, staff, "agreed", "subject")
     links = store.page_player_links()
     assert {l["player_id"] for l in links} == {keep}
     assert links[0]["stage"] == "agreed"
@@ -267,17 +268,15 @@ def test_link_article_stores_role_and_page_links_return_it(engine):
             if l["content_hash"] == h] == ["subject"]
 
 
-def test_link_article_leaves_role_null_when_not_given(engine):
-    # 기존 호출자 (백필 · 재추출 모듈) 는 역할을 넘기지 않는다 — 미기입으로 남아야 한다
+def test_link_article_rejects_a_missing_role(engine):
+    # 역할 미기입은 저장 단계에서 막는다 — 서빙이 그 값을 임의로 읽으면 화면이
+    # 조용히 틀어진다 (안건 f-③ · role NOT NULL).
     store = PlayerStore(engine)
     keep = _add_player(engine, full_name="No Role", surname="NoRole",
                        ko_name="역할없음", category="external", status="confirmed",
                        transfer_status="in_link")
-    store.link_article("e" * 64, keep, "interest")
-    with engine.connect() as c:
-        assert c.execute(text(
-            "SELECT role FROM article_players WHERE content_hash=:h"),
-            {"h": "e" * 64}).scalar_one() is None
+    with pytest.raises(Exception):
+        store.link_article("e" * 64, keep, "interest", None)
 
 
 def test_linked_hashes_ignores_the_target_condition(engine):
@@ -285,7 +284,7 @@ def test_linked_hashes_ignores_the_target_condition(engine):
     staff = _add_player(engine, full_name="Only Staff", surname="Staff",
                         ko_name="스태프", category="manager", status="confirmed",
                         transfer_status="none")
-    store.link_article("c" * 64, staff, "rumour")
+    store.link_article("c" * 64, staff, "rumour", "subject")
     # 추출은 됐으나 페이지 대상이 아닌 선수만 걸린 기사도 "추출 누락" 이 아니다
     assert "c" * 64 in store.linked_hashes()
 

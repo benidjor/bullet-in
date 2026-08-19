@@ -131,9 +131,18 @@ _NAME = rf"{_NAME_TOKEN}(?: +(?:{_NAME_PARTICLE} +)?{_NAME_TOKEN})*"
 # 공저 구분자는 쉼표와 and — 뒤에 다시 이름이 와야 인정한다 (뒤따르는 시각 · 직함 방지).
 _BYLINE_RE = re.compile(rf"\bBy +({_NAME}(?: *(?:,|and) +{_NAME})*)")
 _AUTHOR_SPLIT_RE = re.compile(r"\s*,\s*|\s+and\s+")
-# 한글로 옮겨진 바이라인 — 게시자가 원문 저자를 번역해 적는다 (실측 11건).
+# 한글로 옮겨진 바이라인 — 게시자가 원문 저자를 번역해 적는다.
 # 한글에는 대소문자가 없어 이름 끝을 알 수 없으므로 이름 토큰으로 못 자른다.
-_KO_BYLINE_RE = re.compile(r"\bBy\s+([가-힣].{0,120})")
+# 형태가 둘로 갈린다 (운영 본문 눈검수 2026-08-19).
+# → 표지만 있고 이름이 어디서 끝나는지 모르는 것 ('By' · '글:') 은 왼쪽부터 읽어
+#   본문이 시작하는 데서 멈춘다.
+# → 괄호 · 콜론 · 하이픈은 이름의 끝을 알려 준다. 이때는 잡힌 조각이 전부 이름이어야
+#   하고 하나라도 아니면 바이라인이 아니다 — 괄호 안 편집자 주와 그렇게 갈린다.
+# '글' 은 흔한 낱말이라 콜론이 있을 때만 근거로 쓴다.
+_KO_BYLINE_RE = re.compile(r"(?:\bBy\s+|글\s*[:：]\s*)([가-힣].{0,120})")
+_KO_PAREN_RE = re.compile(r"^\s*[\(（]([^)）]{2,80})[\)）]")
+_KO_COLON_RE = re.compile(r"^\s*([가-힣][가-힣 ·]{1,30})\s*[:：]\s")
+_KO_DASH_RE = re.compile(r"^\s*[A-Za-z][A-Za-z .'’]{2,25}\s*[-–—]\s*([가-힣][가-힣 ·]{1,40})")
 _KO_NAME_MAX_CHARS = 14      # 이름 조각의 길이 상한 (실측 최장 '세바스찬 스태포드-블루어' 13자)
 _KO_SENTENCE_TAIL = re.compile(r"(다|요|죠)$")
 # 직함은 사람이 아니다 — 실측상 이 두 낱말이 비-이름 전부를 덮는다 (설계 §1.4).
@@ -156,22 +165,52 @@ def strip_publish_datetime(body: str) -> str:
     return (_SPACES_RE.sub(" ", cleaned) + tail).strip() or body
 
 
-def _korean_body_authors(body: str) -> list[str]:
-    """한글로 옮겨진 바이라인의 저자 전원 — 왼쪽부터 읽어 본문이 시작하는 데서 멈춘다.
+def _looks_like_a_name(part: str) -> bool:
+    """이름 조각의 모양 — 한두 어절 · 짧음 · 숫자 없음 · 종결어미 없음."""
+    tokens = part.split()
+    return (1 <= len(tokens) <= 2 and len(part) <= _KO_NAME_MAX_CHARS
+            and not re.search(r"\d", part) and not _KO_SENTENCE_TAIL.search(part))
 
-    쉼표로 쪼개되 오른쪽 끝을 경계로 쓰면 안 된다 — 본문에도 쉼표가 있어서
-    문장이 통째로 이름으로 들어온다 (실측 '이적료는 7,000만 유로').
+
+def _bounded_korean_authors(head: str) -> list[str]:
+    """끝을 알려 주는 표지 (괄호 · 콜론 · 하이픈) 가 감싼 저자 전원.
+
+    감싼 조각이 **전부** 이름 모양이어야 채택한다.
+    괄호에는 편집자 주도 들어오고 (`(이 기사는 원래 6월 26일에 …)`) 콜론 앞에는
+    기사 제목도 오므로, 하나라도 어긋나면 통째로 버리는 쪽이 맞다."""
+    for rx in (_KO_PAREN_RE, _KO_COLON_RE, _KO_DASH_RE):
+        m = rx.match(head)
+        if not m:
+            continue
+        parts = [p.strip() for p in re.split(r"\s*[,·]\s*", m.group(1)) if p.strip()]
+        # 하이픈 뒤는 이름과 본문이 붙어 있다 — 앞 두 어절까지가 이름이다
+        if rx is _KO_DASH_RE and parts:
+            parts = [" ".join(parts[0].split()[:2])]
+        if parts and all(_looks_like_a_name(p) for p in parts):
+            return list(dict.fromkeys(parts))
+    return []
+
+
+def _korean_body_authors(body: str) -> list[str]:
+    """한글로 옮겨진 바이라인의 저자 전원.
+
+    이름의 끝을 알려 주는 표지 (괄호 · 콜론 · 하이픈) 가 있으면 그것을 먼저 쓴다.
+    없으면 왼쪽부터 읽어 본문이 시작하는 데서 멈춘다 — 쉼표로 쪼개되 오른쪽 끝을
+    경계로 쓰면 본문에도 쉼표가 있어 문장이 통째로 이름으로 들어온다
+    (실측 '이적료는 7,000만 유로').
     이름만 있는 조각은 그대로 쓰고, 본문이 붙기 시작한 조각에서 멈추되 그 조각의
-    앞 두 어절을 마지막 저자로 본다 — 음역된 서양 이름이 일관되게 두 어절이다.
-    실측 11건 전건에서 오검출 0 이었다 (사용자 눈검수와 이름까지 일치)."""
-    m = _KO_BYLINE_RE.search(re.sub(r"\s+", " ", body)[:_BYLINE_HEAD_CHARS])
+    앞 두 어절을 마지막 저자로 본다 — 음역된 서양 이름이 일관되게 두 어절이다."""
+    head = re.sub(r"\s+", " ", body)[:_BYLINE_HEAD_CHARS]
+    bounded = _bounded_korean_authors(head)
+    if bounded:
+        return bounded
+    m = _KO_BYLINE_RE.search(head)
     if not m:
         return []
     out: list[str] = []
     for part in re.split(r"\s*[,·]\s*", m.group(1)):
         tokens = part.split()
-        if (1 <= len(tokens) <= 2 and len(part) <= _KO_NAME_MAX_CHARS
-                and not re.search(r"\d", part) and not _KO_SENTENCE_TAIL.search(part)):
+        if _looks_like_a_name(part):
             out.append(part)
             continue
         if tokens:
@@ -351,8 +390,9 @@ class FmkoreaAdapter:
     async def _process(self, c: httpx.AsyncClient,
                        matched: list[tuple[str, str]]) -> list[RawItem]:
         """글별 fetch → 말머리 파싱 → 페이월/무료 라우팅 → RawItem."""
-        from bullet_in.adapters.meta import (extract_og_image, extract_article_body,
-                                             extract_body_images, extract_published_at)
+        from bullet_in.adapters.meta import (extract_authors, extract_og_image,
+                                             extract_article_body, extract_body_images,
+                                             extract_published_at)
         now, out = datetime.now(timezone.utc), []
         for i, (title, url) in enumerate(matched):
             if i:
@@ -372,8 +412,13 @@ class FmkoreaAdapter:
             if orig is None or outlet is None:
                 log.warning("fmkorea 원문/말머리 해소 실패 — 스킵 url=%s", url)
                 continue
+            # 원문 본문을 채택하면 게시글 본문이 사라지므로 바이라인을 그 전에 읽어 둔다.
+            # 게시자가 저자를 한글로 옮겨 적은 표기가 여기에만 있다 ('글: 로리 휘트웰, 베렌 크로스').
+            post_body = _body_text(html, self.body_selector)
+            post_authors = extract_body_authors(post_body)
+            origin_authors: list[str] = []
             if outlet in PAYWALLED_OUTLETS:
-                body = _body_text(html, self.body_selector)
+                body = post_body
                 if _is_repost_blocked(html):
                     # E안: 본문은 재작성해 서빙하되 게시글 이미지는 복제하지 않는다
                     # — 이미지는 재작성이 불가능해 리스크의 성격이 다르다.
@@ -395,6 +440,9 @@ class FmkoreaAdapter:
                     # 원문 차단 (실측 26건 중 25건이 406 · 403 · 페이월) — 게시글 본문으로 폴백.
                     log.info("fmkorea 원문 접속 실패 — 게시글 본문 채택 url=%s", orig)
                 else:
+                    # 저자는 본문 채택 여부와 무관하다 — 원문이 오류 안내여서 등급이
+                    # 1 로 내려가도 페이지의 구조화 정보에는 저자가 남아 있다.
+                    origin_authors = extract_authors(ro.text)
                     origin_body = extract_article_body(ro.text)
                     if origin_body_usable(origin_body):
                         body, lang, material_level = origin_body, "en", 2
@@ -405,13 +453,17 @@ class FmkoreaAdapter:
                         log.info("fmkorea 원문이 오류 안내로 보임 (%d자) — 게시글 본문 채택 url=%s",
                                  len((origin_body or "").strip()), orig)
                 if material_level == 1:
-                    body = _body_text(html, self.body_selector)
+                    body = post_body
             body = strip_publish_datetime(body)
             if not self._relevant(title, body):
                 self.relevance_dropped += 1
                 log.info("fmkorea 무관 글 필터 탈락 — title=%s url=%s", title, url)
                 continue
             authors = extract_body_authors(body)
+            if not authors:
+                # 회수는 빈 자리만 채운다 — 이미 저자를 얻고 있던 기사의 대표를 바꾸면
+                # 화면의 바이라인이 함께 움직인다.
+                authors = origin_authors or post_authors
             if journalist:
                 # 말머리 값이 대표 — 본문 공저자는 목록에만 남긴다 (기존 우선순위 유지)
                 authors = [journalist] + [a for a in authors if a != journalist]

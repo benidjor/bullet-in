@@ -14,7 +14,7 @@ from markupsafe import Markup, escape
 from bullet_in import transfer_stage as _stage
 from bullet_in.credibility import norm_alias
 from bullet_in.enrich import attrib_core, roundup_attrib_counts
-from bullet_in.storage.players import MENTION, ROLES
+from bullet_in.storage.players import MENTION
 
 log = logging.getLogger(__name__)
 
@@ -1109,17 +1109,14 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
     단계로 고르던 것을 역할로 바꾼 것인데, 단계는 "이 기사가 그 선수에 대해
     보도하는 진행 단계" 라 "이 기사의 주인공인가" 와 다른 질문이고, 그 대가로
     화면 귀속 807건 중 331건이 남의 기사였다 (2026-08-12 실측).
-    역할이 미기입이면 옛 규칙 (단계가 other 가 아니면 남긴다) 으로 판정한다 —
-    미기입을 주역으로 읽으면 옛 규칙이 빼 주던 588건이 배포 순간 전부 목록에
-    올라오기 때문이다 (전환 규칙, 스펙 §3.2).
 
-    **값을 만드는 규칙이 붙은 뒤에도 이 폴백은 남긴다** (2026-08-12 결정).
-    규칙은 모든 행에 주역 · 언급 중 하나를 넣으므로 소급이 끝나면 이 갈래는 거의
-    돌지 않지만, 추출 응답이 없거나 회차가 중간에 끊긴 기사는 귀속이 아예 안 생기고
-    소급도 파싱 실패 · 호출 한도로 일부를 남긴다. 그때 미기입을 임의의 한쪽으로
-    읽으면 화면이 조용히 틀어진다 — 주역으로 읽으면 남의 기사가 뜨고 언급으로
-    읽으면 본인 기사가 사라진다. 걷어내는 조건은 운영에서 미기입 0건이 유지되는
-    것을 확인한 뒤이며 별도 안건으로 등재한다.
+    **역할이 미기입일 때 옛 단계 규칙으로 판정하던 폴백은 걷어냈다** (2026-08-19).
+    값을 만드는 규칙이 모든 행에 주역 · 언급 중 하나를 넣게 된 뒤로 그 갈래가
+    운영에서 한 번도 돌지 않았고 (5회 연속 신규 적재분 미기입 0 · 소급 후 2,889쌍
+    전부 기입), 값이 빈 채 저장되는 코드 경로도 남아 있지 않다.
+    대신 미기입을 막는 자리를 쓰기 쪽으로 옮겼다 (article_players.role NOT NULL) —
+    서빙이 미기입을 임의의 한쪽으로 읽으면 화면이 조용히 틀어지기 때문이다.
+    주역으로 읽으면 남의 기사가 뜨고 언급으로 읽으면 본인 기사가 사라진다.
     머리 건수도 같은 집합에서 나오므로 "머리 = 목록" 등식은 그대로다 (스펙 §5.3).
     서빙 목록에 없는 기사는 링크에서 빠지고, 그 결과 남는 기사가 0건인 선수는
     빈 페이지가 되지 않도록 결과에서 제외한다."""
@@ -1131,9 +1128,7 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
     out = []
     for p in players:
         paired = [(by_hash[l["content_hash"]], l["stage"]) for l in p["links"]
-                  if l["content_hash"] in by_hash and (
-                      l["stage"] != _stage.OTHER if l.get("role") not in ROLES
-                      else l["role"] != MENTION)]
+                  if l["content_hash"] in by_hash and l["role"] != MENTION]
         if not paired:
             continue
         paired.sort(key=lambda t: _sort_ts(t[0]))          # 오래된 것부터 (사다리 입력)

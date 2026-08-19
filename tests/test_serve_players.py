@@ -1,4 +1,5 @@
 """선수 색인 · 선수 페이지 순수 함수 단위 테스트 (스펙 §4 · §5)."""
+import pytest
 import re
 from datetime import datetime
 from pathlib import Path
@@ -159,9 +160,13 @@ def _art(h, day, stage=None, title="제목"):
 
 
 def _player(pid, surname, ko, status, links):
-    """links = [{"content_hash", "stage"}] — page_player_links 반환 형태."""
+    """links = [{"content_hash", "stage", "role"}] — page_player_links 반환 형태.
+
+    role 은 컬럼이 NOT NULL 이라 실물에서 늘 실려 온다 — 목록 판정과 무관한
+    테스트가 매번 적지 않도록 안 적은 링크는 주역으로 채운다."""
     return {"id": pid, "full_name": f"{ko} {surname}", "surname": surname,
-            "ko_name": ko, "transfer_status": status, "links": links}
+            "ko_name": ko, "transfer_status": status,
+            "links": [{"role": "subject", **l} for l in links]}
 
 
 def test_build_player_entries_orders_articles_newest_first():
@@ -208,42 +213,29 @@ def test_build_player_entries_excludes_mention_from_list_and_count():
     assert [a["content_hash"] for a in entry["articles"]] == ["h3", "h1"]
 
 
-def test_build_player_entries_falls_back_to_stage_when_role_is_missing():
-    # 역할이 채워지기 전에는 옛 규칙이 그대로 돌아 화면이 바뀌지 않는다 (스펙 §3.2)
-    arts = [_art("h1", 1, "interest"), _art("h2", 2, "other")]
-    players = [_player(1, "Tzolis", "촐리스", "in_link",
-                       [{"content_hash": "h1", "stage": "interest"},
-                        {"content_hash": "h2", "stage": "other"}])]
-    [e] = build_player_entries(arts, players)
-    assert [a["content_hash"] for a in e["articles"]] == ["h1"]
-    assert e["count"] == 1
-
-
-def test_build_player_entries_falls_back_to_stage_when_role_is_out_of_vocab():
-    # 어휘 밖 역할 값도 미기입과 같이 옛 단계 규칙으로 판정한다 (스펙 §3.2 전환 규칙)
-    arts = [_art("h1", 1, "interest"), _art("h2", 2, "other")]
-    players = [_player(1, "Tzolis", "촐리스", "in_link",
-                       [{"content_hash": "h1", "stage": "interest",
-                         "role": "배경"},
-                        {"content_hash": "h2", "stage": "other",
-                         "role": "배경"}])]
-    [e] = build_player_entries(arts, players)
-    assert [a["content_hash"] for a in e["articles"]] == ["h1"]
-    assert e["count"] == 1
-
-
-def test_build_player_entries_mixes_role_and_stage_rules_per_link():
-    # 역할이 있는 행은 역할로 · 없는 행은 단계로 (스펙 §3.2 전환 규칙)
-    arts = [_art("h1", 1, "agreed"), _art("h2", 2, "other"), _art("h3", 3, "other")]
+def test_build_player_entries_judges_only_by_role():
+    # 단계 폴백을 걷어냈다 — 목록은 역할 하나로만 갈린다 (안건 f-③).
+    # 단계가 other 인 주역 기사는 남고, 단계가 진행 중이어도 언급이면 빠진다.
+    arts = [_art("h1", 1, "agreed"), _art("h2", 2, "other")]
     players = [_player(1, "Tzolis", "촐리스", "in_link",
                        [{"content_hash": "h1", "stage": "agreed",
-                         "role": "mention"},          # 역할로 제외
+                         "role": "mention"},          # 언급 — 빠진다
                         {"content_hash": "h2", "stage": "other",
-                         "role": "subject"},          # 역할로 포함
-                        {"content_hash": "h3", "stage": "other"}])]   # 단계로 제외
+                         "role": "subject"}])]        # 주역 — 남는다
     [e] = build_player_entries(arts, players)
     assert [a["content_hash"] for a in e["articles"]] == ["h2"]
     assert e["count"] == 1
+
+
+def test_build_player_entries_raises_when_a_link_has_no_role():
+    # 미기입은 쓰기 쪽에서 막는다 (article_players.role NOT NULL) — 서빙이 임의로
+    # 한쪽으로 읽으면 화면이 조용히 틀어지므로 여기서는 터뜨린다.
+    arts = [_art("h1", 1, "interest")]
+    players = [{"id": 1, "full_name": "촐리스 Tzolis", "surname": "Tzolis",
+                "ko_name": "촐리스", "transfer_status": "in_link",
+                "links": [{"content_hash": "h1", "stage": "interest"}]}]
+    with pytest.raises(KeyError):
+        build_player_entries(arts, players)
 
 
 def test_build_player_entries_keeps_subject_other_without_ladder_row():
@@ -413,7 +405,8 @@ def test_build_player_entries_falls_back_to_full_name():
     arts = [_art("h1", 1, "rumour")]
     players = [{"id": 1, "full_name": "Aladji Bamba", "surname": "Bamba",
                 "ko_name": None, "transfer_status": "other_club",
-                "links": [{"content_hash": "h1", "stage": "rumour"}]}]
+                "links": [{"content_hash": "h1", "stage": "rumour",
+                           "role": "subject"}]}]
     [e] = build_player_entries(arts, players)
     assert e["name"] == "Aladji Bamba"
 
@@ -620,7 +613,8 @@ def test_build_player_entries_prefers_ko_full_name():
     players = [{"id": 1, "full_name": "Christos Tzolis", "surname": "Tzolis",
                 "ko_full_name": "크리스토스 촐리스", "ko_name": "촐리스",
                 "transfer_status": "in_link",
-                "links": [{"content_hash": "h1", "stage": "interest"}]}]
+                "links": [{"content_hash": "h1", "stage": "interest",
+                           "role": "subject"}]}]
     assert build_player_entries(rows, players)[0]["name"] == "크리스토스 촐리스"
 
 
@@ -629,7 +623,8 @@ def test_build_player_entries_falls_back_to_ko_name():
     players = [{"id": 1, "full_name": "Christos Tzolis", "surname": "Tzolis",
                 "ko_full_name": None, "ko_name": "촐리스",
                 "transfer_status": "in_link",
-                "links": [{"content_hash": "h1", "stage": "interest"}]}]
+                "links": [{"content_hash": "h1", "stage": "interest",
+                           "role": "subject"}]}]
     assert build_player_entries(rows, players)[0]["name"] == "촐리스"
 
 
