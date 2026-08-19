@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from bullet_in.quality import (success_rate, volume_anomaly, volume_anomalies,
-                               Anomaly, evaluate_freshness, candidate_cliffs)
+                               Anomaly, evaluate_freshness, candidate_cliffs,
+                               freshness_alert_split)
 
 def test_success_rate_excludes_errored_sources():
     assert success_rate(total_sources=5, errored=1) == 0.8
@@ -282,3 +283,61 @@ def test_roster_staleness_silent_on_closing_stage_for_axisless_player():
     from bullet_in.quality import roster_axis_staleness
     assert roster_axis_staleness(
         [_pair(27, "요케레스", "none", "done")], {(27, "done"): 6}) == []
+
+
+def _stale(sid, age, thr):
+    from bullet_in.quality import SourceFreshness
+    return SourceFreshness(sid, datetime(2026, 8, 19) - timedelta(hours=age),
+                           thr, age, age > thr)
+
+
+def test_freshness_alert_split_first_cycle_sends_every_stale_source():
+    # 직전 회차 행이 없으면 비교 기준이 없다 — stale 이면 알린다
+    send, hold = freshness_alert_split([_stale("x_ornstein", 426.0, 120.0)], {})
+    assert [r.source_id for r in send] == ["x_ornstein"]
+    assert hold == []
+
+
+def test_freshness_alert_split_holds_within_same_interval():
+    # 직전 회차와 같은 간격 구간 — 48h 가 아직 안 지났다
+    prev = {"x_ornstein": {"age_hours": 423.0, "threshold_hours": 120.0}}
+    send, [h] = freshness_alert_split([_stale("x_ornstein", 426.0, 120.0)], prev)
+    assert send == []
+    # 120 + 7*48 = 456h 에 다음 알림
+    assert (h.source_id, h.hours_to_next) == ("x_ornstein", 30.0)
+
+
+def test_freshness_alert_split_sends_when_interval_elapses():
+    prev = {"x_ornstein": {"age_hours": 455.0, "threshold_hours": 120.0}}
+    send, hold = freshness_alert_split([_stale("x_ornstein", 458.0, 120.0)], prev)
+    assert [r.source_id for r in send] == ["x_ornstein"]
+    assert hold == []
+
+
+def test_freshness_alert_split_sends_on_first_crossing():
+    prev = {"skysports": {"age_hours": 118.0, "threshold_hours": 120.0}}
+    send, hold = freshness_alert_split([_stale("skysports", 121.0, 120.0)], prev)
+    assert [r.source_id for r in send] == ["skysports"]
+    assert hold == []
+
+
+def test_freshness_alert_split_sends_when_threshold_changed():
+    # 임계를 고친 회차는 새 규칙으로 처음 판정하는 회차라 옛 판정을 기준으로 못 쓴다.
+    # 이 규칙이 없으면 x_ornstein (24h → 120h) 이 배포 회차에 조용히 넘어간다.
+    prev = {"x_ornstein": {"age_hours": 423.0, "threshold_hours": 24.0}}
+    send, hold = freshness_alert_split([_stale("x_ornstein", 426.0, 120.0)], prev)
+    assert [r.source_id for r in send] == ["x_ornstein"]
+    assert hold == []
+
+
+def test_freshness_alert_split_ignores_fresh_sources():
+    send, hold = freshness_alert_split([_stale("bbc_sport", 21.0, 96.0)], {})
+    assert (send, hold) == ([], [])
+
+
+def test_freshness_alert_split_sends_after_watermark_moved_but_still_stale():
+    # 새 글이 들어와 경과가 줄면 구간도 내려간다 — 다음 구간을 새로 넘을 때 알린다
+    prev = {"guardian": {"age_hours": 400.0, "threshold_hours": 192.0}}
+    send, [h] = freshness_alert_split([_stale("guardian", 200.0, 192.0)], prev)
+    assert send == []
+    assert h.hours_to_next == 40.0   # 192 + 48 = 240h

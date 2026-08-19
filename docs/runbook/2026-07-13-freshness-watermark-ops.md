@@ -13,11 +13,21 @@
 
 - **🕰️ 신선도 경고 (주황)** — stale 소스가 하나라도 있으면 한 embed 로 묶여 온다.
   제목이 stale 건수를, description 이 전체 조망 ( `감시 5소스: stale 1 · 정상 3 · 워터마크 없음 1` ) 을 보여준다.
-- **소스당 필드** — 경과 시간 · 적용 임계, 마지막 수집 시각 (Discord 상대시간 · 절대시간), 어댑터 기반 원인 후보 한 줄 (힌트 매핑이 있는 어댑터만).
+- **소스당 필드** — 경과 시간 · 적용 임계, 마지막 수집 시각 (Discord 상대시간 · 절대시간), 이번 회차 후보 건수, 어댑터 기반 원인 후보 한 줄 (힌트 매핑이 있는 어댑터만), 다음 재알림 안내.
   `기본 임계` 필드 ( `전역 48h` ) 와 필드의 임계가 다르면 그 소스는 override 적용 상태다.
+- **후보 건수는 진단 재료다** — 후보가 있으면 "경로는 응답하나 새 글이 없습니다" 로 적고, 어댑터 힌트는 후보 0건일 때만 붙는다.
+  2026-08-14 개정 전에는 이 계수가 발송 조건이었다 ( 후보가 있으면 알림 자체를 막았다 ).
+  그래서 `x_ornstein` 이 13일째 새 글을 못 가져오는데도 알림이 한 번도 안 나갔다 — 경위는 `docs/troubleshooting/2026-08-15-alert-suppression-becomes-silence.md`.
+- **재알림은 48시간 고정 간격** — 임계를 넘은 회차에 한 번 알리고, 그 뒤 경과가 48h 씩 늘 때마다 다시 알린다.
+  간격이 안 찬 stale 소스는 필드에서 빠지고 조망 줄의 `재알림 대기 N` 으로만 남는다.
+  간격은 임계와 독립이다 — 임계의 배수로 두면 임계가 큰 저빈도 소스에서 재알림이 영영 안 온다.
+- **임계를 고친 회차는 한 번 몰린다** — 직전 회차 판정을 새 임계로 다시 쓸 수 없어, 그 시점에 stale 인 소스가 전부 한 번씩 알린다.
+  `config/sources.yaml` 의 임계를 손댄 배포에서는 이것이 정상이다.
 - **메타** — `회차` 필드의 run_id 앞 8자로 `pipeline_runs` · `source_freshness` 회차를 특정하고, embed 하단 시각은 검사 시각 (UTC) 이다.
 - **제목 클릭** — 이 런북으로 연결된다.
-- **무알림** — 모든 소스가 임계 안이거나, 워터마크 자체가 없는 소스뿐인 경우.
+- **무알림** — 모든 소스가 임계 안이거나, 재알림 간격이 아직 안 찼거나, 워터마크 자체가 없는 소스뿐인 경우.
+  어느 쪽인지는 매 회차 남는 저널 한 줄로 답한다 ( 발송이 0건이어도 남는다 ) .
+  `journalctl -u bullet-in.service --since '-1 day' | grep '신선도 판정'` 으로 `감시 N소스 · stale N · 발송 N · 재알림 대기 N` 과, 대기 중인 소스별 다음 알림까지 남은 시간을 본다.
   워터마크 없음 ( 기사 0건 ) 은 "신규 추가" 와 "처음부터 죽음" 을 구분할 수 없어 알림에서 제외한다 — 이 케이스는 SLO-6 · 에러 로그가 담당.
 - **감시 제외 소스 ( `freshness_hours: 0` )** — 판정 루프 자체에서 빠진다.
   stale 이든 아니든 필드에 나타나지 않고, `source_freshness` 이력에도 안 남는다 ( 무알림과 달리 완전히 대상 밖 ) .
@@ -46,17 +56,40 @@
 
 임계는 `config/sources.yaml` 에서만 조정한다 ( 코드 무수정 ).
 
-- **전역 `freshness_default_hours: 48`** — 파이프라인이 6 시간 간격 4 회/일 돌므로 48h = 8 회차 연속 무신규.
-  일반 언론 소스의 주말 · 뉴스 공백을 견디는 보수적 기본값이다.
-- **소스별 `freshness_hours` override** — 소스 항목에 키를 추가하면 그 소스만 좁아진다.
-  현재 `x_afcstuff: 24` ( X aggregator 는 매일 다건 포스팅 → 24h 무소식이면 이상 ).
+- **전역 `freshness_default_hours: 48`** — 새로 붙는 소스가 처음부터 override 를 갖지는 않으므로 기본값으로 유지한다.
+  지금은 감시 중인 소스 전부가 아래 override 를 갖고 있어 실제 판정에 쓰이지는 않는다.
+- **소스별 `freshness_hours` override** — 소스 항목에 키를 추가하면 그 소스만 임계가 달라진다.
+  2026-08-14 실측 ( 21일 · 166회차 ) 의 소스별 공백 95 백분위를 24h 배수로 올려 정했다.
+
+| 소스 | 임계 | 공백 95% |
+|---|---|---|
+| fmkorea · x_afcstuff · bbc_gossip | 24h | 15h · 15h · 21h |
+| bbc_sport | 96h | 75h |
+| skysports · x_ornstein | 120h | 99h · 111h |
+| guardian | 192h | 168h |
+
+  `x_ornstein` 이 120h 인 것은 그 계정이 저빈도라서다.
+  같은 X 소스라도 `x_afcstuff` 는 집계 계정이라 하루에 여러 건이 올라오고, `x_ornstein` 은 본인 계정에 `#AFC` 필터가 걸려 21일에 5건이었다.
+  종전에는 둘 다 "X 는 고빈도" 라는 이유로 24h 였고, 그래서 `x_ornstein` 은 정상 동작 중에도 112회 중 103회가 stale 이었다.
 - **`freshness_hours: 0` = 감시 제외** — 좁히는 override 와 달리 판정 자체를 끈다.
   적용 사례: `arsenal_official` — 1군 이적 · 계약 공식 발표에만 반응하는 이벤트 구동 소스라, 채택 0 이 며칠이고 이어져도 정상일 수 있다.
   대신 채택 필터가 실제 발표를 놓쳤는지는 `docs/runbook/2026-07-13-collection-alerts-ops.md` 의 채택 누락 관측 알림이 담당한다.
-- **오탐이 잦으면** — 해당 소스의 실제 발행 간격을 `source_freshness` 이력으로 확인하고 override 를 늘린다.
-  `SELECT source_id, MAX(age_hours) FROM source_freshness GROUP BY source_id` 로 평시 최대 경과를 본다.
+- **재측정 절차** — 아래 쿼리로 소스별 stale 비율을 보고, 한 소스라도 20% 를 넘으면 그 소스의 임계를 다시 잰다.
+  정상 소스가 회차의 5분의 1에서 경고를 켜면 그것은 경고가 아니라 소음이고, 결국 알림 전체를 못 믿게 만든다.
+
+```sql
+SELECT source_id,
+       COUNT(*) AS checks,
+       ROUND(MAX(age_hours), 1) AS max_age,
+       SUM(stale) AS stale_n
+FROM source_freshness
+WHERE checked_at >= NOW() - INTERVAL 30 DAY
+GROUP BY source_id ORDER BY stale_n DESC;
+```
+
 - **오프시즌** — 이적 뉴스 소스는 시즌 중 대비 확연히 뜸해진다.
-  반복 오탐 시 전역을 올리기보다 뜸한 소스만 override ( 예: 72–96h ) 를 준다.
+  위 임계는 이적 시장이 열린 21일치로 잰 값이라, 시장이 닫히면 좁게 느껴질 수 있다.
+  그때는 전역을 올리기보다 뜸해진 소스만 다시 재서 override 를 늘린다.
 
 ## 검증
 
@@ -80,6 +113,9 @@ uv run pytest tests/integration/test_source_freshness.py -v  # 테이블 적재 
 
 ## 롤백
 
+- 임계만 되돌리려면 `config/sources.yaml` 의 `freshness_hours` 를 원래 값으로 되돌린다 ( 코드 무수정 ) .
+- 재알림 간격을 되돌리려면 `quality.py` 의 `FRESHNESS_REALERT_HOURS` 를 늘린다.
+  값을 키우면 첫 알림만 남고 반복이 사실상 멎는다.
 - 기능 제거는 `git revert` 로 충분하다.
   `source_freshness` 는 append 전용 이력이라 남아 있어도 무해하고, 테이블 자체도 `CREATE TABLE IF NOT EXISTS` 라 재적용 충돌이 없다.
 - 알림만 임시로 끄려면 `DISCORD_WEBHOOK_URL` 을 해제한다 ( WARNING 로깅 폴백 ).
@@ -89,6 +125,7 @@ uv run pytest tests/integration/test_source_freshness.py -v  # 테이블 적재 
 
 - spec · plan: `docs/superpowers/{specs,plans}/2026-07-13-slo5-freshness-watermark*`.
 - 감시 제외 규약 · 문구 정비: `docs/superpowers/specs/2026-08-07-alert-f2-unit-attribution-and-observability-design.md` §3.2.
+- 임계 재조정 · 억제 제거 · 재알림 간격의 설계 근거: `docs/superpowers/specs/2026-08-14-slo5-freshness-alert-blind-spot-design.md`.
 - 함정: `docs/troubleshooting/2026-07-13-freshness-clock-mixing-gap.md` (시계 혼합 · UTC 고정 경위) ·
   `docs/troubleshooting/2026-08-07-arsenal-official-transfer-tag-omission.md` (arsenal_official 감시 제외 경위) .
 - SLO-6 알림 운영: `docs/runbook/2026-07-13-collection-alerts-ops.md`.

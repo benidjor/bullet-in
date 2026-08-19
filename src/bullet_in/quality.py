@@ -73,6 +73,61 @@ def evaluate_freshness(watermarks: dict[str, datetime | None], now: datetime,
     return out
 
 
+# 재알림 고정 간격 (h) — 임계와 독립이다. 임계의 배수로 두면 임계가 큰 저빈도 소스에서
+# 재알림이 영영 안 온다 (x_ornstein 임계 120h 의 3배 = 15일 > 실제 경과 12.6일).
+FRESHNESS_REALERT_HOURS = 48.0
+
+
+@dataclass
+class FreshnessHold:
+    """stale 이지만 이번 회차에 안 알리는 소스 — 로그로 사유를 남기는 데 쓴다."""
+    source_id: str
+    age_hours: float
+    hours_to_next: float
+
+
+def _realert_level(age_hours: float, threshold_hours: float,
+                   interval_hours: float) -> int:
+    """임계를 넘은 뒤 몇 번째 간격 구간에 있는가 — 임계 안이면 -1."""
+    if age_hours <= threshold_hours:
+        return -1
+    return int((age_hours - threshold_hours) // interval_hours)
+
+
+def freshness_alert_split(records: list[SourceFreshness],
+                          previous: dict[str, dict],
+                          interval_hours: float = FRESHNESS_REALERT_HOURS
+                          ) -> tuple[list[SourceFreshness], list[FreshnessHold]]:
+    """stale 소스를 이번 회차 발송분과 보류분으로 가른다 (스펙 2026-08-14 §4.2).
+
+    임계를 넘은 회차에 한 번 알리고, 그 뒤 경과가 interval_hours 씩 늘 때마다 다시
+    알린다. 발송 사실을 따로 저장하지 않고 previous (직전 회차의 source_freshness 행 ·
+    source_id → age_hours · threshold_hours) 와 비교하는 무상태 전이 판정이다 —
+    candidate_cliffs 와 같은 방식.
+    직전 행이 없거나 (첫 회차) 그때 임계가 지금과 다르면 비교 기준이 없어 알린다.
+    임계를 고친 회차는 새 규칙으로 처음 판정하는 회차이므로 옛 판정을 '이미 알렸다' 의
+    근거로 쓸 수 없다."""
+    send: list[SourceFreshness] = []
+    hold: list[FreshnessHold] = []
+    for r in records:
+        if not r.stale:
+            continue
+        prev = previous.get(r.source_id)
+        level = _realert_level(r.age_hours, r.threshold_hours, interval_hours)
+        prev_level = -1
+        if (prev is not None and prev.get("age_hours") is not None
+                and float(prev["threshold_hours"]) == r.threshold_hours):
+            prev_level = _realert_level(float(prev["age_hours"]),
+                                        r.threshold_hours, interval_hours)
+        if level > prev_level:
+            send.append(r)
+        else:
+            next_age = r.threshold_hours + (level + 1) * interval_hours
+            hold.append(FreshnessHold(r.source_id, r.age_hours,
+                                      round(next_age - r.age_hours, 1)))
+    return send, hold
+
+
 def evaluate_coverage(coverage: dict) -> list[str]:
     """공홈 퍼널 불변식 위반 목록 — 후보 0 = 발견 경로 장애 · Men 소멸 = taxonomy 드리프트.
     accept 0 은 비수기 정상이라 판정하지 않는다 (spec 2026-07-24 §5)."""
