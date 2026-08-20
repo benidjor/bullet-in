@@ -89,12 +89,11 @@ outlets:
   - {name: Foot Mercato,    tier: 4,   aliases: ["풋 메르카토", "Foot Mercato", "footmercato", "FM"]}   # 저장값 약칭 "FM" 이 별칭에 없어 안 접히고 있었다
   - {name: talkSPORT,       tier: 4,   aliases: ["talkSPORT"]}   # 백트래킹 domains 승격용 (@JacobsBen 인용 원문 — 기자 미등재라 아웃렛 폴백 경로)
   # 합칠 짝이 없던 단독 매체 (안건 γ 잔여 · 2026-08-20 사용자 결정). 등급은 사용자가 정했다.
-  # 「ge」 는 ge.globo.com 의 브랜드명이고 상위 브랜드 Globo 로 등재한다.
-  # ⚠ 별칭 "ge" 는 두 글자라 제목 부분 문자열 매칭에 약하다 — 현재 노출은 0 이지만
-  #    (fmkorea 235건 중 제목에 ge 를 가진 남의 기사 0 · 로마자 조각이 있는 제목은 92건),
-  #    게시자가 말머리를 영어로 적기 시작하면 tier 2 가 엉뚱한 기사로 새어 간다.
-  #    없애려면 저장값 1행을 ge → Globo 로 고쳐 이 별칭을 지우면 된다.
-  - {name: Globo,           tier: 2,   aliases: ["Globo", "ge"]}
+  # ge.globo.com 은 저장값이 「ge」 였는데 2026-08-20 에 운영 1행을 Globo 로 고쳤다.
+  # 두 글자 별칭 "ge" 를 등급 사전에 두면 제목 부분 문자열 매칭에 걸리므로 (당시 노출은 0 이었지만
+  # 게시자가 말머리를 영어로 적으면 tier 2 가 엉뚱한 기사로 샌다) 저장값을 고쳐 별칭을 없앴다.
+  # 다시 「ge」 로 들어오는 행이 생기면 별칭이 아니라 그 행을 고친다.
+  - {name: Globo,           tier: 2,   aliases: ["Globo"]}
   - {name: UOL,             tier: 2,   aliases: ["UOL"]}
   # 「헤코르드」 로 저장돼 있던 1행은 원문이 ojogo.pt 라 O Jogo 로 정정했다 (안건 η).
   - {name: O Jogo,          tier: 2,   aliases: ["O Jogo"]}
