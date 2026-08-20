@@ -243,7 +243,73 @@ UTC 로 적힌 시각과 회차를 견줄 때는 +9 를 한다.
 
 **확인은 절대값이 아니라 증감으로 한다** — 정정은 저장값에 하고 확인은 화면에서 하므로 층이 다르고, 저장값이 빈 행의 소스 폴백이 화면 계수에 함께 잡힌다.
 
-## 6. 참조
+## 6. 화면 규칙 자체를 브라우저에서 재기 (2026-08-20 추가)
+
+§2 · §5 는 **산출물의 값**을 세는 절차다.
+`app.js` 의 판정 규칙을 바꿨다면 그것만으로는 부족하다 — **그 규칙이 실제 브라우저에서 무엇을 보여 주는지**를 따로 봐야 한다.
+표기 통일 회차에서 사이드바 항목 251개를 하나씩 눌러 확인했고, 그 과정에서 함정 둘을 밟았다.
+
+### 6.1. 절차
+
+렌더한 산출물을 로컬에 띄우고 항목을 하나씩 켜서 화면에 남는 카드를 센다.
+
+```js
+// 사이드바 항목을 하나씩 켜고 「적용」 을 눌러 화면에 남는 카드를 센다
+const apply = document.getElementById('applyBtn');
+const vis = () => [...document.querySelectorAll('a.item')]
+  .filter(e => getComputedStyle(e).display !== 'none').length;
+for (const b of document.querySelectorAll('input[data-group="outlet"]')) {
+  const want = +b.closest('label').querySelector('.ct').textContent;
+  b.checked = true; b.dispatchEvent(new Event('change', {bubbles: true}));
+  apply.click();
+  const got = vis();                       // 적힌 건수와 이 값을 대조한다
+  b.checked = false; b.dispatchEvent(new Event('change', {bubbles: true}));
+  apply.click();
+}
+```
+
+### 6.2. 함정 ① — 체크만으로는 필터가 안 걸린다
+
+**필터는 「적용」 버튼에서 걸린다.**
+`change` 이벤트 처리기는 버튼에 `dirty` 표시만 하고, `applyFilters` 는 `applyBtn.onclick` 에 걸려 있다.
+
+- 이것을 모르고 재면 **항목 전부가 같은 값 (필터 없는 화면의 카드 수) 으로 나온다.**
+실물 — 251개 항목이 전부 701 로 나왔다.
+- **값이 한 종류로 뭉치면 필터가 안 걸린 것을 의심한다.**
+「어긋남 251종」 처럼 보이지 않고 「전부 같은 값」 으로 나타나므로 오독하기 쉽다.
+
+### 6.3. 함정 ② — 항목에서 출발하는 검사는 반대 방향을 못 본다
+
+「사이드바가 적은 건수 = 그 항목을 골랐을 때 나오는 건수」 는 **항목에서 출발하는 검사**다.
+그래서 **「카드에는 있는데 사이드바에 항목이 없다」 를 구조적으로 못 본다** — 그 항목이 없으니 검사 목록에도 없다.
+
+**양방향으로 센다.**
+
+```bash
+# ① 측정 도구부터 의심한다 — 원자료 태그 수와 내 계수가 같은가
+grep -o 'data-group="outlet"' all.html | wc -l
+
+# ② 두 방향을 모두 센다
+#    카드의 고유 data-outlet 값  vs  사이드바 항목
+#    → 카드에만 있는 것 0 · 항목에만 있는 것 0 이어야 한다
+```
+
+- 이 대조가 있어야 **「화면에 빈 자리가 없다」 를 단정**할 수 있다.
+- 실물 — 다른 세션이 잰 49종과 우리 48종이 갈렸을 때, 이 대조로 우리 층이 깨끗한 것을 보이고 원인을 상대 도구 (`outlet_display` 의 `directory` 인자 누락) 로 좁혔다.
+- 없어진 것을 세려면 없어지기 전 목록이 필요하다는 것과 같은 뿌리다 (`2026-08-14-a-tradeoff-weighed-one-loss-but-there-were-five.md`).
+
+### 6.4. 함수를 손으로 불러 화면을 예측할 때
+
+렌더를 돌리지 않고 저장값에 서빙 함수를 직접 적용해 델타를 예고할 수 있다.
+그때는 **인자 목록을 호출부와 1:1 로 맞춘다** — 정본은 `run.py` 의 `write_site(...)` 다.
+
+- `outlet_display` 는 `directory` (인용 기자 소속 접기) 와 `outlet_dir` (표기 · 조직 계정 접기) 를 **둘 다** 받는다.
+하나만 빠져도 화면에 없는 표시명이 생긴다.
+- **그 오차는 델타에서 상쇄돼 안 드러난다** — 전후를 같은 틀린 도구로 재기 때문이다.
+그래서 **절대값을 한 번은 배포 산출물과 맞춰 본다.**
+- 경위와 처방: `docs/troubleshooting/2026-08-14-suspect-the-yardstick-not-the-data.md` §2.3.
+
+## 7. 참조
 
 - 로컬 DB 로는 선수 페이지가 안 나오는 이유: 세션 메모리 `local-mart-cannot-render-player-pages`
 - 재생성 스니펫 정본: `docs/runbook/2026-07-19-enrich-only-pass.md` §4
