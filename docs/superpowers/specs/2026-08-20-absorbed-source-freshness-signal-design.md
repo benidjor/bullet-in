@@ -273,8 +273,9 @@ records    = evaluate_freshness(...)
 되돌리기를 잊으면 마감 뒤에 오탐이 몰리므로 장치를 셋 검.
 
 - **`config/sources.yaml` 주석** — 바꾼 세 줄에 원래 값과 원복 날짜 (2026-09-02) 를 함께 적음.
-- **런북** — `docs/runbook/2026-07-13-freshness-watermark-ops.md` 에 원복 절차와 재보정 SQL 을 남김.
+- **런북** — 절차는 `docs/runbook/2026-08-20-freshness-threshold-recalibration.md` 가 정본 (표본 유효 구간 확인 · 공백 분포 · 후보별 알림 시뮬레이션 · 적용 · 되돌리기).
   재보정 재료는 이 변경이 매 회차 `source_freshness` 에 쌓음.
+  **표본을 자를 때 밟는 함정** — `docs/troubleshooting/2026-08-20-gap-samples-contain-our-own-downtime.md` (정기 회차가 성겼던 구간의 공백은 소스의 침묵이 아니라 우리 정지임).
 - **잔여 안건 메모리** — 안건 ι · 임계계절성을 열고 착수 조건을 「마감 뒤 14일 표본 확보」 로 적음.
 
 ---
