@@ -507,3 +507,35 @@ def test_unregistered_outlet_keeps_no_tier():
     r = load_registry(REG)
     assert "as" not in r.outlets
     assert "아스" not in r.outlets
+
+
+def test_standalone_outlets_fold_to_formal_names():
+    """합칠 짝이 없던 단독 매체의 약칭 · 한글 표기 (안건 γ 잔여 · 2026-08-20)."""
+    d = outlet_directory(REG)
+    for stored, name in [("ge", "Globo"), ("O Jogo", "O Jogo"), ("마르카", "Marca"),
+                         ("가제타", "La Gazzetta dello Sport"), ("CDS", "Corriere dello Sport"),
+                         ("크로니클", "Chronicle Live"), ("MD", "Mundo Deportivo"),
+                         ("CM", "Calciomercato"), ("CN", "CalcioNapoli24"),
+                         ("BB", "BarcaBuzz"), ("NA", "Now Arsenal"),
+                         ("TIA", "This Is Anfield"), ("FM", "Foot Mercato")]:
+        assert d[norm_alias(stored)] == name
+
+
+def test_display_only_standalone_outlets_stay_out_of_tier_lookup():
+    """팬 · 집계 사이트는 표기만 정상화하고 등급은 폴백 4 를 유지한다.
+
+    등급 사전에 들어가면 짧은 별칭 (MD · BB · NA · CN · TIA) 이 제목 부분 문자열로
+    걸린다 — tier 4 는 min 때문에 무해하지만 애초에 그 경로를 안 타게 둔다."""
+    r = load_registry(REG)
+    for alias in ["besoccer", "스포르트", "md", "cm", "cn", "bb", "na", "tia",
+                  "sport24", "relevo", "cope"]:
+        assert alias not in r.outlets
+
+
+def test_mismatched_stored_outlets_are_not_registered():
+    """저장값이 원문 도메인과 어긋나는 매체는 표기 전용으로도 넣지 않는다 (안건 η).
+
+    접기는 저장값 정확 일치라, 등급을 안 매겨도 틀린 값이 엉뚱한 항목으로 간다."""
+    d = outlet_directory(REG)
+    for stored in ["A BOLA", "빌트"]:
+        assert norm_alias(stored) not in d
