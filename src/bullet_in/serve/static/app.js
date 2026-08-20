@@ -248,7 +248,10 @@ function applyFilters() {
     // 무산 (collapsed) 은 방향을 보지 않는다 (§8 개정) — 잔류 확정 · 재계약 체결이
     // 방향 none 이라 걸러지면 무산 필터가 제 내용물을 잃는다. render.in_stage_filter 와 같은 규칙.
     const dirOk = d.stage === 'collapsed' || d.dir === 'in' || d.dir === 'out';
-    const okStage = isOther ? showOther
+    // 언론사 · 기자로 좁히면 기타도 함께 연다 — 사이드바가 적어 둔 건수에는 기타 기사가
+    // 들어 있는데 기타 토글 말고는 그것을 열 수단이 없었다 (사이드바 계수 설계 §5.1).
+    // 단계를 함께 고른 경우는 그대로 뺀다 — 기타는 어느 단계에도 안 속한다.
+    const okStage = isOther ? (showOther || (srcActive && stageEnums.size === 0))
       : (stageEnums.size === 0 || (stageEnums.has(d.stage) && dirOk));
     return okText && okSrc && okTier && okStage;
   };

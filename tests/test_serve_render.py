@@ -303,6 +303,13 @@ def test_app_js_has_other_bucket_toggle_contract():
     assert "showOther" in js            # other 노출 분기
 
 
+def test_app_js_opens_other_when_an_outlet_or_journalist_is_picked():
+    """사이드바 건수에는 기타 기사가 들어 있는데 기타 토글 말고는 열 수단이 없었다.
+    언론사 · 기자로 좁히면 기타도 함께 열어야 건수와 목록이 맞는다 (사이드바 계수 설계 §5.1)."""
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "isOther ? (showOther || (srcActive && stageEnums.size === 0))" in js
+
+
 def test_index_footer_links_to_ops_page():
     html = render_index([_row()], SOURCES, NOW)
     assert '<a href="ops.html">수집 현황</a>' in html

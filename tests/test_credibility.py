@@ -1,7 +1,10 @@
 import pytest
 from pathlib import Path
 from datetime import datetime, timezone
-from bullet_in.credibility import load_registry, resolve_tier, Registry, journalist_directory
+from bullet_in.credibility import (
+    load_registry, resolve_tier, Registry, journalist_directory, outlet_directory,
+    norm_alias,
+)
 from bullet_in.models import RawItem
 
 REG = Path(__file__).parent.parent / "config" / "credibility.yaml"
@@ -385,3 +388,88 @@ def test_x_mention_of_espn_brasil_gets_medium_tier():
     sources = {"x_afcstuff": {"credibility": "x_mentions", "fallback_tier": 4}}
     it = _item("x_afcstuff", {"text": "Bruno Guimarães latest. [ @ESPNBrasil ]"})
     assert resolve_tier(it, sources, r, journalist="@ESPNBrasil") == 2.0
+
+
+# ---- 표기 전용 항목 (tier 없는 등재) — 기자명 · 언론사 표기 통일 설계 §4.1 ----
+
+def test_tierless_entry_stays_out_of_the_registry(tmp_path):
+    """등급을 안 매긴 항목은 Registry 에 안 들어간다 — 공신력이 붙으면 안 되기 때문."""
+    p = tmp_path / "spell.yaml"
+    p.write_text(
+        "journalists:\n"
+        '  - {name: Spelling Only, aliases: ["표기만"]}\n'
+        "outlets:\n"
+        '  - {name: Outlet Only, aliases: ["표기만 매체"]}\n', encoding="utf-8")
+    r = load_registry(p)
+    assert r.journalists == {}
+    assert r.outlets == {}
+
+
+def test_tierless_entry_still_folds_spellings(tmp_path):
+    """조회 맵에는 들어간다 — 표기 통일에 필요한 것은 이름뿐이고 등급이 아니다."""
+    p = tmp_path / "spell.yaml"
+    p.write_text(
+        "journalists:\n"
+        '  - {name: Spelling Only, outlet: Daily Mail, aliases: ["표기만"]}\n'
+        "outlets: []\n", encoding="utf-8")
+    d = journalist_directory(p)
+    assert d["표기만"]["name"] == "Spelling Only"
+    assert d["표기만"]["outlet"] == "Daily Mail"
+
+
+def test_tierless_journalist_does_not_promote_a_fixed_source_tier(tmp_path):
+    """고정 소스 경로의 min 승격은 등재 기자만 탄다 — 표기 전용 항목은 tier 를 안 움직인다."""
+    p = tmp_path / "spell.yaml"
+    p.write_text(
+        "journalists:\n"
+        '  - {name: Spelling Only, outlet: The Sun, aliases: ["표기만"]}\n'
+        "outlets: []\n", encoding="utf-8")
+    r = load_registry(p)
+    sources = {"sun": {"tier": 4, "outlet": "The Sun"}}
+    it = _item("sun", {"title": "Saka"})
+    assert resolve_tier(it, sources, r, journalist="Spelling Only") == 4.0
+
+
+def test_split_korean_journalist_spellings_fold_to_one_name():
+    """같은 기자가 두 항목으로 갈리던 자리 — 갈래 A 는 별칭 추가 · 갈래 B 는 표기 전용 항목."""
+    d = journalist_directory(REG)
+    assert d["제임스 맥니콜라스"]["name"] == "James McNicholas"
+    assert d["맷로"]["name"] == "Matt Law"
+    assert d["사이먼 존스"]["name"] == "Simon Jones"
+    assert d["simon jones"]["name"] == "Simon Jones"
+    assert d["이산 칸"]["name"] == "Isaan Khan"
+    assert d["마리오 코르테가나"]["name"] == "Mario Cortegana"
+    assert d["제임스 피어스"]["name"] == "James Pearce"
+    assert d["@samwallacetel"]["name"] == "Sam Wallace"
+    assert d["@dkingtelegraph"]["name"] == "Dominic King"
+
+
+def test_spelling_only_journalists_carry_no_tier():
+    """표기를 합치면서 공신력은 한 칸도 안 준다 (설계 §4.2)."""
+    r = load_registry(REG)
+    for key in ["simon jones", "사이먼 존스", "isaan khan", "mario cortegana",
+                "james pearce", "sam wallace", "dominic king"]:
+        assert key not in r.journalists
+
+
+def test_split_outlet_spellings_fold_to_one_name():
+    """도메인이 같아 짝이 확정된 표기들 (언론사 표기 통일 설계 §2.1)."""
+    d = outlet_directory(REG)
+    assert d[norm_alias("The Athletics")] == "The Athletic"
+    assert d[norm_alias("Telegraph")] == "The Telegraph"
+    assert d[norm_alias("Sky")] == "Sky Sports"
+    assert d[norm_alias("스카이스포츠")] == "Sky Sports"
+    assert d[norm_alias("DM+")] == "Daily Mail"
+    assert d[norm_alias("메일")] == "Daily Mail"
+    for s in ["더 선", "더선", "더 썬", "더썬"]:
+        assert d[norm_alias(s)] == "The Sun"
+    assert d[norm_alias("아스")] == "AS"
+    assert d[norm_alias("더 타임스")] == "The Times"
+    assert d[norm_alias("스탠더드")] == "Evening Standard"
+
+
+def test_unregistered_outlet_keeps_no_tier():
+    """AS 는 등재 이력이 없어 표기 전용으로 넣었다 — 등급이 붙으면 안 된다."""
+    r = load_registry(REG)
+    assert "as" not in r.outlets
+    assert "아스" not in r.outlets

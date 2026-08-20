@@ -449,3 +449,29 @@ def test_article_journalists_keeps_an_organisation_that_is_the_only_byline():
     row = _art(source_id="bbc_sport", journalist="BBC Sport",
                authors_json='["BBC Sport"]')
     assert [e["name"] for e in article_journalists(row, JSOURCES, DIR)] == ["BBC"]
+
+
+# ---- 표기 접기 · 기타 계수 (기자명 · 언론사 표기 통일 설계 §4.3 · 사이드바 계수 설계 §5.4) ----
+
+def test_outlet_display_folds_stored_outlet_spelling():
+    """저장된 언론사명이 사전을 안 거쳐 「더 선」 과 The Sun 이 두 항목으로 갈리던 자리."""
+    odir = {"더선": "The Sun", "sky": "Sky Sports"}
+    assert outlet_display({"outlet": "더 선", "source_id": "x"}, {}, outlet_dir=odir) == "The Sun"
+    assert outlet_display({"outlet": "Sky", "source_id": "x"}, {}, outlet_dir=odir) == "Sky Sports"
+
+
+def test_outlet_display_leaves_unknown_spellings_alone():
+    """사전에 없는 표기는 그대로 통과한다 — 저장값을 고치는 것이 아니라 표시만 접는다."""
+    odir = {"더선": "The Sun"}
+    assert outlet_display({"outlet": "BeSoccer", "source_id": "x"}, {}, outlet_dir=odir) == "BeSoccer"
+    assert outlet_display({"outlet": "더 선", "source_id": "x"}, {}) == "더 선"
+
+
+def test_facet_counts_other_skips_linked_player_badged_cards():
+    """링크 선수 배지가 붙은 기타 글은 카드가 안 숨는데 계수는 세고 있었다 (실측 88 대 80)."""
+    base = {"source_id": "a", "outlet": "BBC", "tier": 1, "team": "arsenal",
+            "transfer_stage": "other", "title_ko": "첼시 이적 소식"}
+    arts = [dict(base, linked_players=None),
+            dict(base, linked_players="에제")]
+    f = facet_counts(arts, {"a": {}}, registry=_Reg(outlets={"bbc": 1.0}))
+    assert f["other"] == 1

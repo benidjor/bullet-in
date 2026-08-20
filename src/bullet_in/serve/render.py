@@ -170,7 +170,10 @@ def outlet_display(row: dict, sources: dict, directory: dict | None = None,
     고정 tier X 소스 (x_ornstein · self_source) 도 같은 매핑을 탄다 — medium 조건 (PR #137 후속)."""
     src = sources.get(row.get("source_id"), {})
     if row.get("outlet"):
-        return row["outlet"]
+        # 저장된 언론사명도 사전으로 한 번 접는다 — 같은 매체가 「더 타임스」 · The Times 로
+        # 갈려 사이드바에 두 항목이 되던 자리다 (기자명 통일 설계 §4.3).
+        # 사전에 없는 표기는 그대로 통과하고 articles.outlet 저장값은 안 건드린다.
+        return (outlet_dir or {}).get(norm_alias(row["outlet"]), row["outlet"])
     if src.get("credibility") == "x_mentions" or src.get("medium") == "x":
         j = (row.get("journalist") or "").strip()
         entry = (directory or {}).get(norm_alias(j))
@@ -604,7 +607,11 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
         if s in stage_counts:
             if in_stage_filter(s, a.get("transfer_direction")):
                 stage_counts[s] += 1
-        else:
+        elif not linked_player_label(a.get("linked_players"),
+                                     a.get("title_ko") or a.get("title_original") or ""):
+            # 링크 선수 배지가 붙은 글은 기타여도 카드가 안 숨는다 (_cards.html.j2 · app.js).
+            # 계수만 그 예외를 안 세면 사이드바 기타 건수가 실제 숨김 수보다 많아진다
+            # (2026-08-19 실측 88 대 80 · 사이드바 계수 설계 §5.4).
             other_count += 1
     # 표시 7묶음 — 라벨 · 저장 enum 목록 (data-value) · 합산 건수 (spec1 §5)
     stage_groups = [{"label": label, "value": ",".join(enums),
