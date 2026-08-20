@@ -81,6 +81,15 @@ from bullet_in.score import load_sources
 - 정책 비교처럼 규칙을 바꿔 보는 경우에도 **바꾸는 갈래만 갈아 끼우고 나머지는 원본 함수를 탄다.**
 이번에는 「저장값이 없을 때」 와 「저장값이 합성 문자열일 때」 두 갈래만 교체하고 나머지 우선순위는 `journalist_entry` 에 맡겨 조직 이름이 사라졌다.
 
+**이 처방은 부족했다 — import 만으로는 같은 것을 재지 못한다 (2026-08-20 정정).**
+표기 통일 회차에서 `outlet_display` 를 그대로 import 해 놓고 `directory` 인자를 안 넘겨 언론사 항목이 49종으로 나왔다 (화면은 48).
+그 인자가 없으면 X 소스 행이 인용 기자 소속으로 접히는 경로를 못 타고 소스 폴백으로 떨어진다.
+
+- **인자 목록까지 호출부와 1:1 로 맞춘다** — 정본은 `run.py` 의 `write_site(...)` 다.
+- **더 나쁜 것은 그 오차가 델타에서 상쇄된다는 것이다** — 전후를 같은 틀린 도구로 재면 델타 예고가 전부 맞아 도구를 의심할 이유가 안 생긴다.
+그래서 **절대값을 한 번은 정본 산출물과 맞춰 봐야 한다.**
+- 경위 · 수치 · 재현은 `2026-08-20-the-check-ran-but-asked-the-wrong-thing.md` 에 있다.
+
 ### 2.4. 이상값은 버그의 신호로 읽는다
 
 `BBC Sport` 27건은 **너무 눈에 띄어서** 살아남지 못했다.
@@ -163,3 +172,4 @@ from bullet_in.score import load_sources
 - 사례 1 · 2 의 스펙: `docs/superpowers/specs/2026-08-14-coauthor-multi-attribution-design.md`
 - 사례 3 의 스펙: `docs/superpowers/specs/2026-08-14-tweet-article-absorption-design.md` §1.1 · §1.5
 - 검사 자체가 안 돌아 통과하는 다른 모양: `docs/troubleshooting/2026-08-15-verification-that-silently-passes.md`
+- 검사는 돌았는데 물은 것이 달랐던 세 자리 (§2.3 정정의 경위 · 수치): `docs/troubleshooting/2026-08-20-the-check-ran-but-asked-the-wrong-thing.md`
