@@ -5,9 +5,12 @@
 import yaml
 from pathlib import Path
 
+# bbc_sport · skysports · guardian 은 마감 전 임시값이다 (2026-08-20 · 원본 수집
+# 기준 재측정). 2026-09-02 마감 뒤 각각 96 · 120 · 192 로 원복하며, 그때 이 표도
+# 함께 되돌린다 (안건 ι · 임계계절성 · 절차는 재측정 런북).
 THRESHOLDS = {"fmkorea": 24, "x_afcstuff": 24, "bbc_gossip": 24,
-              "bbc_sport": 96, "skysports": 120, "x_ornstein": 120,
-              "guardian": 192}
+              "bbc_sport": 72, "skysports": 96, "x_ornstein": 120,
+              "guardian": 120}
 
 
 def _sources():
