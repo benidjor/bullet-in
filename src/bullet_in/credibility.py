@@ -32,6 +32,10 @@ class Registry:
 
 def _build(entries: list[dict], dest: dict[str, float]) -> None:
     for e in entries or []:
+        # tier 없는 항목은 표기 전용 — 표기만 통일하고 등급은 안 매긴다 (기자명 통일 설계 §4.1).
+        # Registry 에 안 들어가므로 resolve_tier 의 세 경로가 모두 이 항목을 못 본다.
+        if e.get("tier") is None:
+            continue
         tier = float(e["tier"])
         for alias in e["aliases"]:
             key = alias.lower()  # registry keys are always lowercased for case-insensitive lookup
@@ -49,7 +53,8 @@ def load_registry(path) -> Registry:
     for e in data.get("journalists", []) or []:
         # 정식명 키 — html 추출 결과는 풀네임이라 alias 만으론 매치 불가.
         # aliases 에 이미 이름이 있는 항목 (Sam Dean 등) 이 있어 setdefault.
-        jour.setdefault(e["name"].lower(), float(e["tier"]))
+        if e.get("tier") is not None:
+            jour.setdefault(e["name"].lower(), float(e["tier"]))
         if e.get("outlet"):
             for key in [e["name"], *e["aliases"]]:
                 j_outlets[key.lower()] = e["outlet"]
