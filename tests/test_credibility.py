@@ -444,11 +444,45 @@ def test_split_korean_journalist_spellings_fold_to_one_name():
     assert d["@dkingtelegraph"]["name"] == "Dominic King"
 
 
+def test_korean_only_bylines_fold_to_their_latin_name():
+    """한글 표기만 저장돼 있던 13명 — 로마자 이름을 원문 바이라인에서 확정해 등재했다."""
+    d = journalist_directory(REG)
+    pairs = {
+        "크리스 워": "Chris Waugh",
+        "세바스찬 스태포드-블루어": "Sebastian Stafford-Bloor",
+        "세바스찬 스태포드-블로어": "Sebastian Stafford-Bloor",
+        "폴 발루스": "Pol Ballús",
+        "제임스 혼캐슬": "James Horncastle",
+        "조지 콜킨": "George Caulkin",
+        "마이크 맥그라스": "Mike McGrath",
+        "존 퍼시": "John Percy",
+        "잭 로서": "Jack Rosser",
+        "니자르 킨셀라": "Nizaar Kinsella",
+        "호펠디": "José Félix Díaz",
+        "다니엘레 롱고": "Daniele Longo",
+        "리 라이더": "Lee Ryder",
+        "플로리안 플라텐버그": "Florian Plettenberg",
+    }
+    for ko, latin in pairs.items():
+        assert d[ko]["name"] == latin
+        # 저장값에 로마자로 실린 기사도 같은 항목으로 와야 두 표기가 한 항목이 된다
+        assert d[latin.lower()]["name"] == latin
+
+
+def test_two_spellings_of_the_same_person_share_one_entry():
+    """「블루어」 · 「블로어」 는 norm_alias 가 공백 · 대소문자만 지워 저절로는 안 접힌다."""
+    d = journalist_directory(REG)
+    assert (d["세바스찬 스태포드-블루어"]["name"]
+            == d["세바스찬 스태포드-블로어"]["name"] == "Sebastian Stafford-Bloor")
+
+
 def test_spelling_only_journalists_carry_no_tier():
     """표기를 합치면서 공신력은 한 칸도 안 준다 (설계 §4.2)."""
     r = load_registry(REG)
     for key in ["simon jones", "사이먼 존스", "isaan khan", "mario cortegana",
-                "james pearce", "sam wallace", "dominic king"]:
+                "james pearce", "sam wallace", "dominic king",
+                "크리스 워", "chris waugh", "호펠디", "josé félix díaz",
+                "니자르 킨셀라", "nizaar kinsella"]:
         assert key not in r.journalists
 
 
