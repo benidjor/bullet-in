@@ -86,8 +86,43 @@ outlets:
   - {name: arseblog,        tier: 2,   aliases: ["arseblog"]}
   - {name: L'Équipe,        tier: 3,   aliases: ["레키프", "L'Equipe", "L'Équipe", "lequipe"]}
   - {name: RMC Sport,       tier: 1,   aliases: ["RMC", "RMC 스포르", "RMC Sport"]}
-  - {name: Foot Mercato,    tier: 4,   aliases: ["풋 메르카토", "Foot Mercato", "footmercato"]}
+  - {name: Foot Mercato,    tier: 4,   aliases: ["풋 메르카토", "Foot Mercato", "footmercato", "FM"]}   # 저장값 약칭 "FM" 이 별칭에 없어 안 접히고 있었다
   - {name: talkSPORT,       tier: 4,   aliases: ["talkSPORT"]}   # 백트래킹 domains 승격용 (@JacobsBen 인용 원문 — 기자 미등재라 아웃렛 폴백 경로)
+  # 합칠 짝이 없던 단독 매체 (안건 γ 잔여 · 2026-08-20 사용자 결정). 등급은 사용자가 정했다.
+  # 「ge」 는 ge.globo.com 의 브랜드명이고 상위 브랜드 Globo 로 등재한다.
+  # ⚠ 별칭 "ge" 는 두 글자라 제목 부분 문자열 매칭에 약하다 — 현재 노출은 0 이지만
+  #    (fmkorea 235건 중 제목에 ge 를 가진 남의 기사 0 · 로마자 조각이 있는 제목은 92건),
+  #    게시자가 말머리를 영어로 적기 시작하면 tier 2 가 엉뚱한 기사로 새어 간다.
+  #    없애려면 저장값 1행을 ge → Globo 로 고쳐 이 별칭을 지우면 된다.
+  - {name: Globo,           tier: 2,   aliases: ["Globo", "ge"]}
+  - {name: UOL,             tier: 2,   aliases: ["UOL"]}
+  # 「헤코르드」 로 저장돼 있던 1행은 원문이 ojogo.pt 라 O Jogo 로 정정했다 (안건 η).
+  - {name: O Jogo,          tier: 2,   aliases: ["O Jogo"]}
+  # 개인 사이트라 Sky Italia 와 브랜드가 다르다 — 저장값도 Di Marzio 로 정정해 뒀다.
+  - {name: Di Marzio,       tier: 3,   aliases: ["Di Marzio"]}
+  - {name: Marca,           tier: 3,   aliases: ["Marca", "마르카"]}
+  - {name: La Gazzetta dello Sport, tier: 3, aliases: ["La Gazzetta dello Sport", "Gazzetta", "가제타"]}
+  - {name: Corriere dello Sport,    tier: 3, aliases: ["Corriere dello Sport", "CDS"]}
+  - {name: Chronicle Live,  tier: 3,   aliases: ["Chronicle Live", "ChronicleLive", "크로니클"]}
+
   # 표기 전용 항목 — 등재 이력이 없는 매체라 등급을 안 매긴다 (기자와 같은 규칙 · 설계 §4.1).
   # 등재하면 공신력이 붙어 제품 판단이 따라오는데, 여기서 필요한 것은 「아스」 를 AS 로 접는 것뿐이다.
   - {name: AS,                         aliases: ["AS", "아스"]}
+  # 아래는 팬 사이트 · 집계 사이트 · 지역 블로그라 지금 등급 (미등재 폴백 4) 이 맞는다.
+  # 이름만 알아볼 수 있게 하는 것이 목적이고, 등급 사전에 안 들어가 짧은 별칭도 안전하다.
+  - {name: BeSoccer,                   aliases: ["BeSoccer"]}
+  - {name: SPORT,                      aliases: ["SPORT", "스포르트"]}
+  - {name: Mundo Deportivo,            aliases: ["Mundo Deportivo", "MD"]}
+  - {name: Relevo,                     aliases: ["Relevo"]}
+  - {name: COPE,                       aliases: ["COPE"]}
+  - {name: Calciomercato,              aliases: ["Calciomercato", "CM"]}
+  - {name: CalcioNapoli24,             aliases: ["CalcioNapoli24", "CN"]}
+  - {name: BarcaBuzz,                  aliases: ["BarcaBuzz", "BB"]}
+  - {name: Now Arsenal,                aliases: ["Now Arsenal", "NA"]}
+  - {name: This Is Anfield,            aliases: ["This Is Anfield", "TIA"]}
+  - {name: Anfield Watch,              aliases: ["Anfield Watch", "안필드 워치"]}
+  - {name: Planet Football,            aliases: ["Planet Football", "플래닛 풋볼"]}
+  - {name: The Players' Tribune,       aliases: ["The Players' Tribune", "Theplayerstribune"]}
+  - {name: SPORT24,                    aliases: ["SPORT24"]}
+  - {name: africasoccer,               aliases: ["africasoccer"]}
+  - {name: afrik foot,                 aliases: ["afrik foot"]}
