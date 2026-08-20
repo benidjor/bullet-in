@@ -512,7 +512,7 @@ def test_unregistered_outlet_keeps_no_tier():
 def test_standalone_outlets_fold_to_formal_names():
     """합칠 짝이 없던 단독 매체의 약칭 · 한글 표기 (안건 γ 잔여 · 2026-08-20)."""
     d = outlet_directory(REG)
-    for stored, name in [("ge", "Globo"), ("O Jogo", "O Jogo"), ("마르카", "Marca"),
+    for stored, name in [("Globo", "Globo"), ("O Jogo", "O Jogo"), ("마르카", "Marca"),
                          ("가제타", "La Gazzetta dello Sport"), ("CDS", "Corriere dello Sport"),
                          ("크로니클", "Chronicle Live"), ("MD", "Mundo Deportivo"),
                          ("CM", "Calciomercato"), ("CN", "CalcioNapoli24"),
@@ -539,3 +539,13 @@ def test_mismatched_stored_outlets_are_not_registered():
     d = outlet_directory(REG)
     for stored in ["A BOLA", "빌트"]:
         assert norm_alias(stored) not in d
+
+
+def test_two_letter_ge_alias_is_gone():
+    """저장값을 Globo 로 고쳐 두 글자 별칭 "ge" 를 없앴다 (2026-08-20).
+
+    등급 사전에 두 글자가 들어가면 제목 부분 문자열로 걸리고, Globo 는 tier 2 라
+    잘못 걸리면 min 이 그 등급을 채택한다 — 별칭을 다시 넣지 않게 막는다."""
+    r = load_registry(REG)
+    assert "ge" not in r.outlets
+    assert r.outlets["globo"] == 2.0
