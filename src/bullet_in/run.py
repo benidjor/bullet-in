@@ -215,7 +215,8 @@ async def main(concurrency: int):
             canonical_url(it.url))
 
     mongo = MongoClient(os.environ["MONGO_URI"])[os.environ.get("MONGO_DB", "bulletin")]
-    RawStore(mongo).insert_many(raw)
+    rawstore = RawStore(mongo)   # 아래 신선도 판정이 원본 워터마크를 읽으므로 잡아 둔다
+    rawstore.insert_many(raw)
 
     arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
     logging.getLogger(__name__).info(
@@ -369,15 +370,21 @@ async def main(concurrency: int):
         notify.send_alert(**notify.build_anomaly_alert(
             anomalies, len(hist), hist=hist, sources=sources, run_id=run_id))
 
-    # 신선도 워터마크 감시 (SLO-5): 소스별 MAX(fetched_at) 경과가 임계 초과면 알림
+    # 신선도 워터마크 감시 (SLO-5): 소스별 MAX(fetched_at) 경과가 임계 초과면 알림.
+    # 판정 기준은 Mongo 원본 수집이다 — 기사 표를 보면 다른 행으로 흡수되는 소스가
+    # 매일 수집돼도 영영 stale 로 찍힌다 (설계 2026-08-20 §3.1 · x_ornstein 18일).
+    # 기사 표 워터마크는 판정에서 빠지고 흡수 관측용 기록으로만 남는다 (§3.4).
     default_hours = cfg.get("freshness_default_hours", 48)
     overrides = {sid: float(s["freshness_hours"])
                  for sid, s in sources.items() if "freshness_hours" in s}
     checked_at = mart.db_now()
-    wm = mart.source_watermarks()
+    wm = rawstore.source_watermarks()
+    stored_wm = mart.source_watermarks()
     prev_freshness = mart.previous_freshness()   # 이번 회차 행을 넣기 전에 읽는다
     records = evaluate_freshness({sid: wm.get(sid) for sid in sources},
                                  checked_at, default_hours, overrides)
+    for r in records:
+        r.stored_fetched_at = stored_wm.get(r.source_id)
     mart.record_freshness(run_id, checked_at, records)
     fresh_targets, fresh_holds = freshness_alert_split(records, prev_freshness)
     if fresh_targets:
@@ -393,6 +400,15 @@ async def main(concurrency: int):
         len(fresh_targets), len(fresh_holds),
         "".join(f" [{h.source_id} {h.age_hours:.1f}h — 다음 알림까지 {h.hours_to_next:g}h]"
                 for h in fresh_holds))
+    # 원본은 없는데 기사 행은 있는 소스 — 정상 운영에서 나올 수 없는 조합이다.
+    # raw_items 에 보존 정책이 붙었거나 원본이 유실된 것이고, 그대로 두면 그 소스가
+    # 판정에서 조용히 빠진다 (None → stale=False → 침묵 · 설계 2026-08-20 §4.3).
+    lost = [r.source_id for r in records
+            if r.last_fetched_at is None and r.stored_fetched_at is not None]
+    if lost:
+        logging.getLogger(__name__).warning(
+            "원본 워터마크 유실 %d소스 — 판정에서 빠집니다 (raw_items 보존 정책 확인): %s",
+            len(lost), " · ".join(lost))
 
     summary = {"new_or_changed": len(arts), "errors": errors,
                "success_rate": success_rate(len(adapters), len(errors)),

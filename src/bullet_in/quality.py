@@ -52,6 +52,10 @@ class SourceFreshness:
     threshold_hours: float
     age_hours: float | None   # 워터마크 없으면 None
     stale: bool               # 워터마크 없으면 False (알림 제외)
+    # 기사 표에 남은 마지막 시각 — 판정에 안 쓰고 기록 · 문안에만 쓴다.
+    # last_fetched_at 보다 오래됐으면 그 소스는 다른 행으로 흡수되고 있다는 뜻이다
+    # (설계 2026-08-20 §3.4). 판정 뒤 run.py 가 채운다.
+    stored_fetched_at: datetime | None = None
 
 
 def evaluate_freshness(watermarks: dict[str, datetime | None], now: datetime,

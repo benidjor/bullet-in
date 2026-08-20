@@ -37,6 +37,21 @@ def test_record_freshness_persists_rows_with_shared_run_id(engine):
     assert rows == [("run-1", "bbc_sport", None, 0)]
 
 
+def test_record_freshness_persists_stored_watermark_for_absorption_watch(engine):
+    # 판정은 원본 수집으로 하고 기사 표 워터마크는 여기 기록만 남긴다 —
+    # 두 값이 벌어지는 소스가 곧 흡수당하는 소스다 (설계 2026-08-20 §3.4)
+    store = MartStore(engine)
+    now = store.db_now()
+    raw_wm = now - timedelta(hours=10)
+    records = evaluate_freshness({"x_ornstein": raw_wm}, now, default_hours=120)
+    records[0].stored_fetched_at = datetime(2026, 8, 1, 12, 3)
+    store.record_freshness("run-1", now, records)
+    with engine.connect() as c:
+        row = c.execute(text(
+            "SELECT stale, stored_fetched_at FROM source_freshness")).one()
+    assert row == (0, datetime(2026, 8, 1, 12, 3))
+
+
 def test_record_freshness_empty_records_is_noop(engine):
     MartStore(engine).record_freshness("run-1", datetime(2026, 7, 13), [])
     with engine.connect() as c:

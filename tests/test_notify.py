@@ -269,8 +269,35 @@ def test_build_freshness_alert_candidates_present_is_diagnosis_not_suppression()
                                          candidates={"bbc_sport": 4}, fetch_errors={})
     assert alert["title"] == "🕰️ 신선도 경고 — 오래된 소스 1건"
     field = alert["fields"][0]
-    assert "- 이번 회차 후보 4건 — 경로는 응답하나 새 글이 없습니다" in field["value"]
+    # 판정이 원본 수집으로 옮겨간 뒤로는 stale = 후보가 전부 이미 받은 글이라는 뜻이다.
+    # 옛 문안 ("새 글이 없습니다") 은 저장 기준일 때 거짓이었다 (설계 2026-08-20 §3.5).
+    assert "- 이번 회차 후보 4건 — 전부 이미 받은 글입니다" in field["value"]
     assert "원인 후보" not in field["value"]   # 후보가 있으면 셀렉터 힌트는 근거가 없다
+
+
+def test_build_freshness_alert_absorption_line_only_when_storage_lags():
+    # 원본보다 기사 표가 뒤처진 소스에만 흡수 한 줄이 붙는다 (설계 2026-08-20 §3.5)
+    checked, records = _stale_bbc()
+    records[0].stored_fetched_at = checked - timedelta(hours=500)
+    alert = notify.build_freshness_alert(records, 48, targets=records,
+                                         sources=_FRESH_SOURCES,
+                                         run_id="3f2a9c12abcd", checked_at=checked,
+                                         candidates={}, fetch_errors={})
+    epoch = int((checked - timedelta(hours=500))
+                .replace(tzinfo=timezone.utc).timestamp())
+    assert f"- 마지막 저장: <t:{epoch}:f> (그 뒤로는 다른 행으로 흡수)" \
+        in alert["fields"][0]["value"]
+
+
+def test_build_freshness_alert_no_absorption_line_when_signals_agree():
+    # 두 값이 같은 소스 (실측상 일곱 중 여섯) 에는 안 붙인다
+    checked, records = _stale_bbc()
+    records[0].stored_fetched_at = records[0].last_fetched_at
+    alert = notify.build_freshness_alert(records, 48, targets=records,
+                                         sources=_FRESH_SOURCES,
+                                         run_id="3f2a9c12abcd", checked_at=checked,
+                                         candidates={}, fetch_errors={})
+    assert "마지막 저장" not in alert["fields"][0]["value"]
 
 
 def test_build_freshness_alert_counts_held_sources_in_description():

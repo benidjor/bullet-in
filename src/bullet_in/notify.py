@@ -134,13 +134,19 @@ def build_freshness_alert(records, default_hours: float, *,
         lines = [f"⏳ {b.age_hours:.1f}h 경과 (임계 {b.threshold_hours:g}h)",
                  f"마지막 수집: {_discord_ts(b.last_fetched_at, 'R')} "
                  f"({_discord_ts(b.last_fetched_at, 'f')})"]
+        # 기사 표가 원본보다 뒤처진 소스에만 붙인다 — 받기는 받았는데 그 뒤로는
+        # 다른 행에 흡수돼 행이 안 남았다는 뜻이다 (설계 2026-08-20 §3.5).
+        if (b.stored_fetched_at is not None
+                and b.stored_fetched_at < b.last_fetched_at):
+            lines.append(f"마지막 저장: {_discord_ts(b.stored_fetched_at, 'f')} "
+                         "(그 뒤로는 다른 행으로 흡수)")
         hint = ADAPTER_HINTS.get((sources.get(b.source_id) or {}).get("adapter"))
         if (fetch_errors or {}).get(b.source_id):
             lines.append(f"이번 회차 fetch 오류: {fetch_errors[b.source_id][:120]}")
         else:
             n = None if candidates is None else candidates.get(b.source_id, 0)
             if n:
-                lines.append(f"이번 회차 후보 {n}건 — 경로는 응답하나 새 글이 없습니다")
+                lines.append(f"이번 회차 후보 {n}건 — 전부 이미 받은 글입니다")
             elif n is not None:
                 lines.append("이번 회차 후보 0건")
             if hint and not n:
