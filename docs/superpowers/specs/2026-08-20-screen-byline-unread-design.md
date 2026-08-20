@@ -1,0 +1,186 @@
+# 화면에만 있는 바이라인을 읽는다 — 안건 κ 설계 (2026-08-20)
+
+원문 화면에는 기자 이름이 실려 있는데 우리 저장값에는 없는 자리를 다룬다.
+착수 입력은 잔여 안건 메모리의 κ 행 (「화면바이라인미독」) 이고, 형제 안건은 y (저자 추출 사각지대) 다.
+
+**조사 결과 안건의 전제가 두 군데 틀렸다.**
+규모는 하한 7건이 아니라 확정 2건이고, 원인으로 적혀 있던 「BBC 가 구조화 정보에 저자를 안 넣는다」 는 실물에서 성립하지 않는다.
+대신 같은 조사에서 44행짜리 다른 자리가 드러나 파생 안건으로 넘긴다 (§6).
+
+---
+
+## 1. 무엇을 재는지부터 정한다
+
+이 문서의 모든 수치는 **2026-08-20 21:32 운영 사본** (`articles` 807행 · VM `ac23ae5`) 기준이다.
+
+「저자 미상」 은 `journalist` 가 비어 있고 `authors_json` 도 비어 있는 행이다 — 이 잣대로 59행이며 배치 7 종결 시점의 값과 이어진다.
+「원문을 손에 넣었다」 의 근거는 `body_level` 이 2 라는 것 (원문 본문을 채택했다) 또는 등록 소스의 상세 fetch 가 성공했다는 것이다.
+
+**하한 7 은 하한이 아니라 다른 것을 센 값이었다.**
+7 은 「fmkorea 전재글 중 원문 본문을 채택했는데 대표 저자가 한글로 남은 행」 인데, 그중 2건은 영문 바이라인을 이미 함께 갖고 있다 (`By SIMON JONES` · `By ISAAN KHAN`).
+한글 이름이 대표로 앞에 올 뿐 원문 저자를 못 읽은 자리가 아니라서, 그 둘은 표기 축 (안건 α) 이지 이 안건이 아니다.
+
+## 2. 후보를 한 잣대로 다시 세면 42행이다
+
+| 갈래 | 행 | 「받았다」 의 근거 |
+| --- | --- | --- |
+| fmkorea `body_level`=2 · 저자 전무 | 8 | 원문 본문을 채택했다 |
+| fmkorea `body_level`=2 · 한글 폴백이고 영문도 없음 | 5 | 같음 |
+| skysports 미상 | 15 | 직수집 상세 fetch 성공 |
+| goal 미상 | 14 | 같음 |
+| **합계** | **42** | |
+
+**안건 y 가 「원문에도 저자가 없다」 로 닫은 44 와 숫자가 가깝지만 같은 집합이 아니다.**
+y 의 fmkorea 15 는 전부 미상 행이고 이 표의 fmkorea 13 은 미상 8 + 한글 폴백 5 다.
+양쪽에서 각각 몇 행씩 다르므로 두 값을 나란히 놓고 빼면 안 된다.
+
+## 3. 원인은 셋으로 갈린다 — 하나로 적으면 처방이 틀어진다
+
+표본 12건을 사용자 승인을 받아 한 번씩 열어 봤다 (응답은 파일로 저장하고 분석은 저장본으로만 했다).
+
+### 3.1. 「우리가 그 자리를 안 본다」 — 진짜 κ · 2건
+
+`bbc.com/sport/football/teams/arsenal?post=<id>` 형태의 라이브 포스트 페이지다.
+이 페이지에는 JSON-LD 에 `author` 도 `datePublished` 도 없고 `meta[name=author]` 도 없다.
+화면에는 기여자 이름이 `Alex Howell Arsenal reporter` · `Sami Mokbel Senior football correspondent` 형태로 실려 있다.
+
+**그리고 그 이름이 우리가 저장한 본문 앞머리에 이미 글자로 들어와 있다.**
+
+```
+fb169243  body_source: "Alex Howell Arsenal reporter With a squad that won the Premier League…"
+3828d1e9  body_source: "Alex Howell Arsenal reporter England manager Thomas Tuchel has provided…"
+```
+
+`extract_body_authors` 의 `_BYLINE_RE` 가 `By` 표지를 요구해서 이 무표지 형태를 못 잡는다.
+같은 형태의 세 번째 행 (`2f9f2171`) 은 독자 댓글을 모은 포스트라 저자가 없는 것이 맞다.
+
+### 3.2. 「그때 그 함수를 안 불렀다」 — κ 가 아니다
+
+**원문의 구조화 저자를 읽는 코드가 fmkorea 경로에 들어온 것은 2026-08-20 의 #292 하나뿐이다** (`git log -S extract_authors -- src/bullet_in/adapters/fmkorea.py`).
+그 전에 수집된 전재글은 원문 페이지를 받아 놓고도 저자를 읽는 줄 자체가 없었다.
+
+안건 개설의 근거였던 실물이 여기에 해당한다.
+
+```
+3c7aa06b  https://www.bbc.com/sport/football/articles/cy5v91kerr9o   수집 2026-07-25
+저장값        ["니자르 킨셀라"]
+지금 붙이면   extract_authors → ['Nizaar Kinsella', 'Aadam Patel']
+```
+
+JSON-LD 에 두 사람이 `Person` 으로 들어 있고 화면 바이라인도 `By Nizaar Kinsella , Football reporter and Aadam Patel , Football reporter` 다.
+**추출기는 이 페이지를 정확히 읽는다** — 못 읽은 것이 아니라 그 시점에 부르지 않았다.
+
+우리 저장 데이터도 같은 말을 한다.
+
+| bbc.com URL 형태 | 행 | 구조화 저자 |
+| --- | --- | --- |
+| `/sport/football/articles/<id>` | 125 | **125행 전부 있음** (공저 두 명짜리 9행 포함) |
+| `/sport/football/teams/arsenal?post=<id>` | 3 | 3행 전부 없음 |
+
+백로그의 「BBC 는 JSON-LD · meta 에 저자를 안 넣는다」 는 **페이지 형태로 갈리는 이야기**로 고쳐 읽어야 한다.
+BBC 기사 페이지는 넣고, 라이브 포스트 페이지는 안 넣는다.
+
+### 3.3. 「원문에 사람 저자가 없다」 — y 의 판정이 옳았다
+
+- **skysports 15행** — JSON-LD 의 `author` 가 `{"@id": "#Publisher"}` 참조뿐이다.
+저장본에서 `sdc-article-author` 는 0회이고 클래스에 `author` 가 든 요소도 0개다.
+표본 3건 전부 같았다.
+- **goal 14행** — JSON-LD 의 `author` 가 **빈 배열**이다.
+본문에 보이던 `Translated by` 뒤는 사람 이름이 아니라 goal 로고 SVG 이고, 자동 번역 재게재를 알리는 표시다 (`auto-translated`).
+화면의 `data-testid="article-author"` 자리에는 발행 시각만 들어간다.
+표본 3건 전부 같았다.
+- **Di Marzio** — JSON-LD 에 `author` 가 없고 화면에도 사람 바이라인이 없다.
+「Calciomercato di Gianluca Di Marzio」 는 코너 이름이라 저자 자리가 아니다.
+
+**셀렉터가 안 걸린 것을 「없다」 로 읽지 않기 위해** 매체별로 알려진 바이라인 셀렉터와 원문 문자열 검색을 함께 돌렸다.
+
+## 4. 처방 — 본문 앞머리의 무표지 바이라인을 읽는다
+
+`extract_body_authors` 에 형태를 하나 더 준다.
+**본문 첫 조각이 「이름 + 직함구」 로 끝나면 그 이름을 저자로 채택한다.**
+
+- 이름의 끝을 알려 주는 표지는 **직함 낱말**이다 — `_JOB_TITLE_RE` 가 이미 아는 `REPORTER` · `CORRESPONDENT` 에 실측에 나온 `writer` · `editor` 를 더한다.
+- 직함구 앞의 이름은 한두 어절로 제한한다 (기존 `_NAME` 규칙 재사용).
+- 직함 낱말이 없으면 채택하지 않는다 — 경계가 없는 형태를 넓히면 본문 첫 문장이 통째로 이름으로 들어온다 (안건 y 가 남긴 규율).
+
+**오탐 위험을 실측으로 재 뒀다.**
+807행 전수에서 본문 앞머리 70자에 직함 낱말이 든 행은 8건이고, 그중 6건은 이미 `By …` 로 잡히고 있다.
+새 규칙이 새로 잡는 것은 앞의 BBC 2건뿐이다.
+
+### 4.1. 페이지를 긁는 처방은 쓰지 않는다
+
+라이브 페이지 한 장에는 기여자가 여럿 실린다 — `fb169243` 의 저장본에도 `Sami Mokbel` 과 `Alex Howell` 이 함께 있다.
+**페이지에서 기여자 요소를 긁으면 우리가 채택한 포스트를 쓰지 않은 사람이 저자로 붙는다.**
+그래서 근거는 페이지가 아니라 **우리가 실제로 채택한 본문 조각**이어야 하고 그 조각의 앞머리에 붙어 있는 이름만 읽는다.
+
+### 4.2. 소급은 외부 접촉이 필요 없다
+
+재료가 `body_source` 에 이미 있으므로 저장된 본문을 다시 파싱하면 끝난다.
+Gemini 호출 0 · 외부 접속 0 · 과금 0 이다.
+대상은 2행이고 `authors_json` 한 컬럼만 쓴다 — 본문 · 등급 · 대표는 건드리지 않는다.
+
+## 5. 하지 않는 것
+
+- **skysports · goal 29행에 무엇도 하지 않는다.** 원문에 사람 저자가 없다.
+- **직수집 어댑터에 새 셀렉터를 두지 않는다.** 소스별 셀렉터는 외부 사이트에 붙어 깨지는 자리이고, 여기서 얻을 것이 0 이다.
+- **`extract_authors` 는 안 건드린다.** 이 함수는 구조화 정보를 읽는 자리이고, 화면 바이라인은 본문을 읽는 자리에서 다룬다.
+
+## 6. 파생 안건 — 소급의 대상 조건이 만든 사각지대
+
+`backfill_author_refetch.py` 의 대상 조건이 `authors_json IS NULL AND source_id = 'fmkorea'` 다.
+**fmkorea 말머리에서 온 한글 이름이 이미 들어 있던 행은 이 조건에서 통째로 빠졌다.**
+
+| 잣대 | 행 |
+| --- | --- |
+| `authors_json` 이 차 있고 한글이 든 fmkorea 행 | 51 |
+| 그중 영문 표기를 이미 함께 가진 행 | 7 |
+| **재접속으로 정식 표기를 새로 얻을 여지** | **44** |
+
+매체 분포는 The Athletic 39 · Telegraph 3 · Daily Mail 2 · BBC · AS · ESPN · CM · 크로니클 · Di Marzio · Sky 각 1 이다.
+디 애슬레틱은 안건 y 실측에서 23건 전건이 열린 매체다.
+
+**표본에서 실제로 얻었다.**
+
+```
+5b70023f  calciomercato.com   저장 ["다니엘레 롱고"]  →  extract_authors → ['Daniele Longo']
+432c5f79  chroniclelive.co.uk 저장 ["리 라이더"]      →  extract_authors → ['Lee Ryder']
+```
+
+안건 α (기자명표기) 가 별칭으로 덮은 것과 같은 데이터지만 축이 다르다 — 별칭은 화면에서 두 표기를 한 항목으로 접는 것이고, 이것은 **저장값 자체를 원문의 정식 표기로 바꾸는 것**이다.
+저장값이 바뀌면 α 가 등재한 별칭 중 일부는 걸릴 데이터가 없어지므로 **α 의 별칭을 지우기 전에 이 소급을 먼저 돌려야 한다.**
+
+## 7. 검증
+
+| 확인선 | 기대 |
+| --- | --- |
+| 새 규칙이 새로 잡는 행 | 2 (`fb169243` · `3828d1e9`) · 값은 `Alex Howell` |
+| 기존에 저자를 얻던 행의 값 변화 | **0** — 소급 전후를 같은 스니펫으로 뽑아 대조한다 |
+| 저자 미상 | 59 → 57 |
+| 「저자를 아는데 도달 못 하는 기사」 | **0 유지** (서빙이 안 깨졌다는 불변 조건) |
+| 선수 페이지 | 51 유지 |
+
+**전후 대조는 같은 잣대로 두 번 재는 것으로 끝내지 않는다.**
+절대값을 한 번은 렌더 산출물과 맞춰 본다 — 전후를 같은 틀린 도구로 재면 오차가 상쇄돼 델타는 맞고 절대값만 틀린 상태로 간다.
+
+## 8. 아직 확인 안 된 것
+
+승인받은 표본 12건을 다 썼고, 아래는 열어 보지 않았다.
+
+| 행 | 매체 | 왜 안 열었나 |
+| --- | --- | --- |
+| `5e58fb3d` | 아스 | 같은 도메인의 다른 표본이 403 봇 차단을 받았다 (응답 본문에 `Please enable JS and disable any ad blocker`) |
+| `c786fb9f` | Globo | 표본 배분에서 빠졌다 |
+| `26ced057` | 빌트 (transfermarkt) | 같음 |
+| `e4d7978d` | Di Marzio | 같은 매체의 다른 행에서 저자 없음이 확인돼 우선순위를 내렸다 |
+| `6cc14cf6` | 스카이스포츠 | skysports.com 표본 3건이 전부 저자 없음이었다 |
+
+**같은 소스의 다른 기사에서 나온 결과를 이 행들의 근거로 쓰지 않는다.**
+안건 y 가 페이지 유형으로 갈린다는 것을 이미 실물로 보였고, 이 회차에서도 BBC 가 기사 페이지와 라이브 포스트로 갈렸다.
+다섯 행은 「미확인」 으로 남기고 구현 회차가 접촉 승인을 다시 받아 확인한다.
+
+## 9. 관련
+
+- `docs/troubleshooting/2026-08-15-unknown-author-means-we-could-not-read-it.md` — 안건 y 의 경위
+- `docs/superpowers/specs/2026-08-14-coauthor-multi-attribution-design.md` — `authors_json` · `extract_body_authors` 가 생긴 자리
+- `docs/superpowers/specs/2026-08-19-journalist-name-unification-design.md` — 안건 α · 한글 표기 별칭
+- `docs/troubleshooting/2026-08-13-parser-fix-does-not-reach-stored-rows.md` — 파서를 고쳐도 저장된 행은 안 바뀐다
