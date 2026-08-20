@@ -171,11 +171,12 @@ class MartStore:
         with self.engine.begin() as c:
             c.execute(text(
                 "INSERT INTO source_freshness (run_id,checked_at,source_id,"
-                "last_fetched_at,age_hours,threshold_hours,stale) "
-                "VALUES (:rid,:at,:sid,:wm,:age,:thr,:stale)"),
+                "last_fetched_at,age_hours,threshold_hours,stale,stored_fetched_at) "
+                "VALUES (:rid,:at,:sid,:wm,:age,:thr,:stale,:stored)"),
                 [{"rid": run_id, "at": checked_at, "sid": r.source_id,
                   "wm": r.last_fetched_at, "age": r.age_hours,
-                  "thr": r.threshold_hours, "stale": r.stale}
+                  "thr": r.threshold_hours, "stale": r.stale,
+                  "stored": r.stored_fetched_at}
                  for r in records])
 
     def previous_freshness(self) -> dict[str, dict]:

@@ -49,8 +49,9 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
 CREATE TABLE IF NOT EXISTS source_freshness (
   run_id VARCHAR(64), checked_at DATETIME, source_id VARCHAR(64),
   last_fetched_at DATETIME, age_hours FLOAT, threshold_hours FLOAT,
-  stale BOOLEAN,
+  stale BOOLEAN, stored_fetched_at DATETIME NULL,
   PRIMARY KEY (run_id, source_id));
+ALTER TABLE source_freshness ADD COLUMN IF NOT EXISTS stored_fetched_at DATETIME NULL;
 ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS fetch_duration_sec FLOAT;
 ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS blocked_count INT;
 ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS candidate_counts JSON;
