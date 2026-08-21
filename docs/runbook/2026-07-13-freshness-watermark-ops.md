@@ -153,6 +153,7 @@ uv run pytest tests/integration/test_source_freshness.py -v  # 테이블 적재 
 - spec · plan: `docs/superpowers/{specs,plans}/2026-07-13-slo5-freshness-watermark*`.
 - 감시 제외 규약 · 문구 정비: `docs/superpowers/specs/2026-08-07-alert-f2-unit-attribution-and-observability-design.md` §3.2.
 - 살아 있는 소스가 stale 로 찍히는 경위 · 원본 대조 절차: `docs/troubleshooting/2026-08-20-live-source-marked-stale-by-watermark.md`.
+- 두 워터마크를 나란히 볼 때의 함정 ( 차이가 간헐적이라 한 시점으로 흡수를 판정하면 틀린다 ) : `docs/troubleshooting/2026-08-22-two-signals-side-by-side-ask-the-wrong-question.md`.
 - 임계 재조정 · 억제 제거 · 재알림 간격의 설계 근거: `docs/superpowers/specs/2026-08-14-slo5-freshness-alert-blind-spot-design.md`.
 - 함정: `docs/troubleshooting/2026-07-13-freshness-clock-mixing-gap.md` (시계 혼합 · UTC 고정 경위) ·
   `docs/troubleshooting/2026-08-07-arsenal-official-transfer-tag-omission.md` (arsenal_official 감시 제외 경위) .
