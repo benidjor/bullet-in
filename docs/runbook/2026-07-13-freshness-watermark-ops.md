@@ -79,16 +79,25 @@
 - **소스별 `freshness_hours` override** — 소스 항목에 키를 추가하면 그 소스만 임계가 달라진다.
   2026-08-14 실측 ( 21일 · 166회차 ) 의 소스별 공백 95 백분위를 24h 배수로 올려 정했다.
 
-| 소스 | 임계 | 공백 95% |
-|---|---|---|
-| fmkorea · x_afcstuff · bbc_gossip | 24h | 15h · 15h · 21h |
-| bbc_sport | 96h | 75h |
-| skysports · x_ornstein | 120h | 99h · 111h |
-| guardian | 192h | 168h |
+| 소스 | 임계 | 원래 값 | 공백 95% |
+|---|---|---|---|
+| fmkorea · x_afcstuff · bbc_gossip | 24h | — | 15h · 15h · 21h |
+| **bbc_sport** | **72h** | 96h | 75h |
+| **skysports** | **96h** | 120h | 99h |
+| **guardian** | **120h** | 192h | 168h |
+| x_ornstein | 120h | — | 111h |
 
   `x_ornstein` 이 120h 인 것은 그 계정이 저빈도라서다.
   같은 X 소스라도 `x_afcstuff` 는 집계 계정이라 하루에 여러 건이 올라오고, `x_ornstein` 은 본인 계정에 `#AFC` 필터가 걸려 21일에 5건이었다.
   종전에는 둘 다 "X 는 고빈도" 라는 이유로 24h 였고, 그래서 `x_ornstein` 은 정상 동작 중에도 112회 중 103회가 stale 이었다.
+- **굵은 세 줄은 이적 시장 마감 전 임시값이다** ( 2026-08-20 · 원본 수집 기준 재측정 ) .
+  **2026-09-02 마감 뒤 「원래 값」 열로 되돌린다** — 안건 ι · 임계계절성이고, 절차는 `docs/runbook/2026-08-20-freshness-threshold-recalibration.md` 가 정본이다.
+  되돌릴 자리는 셋이다 — `config/sources.yaml` 세 줄 · `tests/test_freshness_config.py` 의 계약 표 · 이 표.
+  마감이 다가올수록 기사가 늘어 공백이 짧아지므로, 이 값들을 마감 뒤에 그대로 두면 정상 침묵에서 울린다.
+- 고른 기준은 **「최근 14일 알림이 소스당 1건 이하가 되는 가장 작은 임계」** 다.
+  마감 전 임시값에서 실제로 `bbc_sport` 1건 · `skysports` 1건 · `guardian` 0건이 나왔다.
+- **`x_ornstein` 은 이번에 안 건드렸다** — 원본 기준 공백 p95 가 186h 로 현행 120h 보다 크다 ( 데이터는 좁히지 말고 넓히라고 한다 ) .
+  신호 교체 효과와 섞이므로 안건 ι 에서 함께 본다.
 - **`freshness_hours: 0` = 감시 제외** — 좁히는 override 와 달리 판정 자체를 끈다.
   적용 사례: `arsenal_official` — 1군 이적 · 계약 공식 발표에만 반응하는 이벤트 구동 소스라, 채택 0 이 며칠이고 이어져도 정상일 수 있다.
   대신 채택 필터가 실제 발표를 놓쳤는지는 `docs/runbook/2026-07-13-collection-alerts-ops.md` 의 채택 누락 관측 알림이 담당한다.

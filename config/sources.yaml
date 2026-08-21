@@ -31,7 +31,9 @@ sources:
       title_selector: "span[class*='LinkPostHeadline']"
       title_contains: *transfer_kw
       body_selector: "article"
-    freshness_hours: 96    # 공백 95% 75h (21일 실측) — 48h 는 정상 소스를 회차의 22% 에서 stale 로 찍었다
+    # 마감 전 임시값 — 원래 96 · 2026-09-02 마감 뒤 96 으로 원복 (안건 ι · 임계계절성).
+    # 원본 수집 기준 재측정에서 최근 14일 알림 1건 · 48h 로 더 내리면 3건.
+    freshness_hours: 72    # 공백 95% 75h (21일 실측) — 48h 는 정상 소스를 회차의 22% 에서 stale 로 찍었다
     enabled: true
   - source_id: bbc_gossip
     display_name: BBC Football Gossip
@@ -102,7 +104,9 @@ sources:
       body_selector: "div[data-gu-name='body']"
       base_url: "https://www.theguardian.com"
       title_contains: *transfer_kw
-    freshness_hours: 192   # 공백 95% 168h (21일 실측) — 저빈도 소스 (아스날 태그 주 2~3건)
+    # 마감 전 임시값 — 원래 192 · 2026-09-02 마감 뒤 192 로 원복 (안건 ι · 임계계절성).
+    # 마감이 다가와 최근 공백 p95 가 45h 로 좁아졌고, 120h 에서 최근 14일 알림 0건.
+    freshness_hours: 120   # 공백 95% 168h (21일 실측) — 저빈도 소스 (아스날 태그 주 2~3건)
     enabled: true
   - source_id: skysports
     display_name: Sky Sports
@@ -118,7 +122,9 @@ sources:
       base_url: "https://www.skysports.com"
       title_contains: *transfer_kw
       body_selector: "div.sdc-article-body"
-    freshness_hours: 120   # 공백 95% 99h (21일 실측) — 48h 는 정상 소스를 회차의 27% 에서 stale 로 찍었다
+    # 마감 전 임시값 — 원래 120 · 2026-09-02 마감 뒤 120 으로 원복 (안건 ι · 임계계절성).
+    # 96h 에서 최근 14일 알림 1건 · 72h 는 2건.
+    freshness_hours: 96    # 공백 95% 99h (21일 실측) — 48h 는 정상 소스를 회차의 27% 에서 stale 로 찍었다
     enabled: true
   - source_id: x_afcstuff
     display_name: afcstuff (aggregator)
