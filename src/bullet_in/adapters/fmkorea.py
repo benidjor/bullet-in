@@ -145,8 +145,19 @@ _KO_COLON_RE = re.compile(r"^\s*([가-힣][가-힣 ·]{1,30})\s*[:：]\s")
 _KO_DASH_RE = re.compile(r"^\s*[A-Za-z][A-Za-z .'’]{2,25}\s*[-–—]\s*([가-힣][가-힣 ·]{1,40})")
 _KO_NAME_MAX_CHARS = 14      # 이름 조각의 길이 상한 (실측 최장 '세바스찬 스태포드-블루어' 13자)
 _KO_SENTENCE_TAIL = re.compile(r"(다|요|죠)$")
-# 직함은 사람이 아니다 — 실측상 이 두 낱말이 비-이름 전부를 덮는다 (설계 §1.4).
-_JOB_TITLE_RE = re.compile(r"REPORTER|CORRESPONDENT", re.I)
+# 직함은 사람이 아니다 — 실측상 이 낱말들이 비-이름 전부를 덮는다 (설계 §1.4).
+# writer · editor 는 표지 없는 바이라인 실측에서 더했다 (안건 κ 설계 §4).
+_JOB_TITLE_WORDS = r"REPORTER|CORRESPONDENT|WRITER|EDITOR"
+_JOB_TITLE_RE = re.compile(_JOB_TITLE_WORDS, re.I)
+# 표지 없는 바이라인 — 본문 첫 조각이 '이름 + 직함구' 로 시작한다.
+# 실물은 BBC 라이브 포스트 페이지다 ('Alex Howell Arsenal reporter With a squad…').
+# 이 페이지는 구조화 정보에 저자를 안 실어서 화면의 이름이 본문 앞머리에만 남는다.
+# 이름의 끝을 알려 주는 것은 직함 낱말뿐이라 그것이 없으면 채택하지 않는다 —
+# 경계가 없는 형태를 넓히면 첫 문장이 통째로 이름으로 들어온다 (안건 y 가 남긴 규율).
+# 직함구는 두 어절까지 앞에 붙을 수 있다 ('Senior football correspondent').
+_LEAD_BYLINE_RE = re.compile(
+    rf"^\s*({_NAME_TOKEN}(?: +{_NAME_TOKEN})?) +(?:[\w'’\-]+ +){{0,2}}"
+    rf"(?i:{_JOB_TITLE_WORDS})\b")
 
 
 def strip_publish_datetime(body: str) -> str:
@@ -219,6 +230,16 @@ def _korean_body_authors(body: str) -> list[str]:
     return [n for n in dict.fromkeys(out) if n]
 
 
+def _unmarked_lead_authors(body: str) -> list[str]:
+    """표지 없이 본문 첫 조각에 붙은 저자 1명 — 직함 낱말이 이름의 끝이다.
+
+    근거는 페이지가 아니라 **우리가 채택한 본문 조각**이다.
+    라이브 페이지 한 장에는 기여자가 여럿 실려 있어서, 페이지에서 이름을 긁으면
+    우리가 채택하지 않은 포스트의 저자가 붙는다 (설계 §4.1)."""
+    m = _LEAD_BYLINE_RE.match(body)
+    return [m.group(1)] if m else []
+
+
 def extract_body_authors(body: str) -> list[str]:
     """본문 앞머리 바이라인의 저자 전원 — 등장 순서 보존 · 중복 제거.
 
@@ -230,7 +251,7 @@ def extract_body_authors(body: str) -> list[str]:
         return []
     m = _BYLINE_RE.search(body[:_BYLINE_HEAD_CHARS])
     if not m:
-        return _korean_body_authors(body)
+        return _korean_body_authors(body) or _unmarked_lead_authors(body)
     out: list[str] = []
     for part in _AUTHOR_SPLIT_RE.split(m.group(1)):
         part = part.strip()
