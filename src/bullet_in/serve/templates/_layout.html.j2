@@ -19,6 +19,7 @@
     <div class="unreghead"><span>미등재</span></div>
     {{ facet_opts(group, st.unregistered) }}
     {% endif %}
+    {{ facet_opts(group, st["items"]) }}
   </div>
   <button class="morebtn" type="button" hidden>{{ st.label }}</button>
   {% endfor %}
@@ -101,7 +102,13 @@
 
     <div class="grp collapsed" data-grp="journalist">
       <button class="grphead" type="button"><h4>기자</h4><span class="caret">▾</span></button>
-      <div class="grpbody">{{ facet_block('journalist', facets.journalists) }}</div>
+      <div class="grpbody">
+        <label class="facetsearch">
+          <input type="search" id="jSearch" autocomplete="off"
+                 placeholder="이름으로 찾기 · {{ facets.journalists['total'] }}명">
+        </label>
+        {{ facet_block('journalist', facets.journalists) }}
+      </div>
     </div>
 
     <div class="fstatus" id="fstatus">전체 표시</div>
