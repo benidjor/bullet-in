@@ -60,6 +60,25 @@ def test_targets_are_fmkorea_rows_without_authors():
     assert "source_id = 'fmkorea'" in sql
 
 
+def test_targets_include_rows_a_korean_fallback_already_filled():
+    # 안건 λ — 「비어 있다」 로 잡으면 게시자가 옮긴 한글 이름이 든 행이 통째로 빠진다
+    sql = str(_SELECT_SQL)
+    assert "[가-힣]" in sql
+    assert "NOT REGEXP '[A-Za-z]'" in sql
+
+
+def test_rows_that_already_carry_a_latin_form_are_not_targets():
+    # 영문 표기를 이미 가진 행은 재접속으로 얻을 것이 없다 (51행 중 7행)
+    sql = str(_SELECT_SQL)
+    assert sql.index("NOT REGEXP '[A-Za-z]'") > sql.index("REGEXP '[가-힣]'")
+
+
+def test_each_target_carries_why_it_was_selected():
+    # 두 갈래를 갈라 세어야 「무엇이 대상에서 빠졌나」 를 다음 회차가 읽는다
+    sql = str(_SELECT_SQL)
+    assert "AS kind" in sql
+
+
 def test_state_file_round_trips_and_skips_what_was_already_tried(tmp_path):
     p = tmp_path / "state.txt"
     assert load_state(str(p)) == set()

@@ -9,7 +9,8 @@
 대표 기자도 안 쓴다 — 서빙이 저자 목록에서 같은 규칙으로 골라낸다
 (serve.render.article_journalists).
 
-대상은 fmkorea 전재글뿐이다.
+대상은 fmkorea 전재글 중 **정식 표기를 못 가진 행**이다 — 값이 비어 있는 행과
+게시자가 옮긴 한글 이름만 든 행 둘 다다 (안건 λ · 처음에는 앞의 것만 봐서 51행을 놓쳤다).
 직수집 소스 (skysports · goal) 는 표본 10건 전건에서 원문에도 저자가 없었다
 (구조화 정보 0 · 화면 바이라인 0 · 2026-08-19 실측) — 붙어 봐야 얻을 것이 없다.
 
@@ -41,9 +42,18 @@ _UA = "Mozilla/5.0 bullet-in/0.1"
 _REQUEST_GAP_SEC = 2.0
 _TIMEOUT_SEC = 25
 
+# 대상 조건은 「비어 있다」 가 아니라 「고칠 값이 있다」 다 (안건 λ).
+# 첫 판본은 authors_json IS NULL 이었고, 게시자가 말머리에서 옮긴 한글 이름이
+# 이미 들어 있던 51행이 통째로 빠졌다 — 화면에는 이름이 하나 떠 있어서 미상
+# 집계에도 안 잡혀 어느 계수로도 안 보였다
+# (docs/troubleshooting/2026-08-20-backfill-skipped-it-so-we-diagnosed-it-again.md).
+# 영문 표기를 이미 함께 가진 행은 재접속으로 얻을 것이 없어 뺀다.
 _SELECT_SQL = text(
-    "SELECT content_hash, url, outlet FROM articles "
-    "WHERE authors_json IS NULL AND source_id = 'fmkorea' "
+    "SELECT content_hash, url, outlet, "
+    "CASE WHEN authors_json IS NULL THEN '빈 값' ELSE '한글 폴백' END AS kind "
+    "FROM articles WHERE source_id = 'fmkorea' AND ("
+    "authors_json IS NULL OR "
+    "(authors_json REGEXP '[가-힣]' AND authors_json NOT REGEXP '[A-Za-z]')) "
     "ORDER BY published_at DESC")
 _UPDATE_SQL = text("UPDATE articles SET authors_json=:a WHERE content_hash=:h")
 
@@ -84,9 +94,9 @@ async def _run(rows: list[dict], dry_run: bool, state: str | None,
                 await asyncio.sleep(_REQUEST_GAP_SEC)
             names, label = await fetch_authors(client, row["url"])
             stats[label] += 1
-            log.info("[%d/%d] %s %s %s %s", i + 1, len(rows),
-                     row["content_hash"][:8], row.get("outlet") or "?", label,
-                     names or "")
+            log.info("[%d/%d] %s %s %s %s %s", i + 1, len(rows),
+                     row["content_hash"][:8], row.get("outlet") or "?",
+                     row.get("kind") or "?", label, names or "")
             if names and not dry_run:
                 with engine.begin() as c:
                     c.execute(_UPDATE_SQL,
@@ -106,9 +116,11 @@ def backfill(dry_run: bool = False, limit: int | None = None,
     rows = [r for r in rows if r["content_hash"] not in done]
     if limit:
         rows = rows[:limit]
-    log.info("대상 %d행 (state 로 건너뛴 것 %d) · 요청 간격 %.1f초 · 예상 %.0f분",
-             len(rows), len(done), _REQUEST_GAP_SEC,
-             len(rows) * _REQUEST_GAP_SEC / 60)
+    kinds = Counter(r["kind"] for r in rows)
+    log.info("대상 %d행 (빈 값 %d · 한글 폴백 %d · state 로 건너뛴 것 %d)"
+             " · 요청 간격 %.1f초 · 예상 %.0f분",
+             len(rows), kinds["빈 값"], kinds["한글 폴백"], len(done),
+             _REQUEST_GAP_SEC, len(rows) * _REQUEST_GAP_SEC / 60)
     stats = asyncio.run(_run(rows, dry_run, state, engine))
     log.info("%s 회수 %d · 저자 없음 %d · 접속 실패 %d",
              "[dry-run]" if dry_run else "반영", stats["회수"], stats["저자 없음"],
