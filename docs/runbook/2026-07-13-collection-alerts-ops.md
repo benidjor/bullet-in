@@ -28,7 +28,11 @@
   `.env` 에 `DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...` 를 추가하고 `set -a; source .env; set +a` 후 실행.
   채널 변수도 같은 자리에 같은 형식으로 넣는다.
 - **갈렸는지 판정하는 법** — 「알림이 왔다」 가 아니라 「어느 채널로 왔다」 로 본다.
-  변수를 잘못 넣으면 발송은 성공하고 채널만 기존 하나로 모이므로 로그로는 구분이 안 된다.
+- **저널에 발송 한 줄이 남는다** — `알림 발송: trend — 🕰️ 신선도 경고 …` 형태다.
+  폴백으로 떨어지면 `trend→기본(폴백)` 으로 적히므로 **저널만으로 갈렸는지 가릴 수 있다** ( 웹훅 주소는 안 남는다 ) .
+  회차별 발송 건수도 이 줄을 세면 나온다 — `journalctl -u bullet-in.service --since '-1 day' | grep '알림 발송:'`.
+  **2026-08-23 이전에는 실패에만 로그가 있어 「알림이 나갔나」 를 저널로 답할 수 없었다.**
+  그날 후보 등재 알림 다섯이 실제로 나갔는데 저널로 확인이 안 돼 화면과 `pipeline_runs` 를 봐야 했다.
 - **systemd 유닛 실패 알림은 유닛 파일 안에서 직접 발송한다** — `infra/systemd/bullet-in-fail-notify@.service` 의 `ExecStart` 한 줄이다.
   파이썬 밖에서 알림을 보내는 유일한 자리라 채널 배정도 거기에 박혀 있다 ( `channel=CHANNEL_INCIDENT` ) .
   **이 줄을 고치면 VM 에서 `bash infra/systemd/install-units.sh` 를 다시 돌려야 반영된다** ( `git pull` 만으로는 `/etc/systemd/system/` 사본이 안 바뀐다 · `docs/runbook/2026-07-20-vm-cohost-bootstrap.md` §5 ) .

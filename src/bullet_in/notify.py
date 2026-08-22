@@ -40,13 +40,16 @@ COLOR_FAILURE = 0xE01E5A
 COLOR_CANDIDATE = 0x3BA55D
 COLOR_BLOCK = 0xD9534F
 
+# 후보 0건일 때만 붙는 추측 줄이다 — 응답 코드 같은 관측값은 여기 적지 않는다.
+# _failure_code_line 이 서버가 준 코드를 따로 싣고, 두 자리에 같은 값을 두면
+# 한쪽이 낡는다 (fmkorea 힌트가 「429」 로 남아 있었고 실제 차단 응답은 430 이다).
 ADAPTER_HINTS = {
     "x_playwright": "X 쿠키 만료 · 핸들 변경",
     "x_backtrack": "X 쿠키 만료 · 핸들 변경",
     "html": "셀렉터 드리프트 · 사이트 개편",
     "playwright": "셀렉터 · 동의창 드리프트",
     "rss": "피드 URL 변경",
-    "fmkorea": "검색 URL 변경 · 429 차단",
+    "fmkorea": "검색 URL 변경 · 자동 수집 차단",
 }
 RUNBOOK_FRESHNESS = ("https://github.com/benidjor/bullet-in/blob/main/"
                      "docs/runbook/2026-07-13-freshness-watermark-ops.md")
@@ -78,8 +81,12 @@ def send_alert(title: str, description: str, *, color: int,
         embed["timestamp"] = timestamp
     if footer:
         embed["footer"] = {"text": footer}
-    webhook = (os.environ.get(CHANNEL_ENV.get(channel or "", ""))
-               or os.environ.get("DISCORD_WEBHOOK_URL"))
+    webhook = os.environ.get(CHANNEL_ENV.get(channel or "", ""))
+    # 폴백으로 떨어진 것도 발송 성공이라 종전에는 흔적이 없었다 — 어느 채널로 갔는지를
+    # 저널에서 가릴 수 없었다 (2026-08-23 실물: 후보 등재 알림 다섯이 나갔는데 저널로
+    # 확인이 안 돼 화면과 pipeline_runs 를 봐야 했다).
+    routed = channel if webhook else (f"{channel}→기본(폴백)" if channel else "기본")
+    webhook = webhook or os.environ.get("DISCORD_WEBHOOK_URL")
     if not webhook:
         logger.warning("알림 (webhook 미설정): %s — %s", title, description)
         return
@@ -87,6 +94,9 @@ def send_alert(title: str, description: str, *, color: int,
         resp = httpx.post(webhook, json={"embeds": [embed]}, timeout=10)
         if resp.status_code >= 300:
             logger.warning("알림 발송 실패 (status %s): %s", resp.status_code, title)
+        else:
+            # 주소는 안 남긴다 — 웹훅 주소는 그 자체가 인증 수단이다 (#220).
+            logger.info("알림 발송: %s — %s", routed, title)
     except Exception as e:
         logger.warning("알림 발송 오류: %s (%s)", title, e)
 

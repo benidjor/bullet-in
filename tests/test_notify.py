@@ -209,7 +209,7 @@ def test_build_anomaly_alert_drop_field_sequence_and_hint():
     assert field["inline"] is False
     assert "- ▼ 0건 (평소 ~14)" in field["value"]
     assert "- 최근: 14 → 12 → 15 → 13 → 14 → (오늘) 0" in field["value"]
-    assert "- 원인 후보: 검색 URL 변경 · 429 차단" in field["value"]
+    assert "- 원인 후보: 검색 URL 변경 · 자동 수집 차단" in field["value"]
     assert alert["fields"][-1] == {"name": "회차",
                                    "value": "최근 12회 기준 · run 3f2a9c12",
                                    "inline": True}
@@ -711,7 +711,7 @@ def test_anomaly_drop_keeps_adapter_hint_when_no_candidates():
                                        run_id="3f2a9c12abcd", candidates={})
     value = alert["fields"][0]["value"]
     assert "- 이번 회차 후보 0건 중 새로 담은 글 0건" in value
-    assert "- 원인 후보: 검색 URL 변경 · 429 차단" in value
+    assert "- 원인 후보: 검색 URL 변경 · 자동 수집 차단" in value
 
 
 def test_anomaly_drop_omits_adapter_hint_when_candidates_found():
@@ -883,3 +883,48 @@ def test_freshness_shows_the_discovery_funnel_in_the_path_section():
         checked_at=checked, candidates={}, funnels={"bbc_sport": _FUNNEL})
     assert "- 발견 퍼널: 목록 13 → URL 13 → 제목 7 → 키워드 3" \
         in _field(alert, "수집 경로는 살아 있나")
+
+
+def test_adapter_hints_do_not_carry_status_codes():
+    """힌트는 추측 줄이고 응답 코드는 관측값이다 — 섞으면 조용히 어긋난다.
+
+    `fmkorea` 힌트가 「429 차단」 으로 남아 있었는데 실제 차단 응답은 430 이다
+    (2026-08-16 이후 저널 실측 152건 전부 430 · 429 는 0건). 바로 위 절벽 알림은
+    `_failure_code_line` 이 관측한 코드를 제대로 싣고 있었다."""
+    import re
+    for adapter, hint in notify.ADAPTER_HINTS.items():
+        assert not re.search(r"[45]\d\d", hint), (adapter, hint)
+
+
+# ── 발송 성공도 로그를 남긴다 (2026-08-23) ──────────────────────────────────
+
+def test_send_alert_logs_the_channel_it_went_to(monkeypatch, caplog):
+    """저널이 「알림이 나갔나」 를 못 답하던 자리 — 실패에만 로그가 있었다.
+
+    2026-08-23 03:04 회차에 후보 등재 알림 다섯이 실제로 나갔는데 저널로는
+    확인이 안 돼, 화면과 pipeline_runs 를 봐야 알 수 있었다."""
+    monkeypatch.setenv("DISCORD_WEBHOOK_TREND", "https://discord.test/trend")
+    _capture_channel_post(monkeypatch)
+    with caplog.at_level(logging.INFO):
+        notify.send_alert("제목", "설명", color=0x1, channel=notify.CHANNEL_TREND)
+    assert "알림 발송: trend — 제목" in caplog.text
+
+
+def test_send_alert_log_shows_when_it_fell_back(monkeypatch, caplog):
+    """폴백은 발송 성공이라 종전에는 아무 흔적이 없었다 — 갈렸는지 판정할 수 없었다."""
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.test/default")
+    monkeypatch.delenv("DISCORD_WEBHOOK_TREND", raising=False)
+    _capture_channel_post(monkeypatch)
+    with caplog.at_level(logging.INFO):
+        notify.send_alert("제목", "설명", color=0x1, channel=notify.CHANNEL_TREND)
+    assert "알림 발송: trend→기본(폴백) — 제목" in caplog.text
+
+
+def test_send_alert_log_never_carries_the_webhook_url(monkeypatch, caplog):
+    """웹훅 주소는 그 자체가 인증 수단이다 (#220 과 같은 이유)."""
+    monkeypatch.setenv("DISCORD_WEBHOOK_INCIDENT", "https://discord.test/secret-abc")
+    _capture_channel_post(monkeypatch)
+    with caplog.at_level(logging.INFO):
+        notify.send_alert("제목", "설명", color=0x1, channel=notify.CHANNEL_INCIDENT)
+    assert "secret-abc" not in caplog.text
+
