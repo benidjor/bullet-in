@@ -1269,3 +1269,48 @@ def test_lineup_parenthesis_is_not_a_byline():
     # 실물 본문 앞머리 — 포메이션 표기가 괄호로 시작한다
     from bullet_in.adapters.fmkorea import extract_body_authors
     assert extract_body_authors("아스날 (4-2-3-1): 라야 7; 화이트 7, 모스케라 7") == []
+
+
+# --- 표지 없는 바이라인 (2026-08-20 조사 · 안건 κ 설계 §4) --------------------
+# BBC 라이브 포스트 페이지는 구조화 정보에 저자를 안 싣고 화면에만 이름을 띄운다.
+# 그 이름이 우리가 채택한 본문 앞머리에 'Alex Howell Arsenal reporter' 형태로
+# 들어와 있는데, 'By' 표지가 없어 기존 규칙이 못 잡았다.
+# 이름의 끝을 알려 주는 것은 직함 낱말뿐이라 그것이 없으면 채택하지 않는다.
+
+def test_unmarked_lead_byline_is_read_as_an_author():
+    # 실물 fb169243 · 3828d1e9 의 본문 앞머리
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    body = "Alex Howell Arsenal reporter With a squad that won the Premier League"
+    assert extract_body_authors(body) == ["Alex Howell"]
+
+
+def test_unmarked_lead_byline_allows_a_multiword_job_phrase():
+    # 같은 페이지의 다른 기여자 표기 — 직함구가 세 어절이다
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    body = "Sami Mokbel Senior football correspondent Arsenal have agreed a fee"
+    assert extract_body_authors(body) == ["Sami Mokbel"]
+
+
+def test_unmarked_lead_byline_needs_a_job_title_word():
+    # 경계가 없는 형태를 넓히면 첫 문장이 통째로 이름으로 들어온다 (안건 y 의 규율)
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    assert extract_body_authors("Bukayo Saka scored twice as Arsenal beat Spurs") == []
+
+
+def test_a_name_talking_to_reporters_is_not_a_byline():
+    # 직함 낱말의 복수형은 바이라인이 아니다
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    assert extract_body_authors("Mikel Arteta told reporters that Arsenal are ready") == []
+
+
+def test_unmarked_byline_is_read_only_at_the_head():
+    # 근거는 본문 첫 조각이다 — 뒤쪽에 나오는 기여자는 우리가 채택한 포스트의 저자가 아니다
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    body = "Arsenal have agreed a fee for the striker. Sami Mokbel Senior football correspondent"
+    assert extract_body_authors(body) == []
+
+
+def test_marked_byline_still_wins_over_the_unmarked_rule():
+    from bullet_in.adapters.fmkorea import extract_body_authors
+    body = "By KIERAN GILL, MAIL SPORT REPORTER 아스날이"
+    assert extract_body_authors(body) == ["KIERAN GILL"]
