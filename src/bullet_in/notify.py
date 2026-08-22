@@ -154,15 +154,37 @@ def _title_subject(labels: list[str]) -> str:
     return f"{labels[0]} 외 {rest}개 소스" if rest else labels[0]
 
 
+SPACER = "\u200b"   # 폭 없는 공백 — 이 한 줄이 구획 사이의 여백이 된다
+
+
+def _section_fields(sections: list[tuple[str, list[str]]]) -> list[dict]:
+    """구획을 embed 필드로 낸다 — 필드 이름이 디스코드가 직접 그리는 제목이다.
+
+    마크다운 굵기와 달리 크기 · 여백까지 디스코드가 붙여 주고, 렌더가 보장된다
+    (2026-08-23 실물 비교에서 세 서식 중 이것이 이겼다).
+    필드 간격은 고정이라 마지막을 뺀 구획 끝에 폭 없는 공백 한 줄을 더해 띄운다.
+    줄이 없는 구획은 빠진다."""
+    kept = [(name, lines) for name, lines in sections if lines]
+    out = []
+    for i, (name, lines) in enumerate(kept):
+        value = "\n".join(f"- {ln}" for ln in lines)
+        if i < len(kept) - 1:
+            value += "\n" + SPACER
+        out.append({"name": name, "value": value, "inline": False})
+    return out
+
+
 def _sectioned(sections: list[tuple[str, list[str]]]) -> str:
     """구획 제목과 줄 목록을 필드 값으로 엮는다 — 줄이 없는 구획은 빠진다.
 
-    「그래서 어떤 상태인가」 와 「무엇을 하나」 를 눈으로 가르기 위한 것이다 (§6.1)."""
+    「그래서 어떤 상태인가」 와 「무엇을 하나」 를 눈으로 가르기 위한 것이다 (§6.1).
+    구획 제목을 굵게 내는 이유는 디스코드가 굵기 없이는 불릿과 같은 무게로 그리기
+    때문이다 (2026-08-22 실물 화면)."""
     out: list[str] = []
     for name, lines in sections:
         if not lines:
             continue
-        out.append(f"▸ {name}")
+        out.append(f"**▸ {name}**")
         out.extend(f"- {ln}" for ln in lines)
     return "\n".join(out)
 
@@ -187,9 +209,9 @@ def build_freshness_alert(records, default_hours: float, *,
     waiting = len(breaches) - len(targets)
     no_wm = sum(1 for r in records if r.last_fetched_at is None)
     ok = len(records) - len(breaches) - no_wm
-    fields = []
+    per_source: list[tuple[str, list[tuple[str, list[str]]]]] = []
     for b in targets:
-        age = [f"⏳ {b.age_hours:.1f}h 경과 (임계 {b.threshold_hours:g}h)",
+        age = [f"⏳ **{b.age_hours:.1f}h** 경과 (임계 {b.threshold_hours:g}h)",
                f"마지막 수집: {_discord_ts(b.last_fetched_at, 'R')} "
                f"({_discord_ts(b.last_fetched_at, 'f')})"]
         # 기사 표가 원본보다 뒤처진 소스에만 붙인다 — 받기는 받았는데 그 뒤로는
@@ -205,19 +227,23 @@ def build_freshness_alert(records, default_hours: float, *,
         else:
             n = None if candidates is None else candidates.get(b.source_id, 0)
             if n:
-                path.append(f"이번 회차 후보 {n}건 — 전부 이미 받은 글입니다")
+                path.append(f"이번 회차 후보 **{n}건** — 전부 이미 받은 글입니다")
             elif n is not None:
                 path.append("이번 회차 후보 0건")
             if hint and not n:
                 path.append(f"원인 후보: {hint}")
-        fields.append({
-            "name": _source_field_name(b.source_id, sources),
-            "value": _sectioned([
-                ("얼마나 오래됐나", age),
-                ("수집 경로는 살아 있나", path),
-                ("다음 알림",
-                 [f"{FRESHNESS_REALERT_HOURS:g}시간 더 지나면 다시 알립니다"])]),
-            "inline": False})
+        per_source.append((b.source_id, [
+            ("얼마나 오래됐나", age),
+            ("수집 경로는 살아 있나", path),
+            ("다음 알림",
+             [f"{FRESHNESS_REALERT_HOURS:g}시간 더 지나면 다시 알립니다"])]))
+    # 절벽 알림과 같은 규칙 — 소스가 하나면 구획을 필드로 펼치고 여럿이면 접는다.
+    if len(per_source) == 1:
+        fields = _section_fields(per_source[0][1])
+    else:
+        fields = [{"name": _source_field_name(sid, sources),
+                   "value": _sectioned(sections), "inline": False}
+                  for sid, sections in per_source]
     fields.append({"name": "기본 임계", "value": f"전역 {default_hours:g}h",
                    "inline": True})
     fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
@@ -345,15 +371,15 @@ def _search_keyword_line(source: dict, failed: int) -> str | None:
     """설정에 있는 검색 키워드를 알림이 직접 싣는다 (스펙 2026-08-14 §6.1).
 
     어댑터는 키워드마다 첫 실패에서 그 키워드를 접으므로 실패 계수와 실패한 키워드
-    수가 같다 — 그래서 「전부」 라고 쓸 수 있다. 키워드를 안 쓰는 어댑터는 None."""
+    수가 같다 — 그래서 「전부」 라고 쓸 수 있다. 키워드를 안 쓰는 어댑터는 None.
+    키워드마다 중첩 목록 한 줄로 내는 이유는 디스코드가 들여쓴 이어붙임 줄을 앞
+    불릿에 흡수해 한 덩어리로 흘려 버리기 때문이다 (2026-08-22 실물 화면)."""
     kws = ((source.get("config") or {}).get("search_keywords")) or []
     if not kws:
         return None
-    items = [f"· {k['keyword']} "
-             f"({_SEARCH_TARGET_LABELS.get(k['target'], k['target'])})"
-             for k in kws]
-    rows = ["  " + " ".join(items[i:i + 2]) for i in range(0, len(items), 2)]
-    head = (f"검색 키워드 {len(kws)}개가 전부 실패했습니다" if failed == len(kws)
+    rows = [f"  - `{k['keyword']}` — "
+            f"{_SEARCH_TARGET_LABELS.get(k['target'], k['target'])}" for k in kws]
+    head = (f"검색 키워드 **{len(kws)}개가 전부 실패**했습니다" if failed == len(kws)
             else f"검색 키워드 {len(kws)}개")
     return "\n".join([head, *rows])
 
@@ -364,9 +390,9 @@ def _failure_code_line(codes: dict) -> str | None:
     if not codes:
         return None
     total = sum(codes.values())
-    parts = [("연결 오류" if k == "error" else f"HTTP {k}") + f" {v}건"
+    parts = [("연결 오류" if k == "error" else f"`HTTP {k}`") + f" {v}건"
              for k, v in sorted(codes.items(), key=lambda kv: str(kv[0]))]
-    return f"검색 실패 {total}건 — " + " · ".join(parts)
+    return f"검색 실패 **{total}건** — " + " · ".join(parts)
 
 
 def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
@@ -377,7 +403,7 @@ def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
     판정은 run.py 가 끝냈고 여기서는 표시만 한다 — history[0] 이 직전 회차다.
     ADAPTER_HINTS 를 쓰지 않는다: 후보 0 의 원인은 알림 시점에 알 수 없고,
     같은 함정으로 SLO-5 를 두 번 고쳤다 (#169 · #174)."""
-    fields = []
+    per_source: list[tuple[str, list[tuple[str, list[str]]]]] = []
     for sid in cliffs:
         codes = failure_codes.get(sid) or {}
         blocked = BOT_BLOCK_CODE in codes
@@ -387,30 +413,40 @@ def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
             happened.append(kw_line)
         code_line = _failure_code_line(codes)
         if code_line:
-            happened.append(code_line + (" (자동 수집 차단 응답)" if blocked else ""))
+            happened.append(code_line
+                            + (" *(자동 수집 차단 응답)*" if blocked else ""))
         recent = [h.get(sid, 0) for h in history[:4]]
-        seq = (f" (직전 {len(recent)}회차 "
-               + " → ".join(str(c) for c in reversed(recent)) + ")") if recent else ""
-        compared = [f"찾은 글: 이번 0건{seq}",
-                    "「찾은 글」 은 중복을 포함한 발견 결과 수이고 저장된 글 수가 "
-                    "아닙니다"]
+        # 마지막 자리가 이번 회차임을 화살표 사슬 안에서 보여 준다 — 종전에는 계수와
+        # 추이를 따로 적어 어느 숫자가 이번 것인지 한눈에 안 보였다.
+        compared = [(" → ".join(str(c) for c in reversed(recent))
+                     + " → **0 (이번)**" if recent else "**0건** (이번 회차)"),
+                    "*「찾은 글」 은 중복을 포함한 발견 결과 수이고 저장된 글 수가 "
+                    "아닙니다*"]
+        compared[0] = ("찾은 글 추이: " if recent else "찾은 글: ") + compared[0]
         # "정상 종료" 라고 쓰면 success_rate 가 1 미만일 때 숫자와 말이 어긋난다
         # (실사례 2026-08-04 06:04 — arsenal_official 503 으로 0.889).
         # 실패 알림이 왜 따로 안 왔는지만 사실로 적고 판단은 숫자에 맡긴다.
         state = ["이번 회차에 새 글이 없습니다",
-                 "다음 회차에 풀리면 대개 놓치는 글이 없습니다 — 발견이 최근 글 "
-                 "목록을 매번 다시 훑습니다",
-                 f"회차는 실패로 끝나지 않았습니다 (success_rate {success_rate:g}) "
-                 "— 어댑터가 예외를 던지지 않아 실패 알림이 따로 가지 않았습니다"]
+                 "*다음 회차에 풀리면 대개 놓치는 글이 없습니다 — 발견이 최근 글 "
+                 "목록을 매번 다시 훑습니다*",
+                 f"회차는 실패로 끝나지 않았습니다 (`success_rate {success_rate:g}`)",
+                 "*어댑터가 예외를 던지지 않아 실패 알림이 따로 가지 않았습니다*"]
         todo = ["차단은 보통 저절로 풀립니다 — 지금은 조치하지 않습니다"] if blocked else []
         todo += ["확인할 때 사이트에 직접 접속하지 말고 다음 회차 로그를 보십시오",
                  "회차가 계속 0이면 런북 (제목 클릭) 의 절차를 따릅니다"]
-        fields.append({"name": _source_field_name(sid, sources),
-                       "value": _sectioned([("무슨 일이 있었나", happened),
-                                            ("평소와 비교", compared),
-                                            ("지금 어떤 상태인가", state),
-                                            ("무엇을 하나", todo)]),
-                       "inline": False})
+        per_source.append((sid, [("무슨 일이 있었나", happened),
+                                 ("평소와 비교", compared),
+                                 ("지금 어떤 상태인가", state),
+                                 ("무엇을 하나", todo)]))
+    # 소스가 하나면 구획을 필드로 펼친다 (읽기 좋은 쪽). 여럿이면 소스당 한 필드로
+    # 접는다 — 구획을 펼친 채로 소스가 일곱 곳 동시에 끊기면 embed 필드 상한 (25) 을
+    # 넘겨 알림이 발송에 실패한다. 하필 전면 장애 때 알림을 잃는 자리다.
+    if len(per_source) == 1:
+        fields = _section_fields(per_source[0][1])
+    else:
+        fields = [{"name": _source_field_name(sid, sources),
+                   "value": _sectioned(sections), "inline": False}
+                  for sid, sections in per_source]
     fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
     return {"title": _cliff_title(cliffs, sources, failure_codes),
             "description": "직전 회차까지 글을 가져오던 소스가 이번 회차에 한 건도 못 가져왔습니다.",

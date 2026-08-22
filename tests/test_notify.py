@@ -122,14 +122,13 @@ def test_build_freshness_alert_stale_field_detail():
     alert = notify.build_freshness_alert(records, 48, targets=_stale_of(records),
                                          sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked)
-    [field] = [f for f in alert["fields"] if f["name"].startswith("afcstuff")]
-    assert field["name"] == "afcstuff (aggregator) (x_afcstuff)"
-    assert field["inline"] is False
-    assert "- ⏳ 61.4h 경과 (임계 24h)" in field["value"]
+    age = _field(alert, "얼마나 오래됐나")
+    assert "- ⏳ **61.4h** 경과 (임계 24h)" in age
     epoch = int((checked - timedelta(hours=61.4))
                 .replace(tzinfo=timezone.utc).timestamp())
-    assert f"- 마지막 수집: <t:{epoch}:R> (<t:{epoch}:f>)" in field["value"]
-    assert "- 원인 후보: X 쿠키 만료 · 핸들 변경" in field["value"]
+    assert f"- 마지막 수집: <t:{epoch}:R> (<t:{epoch}:f>)" in age
+    assert "- 원인 후보: X 쿠키 만료 · 핸들 변경" \
+        in _field(alert, "수집 경로는 살아 있나")
 
 
 def test_build_freshness_alert_common_fields():
@@ -139,7 +138,8 @@ def test_build_freshness_alert_common_fields():
                                          run_id="3f2a9c12abcd", checked_at=checked)
     assert {"name": "기본 임계", "value": "전역 48h", "inline": True} in alert["fields"]
     assert {"name": "회차", "value": "run 3f2a9c12", "inline": True} in alert["fields"]
-    assert len([f for f in alert["fields"] if f["inline"] is False]) == 1  # stale 1건만
+    assert [f["name"] for f in alert["fields"] if f["inline"] is False] \
+        == ["얼마나 오래됐나", "수집 경로는 살아 있나", "다음 알림"]
 
 
 def test_build_freshness_alert_fallbacks_unknown_adapter_no_display_name():
@@ -148,9 +148,9 @@ def test_build_freshness_alert_fallbacks_unknown_adapter_no_display_name():
     alert = notify.build_freshness_alert(records, 48, targets=records,
                                          sources={"mystery": {"adapter": "weird"}},
                                          run_id="rrrrrrrrrrrr", checked_at=checked)
-    field = alert["fields"][0]
-    assert field["name"] == "mystery"
-    assert "원인 후보" not in field["value"]
+    assert "원인 후보" not in str(alert["fields"])
+    # 힌트도 후보 계수도 없으면 경로 구획 자체가 안 생긴다
+    assert "수집 경로는 살아 있나" not in [f["name"] for f in alert["fields"]]
 
 
 class _Resp:
@@ -249,10 +249,10 @@ def test_build_freshness_alert_zero_candidates_keeps_hint():
                                          sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={}, fetch_errors={})
-    field = alert["fields"][0]
-    assert "- 이번 회차 후보 0건" in field["value"]
-    assert "수집 끊김 의심" not in field["value"]
-    assert "- 원인 후보: 셀렉터 드리프트 · 사이트 개편" in field["value"]
+    path = _field(alert, "수집 경로는 살아 있나")
+    assert "- 이번 회차 후보 0건" in path
+    assert "수집 끊김 의심" not in path
+    assert "- 원인 후보: 셀렉터 드리프트 · 사이트 개편" in path
 
 
 def test_build_freshness_alert_candidates_present_is_diagnosis_not_suppression():
@@ -264,11 +264,11 @@ def test_build_freshness_alert_candidates_present_is_diagnosis_not_suppression()
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={"bbc_sport": 4}, fetch_errors={})
     assert alert["title"] == "🕰️ 신선도 경고 — BBC Sport 2.9일째 조용합니다"
-    field = alert["fields"][0]
+    path = _field(alert, "수집 경로는 살아 있나")
     # 판정이 원본 수집으로 옮겨간 뒤로는 stale = 후보가 전부 이미 받은 글이라는 뜻이다.
     # 옛 문안 ("새 글이 없습니다") 은 저장 기준일 때 거짓이었다 (설계 2026-08-20 §3.5).
-    assert "- 이번 회차 후보 4건 — 전부 이미 받은 글입니다" in field["value"]
-    assert "원인 후보" not in field["value"]   # 후보가 있으면 셀렉터 힌트는 근거가 없다
+    assert "- 이번 회차 후보 **4건** — 전부 이미 받은 글입니다" in path
+    assert "원인 후보" not in path   # 후보가 있으면 셀렉터 힌트는 근거가 없다
 
 
 def test_build_freshness_alert_absorption_line_only_when_storage_lags():
@@ -282,7 +282,7 @@ def test_build_freshness_alert_absorption_line_only_when_storage_lags():
     epoch = int((checked - timedelta(hours=500))
                 .replace(tzinfo=timezone.utc).timestamp())
     assert f"- 마지막 저장: <t:{epoch}:f> (그 뒤로는 다른 행으로 흡수)" \
-        in alert["fields"][0]["value"]
+        in _field(alert, "얼마나 오래됐나")
 
 
 def test_build_freshness_alert_no_absorption_line_when_signals_agree():
@@ -293,7 +293,7 @@ def test_build_freshness_alert_no_absorption_line_when_signals_agree():
                                          sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={}, fetch_errors={})
-    assert "마지막 저장" not in alert["fields"][0]["value"]
+    assert "마지막 저장" not in _field(alert, "얼마나 오래됐나")
 
 
 def test_build_freshness_alert_counts_held_sources_in_description():
@@ -306,7 +306,7 @@ def test_build_freshness_alert_counts_held_sources_in_description():
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={}, fetch_errors={})
     assert [f["name"] for f in alert["fields"] if f["inline"] is False] \
-        == ["BBC Sport (bbc_sport)"]
+        == ["얼마나 오래됐나", "수집 경로는 살아 있나", "다음 알림"]
     assert "재알림 대기 1" in alert["description"]
 
 
@@ -316,7 +316,7 @@ def test_build_freshness_alert_states_realert_interval():
                                          sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={}, fetch_errors={})
-    assert "- 48시간 더 지나면 다시 알립니다" in alert["fields"][0]["value"]
+    assert "- 48시간 더 지나면 다시 알립니다" in _field(alert, "다음 알림")
 
 
 def test_build_freshness_alert_fetch_error_shows_error_not_hint():
@@ -327,10 +327,10 @@ def test_build_freshness_alert_fetch_error_shows_error_not_hint():
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={},
                                          fetch_errors={"bbc_sport": "HTTP 503"})
-    field = alert["fields"][0]
-    assert "- 이번 회차 fetch 오류: HTTP 503" in field["value"]
-    assert "원인 후보" not in field["value"]
-    assert "후보 0건" not in field["value"]  # 오류면 후보 수는 미지 — 0 으로 단정 금지
+    path = _field(alert, "수집 경로는 살아 있나")
+    assert "- 이번 회차 fetch 오류: HTTP 503" in path
+    assert "원인 후보" not in path
+    assert "후보 0건" not in path  # 오류면 후보 수는 미지 — 0 으로 단정 금지
 
 
 from bullet_in.notify import build_coverage_alert, COLOR_ANOMALY
@@ -395,10 +395,10 @@ def test_cliff_alert_shows_transition_and_recent_sequence():
         success_rate=1.0,
         run_id="3259230a-1111-2222-3333-444444444444")
     assert "수집 0건" in embed["title"]
-    body = embed["fields"][0]["value"]
-    assert "- 찾은 글: 이번 0건 (직전 4회차 10 → 0 → 10 → 10)" in body
-    assert "검색 실패 4건 — HTTP 430 4건" in body
-    assert "success_rate 1" in body
+    assert "- 찾은 글 추이: 10 → 0 → 10 → 10 → **0 (이번)**" \
+        in _field(embed, "평소와 비교")
+    assert "검색 실패 **4건** — `HTTP 430` 4건" in _field(embed, "무슨 일이 있었나")
+    assert "success_rate 1" in _field(embed, "지금 어떤 상태인가")
 
 
 def test_cliff_alert_omits_failure_line_when_adapter_has_no_codes():
@@ -409,9 +409,8 @@ def test_cliff_alert_omits_failure_line_when_adapter_has_no_codes():
         failure_codes={},
         success_rate=1.0,
         run_id="abcdef01")
-    body = embed["fields"][0]["value"]
-    assert "검색 실패" not in body
-    assert "- 찾은 글: 이번 0건 (직전 1회차 8)" in body
+    assert "검색 실패" not in str(embed["fields"])
+    assert "- 찾은 글 추이: 8 → **0 (이번)**" in _field(embed, "평소와 비교")
 
 
 def test_cliff_alert_has_no_cause_speculation():
@@ -439,7 +438,7 @@ def test_watchlist_blackout_alert_reports_counts_and_codes():
     assert "전원" in embed["title"]
     body = "".join(f["value"] for f in embed["fields"])
     assert "검색 10명" in body
-    assert "검색 실패 10건 — HTTP 430 10건" in body
+    assert "검색 실패 **10건** — `HTTP 430` 10건" in body
     assert "다시 시도" in embed["description"]
 
 
@@ -492,7 +491,7 @@ def test_cliff_alert_reports_cycle_outcome_without_claiming_normal():
         ["fmkorea"], history=[{"fmkorea": 10}],
         sources={"fmkorea": {"display_name": "fmkorea 축구 소식통"}},
         failure_codes={}, success_rate=0.889, run_id="abcdef01")
-    body = embed["fields"][0]["value"]
+    body = _field(embed, "지금 어떤 상태인가")
     assert "success_rate 0.889" in body
     assert "정상 종료" not in body
 
@@ -650,17 +649,18 @@ def test_freshness_title_counts_the_rest_when_several_sources():
     assert alert["title"] == "🕰️ 신선도 경고 — David Ornstein (X) 외 1개 소스가 오래됐습니다"
 
 
+def _field(alert, name):
+    return next(f["value"] for f in alert["fields"] if f["name"] == name)
+
+
 def test_freshness_field_groups_lines_into_sections():
     checked = datetime(2026, 8, 22, 6, 0, 0)
     records = _ornstein_records(checked)[:1]
     alert = notify.build_freshness_alert(records, 48, targets=records,
                                          sources=_ORNSTEIN, run_id="run12345678",
                                          checked_at=checked, candidates={"x_ornstein": 5})
-    value = alert["fields"][0]["value"]
-    assert "▸ 얼마나 오래됐나" in value
-    assert "▸ 수집 경로는 살아 있나" in value
-    assert "▸ 다음 알림" in value
-    assert value.index("▸ 얼마나 오래됐나") < value.index("▸ 수집 경로는 살아 있나")
+    assert [f["name"] for f in alert["fields"] if f["inline"] is False] \
+        == ["얼마나 오래됐나", "수집 경로는 살아 있나", "다음 알림"]
 
 
 def test_freshness_omits_the_path_section_when_nothing_observed():
@@ -670,7 +670,7 @@ def test_freshness_omits_the_path_section_when_nothing_observed():
     alert = notify.build_freshness_alert(records, 48, targets=records,
                                          sources={"new_source": {}},
                                          run_id="run12345678", checked_at=checked)
-    assert "▸ 수집 경로는 살아 있나" not in alert["fields"][0]["value"]
+    assert "수집 경로는 살아 있나" not in [f["name"] for f in alert["fields"]]
 
 
 # ── 문안 개편 · 수집량 이상 (스펙 2026-08-14 §6.1 · §6.4) ────────────────────
@@ -775,35 +775,32 @@ def test_cliff_title_counts_the_rest_when_several_sources():
 
 
 def test_cliff_lists_the_search_keywords_from_config():
-    value = _fm_cliff()["fields"][0]["value"]
-    assert "▸ 무슨 일이 있었나" in value
-    assert "- 검색 키워드 2개가 전부 실패했습니다" in value
-    assert '  · 아스날 (제목) · "de roche" (제목·본문)' in value
+    value = _field(_fm_cliff(), "무슨 일이 있었나")
+    assert "- 검색 키워드 **2개가 전부 실패**했습니다" in value
+    assert "  - `아스날` — 제목" in value
+    assert '  - `"de roche"` — 제목·본문' in value
 
 
 def test_cliff_names_the_bot_block_behind_the_response_code():
-    assert "- 검색 실패 2건 — HTTP 430 2건 (자동 수집 차단 응답)" \
-        in _fm_cliff()["fields"][0]["value"]
+    assert "- 검색 실패 **2건** — `HTTP 430` 2건 *(자동 수집 차단 응답)*" \
+        in _field(_fm_cliff(), "무슨 일이 있었나")
 
 
 def test_cliff_says_what_the_found_count_counts():
-    value = _fm_cliff()["fields"][0]["value"]
-    assert "▸ 평소와 비교" in value
-    assert "- 찾은 글: 이번 0건 (직전 2회차 12 → 12)" in value
-    assert "- 「찾은 글」 은 중복을 포함한 발견 결과 수이고 저장된 글 수가 아닙니다" in value
+    value = _field(_fm_cliff(), "평소와 비교")
+    assert "- 찾은 글 추이: 12 → 12 → **0 (이번)**" in value
+    assert "- *「찾은 글」 은 중복을 포함한 발견 결과 수이고 저장된 글 수가 아닙니다*" in value
 
 
 def test_cliff_explains_why_no_failure_alert_was_sent():
-    value = _fm_cliff()["fields"][0]["value"]
-    assert "▸ 지금 어떤 상태인가" in value
-    assert ("- 회차는 실패로 끝나지 않았습니다 (success_rate 1) — 어댑터가 예외를 "
-            "던지지 않아 실패 알림이 따로 가지 않았습니다") in value
+    value = _field(_fm_cliff(), "지금 어떤 상태인가")
+    assert "- 회차는 실패로 끝나지 않았습니다 (`success_rate 1`)" in value
+    assert "- *어댑터가 예외를 던지지 않아 실패 알림이 따로 가지 않았습니다*" in value
 
 
 def test_cliff_advises_waiting_only_when_the_block_code_is_present():
-    with_block = _fm_cliff()["fields"][0]["value"]
-    without = _fm_cliff(failure_codes={"fmkorea": {503: 2}})["fields"][0]["value"]
-    assert "▸ 무엇을 하나" in with_block
+    with_block = _field(_fm_cliff(), "무엇을 하나")
+    without = _field(_fm_cliff(failure_codes={"fmkorea": {503: 2}}), "무엇을 하나")
     assert "- 차단은 보통 저절로 풀립니다 — 지금은 조치하지 않습니다" in with_block
     assert "차단은 보통 저절로 풀립니다" not in without
     assert "- 회차가 계속 0이면 런북 (제목 클릭) 의 절차를 따릅니다" in without
@@ -813,4 +810,46 @@ def test_cliff_omits_the_what_happened_section_without_keywords_or_codes():
     alert = notify.build_cliff_alert(
         ["guardian"], history=[{"guardian": 8}], sources=_FM_CFG,
         failure_codes={}, success_rate=1.0, run_id="3f2a9c12abcd")
-    assert "▸ 무슨 일이 있었나" not in alert["fields"][0]["value"]
+    assert [f["name"] for f in alert["fields"]][0] == "평소와 비교"
+
+
+# ── 디스코드 렌더 (실물 화면에서 줄이 붙어 버린 자리) ────────────────────────
+
+def test_single_source_puts_each_section_in_its_own_field():
+    # 필드 이름은 디스코드가 직접 굵게 · 여백까지 그려 주는 자리다 (2026-08-23 실물 비교)
+    names = [f["name"] for f in _fm_cliff()["fields"]]
+    assert names == ["무슨 일이 있었나", "평소와 비교", "지금 어떤 상태인가",
+                     "무엇을 하나", "회차"]
+
+
+def test_sections_are_spaced_apart_except_the_last_one():
+    # 디스코드 필드 간격은 고정이라 폭 없는 공백 한 줄로 띄운다
+    fields = [f for f in _fm_cliff()["fields"] if not f.get("inline")]
+    assert all(f["value"].endswith("\n\u200b") for f in fields[:-1])
+    assert not fields[-1]["value"].endswith("\u200b")
+
+
+def test_several_sources_fall_back_to_one_field_each():
+    # 구획을 필드로 펼치면 소스 일곱 곳이 동시에 끊길 때 상한 (25) 을 넘겨
+    # 알림이 발송에 실패한다 — 하필 전면 장애 때 알림을 잃는다
+    alert = notify.build_cliff_alert(
+        ["fmkorea", "guardian"], history=[{"fmkorea": 12, "guardian": 8}],
+        sources=_FM_CFG, failure_codes={}, success_rate=1.0, run_id="3f2a9c12abcd")
+    names = [f["name"] for f in alert["fields"]]
+    assert names == ["fmkorea 축구 소식통 (fmkorea)", "The Guardian (guardian)", "회차"]
+    assert "**▸ 무슨 일이 있었나**" not in names[0]
+    assert "**▸ 평소와 비교**" in alert["fields"][0]["value"]
+
+
+def test_each_search_keyword_gets_its_own_line():
+    # 이어붙인 줄은 디스코드가 앞 불릿에 흡수한다 — 키워드마다 중첩 항목으로 낸다
+    value = _field(_fm_cliff(), "무슨 일이 있었나")
+    kw_lines = [ln for ln in value.splitlines() if ln.startswith("  - `")]
+    assert len(kw_lines) == 2
+
+
+def test_cliff_states_the_count_plainly_without_history():
+    alert = notify.build_cliff_alert(
+        ["fmkorea"], history=[], sources=_FM_CFG,
+        failure_codes={}, success_rate=1.0, run_id="3f2a9c12abcd")
+    assert "- 찾은 글: **0건** (이번 회차)" in _field(alert, "평소와 비교")
