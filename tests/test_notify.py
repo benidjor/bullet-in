@@ -125,7 +125,7 @@ def test_build_freshness_alert_stale_field_detail():
     [field] = [f for f in alert["fields"] if f["name"].startswith("afcstuff")]
     assert field["name"] == "afcstuff (aggregator) (x_afcstuff)"
     assert field["inline"] is False
-    assert "- ⏳ 61.4h 경과 (임계 24h)" in field["value"]
+    assert "- ⏳ **61.4h** 경과 (임계 24h)" in field["value"]
     epoch = int((checked - timedelta(hours=61.4))
                 .replace(tzinfo=timezone.utc).timestamp())
     assert f"- 마지막 수집: <t:{epoch}:R> (<t:{epoch}:f>)" in field["value"]
@@ -267,7 +267,7 @@ def test_build_freshness_alert_candidates_present_is_diagnosis_not_suppression()
     field = alert["fields"][0]
     # 판정이 원본 수집으로 옮겨간 뒤로는 stale = 후보가 전부 이미 받은 글이라는 뜻이다.
     # 옛 문안 ("새 글이 없습니다") 은 저장 기준일 때 거짓이었다 (설계 2026-08-20 §3.5).
-    assert "- 이번 회차 후보 4건 — 전부 이미 받은 글입니다" in field["value"]
+    assert "- 이번 회차 후보 **4건** — 전부 이미 받은 글입니다" in field["value"]
     assert "원인 후보" not in field["value"]   # 후보가 있으면 셀렉터 힌트는 근거가 없다
 
 
@@ -396,8 +396,8 @@ def test_cliff_alert_shows_transition_and_recent_sequence():
         run_id="3259230a-1111-2222-3333-444444444444")
     assert "수집 0건" in embed["title"]
     body = embed["fields"][0]["value"]
-    assert "- 찾은 글: 이번 0건 (직전 4회차 10 → 0 → 10 → 10)" in body
-    assert "검색 실패 4건 — HTTP 430 4건" in body
+    assert "- 찾은 글 추이: 10 → 0 → 10 → 10 → **0 (이번)**" in body
+    assert "검색 실패 **4건** — `HTTP 430` 4건" in body
     assert "success_rate 1" in body
 
 
@@ -411,7 +411,7 @@ def test_cliff_alert_omits_failure_line_when_adapter_has_no_codes():
         run_id="abcdef01")
     body = embed["fields"][0]["value"]
     assert "검색 실패" not in body
-    assert "- 찾은 글: 이번 0건 (직전 1회차 8)" in body
+    assert "- 찾은 글 추이: 8 → **0 (이번)**" in body
 
 
 def test_cliff_alert_has_no_cause_speculation():
@@ -439,7 +439,7 @@ def test_watchlist_blackout_alert_reports_counts_and_codes():
     assert "전원" in embed["title"]
     body = "".join(f["value"] for f in embed["fields"])
     assert "검색 10명" in body
-    assert "검색 실패 10건 — HTTP 430 10건" in body
+    assert "검색 실패 **10건** — `HTTP 430` 10건" in body
     assert "다시 시도" in embed["description"]
 
 
@@ -777,27 +777,28 @@ def test_cliff_title_counts_the_rest_when_several_sources():
 def test_cliff_lists_the_search_keywords_from_config():
     value = _fm_cliff()["fields"][0]["value"]
     assert "▸ 무슨 일이 있었나" in value
-    assert "- 검색 키워드 2개가 전부 실패했습니다" in value
-    assert '  · 아스날 (제목) · "de roche" (제목·본문)' in value
+    assert "- 검색 키워드 **2개가 전부 실패**했습니다" in value
+    assert "  - `아스날` — 제목" in value
+    assert '  - `"de roche"` — 제목·본문' in value
 
 
 def test_cliff_names_the_bot_block_behind_the_response_code():
-    assert "- 검색 실패 2건 — HTTP 430 2건 (자동 수집 차단 응답)" \
+    assert "- 검색 실패 **2건** — `HTTP 430` 2건 *(자동 수집 차단 응답)*" \
         in _fm_cliff()["fields"][0]["value"]
 
 
 def test_cliff_says_what_the_found_count_counts():
     value = _fm_cliff()["fields"][0]["value"]
     assert "▸ 평소와 비교" in value
-    assert "- 찾은 글: 이번 0건 (직전 2회차 12 → 12)" in value
-    assert "- 「찾은 글」 은 중복을 포함한 발견 결과 수이고 저장된 글 수가 아닙니다" in value
+    assert "- 찾은 글 추이: 12 → 12 → **0 (이번)**" in value
+    assert "- *「찾은 글」 은 중복을 포함한 발견 결과 수이고 저장된 글 수가 아닙니다*" in value
 
 
 def test_cliff_explains_why_no_failure_alert_was_sent():
     value = _fm_cliff()["fields"][0]["value"]
     assert "▸ 지금 어떤 상태인가" in value
-    assert ("- 회차는 실패로 끝나지 않았습니다 (success_rate 1) — 어댑터가 예외를 "
-            "던지지 않아 실패 알림이 따로 가지 않았습니다") in value
+    assert "- 회차는 실패로 끝나지 않았습니다 (`success_rate 1`)" in value
+    assert "- *어댑터가 예외를 던지지 않아 실패 알림이 따로 가지 않았습니다*" in value
 
 
 def test_cliff_advises_waiting_only_when_the_block_code_is_present():
@@ -814,3 +815,24 @@ def test_cliff_omits_the_what_happened_section_without_keywords_or_codes():
         ["guardian"], history=[{"guardian": 8}], sources=_FM_CFG,
         failure_codes={}, success_rate=1.0, run_id="3f2a9c12abcd")
     assert "▸ 무슨 일이 있었나" not in alert["fields"][0]["value"]
+
+
+# ── 디스코드 렌더 (실물 화면에서 줄이 붙어 버린 자리) ────────────────────────
+
+def test_section_headers_are_bold_so_they_do_not_read_as_bullets():
+    # 굵게 안 하면 구획 제목이 바로 아래 불릿과 같은 무게로 보인다 (2026-08-22 실물)
+    assert "**▸ 무슨 일이 있었나**" in _fm_cliff()["fields"][0]["value"]
+
+
+def test_each_search_keyword_gets_its_own_line():
+    # 이어붙인 줄은 디스코드가 앞 불릿에 흡수한다 — 키워드마다 중첩 항목으로 낸다
+    value = _fm_cliff()["fields"][0]["value"]
+    kw_lines = [ln for ln in value.splitlines() if ln.startswith("  - `")]
+    assert len(kw_lines) == 2
+
+
+def test_cliff_states_the_count_plainly_without_history():
+    alert = notify.build_cliff_alert(
+        ["fmkorea"], history=[], sources=_FM_CFG,
+        failure_codes={}, success_rate=1.0, run_id="3f2a9c12abcd")
+    assert "- 찾은 글: **0건** (이번 회차)" in alert["fields"][0]["value"]

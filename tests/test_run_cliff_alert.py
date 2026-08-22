@@ -29,7 +29,7 @@ def test_payload_built_for_cliff_with_adapter_codes():
         sources={"fmkorea": {"display_name": "fmkorea 축구 소식통"}},
         success_rate=1.0, run_id="3259230a")
     assert "수집 0건" in payload["title"]
-    assert "HTTP 430 4건" in payload["fields"][0]["value"]
+    assert "`HTTP 430` 4건" in payload["fields"][0]["value"]
 
 
 def test_payload_ignores_source_already_at_zero():
