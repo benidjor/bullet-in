@@ -109,7 +109,7 @@ def test_build_freshness_alert_title_overview_and_meta():
     alert = notify.build_freshness_alert(records, 48, targets=_stale_of(records),
                                          sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked)
-    assert alert["title"] == "🕰️ 신선도 경고 — 오래된 소스 1건"
+    assert alert["title"] == "🕰️ 신선도 경고 — afcstuff (aggregator) 2.6일째 조용합니다"
     assert alert["description"] == "감시 3소스: stale 1 · 정상 1 · 워터마크 없음 1"
     assert alert["color"] == notify.COLOR_ANOMALY
     assert alert["url"] == notify.RUNBOOK_FRESHNESS
@@ -203,8 +203,6 @@ def test_build_anomaly_alert_drop_field_sequence_and_hint():
     srcs = {"fmkorea": {"display_name": "fmkorea 축구 소식통", "adapter": "fmkorea"}}
     alert = notify.build_anomaly_alert(anomalies, 12, hist=_HIST, sources=srcs,
                                        run_id="3f2a9c12abcd")
-    assert alert["title"] == "⚠️ 수집량 이상 — 1건 (드롭 1 · 스파이크 0)"
-    assert alert["description"] == "최근 12회 대비 소스별 수집량 이상"
     assert alert["url"] == notify.RUNBOOK_ANOMALY
     field = alert["fields"][0]
     assert field["name"] == "fmkorea 축구 소식통 (fmkorea)"
@@ -217,15 +215,13 @@ def test_build_anomaly_alert_drop_field_sequence_and_hint():
                                    "inline": True}
 
 
-def test_build_anomaly_alert_spike_hint_and_missing_hist_source():
+def test_build_anomaly_alert_omits_sequence_for_source_missing_from_history():
     anomalies = [Anomaly("bbc", 30, 9.0, "spike"), Anomaly("ghost", 0, 5.0, "drop")]
     alert = notify.build_anomaly_alert(anomalies, 12, hist=[], sources={},
                                        run_id="rrrrrrrrrrrr")
-    assert alert["title"] == "⚠️ 수집량 이상 — 2건 (드롭 1 · 스파이크 1)"
     spike_field, ghost_field = alert["fields"][0], alert["fields"][1]
     assert spike_field["name"] == "bbc"
     assert "- ▲ 30건 (평소 ~9)" in spike_field["value"]
-    assert "- 원인 후보: 중복 유입 · 파싱 회귀 의심" in spike_field["value"]
     assert "최근:" not in ghost_field["value"]      # hist 에 없음 → 시퀀스 생략
     assert "원인 후보" not in ghost_field["value"]  # 미지 어댑터 드롭 → 힌트 생략
 
@@ -267,7 +263,7 @@ def test_build_freshness_alert_candidates_present_is_diagnosis_not_suppression()
                                          sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={"bbc_sport": 4}, fetch_errors={})
-    assert alert["title"] == "🕰️ 신선도 경고 — 오래된 소스 1건"
+    assert alert["title"] == "🕰️ 신선도 경고 — BBC Sport 2.9일째 조용합니다"
     field = alert["fields"][0]
     # 판정이 원본 수집으로 옮겨간 뒤로는 stale = 후보가 전부 이미 받은 글이라는 뜻이다.
     # 옛 문안 ("새 글이 없습니다") 은 저장 기준일 때 거짓이었다 (설계 2026-08-20 §3.5).
@@ -303,11 +299,14 @@ def test_build_freshness_alert_no_absorption_line_when_signals_agree():
 def test_build_freshness_alert_counts_held_sources_in_description():
     # 재알림 간격이 안 찬 stale 은 필드에서 빠지고 조망 줄에 계수로만 남는다
     checked, records = _stale_bbc()
-    alert = notify.build_freshness_alert(records, 48, targets=[],
+    records.append(SourceFreshness("x_afcstuff", checked - timedelta(hours=61.4),
+                                   24.0, 61.4, True))
+    alert = notify.build_freshness_alert(records, 48, targets=records[:1],
                                          sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={}, fetch_errors={})
-    assert alert["title"] == "🕰️ 신선도 경고 — 오래된 소스 0건"
+    assert [f["name"] for f in alert["fields"] if f["inline"] is False] \
+        == ["BBC Sport (bbc_sport)"]
     assert "재알림 대기 1" in alert["description"]
 
 
@@ -397,8 +396,7 @@ def test_cliff_alert_shows_transition_and_recent_sequence():
         run_id="3259230a-1111-2222-3333-444444444444")
     assert "수집 0건" in embed["title"]
     body = embed["fields"][0]["value"]
-    assert "직전 회차 10건 → 이번 회차 0건" in body
-    assert "10 → 0 → 10 → 10 → 0 (이번)" in body
+    assert "- 찾은 글: 이번 0건 (직전 4회차 10 → 0 → 10 → 10)" in body
     assert "검색 실패 4건 — HTTP 430 4건" in body
     assert "success_rate 1" in body
 
@@ -413,7 +411,7 @@ def test_cliff_alert_omits_failure_line_when_adapter_has_no_codes():
         run_id="abcdef01")
     body = embed["fields"][0]["value"]
     assert "검색 실패" not in body
-    assert "직전 회차 8건 → 이번 회차 0건" in body
+    assert "- 찾은 글: 이번 0건 (직전 1회차 8)" in body
 
 
 def test_cliff_alert_has_no_cause_speculation():
@@ -523,3 +521,296 @@ def test_build_roster_staleness_alert_has_no_cause_speculation():
         f["value"] for f in embed["fields"])
     for banned in ("차단", "원인", "실패", "오류"):
         assert banned not in text
+
+
+# ── 디스코드 채널 3분리 (스펙 2026-08-14 §7) ─────────────────────────────────
+
+def _capture_channel_post(monkeypatch) -> dict:
+    captured: dict = {}
+
+    class Resp:
+        status_code = 204
+
+    def fake_post(url, json, timeout):
+        captured["url"] = url
+        captured["json"] = json
+        return Resp()
+
+    monkeypatch.setattr(notify.httpx, "post", fake_post)
+    return captured
+
+
+def test_send_alert_posts_to_channel_webhook(monkeypatch):
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.test/default")
+    monkeypatch.setenv("DISCORD_WEBHOOK_INCIDENT", "https://discord.test/incident")
+    captured = _capture_channel_post(monkeypatch)
+    notify.send_alert("제목", "설명", color=0x1, channel=notify.CHANNEL_INCIDENT)
+    assert captured["url"] == "https://discord.test/incident"
+
+
+def test_send_alert_falls_back_to_default_webhook_when_channel_unset(monkeypatch):
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.test/default")
+    monkeypatch.delenv("DISCORD_WEBHOOK_TREND", raising=False)
+    captured = _capture_channel_post(monkeypatch)
+    notify.send_alert("제목", "설명", color=0x1, channel=notify.CHANNEL_TREND)
+    assert captured["url"] == "https://discord.test/default"
+
+
+def test_send_alert_keeps_channel_out_of_embed(monkeypatch):
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.test/default")
+    captured = _capture_channel_post(monkeypatch)
+    notify.send_alert("제목", "설명", color=0x1, channel=notify.CHANNEL_REVIEW)
+    assert "channel" not in captured["json"]["embeds"][0]
+
+
+def _sample_payloads() -> dict:
+    """9종 알림 payload 를 한 번에 만든다 — 채널 배정 확인용 최소 입력."""
+    from types import SimpleNamespace
+    now = datetime(2026, 8, 22, 6, 0, 0)
+    ti = SimpleNamespace(dag_id="d", task_id="t", try_number=1, hostname="h",
+                         duration=1.0, log_url="http://log")
+    records = [SourceFreshness("x_ornstein", now - timedelta(hours=291), 120.0,
+                               291.0, True)]
+    return {
+        "failure": notify.build_failure_alert(
+            {"task_instance": ti, "run_id": "r", "exception": ValueError("boom")}),
+        "cliff": notify.build_cliff_alert(
+            ["fmkorea"], history=[{"fmkorea": 12}], sources={},
+            failure_codes={}, success_rate=1.0, run_id="run12345678"),
+        "blackout": notify.build_watchlist_blackout_alert(
+            searched=5, failure_codes={430: 5}, last_contact=now),
+        "candidate": notify.build_candidate_alert(
+            [{"ko": "사카", "full_name": "Bukayo Saka", "stage": "rumour"}],
+            run_id="run12345678"),
+        "filter_miss": notify.build_filter_miss_alert(
+            [{"title": "t", "taxonomies": [], "url": "http://a"}],
+            run_id="run12345678"),
+        "roster": notify.build_roster_staleness_alert(
+            [{"ko_name": "사카", "transfer_status": "none",
+              "new_stages": {"rumour": 1}, "recent_total": 3}],
+            run_id="run12345678"),
+        "anomaly": notify.build_anomaly_alert(
+            [Anomaly("fmkorea", 0, 11.2, "drop")], 12, hist=[{"fmkorea": 11}],
+            sources={}, run_id="run12345678"),
+        "freshness": notify.build_freshness_alert(
+            records, 48, targets=records, sources={}, run_id="run12345678",
+            checked_at=now),
+        "coverage": notify.build_coverage_alert(
+            ["no_candidates"], {"candidates": 0}, run_id="run12345678"),
+    }
+
+
+def test_incident_alerts_carry_incident_channel():
+    p = _sample_payloads()
+    assert [p[k]["channel"] for k in ("failure", "cliff", "blackout")] \
+        == [notify.CHANNEL_INCIDENT] * 3
+
+
+def test_review_alerts_carry_review_channel():
+    p = _sample_payloads()
+    assert [p[k]["channel"] for k in ("candidate", "filter_miss", "roster")] \
+        == [notify.CHANNEL_REVIEW] * 3
+
+
+def test_trend_alerts_carry_trend_channel():
+    p = _sample_payloads()
+    assert [p[k]["channel"] for k in ("anomaly", "freshness", "coverage")] \
+        == [notify.CHANNEL_TREND] * 3
+
+
+# ── 문안 개편 · 신선도 (스펙 2026-08-14 §6.1 · §6.3) ──────────────────────────
+
+_ORNSTEIN = {"x_ornstein": {"display_name": "David Ornstein (X)",
+                            "adapter": "x_playwright"},
+             "skysports": {"display_name": "Sky Sports", "adapter": "html"}}
+
+
+def _ornstein_records(checked):
+    return [SourceFreshness("x_ornstein", checked - timedelta(hours=291), 120.0,
+                            291.0, True),
+            SourceFreshness("skysports", checked - timedelta(hours=200), 96.0,
+                            200.0, True)]
+
+
+def test_freshness_title_names_the_source_and_days_silent():
+    checked = datetime(2026, 8, 22, 6, 0, 0)
+    records = _ornstein_records(checked)
+    alert = notify.build_freshness_alert(records, 48, targets=records[:1],
+                                         sources=_ORNSTEIN, run_id="run12345678",
+                                         checked_at=checked)
+    assert alert["title"] == "🕰️ 신선도 경고 — David Ornstein (X) 12.1일째 조용합니다"
+
+
+def test_freshness_title_counts_the_rest_when_several_sources():
+    checked = datetime(2026, 8, 22, 6, 0, 0)
+    records = _ornstein_records(checked)
+    alert = notify.build_freshness_alert(records, 48, targets=records,
+                                         sources=_ORNSTEIN, run_id="run12345678",
+                                         checked_at=checked)
+    assert alert["title"] == "🕰️ 신선도 경고 — David Ornstein (X) 외 1개 소스가 오래됐습니다"
+
+
+def test_freshness_field_groups_lines_into_sections():
+    checked = datetime(2026, 8, 22, 6, 0, 0)
+    records = _ornstein_records(checked)[:1]
+    alert = notify.build_freshness_alert(records, 48, targets=records,
+                                         sources=_ORNSTEIN, run_id="run12345678",
+                                         checked_at=checked, candidates={"x_ornstein": 5})
+    value = alert["fields"][0]["value"]
+    assert "▸ 얼마나 오래됐나" in value
+    assert "▸ 수집 경로는 살아 있나" in value
+    assert "▸ 다음 알림" in value
+    assert value.index("▸ 얼마나 오래됐나") < value.index("▸ 수집 경로는 살아 있나")
+
+
+def test_freshness_omits_the_path_section_when_nothing_observed():
+    checked = datetime(2026, 8, 22, 6, 0, 0)
+    records = [SourceFreshness("new_source", checked - timedelta(hours=99), 48.0,
+                               99.0, True)]
+    alert = notify.build_freshness_alert(records, 48, targets=records,
+                                         sources={"new_source": {}},
+                                         run_id="run12345678", checked_at=checked)
+    assert "▸ 수집 경로는 살아 있나" not in alert["fields"][0]["value"]
+
+
+# ── 문안 개편 · 수집량 이상 (스펙 2026-08-14 §6.1 · §6.4) ────────────────────
+
+_FM = {"fmkorea": {"display_name": "fmkorea 축구 소식통", "adapter": "fmkorea"},
+       "bbc_sport": {"display_name": "BBC Sport", "adapter": "html"}}
+
+
+def test_anomaly_title_names_the_source_with_its_numbers():
+    alert = notify.build_anomaly_alert([Anomaly("fmkorea", 0, 14.0, "drop")], 12,
+                                       hist=_HIST, sources=_FM,
+                                       run_id="3f2a9c12abcd")
+    assert alert["title"] == "⚠️ 수집량 드롭 — fmkorea 축구 소식통 0건 (평소 ~14)"
+
+
+def test_anomaly_title_counts_the_rest_when_several_sources():
+    anomalies = [Anomaly("fmkorea", 0, 14.0, "drop"),
+                 Anomaly("bbc_sport", 30, 9.0, "spike")]
+    alert = notify.build_anomaly_alert(anomalies, 12, hist=_HIST, sources=_FM,
+                                       run_id="3f2a9c12abcd")
+    assert alert["title"] == \
+        "⚠️ 수집량 이상 — fmkorea 축구 소식통 외 1개 소스 (드롭 1 · 스파이크 1)"
+
+
+def test_anomaly_description_says_what_the_count_means():
+    alert = notify.build_anomaly_alert([Anomaly("fmkorea", 0, 14.0, "drop")], 12,
+                                       hist=_HIST, sources=_FM,
+                                       run_id="3f2a9c12abcd")
+    assert alert["description"] == (
+        "최근 12회 대비 소스별 수집량 이상 — 「수집량」 은 중복 · 필터를 지나 "
+        "이번 회차에 새로 담은 글 수입니다")
+
+
+def test_anomaly_drop_keeps_adapter_hint_when_no_candidates():
+    # 후보 0건 = 발견 자체가 끊겼다 — 이때만 셀렉터 · 차단 힌트에 근거가 있다
+    alert = notify.build_anomaly_alert([Anomaly("fmkorea", 0, 14.0, "drop")], 12,
+                                       hist=_HIST, sources=_FM,
+                                       run_id="3f2a9c12abcd", candidates={})
+    value = alert["fields"][0]["value"]
+    assert "- 이번 회차 후보 0건 중 새로 담은 글 0건" in value
+    assert "- 원인 후보: 검색 URL 변경 · 429 차단" in value
+
+
+def test_anomaly_drop_omits_adapter_hint_when_candidates_found():
+    # 후보가 있는데 적재가 줄었다 = 발견은 살아 있고 중복 · 필터에서 걸린 것이다
+    alert = notify.build_anomaly_alert([Anomaly("fmkorea", 2, 14.0, "drop")], 12,
+                                       hist=_HIST, sources=_FM,
+                                       run_id="3f2a9c12abcd",
+                                       candidates={"fmkorea": 12})
+    value = alert["fields"][0]["value"]
+    assert "- 이번 회차 후보 12건 중 새로 담은 글 2건" in value
+    assert "원인 후보" not in value
+
+
+def test_anomaly_spike_states_counts_instead_of_guessing_cause():
+    # 근거 없는 「중복 유입 · 파싱 회귀 의심」 을 걷어내고 관측 사실만 적는다
+    alert = notify.build_anomaly_alert([Anomaly("bbc_sport", 30, 9.0, "spike")], 12,
+                                       hist=_HIST, sources=_FM,
+                                       run_id="3f2a9c12abcd",
+                                       candidates={"bbc_sport": 33})
+    value = alert["fields"][0]["value"]
+    assert "- 이번 회차 후보 33건 중 새로 담은 글 30건" in value
+    assert "원인 후보" not in value
+    assert not hasattr(notify, "SPIKE_HINT")
+
+
+# ── 문안 개편 · 후보 절벽 (스펙 2026-08-14 §6.1 · §6.2) ──────────────────────
+
+_FM_CFG = {"fmkorea": {"display_name": "fmkorea 축구 소식통", "adapter": "fmkorea",
+                       "config": {"search_keywords": [
+                           {"keyword": "아스날", "target": "title"},
+                           {"keyword": '"de roche"', "target": "title_content"}]}},
+           "guardian": {"display_name": "The Guardian", "adapter": "html"}}
+
+
+def _fm_cliff(**kw):
+    args = {"history": [{"fmkorea": 12}, {"fmkorea": 12}], "sources": _FM_CFG,
+            "failure_codes": {"fmkorea": {430: 2}}, "success_rate": 1.0,
+            "run_id": "3f2a9c12abcd"}
+    args.update(kw)
+    return notify.build_cliff_alert(["fmkorea"], **args)
+
+
+def test_cliff_title_names_the_source_and_the_failed_searches():
+    assert _fm_cliff()["title"] == \
+        "🚨 fmkorea 축구 소식통 수집 0건 — 검색 2건이 전부 실패했습니다"
+
+
+def test_cliff_title_states_only_the_zero_when_no_failure_codes():
+    alert = notify.build_cliff_alert(
+        ["guardian"], history=[{"guardian": 8}], sources=_FM_CFG,
+        failure_codes={}, success_rate=1.0, run_id="3f2a9c12abcd")
+    assert alert["title"] == "🚨 The Guardian 수집 0건"
+
+
+def test_cliff_title_counts_the_rest_when_several_sources():
+    alert = notify.build_cliff_alert(
+        ["fmkorea", "guardian"], history=[{"fmkorea": 12, "guardian": 8}],
+        sources=_FM_CFG, failure_codes={}, success_rate=1.0,
+        run_id="3f2a9c12abcd")
+    assert alert["title"] == "🚨 이번 회차 수집 0건 — fmkorea 축구 소식통 외 1개 소스"
+
+
+def test_cliff_lists_the_search_keywords_from_config():
+    value = _fm_cliff()["fields"][0]["value"]
+    assert "▸ 무슨 일이 있었나" in value
+    assert "- 검색 키워드 2개가 전부 실패했습니다" in value
+    assert '  · 아스날 (제목) · "de roche" (제목·본문)' in value
+
+
+def test_cliff_names_the_bot_block_behind_the_response_code():
+    assert "- 검색 실패 2건 — HTTP 430 2건 (자동 수집 차단 응답)" \
+        in _fm_cliff()["fields"][0]["value"]
+
+
+def test_cliff_says_what_the_found_count_counts():
+    value = _fm_cliff()["fields"][0]["value"]
+    assert "▸ 평소와 비교" in value
+    assert "- 찾은 글: 이번 0건 (직전 2회차 12 → 12)" in value
+    assert "- 「찾은 글」 은 중복을 포함한 발견 결과 수이고 저장된 글 수가 아닙니다" in value
+
+
+def test_cliff_explains_why_no_failure_alert_was_sent():
+    value = _fm_cliff()["fields"][0]["value"]
+    assert "▸ 지금 어떤 상태인가" in value
+    assert ("- 회차는 실패로 끝나지 않았습니다 (success_rate 1) — 어댑터가 예외를 "
+            "던지지 않아 실패 알림이 따로 가지 않았습니다") in value
+
+
+def test_cliff_advises_waiting_only_when_the_block_code_is_present():
+    with_block = _fm_cliff()["fields"][0]["value"]
+    without = _fm_cliff(failure_codes={"fmkorea": {503: 2}})["fields"][0]["value"]
+    assert "▸ 무엇을 하나" in with_block
+    assert "- 차단은 보통 저절로 풀립니다 — 지금은 조치하지 않습니다" in with_block
+    assert "차단은 보통 저절로 풀립니다" not in without
+    assert "- 회차가 계속 0이면 런북 (제목 클릭) 의 절차를 따릅니다" in without
+
+
+def test_cliff_omits_the_what_happened_section_without_keywords_or_codes():
+    alert = notify.build_cliff_alert(
+        ["guardian"], history=[{"guardian": 8}], sources=_FM_CFG,
+        failure_codes={}, success_rate=1.0, run_id="3f2a9c12abcd")
+    assert "▸ 무슨 일이 있었나" not in alert["fields"][0]["value"]

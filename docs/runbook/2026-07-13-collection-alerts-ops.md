@@ -9,11 +9,29 @@
 
 ## Discord webhook 설정
 
-알림은 `DISCORD_WEBHOOK_URL` 환경변수 하나로 켜고 끈다.
+알림은 급한 정도에 따라 세 채널로 갈라져 나간다 ( 스펙 `docs/superpowers/specs/2026-08-14-slo5-freshness-alert-blind-spot-design.md` §7 ).
+채널별 변수가 없으면 종전처럼 `DISCORD_WEBHOOK_URL` 하나로 모인다.
+
+| 채널 | 환경변수 | 실리는 알림 | 받는 사람이 할 일 |
+| --- | --- | --- | --- |
+| 장애 | `DISCORD_WEBHOOK_INCIDENT` | 파이프라인 실패 · 수집 0건 ( 절벽 ) · 선수 검색 배치 전멸 | 원인을 좁히고 고친다 |
+| 관측 | `DISCORD_WEBHOOK_REVIEW` | 링크 선수 후보 등재 · 명단 이적 상태 낡음 · 공홈 채택 누락 | 확정 CLI · 명단 런북으로 결정한다 |
+| 경향 | `DISCORD_WEBHOOK_TREND` | 수집량 이상 · 신선도 · 공홈 커버리지 | 당장 할 일이 없을 때가 많다 |
 
 - **webhook URL 발급** — Discord 서버 → 서버 설정 → 연동 (Integrations) → 웹후크 → 새 웹후크 → 채널 선택 → 웹후크 URL 복사.
+  채널을 셋으로 쓰려면 채널마다 한 번씩 발급한다.
+- **셋 중 없는 것은 기존 웹훅으로 떨어진다** — 세 변수를 하나도 안 넣고 배포해도 알림이 사라지지 않는다.
+  그래서 코드 배포와 웹훅 설정은 순서를 가리지 않는다.
+  변수를 나중에 채우면 그 채널부터 갈라져 나간다.
+  VM 유닛은 `Type=oneshot` 이고 회차마다 `.env` 를 새로 읽으므로 재배포도 프로세스 재시작도 필요 없다 ( 다음 회차부터 반영 ).
 - **주입** — 이 프로젝트는 dotenv 미사용이므로 셸 export 로 넣는다.
   `.env` 에 `DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...` 를 추가하고 `set -a; source .env; set +a` 후 실행.
+  채널 변수도 같은 자리에 같은 형식으로 넣는다.
+- **갈렸는지 판정하는 법** — 「알림이 왔다」 가 아니라 「어느 채널로 왔다」 로 본다.
+  변수를 잘못 넣으면 발송은 성공하고 채널만 기존 하나로 모이므로 로그로는 구분이 안 된다.
+- **systemd 유닛 실패 알림은 유닛 파일 안에서 직접 발송한다** — `infra/systemd/bullet-in-fail-notify@.service` 의 `ExecStart` 한 줄이다.
+  파이썬 밖에서 알림을 보내는 유일한 자리라 채널 배정도 거기에 박혀 있다 ( `channel=CHANNEL_INCIDENT` ) .
+  **이 줄을 고치면 VM 에서 `bash infra/systemd/install-units.sh` 를 다시 돌려야 반영된다** ( `git pull` 만으로는 `/etc/systemd/system/` 사본이 안 바뀐다 · `docs/runbook/2026-07-20-vm-cohost-bootstrap.md` §5 ) .
 - **Airflow 환경** — DAG 워커 프로세스에도 같은 변수가 보여야 한다 (컨테이너 env · Airflow Variable → env 매핑 등 배포 방식에 맞춤) .
 - **미설정 동작** — 변수가 없으면 발송하지 않고 `WARNING` 으로 제목 · 설명을 로깅한다 (폴백) .
   dev · CI 는 이 폴백으로 도므로 webhook 없이도 테스트가 깨지지 않는다.
@@ -27,18 +45,34 @@
 
 - **⚠️ 수집량 이상 (주황)** — 소프트 드리프트.
   실행은 성공했으나 소스별 수집량이 지난 이력 대비 2σ 밖.
-  `▼` 는 드롭 (평소보다 급감, 셀렉터 드리프트 의심) · `▲` 는 스파이크 (급증, 중복 유입 · 페이지 구조 변화 의심) .
-  제목이 이상 건수 (드롭 · 스파이크 분해) 를 보여주고, 제목 클릭은 이 런북으로 연결된다.
-- **소스당 필드** — `▼ 0건 (평소 ~14)` + 최근 5회 → (오늘) 수집량 시퀀스 + 원인 후보 (드롭 = 어댑터 힌트 · 스파이크 = 중복 유입 · 파싱 회귀 의심).
+  `▼` 는 드롭 ( 평소보다 급감 ) · `▲` 는 스파이크 ( 급증 ) 다.
+  한 소스만 걸리면 제목이 그 소스 이름과 숫자를 싣는다 ( `⚠️ 수집량 드롭 — fmkorea 축구 소식통 0건 (평소 ~14)` ) .
+  여럿이면 첫 소스 이름과 나머지 계수를 싣는다.
+  제목 클릭은 이 런북으로 연결된다.
+- **「수집량」 이 무엇을 센 값인지 description 에 적혀 있다** — 중복 · 필터를 지나 이번 회차에 새로 담은 글 수다.
+  검색 · 목록에서 찾은 글 수 ( 후보 ) 가 아니다.
+- **소스당 필드** — `▼ 0건 (평소 ~14)` · 최근 5회 → (오늘) 시퀀스 · 후보 대비 적재 한 줄 ( `이번 회차 후보 33건 중 새로 담은 글 30건` ) .
   `회차` 필드의 run_id 앞 8자로 회차를 특정한다.
+- **어댑터 힌트는 드롭이면서 후보가 0건일 때만 붙는다** — 후보가 있는데 적재만 줄었다면 발견은 도는 것이므로 셀렉터 드리프트 힌트에 근거가 없다.
+  스파이크에는 원인 후보를 아예 안 붙인다.
+  종전의 「중복 유입 · 파싱 회귀 의심」 은 관측이 아니라 추측이었다 — 같은 함정으로 SLO-5 를 두 번 고쳤다 ( #169 · #174 ) .
 - **❌ 파이프라인 실패 (빨강)** — 하드 실패.
   `run_pipeline` 태스크가 예외로 중단.
   fields 의 `로그` 링크 · `Try` · `Host` 로 Airflow 태스크를 특정하고, description 의 예외 요약 (최대 400자) 으로 원인을 좁힌다.
-- **🚨 이번 회차 수집 0건 (빨강)** — 직전 회차까지 글을 가져오던 소스가 이번 회차에 한 건도 못 가져옴.
+- **🚨 수집 0건 (빨강)** — 직전 회차까지 글을 가져오던 소스가 이번 회차에 한 건도 못 가져옴.
   회차 자체는 성공으로 끝나므로 실패 알림이 따로 오지 않는다.
-  소스당 필드에 직전 회차 대비 계수 · 최근 5회 추이 · 회차 종료 상태가 들어간다.
-  어댑터가 실패 사유를 내놓으면 `검색 실패 4건 — HTTP 430 4건` 처럼 서버 응답 코드가 붙는다.
-  **원인은 적지 않는다** — 후보 0 이 차단인지 셀렉터 드리프트인지는 알림 시점에 알 수 없다.
+  제목에 소스 이름이 오고, 어댑터가 실패 계수를 내놓으면 `— 검색 4건이 전부 실패했습니다` 가 붙는다.
+- **소스당 필드가 네 구획으로 나뉜다** — 무슨 일이 있었나 · 평소와 비교 · 지금 어떤 상태인가 · 무엇을 하나.
+  앞 둘은 관측이고 뒤 둘은 판단 재료다.
+- **「무슨 일이 있었나」** — 설정에 적힌 검색 키워드를 알림이 직접 싣는다 ( 실패 계수와 키워드 수가 같으면 「전부 실패」 로 적는다 ) .
+  서버 응답 코드가 뒤따르고 430 이면 `(자동 수집 차단 응답)` 이 붙는다.
+  키워드도 응답 코드도 없는 어댑터는 이 구획이 통째로 빠진다.
+- **「평소와 비교」 의 숫자는 「찾은 글」 이다** — 중복을 포함한 발견 결과 수이고 저장된 글 수가 아니다.
+  이 정의가 알림 안에 한 줄로 들어 있다.
+- **「지금 어떤 상태인가」** — `회차는 실패로 끝나지 않았습니다 (success_rate 1) — 어댑터가 예외를 던지지 않아 실패 알림이 따로 가지 않았습니다`.
+  「정상 종료」 라고 안 쓰는 이유는 아래 대응 절에 있다.
+- **원인은 여전히 적지 않는다** — 후보 0 이 차단인지 셀렉터 드리프트인지는 알림 시점에 알 수 없다.
+  응답 코드는 서버가 준 사실이라 적고 어댑터 힌트는 안 붙인다.
 - **🚨 fmkorea 선수 검색 실패 (빨강)** — 이적설 선수 명단을 이름으로 검색하는 배치에서 그 차례 전원이 실패.
   새로 가져온 글이 0건이고 검색 순서가 전진하지 않아 다음 차례에 같은 선수들을 다시 시도한다.
   사람이 되돌릴 것은 없다.
@@ -129,31 +163,48 @@ uv run python -c "from bullet_in import notify; assert callable(notify.build_fai
 ### 실발송 스모크
 
 단위 테스트는 httpx 를 모킹하므로 "Discord 가 payload 를 수락하고 의도대로 렌더링하는가" 는 실발송으로만 확인된다.
-알림 포맷을 바꿨거나 webhook 을 새로 발급했으면 아래로 샘플 2건 (신선도 · 수집량) 을 실발송한다.
+알림 포맷을 바꿨거나 webhook 을 새로 발급했으면 아래로 채널마다 한 건씩 실발송한다.
 
 ```bash
-set -a; source .env; set +a        # DISCORD_WEBHOOK_URL 주입
+set -a; source .env; set +a        # 기본 웹훅 + 채널 셋 주입
 uv run python - <<'EOF'
 import logging
 logging.basicConfig(level=logging.WARNING)   # 실패 시 WARNING · 무음이면 2xx 수락
 from datetime import datetime, timedelta, timezone
 from bullet_in import notify
 from bullet_in.quality import SourceFreshness, Anomaly
+from bullet_in.score import load_sources
 
 now = datetime.now(timezone.utc).replace(tzinfo=None)
-sources = {"x_afcstuff": {"display_name": "afcstuff (aggregator)", "adapter": "x_playwright"},
-           "fmkorea": {"display_name": "fmkorea 축구 소식통", "adapter": "fmkorea"}}
-records = [SourceFreshness("x_afcstuff", now - timedelta(hours=61.4), 24.0, 61.4, True)]
-notify.send_alert(**notify.build_freshness_alert(records, 48, sources=sources,
-                                                 run_id="smoke-test-0000", checked_at=now))
-hist = [{}, {"fmkorea": 14}, {"fmkorea": 13}, {"fmkorea": 15}, {"fmkorea": 12}]  # 직전 회차 0건 샘플
-notify.send_alert(**notify.build_anomaly_alert([Anomaly("fmkorea", 0, 14.0, "drop")], 12,
-                                               hist=hist, sources=sources,
-                                               run_id="smoke-test-0000"))
+sources = load_sources("config/sources.yaml")   # 검색 키워드 · 표시 이름을 설정에서 그대로
+
+# 장애 채널 — 수집 0건 (fmkorea 검색 전멸 모양)
+notify.send_alert(**notify.build_cliff_alert(
+    ["fmkorea"], history=[{"fmkorea": 12}] * 4, sources=sources,
+    failure_codes={"fmkorea": {430: 4}}, success_rate=1.0, run_id="smoke-test-0000"))
+
+# 관측 채널 — 링크 선수 후보 등재
+notify.send_alert(**notify.build_candidate_alert(
+    [{"ko": "스모크", "full_name": "Smoke Test", "stage": "rumour",
+      "title": "실발송 스모크"}], run_id="smoke-test-0000"))
+
+# 경향 채널 — 신선도 · 수집량
+records = [SourceFreshness("x_ornstein", now - timedelta(hours=291), 120.0, 291.0, True)]
+notify.send_alert(**notify.build_freshness_alert(
+    records, 48, targets=records, sources=sources, run_id="smoke-test-0000",
+    checked_at=now, candidates={"x_ornstein": 5}))
+hist = [{"fmkorea": 14}, {"fmkorea": 13}, {"fmkorea": 15}, {"fmkorea": 12}]
+notify.send_alert(**notify.build_anomaly_alert(
+    [Anomaly("fmkorea", 0, 14.0, "drop")], 12, hist=hist, sources=sources,
+    run_id="smoke-test-0000", candidates={}))
 EOF
 ```
 
 - **판독** — WARNING 없이 끝나면 Discord 2xx 수락 · 채널에서 불릿 · 상대시간 · 시퀀스 렌더링을 눈으로 확인.
+- **채널 판정** — 네 건이 **어느 채널에 떨어졌는지**로 본다 ( 장애 1 · 관측 1 · 경향 2 ) .
+  넷이 한 채널에 모였으면 채널 변수가 안 주입된 것이다.
+  코드가 아니라 `.env` · 프로세스 환경을 본다.
+  발송 성공만으로는 갈렸는지 알 수 없다 — 폴백이 조용히 받아 주기 때문이다.
 - **캡처 갱신** — embed 형식을 바꾼 변경이면 `docs/assets/discord-alert-embed-after.png` 를 새 캡처로 교체해 문서와 실물을 맞춘다.
 - **함정** — webhook 미설정이면 알림 기능 전체가 WARNING 폴백으로만 돌아 "코드는 정상 · 도달은 0" 상태가 된다.
   SLO-6 머지 후 이 상태가 한동안 지속된 적 있음 — 알림 기능 배포 시 실발송 스모크를 필수 체크로.
@@ -169,7 +220,9 @@ EOF
 
 - 알림 기능은 신규 테이블 · 컬럼 · 마이그레이션이 없다 (기존 `pipeline_runs.source_counts` 읽기만) .
 - `git revert` 로 롤백 가능하며 데이터 영향이 없다.
-- 임시로 끄려면 `DISCORD_WEBHOOK_URL` 을 해제한다 (코드 변경 없이 WARNING 폴백으로 전환) .
+- **채널 분리만 되돌리려면 세 채널 변수를 지운다** — 코드를 안 고쳐도 기존 웹훅 하나로 다시 모인다.
+- 임시로 끄려면 웹훅 변수를 **넷 다** 해제한다 (코드 변경 없이 WARNING 폴백으로 전환) .
+  기본 변수만 지우고 채널 변수를 남기면 그 채널로는 계속 나간다.
 
 ## 참고
 
