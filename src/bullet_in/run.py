@@ -368,7 +368,8 @@ async def main(concurrency: int):
     anomalies = volume_anomalies(stats["source_counts"], hist)
     if anomalies:
         notify.send_alert(**notify.build_anomaly_alert(
-            anomalies, len(hist), hist=hist, sources=sources, run_id=run_id))
+            anomalies, len(hist), hist=hist, sources=sources, run_id=run_id,
+            candidates=candidate_counts))
 
     # 신선도 워터마크 감시 (SLO-5): 소스별 MAX(fetched_at) 경과가 임계 초과면 알림.
     # 판정 기준은 Mongo 원본 수집이다 — 기사 표를 보면 다른 행으로 흡수되는 소스가
