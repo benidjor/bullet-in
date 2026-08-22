@@ -13,6 +13,13 @@ LD = ('<html><head><script type="application/ld+json">'
 NO_AUTHOR = "<html><body><p>기사 본문</p></body></html>"
 
 
+def _ld_authors(n: int) -> str:
+    people = ",".join('{"@type":"Person","name":"Writer %d"}' % i for i in range(n))
+    return ('<html><head><script type="application/ld+json">'
+            '{"@type":"NewsArticle","author":[' + people + ']}</script></head>'
+            '<body><p>기사 본문</p></body></html>')
+
+
 def _fetch(url: str):
     async def go():
         async with httpx.AsyncClient() as c:
@@ -43,6 +50,26 @@ def test_blocked_origin_keeps_the_batch_going_with_its_status():
 def test_connection_error_is_labelled_not_raised():
     respx.get("https://ex.test/d").mock(side_effect=httpx.ConnectError("boom"))
     assert _fetch("https://ex.test/d") == ([], "error ConnectError")
+
+
+@respx.mock
+def test_a_contributor_roster_is_not_taken_as_a_byline():
+    # 라이브 블로그는 그날 글을 쓴 사람 전원을 구조화 정보에 싣는다 — 우리가 받은 글의
+    # 바이라인이 아니다. 그대로 넣으면 그 글을 안 쓴 기자 열대여섯이 한 기사에 붙는다
+    # (실측 2건 · The Athletic transfer-latest 페이지 · 15명 · 16명).
+    respx.get("https://ex.test/e").mock(return_value=httpx.Response(200, text=_ld_authors(7)))
+    names, label = _fetch("https://ex.test/e")
+    assert names == []
+    assert label.startswith("명단 과다")
+
+
+@respx.mock
+def test_a_real_coauthor_byline_is_still_taken():
+    # 실측에서 정상 바이라인의 최대는 4명이었다 — 공저 회수가 이 가드에 걸리면 안 된다
+    respx.get("https://ex.test/f").mock(return_value=httpx.Response(200, text=_ld_authors(4)))
+    names, label = _fetch("https://ex.test/f")
+    assert len(names) == 4
+    assert label == "회수"
 
 
 def test_update_touches_only_the_authors_column():

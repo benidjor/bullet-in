@@ -4,6 +4,9 @@
 어댑터는 고쳤지만 이미 적재된 행은 그대로라 원문에 한 번 더 붙어야 한다
 (docs/troubleshooting/2026-08-13-parser-fix-does-not-reach-stored-rows.md).
 
+**기여자 명단은 바이라인이 아니다** — 원문이 돌려준 이름이 여섯을 넘으면 안 쓴다
+(라이브 블로그가 그날 글을 쓴 사람 전원을 싣는다 · 실측 2건).
+
 **본문은 건드리지 않는다** — UPDATE 는 authors_json 한 컬럼뿐이다.
 저자를 얻으려다 본문까지 갈아 끼우면 body_level 이 흔들려 화면이 바뀐다.
 대표 기자도 안 쓴다 — 서빙이 저자 목록에서 같은 규칙으로 골라낸다
@@ -41,6 +44,12 @@ log = logging.getLogger(__name__)
 _UA = "Mozilla/5.0 bullet-in/0.1"
 _REQUEST_GAP_SEC = 2.0
 _TIMEOUT_SEC = 25
+# 원문이 돌려준 이름이 이보다 많으면 바이라인이 아니라 기여자 명단으로 본다.
+# 라이브 블로그는 그날 글을 쓴 사람 전원을 구조화 정보에 싣는데, 전재글이 옮긴 것은
+# 그중 한 꼭지다 — 명단을 그대로 넣으면 그 글을 안 쓴 기자가 기사에 붙는다.
+# 실측 53건에서 정상 바이라인의 최대는 4명이었고, 넘은 둘은 The Athletic 의
+# transfer-latest 페이지 (15명 · 16명) 로 게시자가 옮긴 바이라인은 한 명이었다.
+_MAX_BYLINE_AUTHORS = 6
 
 # 대상 조건은 「비어 있다」 가 아니라 「고칠 값이 있다」 다 (안건 λ).
 # 첫 판본은 authors_json IS NULL 이었고, 게시자가 말머리에서 옮긴 한글 이름이
@@ -81,6 +90,8 @@ async def fetch_authors(client: httpx.AsyncClient, url: str) -> tuple[list[str],
     except httpx.HTTPError as e:
         return [], f"error {type(e).__name__}"
     names = extract_authors(r.text)
+    if len(names) > _MAX_BYLINE_AUTHORS:
+        return [], f"명단 과다 {len(names)}"
     return names, "회수" if names else "저자 없음"
 
 
@@ -122,8 +133,9 @@ def backfill(dry_run: bool = False, limit: int | None = None,
              len(rows), kinds["빈 값"], kinds["한글 폴백"], len(done),
              _REQUEST_GAP_SEC, len(rows) * _REQUEST_GAP_SEC / 60)
     stats = asyncio.run(_run(rows, dry_run, state, engine))
-    log.info("%s 회수 %d · 저자 없음 %d · 접속 실패 %d",
+    log.info("%s 회수 %d · 저자 없음 %d · 명단 과다 %d · 접속 실패 %d",
              "[dry-run]" if dry_run else "반영", stats["회수"], stats["저자 없음"],
+             sum(v for k, v in stats.items() if k.startswith("명단 과다")),
              sum(v for k, v in stats.items() if k.startswith(("http", "error"))))
     return dict(stats)
 
