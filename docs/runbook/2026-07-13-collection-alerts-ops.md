@@ -177,6 +177,19 @@ uv run python -c "from bullet_in import notify; assert callable(notify.build_fai
 - **참고** — 로컬 `airflow/` 디렉터리가 pip `airflow` 패키지명을 가려, airflow 미설치 시 `test_dag_import` 는 `importorskip("airflow.models")` 로 skip 된다.
   전체 DAG 로드 검증은 airflow 가 설치된 환경 (Docker `apache/airflow:3.0.0`) 에서 DagBag 으로 확인.
 
+### 문안 · 서식을 바꿀 때의 순서
+
+단위 테스트는 우리가 만든 문자열만 보고 디스코드가 그것을 어떻게 그리는지는 안 본다.
+**문자열 테스트를 전부 통과한 문안이 실물에서 두 번 뭉갰다** ( `docs/troubleshooting/2026-08-23-unit-tests-passed-but-discord-flattened-the-alert.md` ) .
+
+1. **문안을 고치고 단위 테스트를 통과시킨다** — 계약 ( 어떤 줄이 언제 붙는가 ) 을 여기서 고정한다.
+2. **서식 후보가 둘 이상이면 같은 내용으로 나란히 실발송한다** — 제목에 `[A]` · `[B]` 를 붙여 한 채널에 보내고 눈으로 고른다.
+3. **확정안을 실제 빌더 · 실제 `config/sources.yaml` 로 다시 한 번 보낸다** — 손으로 만든 표본은 설정에서 오는 값 ( 검색 키워드 등 ) 을 안 거친다.
+4. **테스트 메시지는 확인 뒤 지운다.**
+
+- **실패해도 지금보다 나쁘지 않은 쪽을 고른다** — 중첩 목록은 안 그려져도 한 줄에 하나씩 남지만, 작은 회색 글씨 ( `-# ` ) 는 안 그려지면 문자 그대로 찍혀 더 나빠진다.
+- **확인 안 한 문법은 안 쓴다** — 「아마 될 것이다」 는 서식 결정의 근거가 못 된다.
+
 ### 실발송 스모크
 
 단위 테스트는 httpx 를 모킹하므로 "Discord 가 payload 를 수락하고 의도대로 렌더링하는가" 는 실발송으로만 확인된다.
