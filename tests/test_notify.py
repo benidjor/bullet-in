@@ -895,3 +895,36 @@ def test_adapter_hints_do_not_carry_status_codes():
     for adapter, hint in notify.ADAPTER_HINTS.items():
         assert not re.search(r"[45]\d\d", hint), (adapter, hint)
 
+
+# ── 발송 성공도 로그를 남긴다 (2026-08-23) ──────────────────────────────────
+
+def test_send_alert_logs_the_channel_it_went_to(monkeypatch, caplog):
+    """저널이 「알림이 나갔나」 를 못 답하던 자리 — 실패에만 로그가 있었다.
+
+    2026-08-23 03:04 회차에 후보 등재 알림 다섯이 실제로 나갔는데 저널로는
+    확인이 안 돼, 화면과 pipeline_runs 를 봐야 알 수 있었다."""
+    monkeypatch.setenv("DISCORD_WEBHOOK_TREND", "https://discord.test/trend")
+    _capture_channel_post(monkeypatch)
+    with caplog.at_level(logging.INFO):
+        notify.send_alert("제목", "설명", color=0x1, channel=notify.CHANNEL_TREND)
+    assert "알림 발송: trend — 제목" in caplog.text
+
+
+def test_send_alert_log_shows_when_it_fell_back(monkeypatch, caplog):
+    """폴백은 발송 성공이라 종전에는 아무 흔적이 없었다 — 갈렸는지 판정할 수 없었다."""
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.test/default")
+    monkeypatch.delenv("DISCORD_WEBHOOK_TREND", raising=False)
+    _capture_channel_post(monkeypatch)
+    with caplog.at_level(logging.INFO):
+        notify.send_alert("제목", "설명", color=0x1, channel=notify.CHANNEL_TREND)
+    assert "알림 발송: trend→기본(폴백) — 제목" in caplog.text
+
+
+def test_send_alert_log_never_carries_the_webhook_url(monkeypatch, caplog):
+    """웹훅 주소는 그 자체가 인증 수단이다 (#220 과 같은 이유)."""
+    monkeypatch.setenv("DISCORD_WEBHOOK_INCIDENT", "https://discord.test/secret-abc")
+    _capture_channel_post(monkeypatch)
+    with caplog.at_level(logging.INFO):
+        notify.send_alert("제목", "설명", color=0x1, channel=notify.CHANNEL_INCIDENT)
+    assert "secret-abc" not in caplog.text
+
