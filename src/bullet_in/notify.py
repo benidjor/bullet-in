@@ -193,7 +193,8 @@ def build_freshness_alert(records, default_hours: float, *,
                           targets: list, sources: dict, run_id: str,
                           checked_at: datetime,
                           candidates: dict | None = None,
-                          fetch_errors: dict | None = None) -> dict:
+                          fetch_errors: dict | None = None,
+                          funnels: dict | None = None) -> dict:
     """전체 판정 레코드를 받아 이번 회차 발송 대상만 필드로 펼친다.
 
     targets 는 quality.freshness_alert_split 이 고른 발송분이다 — stale 전부가 아니라
@@ -232,6 +233,7 @@ def build_freshness_alert(records, default_hours: float, *,
                 path.append("이번 회차 후보 0건")
             if hint and not n:
                 path.append(f"원인 후보: {hint}")
+        path += _funnel_lines((funnels or {}).get(b.source_id))
         per_source.append((b.source_id, [
             ("얼마나 오래됐나", age),
             ("수집 경로는 살아 있나", path),
@@ -384,6 +386,26 @@ def _search_keyword_line(source: dict, failed: int) -> str | None:
     return "\n".join([head, *rows])
 
 
+_FUNNEL_STAGES = [("selected", "목록"), ("deduped", "URL"),
+                  ("titled", "제목"), ("passed", "키워드")]
+
+
+def _funnel_lines(funnel: dict | None) -> list[str]:
+    """발견 4단 계수를 두 줄로 (스펙 2026-08-14 §8.2).
+
+    기록되는 후보 계수는 마지막 단뿐이라, 셀렉터가 깨져 첫 단이 0 이 된 것과 원문이
+    조용해 마지막 단이 0 이 된 것이 구분되지 않았다 (§2.5 실측 13 → 13 → 7 → 3).
+    계수를 안 내놓는 어댑터 (rss · x_playwright) 는 빈 목록이라 그 줄이 빠진다 —
+    _failure_code_line 과 같은 방식이다."""
+    if not funnel:
+        return []
+    chain = " → ".join(f"{label} {funnel.get(key, 0)}"
+                       for key, label in _FUNNEL_STAGES)
+    return [f"발견 퍼널: {chain}",
+            "*단마다 남은 수 — 목록이 0이면 셀렉터, 키워드만 0이면 원문이 "
+            "조용한 것입니다*"]
+
+
 def _failure_code_line(codes: dict) -> str | None:
     """어댑터가 센 검색 실패 사유 — 서버 응답 코드라 관측 사실로 적을 수 있다.
     계수를 내놓지 않는 어댑터는 None 을 돌려 그 줄이 빠진다."""
@@ -397,7 +419,7 @@ def _failure_code_line(codes: dict) -> str | None:
 
 def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
                       failure_codes: dict, success_rate: float,
-                      run_id: str) -> dict:
+                      run_id: str, funnels: dict | None = None) -> dict:
     """후보 절벽 알림 (차단 알림 스펙 §5.1).
 
     판정은 run.py 가 끝냈고 여기서는 표시만 한다 — history[0] 이 직전 회차다.
@@ -415,6 +437,7 @@ def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
         if code_line:
             happened.append(code_line
                             + (" *(자동 수집 차단 응답)*" if blocked else ""))
+        happened += _funnel_lines((funnels or {}).get(sid))
         recent = [h.get(sid, 0) for h in history[:4]]
         # 마지막 자리가 이번 회차임을 화살표 사슬 안에서 보여 준다 — 종전에는 계수와
         # 추이를 따로 적어 어느 숫자가 이번 것인지 한눈에 안 보였다.

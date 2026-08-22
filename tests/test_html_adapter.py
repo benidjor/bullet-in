@@ -277,3 +277,42 @@ def test_html_adapter_title_attr_missing_skips_item():
                     title_attr="aria-label", title_contains=["sign"])
     items = asyncio.run(a.fetch())
     assert [i.url for i in items] == ["https://g.test/a"]
+
+
+# ── 발견 퍼널 4단 (스펙 2026-08-14 §8.2) ─────────────────────────────────────
+
+FUNNEL_HTML = (
+    '<a class="card" href="/a"><h3>Arsenal sign Gyokeres</h3></a>'
+    '<a class="card" href="/a"><h3>Arsenal sign Gyokeres</h3></a>'   # 중복 URL
+    '<a class="card" href="/b">헤드라인 요소 없음</a>'                # 제목 요소 없음
+    '<a class="card"><h3>Arsenal agree deal</h3></a>'                # href 없음
+    '<a class="card" href="/c"><h3>Match preview</h3></a>')          # 키워드 탈락
+
+
+def _funnel_adapter():
+    return HtmlAdapter(source_id="bbc_sport", list_url="https://a.test/news",
+                       item_selector="a.card", base_url="https://a.test",
+                       title_selector="h3", title_contains=["sign", "agree"])
+
+
+@respx.mock
+def test_html_adapter_counts_each_discovery_stage():
+    respx.get("https://a.test/news").mock(
+        return_value=httpx.Response(200, text=FUNNEL_HTML))
+    a = _funnel_adapter()
+    asyncio.run(a.fetch())
+    assert a.funnel == {"selected": 5, "deduped": 3, "titled": 2, "passed": 1}
+
+
+@respx.mock
+def test_html_adapter_funnel_shows_zero_at_the_top_when_selector_breaks():
+    # 셀렉터가 깨진 것과 사이트가 조용한 것을 가르는 것이 이 계수의 목적이다
+    respx.get("https://a.test/news").mock(
+        return_value=httpx.Response(200, text="<div>개편된 페이지</div>"))
+    a = _funnel_adapter()
+    assert asyncio.run(a.fetch()) == []
+    assert a.funnel == {"selected": 0, "deduped": 0, "titled": 0, "passed": 0}
+
+
+def test_html_adapter_funnel_is_empty_before_first_fetch():
+    assert _funnel_adapter().funnel == {}

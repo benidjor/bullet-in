@@ -853,3 +853,33 @@ def test_cliff_states_the_count_plainly_without_history():
         ["fmkorea"], history=[], sources=_FM_CFG,
         failure_codes={}, success_rate=1.0, run_id="3f2a9c12abcd")
     assert "- 찾은 글: **0건** (이번 회차)" in _field(alert, "평소와 비교")
+
+
+# ── 발견 퍼널 4단을 알림에 싣는다 (스펙 2026-08-14 §8.2) ─────────────────────
+
+_FUNNEL = {"selected": 13, "deduped": 13, "titled": 7, "passed": 3}
+
+
+def test_cliff_shows_the_discovery_funnel_when_the_adapter_counts_it():
+    alert = _fm_cliff(funnels={"fmkorea": _FUNNEL})
+    value = _field(alert, "무슨 일이 있었나")
+    assert "- 발견 퍼널: 목록 13 → URL 13 → 제목 7 → 키워드 3" in value
+    assert "*단마다 남은 수" in value
+
+
+def test_cliff_omits_the_funnel_when_the_adapter_does_not_count_it():
+    # 계수를 안 내놓는 어댑터 (rss · x_playwright) 는 그 줄이 빠진다
+    assert "발견 퍼널" not in str(_fm_cliff()["fields"])
+
+
+def test_freshness_shows_the_discovery_funnel_in_the_path_section():
+    # 신선도 알림은 셀렉터 드리프트를 「원인 후보」 로 추측해 왔다 — 퍼널이 그 자리를
+    # 관측으로 바꾼다 (목록이 0이면 셀렉터, 키워드만 0이면 원문이 조용한 것)
+    checked = datetime(2026, 8, 23, 6, 0, 0)
+    records = [SourceFreshness("bbc_sport", checked - timedelta(hours=99), 72.0,
+                               99.0, True)]
+    alert = notify.build_freshness_alert(
+        records, 48, targets=records, sources=_FRESH_SOURCES, run_id="3f2a9c12abcd",
+        checked_at=checked, candidates={}, funnels={"bbc_sport": _FUNNEL})
+    assert "- 발견 퍼널: 목록 13 → URL 13 → 제목 7 → 키워드 3" \
+        in _field(alert, "수집 경로는 살아 있나")
