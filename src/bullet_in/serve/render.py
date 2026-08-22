@@ -406,9 +406,14 @@ def _journalist_view(j: str, src: dict, directory: dict | None,
         # — 저장된 언론사가 이미 둘 다 같은 값이라 항목만 둘로 갈려 있다.
         if outlet and name.lower().startswith(outlet.lower() + "."):
             name = outlet
-    if j == src.get("journalist_label") or name == outlet or name.endswith(")"):
-        # 통칭 라벨 · 조직 이름 · 정식명에 괄호가 이미 있는 항목 (설계 §2.5 가 ·
-        # 'Bruno Andrade (ESPN)') 은 괄호를 생략한다.
+    if (j == src.get("journalist_label") or name == outlet or name.endswith(")")
+            or name.lower() == (src.get("display_name") or "").lower()):
+        # 괄호를 생략하는 네 자리 — 통칭 라벨 · 이름과 소속이 같음 · 정식명에 괄호가
+        # 이미 있음 (설계 §2.5 가 · 'Bruno Andrade (ESPN)') · **이름이 그 소스의 이름
+        # 그대로임** (원문이 저자 자리에 매체 이름을 쓴 자리 · 사용자 확정 2026-08-23).
+        # 마지막 자리는 'BBC Sport (BBC)' 가 실물이다 — 같은 목록의 'Arsenal Official' ·
+        # 'BBC Gossip' 은 통칭 라벨이라 괄호가 없는데 이것만 붙어 어색했다.
+        # 이름은 그대로 남긴다 (원문이 쓴 값이다) — 괄호만 생략한다.
         outlet = None
     return {"name": name, "label": f"{name} ({outlet})" if outlet else name,
             "registered": registered, "outlet": outlet}
