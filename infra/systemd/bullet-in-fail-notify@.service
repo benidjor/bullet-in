@@ -6,4 +6,4 @@ Type=oneshot
 User=ubuntu
 WorkingDirectory=/home/ubuntu/bullet-in
 EnvironmentFile=/home/ubuntu/bullet-in/.env
-ExecStart=/home/ubuntu/.local/bin/uv run python -c "from bullet_in.notify import send_alert; send_alert('bullet-in 유닛 실패 (systemd)', '%i 실패 — VM 에서 journalctl -u %i -n 100 확인', color=0xE74C3C)"
+ExecStart=/home/ubuntu/.local/bin/uv run python -c "from bullet_in.notify import send_alert, CHANNEL_INCIDENT; send_alert('bullet-in 유닛 실패 (systemd)', '%i 실패 — VM 에서 journalctl -u %i -n 100 확인', color=0xE74C3C, channel=CHANNEL_INCIDENT)"

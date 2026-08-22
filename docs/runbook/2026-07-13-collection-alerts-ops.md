@@ -22,12 +22,16 @@
   채널을 셋으로 쓰려면 채널마다 한 번씩 발급한다.
 - **셋 중 없는 것은 기존 웹훅으로 떨어진다** — 세 변수를 하나도 안 넣고 배포해도 알림이 사라지지 않는다.
   그래서 코드 배포와 웹훅 설정은 순서를 가리지 않는다.
-  변수를 나중에 채우면 그 채널부터 갈라져 나간다 ( 재배포 불요 · 프로세스 재시작만 필요 ).
+  변수를 나중에 채우면 그 채널부터 갈라져 나간다.
+  VM 유닛은 `Type=oneshot` 이고 회차마다 `.env` 를 새로 읽으므로 재배포도 프로세스 재시작도 필요 없다 ( 다음 회차부터 반영 ).
 - **주입** — 이 프로젝트는 dotenv 미사용이므로 셸 export 로 넣는다.
   `.env` 에 `DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...` 를 추가하고 `set -a; source .env; set +a` 후 실행.
   채널 변수도 같은 자리에 같은 형식으로 넣는다.
 - **갈렸는지 판정하는 법** — 「알림이 왔다」 가 아니라 「어느 채널로 왔다」 로 본다.
   변수를 잘못 넣으면 발송은 성공하고 채널만 기존 하나로 모이므로 로그로는 구분이 안 된다.
+- **systemd 유닛 실패 알림은 유닛 파일 안에서 직접 발송한다** — `infra/systemd/bullet-in-fail-notify@.service` 의 `ExecStart` 한 줄이다.
+  파이썬 밖에서 알림을 보내는 유일한 자리라 채널 배정도 거기에 박혀 있다 ( `channel=CHANNEL_INCIDENT` ) .
+  **이 줄을 고치면 VM 에서 `bash infra/systemd/install-units.sh` 를 다시 돌려야 반영된다** ( `git pull` 만으로는 `/etc/systemd/system/` 사본이 안 바뀐다 · `docs/runbook/2026-07-20-vm-cohost-bootstrap.md` §5 ) .
 - **Airflow 환경** — DAG 워커 프로세스에도 같은 변수가 보여야 한다 (컨테이너 env · Airflow Variable → env 매핑 등 배포 방식에 맞춤) .
 - **미설정 동작** — 변수가 없으면 발송하지 않고 `WARNING` 으로 제목 · 설명을 로깅한다 (폴백) .
   dev · CI 는 이 폴백으로 도므로 webhook 없이도 테스트가 깨지지 않는다.
