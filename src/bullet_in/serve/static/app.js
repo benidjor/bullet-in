@@ -57,8 +57,32 @@ function setupMore(scope) {
   btns.forEach((b, i) => { b.onclick = () => { open = i + 1; sync(); }; });
   stages.forEach((s, i) => { if (s.querySelector('input:checked')) open = Math.max(open, i + 1); });
   sync();
+  scope._moreSync = sync;      // 검색칸이 검색을 마칠 때 열려 있던 단계로 되돌린다
 }
 const setupAllMore = () => document.querySelectorAll('.facetgroup').forEach(setupMore);
+
+// ── facet 검색칸 (기자 목록) ────────────────────────────────────────
+// 접힌 단계 안의 이름도 걸려야 하므로 검색 중에는 단계를 전부 펼치고 견출 · 더보기
+// 버튼을 감춘다. 그러지 않으면 뒤쪽 단계의 이름이 구조적으로 검색에서 빠진다.
+function setupFacetSearch(input) {
+  const scope = input.closest('.grpbody')?.querySelector('.facetgroup');
+  if (!scope) return;
+  const heads = [...scope.querySelectorAll('.tierhead, .unreghead')];
+  const stages = [...scope.querySelectorAll('.morestage')];
+  const btns = [...scope.querySelectorAll('.morebtn')];
+  // 검색 키는 라벨의 텍스트 노드만 — 건수 span 을 넣으면 숫자가 이름에 걸린다
+  const opts = [...scope.querySelectorAll('label.opt')].map(o => [o,
+    [...o.childNodes].filter(n => n.nodeType === 3)
+      .map(n => n.textContent).join(' ').trim().toLowerCase()]);
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+    heads.forEach(h => { h.hidden = !!q; });
+    btns.forEach(b => { if (q) b.hidden = true; });
+    opts.forEach(([o, key]) => { o.hidden = !!q && !key.includes(q); });
+    if (q) stages.forEach(s => { s.hidden = false; });
+    else scope._moreSync?.();
+  });
+}
 
 // ── 필터 요소 ──────────────────────────────────────────────────────
 const fstatus = document.getElementById('fstatus');
@@ -393,9 +417,15 @@ function resetAll() {
   box('team').forEach(c => { c.checked = c.dataset.value === 'arsenal'; });
   userTouchedSrc = false;
   if (searchInput) searchInput.value = '';
+  const js = document.getElementById('jSearch');       // 기자 검색칸도 함께 되돌린다
+  if (js && js.value) { js.value = ''; js.dispatchEvent(new Event('input')); }
 }
 
-if (side) setupAllMore();
+if (side) {
+  setupAllMore();
+  const jSearch = document.getElementById('jSearch');
+  if (jSearch) setupFacetSearch(jSearch);
+}
 
 if (items.length && side) {                               // 인덱스
   side.addEventListener('change', (e) => {

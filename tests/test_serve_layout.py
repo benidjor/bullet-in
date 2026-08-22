@@ -141,17 +141,20 @@ def test_facet_counts_tiers_include_one_point_five():
     assert [t["reader"] for t in f["tiers"]][:3] == ["구단 공식", "공신력 최상", "공신력 상"]
 
 def test_facet_counts_journalist_tier_from_registry():
+    # 첫 화면은 2건 문턱을 함께 넘어야 하므로 (기자 축 설계 §3.2) 이름마다 2건씩 둔다
     arts = [{"source_id": "a", "outlet": "BBC", "tier": 1, "team": "arsenal",
-             "journalist": "온스테인"},
-            {"source_id": "a", "outlet": "BBC", "tier": 1, "team": "arsenal",
-             "journalist": "Kaya Kaynak"}]
+             "journalist": j}
+            for j in ["온스테인", "온스테인", "Kaya Kaynak", "Kaya Kaynak"]]
     directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
     reg = _Reg(journalists={"온스테인": 1.0, "david ornstein": 1.0})
     f = facet_counts(arts, {"a": {}}, directory=directory, registry=reg)
     t1 = [g for g in f["journalists"]["initial"] if g["key"] == "1"][0]
-    # 등재 기자는 레지스트리 tier, 비전담 (미등재) 은 기사 tier 로 같은 그룹에 분류
-    assert [i["label"] for i in t1["items"]] == ["David Ornstein (The Athletic)", "Kaya Kaynak"]
-    assert f["journalists"]["stages"] == []   # 미등재 꼬리 없음
+    # 등재 기자는 레지스트리 tier, 비전담 (미등재) 은 기사 tier 로 같은 그룹에 분류.
+    # 미등재 쪽 소속은 기사가 아는 매체에서 온다 (기자 축 설계 §2.2 — 소스 'a' 는 매체를
+    # 모르는데 기사가 BBC 로 적어 뒀다).
+    assert [i["label"] for i in t1["items"]] == ["David Ornstein (The Athletic)",
+                                                 "Kaya Kaynak (BBC)"]
+    assert f["journalists"]["stages"] == []   # 미등재 꼬리 · 추가 단계 없음
 
 def test_facet_counts_includes_stage_excluding_other():
     # 단계 계수는 방향 in · out 한정 (단계 재정의 스펙 2026-08-10 §8) — none 은 분모 제외
@@ -193,13 +196,33 @@ DIR = _with_norm_keys({"온스테인": {"name": "David Ornstein", "outlet": "The
                        "charles watts": {"name": "Charles Watts", "outlet": None}})
 JSOURCES = {"bbc_sport": {"display_name": "BBC Sport", "outlet": "BBC"},
             "goal": {"display_name": "Goal.com", "outlet": "Goal.com"},
+            "guardian": {"display_name": "The Guardian", "outlet": "The Guardian"},
+            # 여러 매체를 실어 나르는 통로 소스 — 자기 outlet 이 없다 (설계 §2.2 D 갈래)
+            "fmkorea": {"display_name": "에펨코리아"},
             "arsenal_official": {"display_name": "Arsenal.com", "outlet": "Arsenal.com",
                                  "journalist_label": "Arsenal Official"}}
+
+def _journalist_items(f):
+    """모든 자리 (첫 화면 · 더보기 단계) 의 기자 항목을 {이름: 건수} 로 모은다."""
+    out = {}
+    for g in f["journalists"]["initial"]:
+        out.update({i["value"]: i["count"] for i in g["items"]})
+    for st in f["journalists"]["stages"]:
+        for g in st["groups"]:
+            out.update({i["value"]: i["count"] for i in g["items"]})
+        out.update({i["value"]: i["count"] for i in st["unregistered"]})
+        out.update({i["value"]: i["count"] for i in st["items"]})
+    return out
+
+
+def _stage_named(f, label):
+    return next(st for st in f["journalists"]["stages"] if st["label"] == label)
+
 
 def test_journalist_entry_normalizes_alias_and_labels_outlet():
     e = journalist_entry({"journalist": "온스테인", "source_id": "bbc_sport"}, JSOURCES, DIR)
     assert e == {"name": "David Ornstein", "label": "David Ornstein (The Athletic)",
-                 "registered": True}
+                 "registered": True, "outlet": "The Athletic"}
 
 def test_journalist_entry_registered_without_outlet_shows_name_only():
     e = journalist_entry({"journalist": "Charles Watts", "source_id": "goal"}, JSOURCES, DIR)
@@ -207,12 +230,14 @@ def test_journalist_entry_registered_without_outlet_shows_name_only():
 
 def test_journalist_entry_unregistered_uses_source_outlet():
     e = journalist_entry({"journalist": "Kaya Kaynak", "source_id": "goal"}, JSOURCES, DIR)
-    assert e == {"name": "Kaya Kaynak", "label": "Kaya Kaynak (Goal.com)", "registered": False}
+    assert e == {"name": "Kaya Kaynak", "label": "Kaya Kaynak (Goal.com)",
+                 "registered": False, "outlet": "Goal.com"}
 
 def test_journalist_entry_label_omits_parens_for_source_label():
     e = journalist_entry({"journalist": "Arsenal Official", "source_id": "arsenal_official"},
                          JSOURCES, DIR)
-    assert e == {"name": "Arsenal Official", "label": "Arsenal Official", "registered": False}
+    assert e == {"name": "Arsenal Official", "label": "Arsenal Official",
+                 "registered": False, "outlet": None}
 
 def test_journalist_entry_none_when_missing():
     assert journalist_entry({"journalist": None, "source_id": "goal"}, JSOURCES, DIR) is None
@@ -224,23 +249,25 @@ def test_facet_counts_journalists_aggregate_by_name_without_registry():
     arts = [
         {"journalist": "온스테인", "source_id": "bbc_sport"},          # alias → 정규화
         {"journalist": "David Ornstein", "source_id": "bbc_sport"},   # 같은 기자 — 합산돼야
-        {"journalist": "Kaya Kaynak", "source_id": "goal"},
-        {"journalist": "Kaya Kaynak", "source_id": "goal"},
-        {"journalist": "Kaya Kaynak", "source_id": "goal"},
+        {"journalist": "Kaya Kaynak", "source_id": "guardian"},
+        {"journalist": "Kaya Kaynak", "source_id": "guardian"},
+        {"journalist": "Kaya Kaynak", "source_id": "guardian"},
         {"journalist": "Arsenal Official", "source_id": "arsenal_official"},
-        {"journalist": None, "source_id": "goal"},                    # 집계 제외
+        {"journalist": None, "source_id": "guardian"},                # 집계 제외
     ]
     f = facet_counts(arts, JSOURCES, directory=DIR)
-    last = f["journalists"]["stages"][-1]
-    assert [i["value"] for i in last["unregistered"]] == [
-        "Arsenal Official", "David Ornstein", "Kaya Kaynak"]
-    assert [i["count"] for i in last["unregistered"]] == [1, 2, 3]
-    assert [i["label"] for i in last["unregistered"]] == [
-        "Arsenal Official", "David Ornstein (The Athletic)", "Kaya Kaynak (Goal.com)"]
+    assert _journalist_items(f) == {"Arsenal Official": 1, "David Ornstein": 2,
+                                    "Kaya Kaynak": 3}
+    tail = [st for st in f["journalists"]["stages"] if st["unregistered"]][-1]
+    assert [i["label"] for i in tail["unregistered"]] == [
+        "David Ornstein (The Athletic)", "Kaya Kaynak (The Guardian)"]
+    # 1건짜리는 새 단계로 내려간다 (기자 축 설계 §3.3)
+    assert [i["value"] for i in _stage_named(f, "더보기 · 기사 1건인 기자")["items"]] == [
+        "Arsenal Official"]
 
 def test_facet_counts_journalists_empty_without_directory():
     f = facet_counts([{"journalist": None, "source_id": "goal"}], JSOURCES)
-    assert f["journalists"] == {"initial": [], "stages": []}
+    assert f["journalists"] == {"initial": [], "stages": [], "total": 0}
 
 def test_journalist_entry_co_byline_resolves_to_registered_representative():
     from bullet_in.serve.render import journalist_entry
@@ -346,7 +373,7 @@ def test_journalist_entry_folds_spaced_korean_alias():
                          JSOURCES, {"데이비드온스테인": {"name": "David Ornstein",
                                                   "outlet": "The Athletic"}})
     assert e == {"name": "David Ornstein", "label": "David Ornstein (The Athletic)",
-                 "registered": True}
+                 "registered": True, "outlet": "The Athletic"}
 
 
 # --- 공저자 다중 귀속 (설계 2026-08-14 · 정책 C) ---
@@ -400,42 +427,39 @@ def test_article_journalists_empty_when_no_byline_at_all():
     assert article_journalists(_art(journalist=None), JSOURCES, DIR) == []
 
 
-def test_facet_counts_makes_no_item_for_coauthor_only_name():
-    # 정책 C — 항목은 어느 기사에서든 대표인 이름에만 생긴다
+def test_facet_counts_makes_an_item_for_coauthor_only_name():
+    # 옛 정책 C 는 대표가 된 적 있는 이름에만 항목을 만들어서, 공동 기사에만 나오는
+    # 기자는 카드에 실린 채 사이드바에서 빠졌다 (기자 축 설계 §3.4).
+    # 이제 항목을 만들고 대표 여부는 더보기 단계 배치로만 쓴다.
     arts = [_art(journalist="David Ornstein",
                  authors_json='["David Ornstein", "James McNicholas"]')]
     f = facet_counts(arts, JSOURCES, directory=DIR)
-    last = f["journalists"]["stages"][-1]
-    assert [i["value"] for i in last["unregistered"]] == ["David Ornstein"]
+    assert _journalist_items(f) == {"David Ornstein": 1, "James McNicholas": 1}
+    co = _stage_named(f, "더보기 · 공동 기사에만 나오는 기자")
+    assert [i["value"] for i in co["items"]] == ["David Ornstein", "James McNicholas"]
 
 
 def test_facet_counts_counts_article_for_coauthor_that_leads_elsewhere():
     arts = [_art(journalist="David Ornstein",
                  authors_json='["David Ornstein", "Kaya Kaynak"]'),
-            _art(source_id="goal", journalist="Kaya Kaynak")]
+            _art(source_id="guardian", journalist="Kaya Kaynak")]
     f = facet_counts(arts, JSOURCES, directory=DIR)
-    counts = {i["value"]: i["count"]
-              for i in f["journalists"]["stages"][-1]["unregistered"]}
-    assert counts == {"David Ornstein": 1, "Kaya Kaynak": 2}
+    assert _journalist_items(f) == {"David Ornstein": 1, "Kaya Kaynak": 2}
 
 
 def test_fold_alias_spellings_merges_case_variants_of_unregistered_name():
-    arts = [_art(source_id="goal", journalist="JAMES SHARPE"),
-            _art(source_id="goal", journalist="James Sharpe")]
+    arts = [_art(source_id="guardian", journalist="JAMES SHARPE"),
+            _art(source_id="guardian", journalist="James Sharpe")]
     folded = fold_alias_spellings(arts, DIR)
     f = facet_counts(arts, JSOURCES, directory=folded)
-    counts = {i["value"]: i["count"]
-              for i in f["journalists"]["stages"][-1]["unregistered"]}
-    assert counts == {"James Sharpe": 2}
+    assert _journalist_items(f) == {"James Sharpe": 2}
 
 
 def test_fold_alias_spellings_leaves_registered_names_alone():
     arts = [_art(journalist="온스테인"), _art(journalist="David Ornstein")]
     folded = fold_alias_spellings(arts, DIR)
     f = facet_counts(arts, JSOURCES, directory=folded)
-    counts = {i["value"]: i["count"]
-              for i in f["journalists"]["stages"][-1]["unregistered"]}
-    assert counts == {"David Ornstein": 2}
+    assert _journalist_items(f) == {"David Ornstein": 2}
 
 
 def test_article_journalists_adds_no_coauthor_for_a_source_label():
@@ -446,9 +470,11 @@ def test_article_journalists_adds_no_coauthor_for_a_source_label():
 
 
 def test_article_journalists_keeps_an_organisation_that_is_the_only_byline():
+    # 원문이 저자로 적은 값은 그대로 남긴다 (기자 축 설계 §4.3) — 옛 규칙은 이 값을
+    # 언론사 정식명 'BBC' 로 접었는데, 접어도 기자 항목은 그대로 남아 아무것도 못 고쳤다.
     row = _art(source_id="bbc_sport", journalist="BBC Sport",
                authors_json='["BBC Sport"]')
-    assert [e["name"] for e in article_journalists(row, JSOURCES, DIR)] == ["BBC"]
+    assert [e["name"] for e in article_journalists(row, JSOURCES, DIR)] == ["BBC Sport"]
 
 
 # ---- 표기 접기 · 기타 계수 (기자명 · 언론사 표기 통일 설계 §4.3 · 사이드바 계수 설계 §5.4) ----
@@ -475,3 +501,131 @@ def test_facet_counts_other_skips_linked_player_badged_cards():
             dict(base, linked_players="에제")]
     f = facet_counts(arts, {"a": {}}, registry=_Reg(outlets={"bbc": 1.0}))
     assert f["other"] == 1
+
+
+# ---- 사이드바 기자 축 (설계 2026-08-20 · δ 소속 표기 · ε 목록 길이 · ζ 비인물 항목) ----
+
+def test_journalist_outlet_comes_from_the_article_when_the_source_has_none():
+    """소속이 절반만 붙던 자리 (설계 §2.2) — 통로 소스는 매체를 모르고 기사는 안다."""
+    row = _art(source_id="fmkorea", journalist="Jacob Tanswell", outlet="The Athletic")
+    assert journalist_entry(row, JSOURCES, DIR)["label"] == "Jacob Tanswell (The Athletic)"
+
+
+def test_journalist_outlet_prefers_the_article_over_the_source():
+    """순서는 사전 → 기사 → 소스다 — 소스 매체는 기사가 모를 때만 쓴다."""
+    row = _art(source_id="bbc_sport", journalist="Sam Blitz", outlet="Daily Mail")
+    assert journalist_entry(row, JSOURCES, DIR)["label"] == "Sam Blitz (Daily Mail)"
+
+
+def test_journalist_outlet_from_the_article_goes_through_the_outlet_directory():
+    """기사 매체도 언론사 사전을 거친다 — γ 의 표기 통일 결과와 같은 이름이어야 한다."""
+    row = _art(source_id="fmkorea", journalist="Alan Nixon", outlet="더 선")
+    e = journalist_entry(row, JSOURCES, DIR, {"더선": "The Sun"})
+    assert e["label"] == "Alan Nixon (The Sun)"
+
+
+def test_registered_journalist_without_outlet_takes_it_from_the_article():
+    """사전에 소속이 비어 있는 등재 기자도 같은 순서를 탄다 (설계 §2.4)."""
+    row = _art(source_id="fmkorea", journalist="Charles Watts", outlet="Arsenal Insider")
+    e = journalist_entry(row, JSOURCES, DIR)
+    assert e["registered"] is True
+    assert e["label"] == "Charles Watts (Arsenal Insider)"
+
+
+def test_registered_outlet_goes_through_the_outlet_directory():
+    """사전 소속의 표기도 한 번 접는다 (설계 §2.5 나 · ChronicleLive → Chronicle Live)."""
+    directory = {"lee ryder": {"name": "Lee Ryder", "outlet": "ChronicleLive"}}
+    e = journalist_entry(_art(journalist="Lee Ryder"), JSOURCES, directory,
+                         {"chroniclelive": "Chronicle Live"})
+    assert e["label"] == "Lee Ryder (Chronicle Live)"
+
+
+def test_label_omits_the_outlet_when_the_name_already_ends_with_parentheses():
+    """정식명에 괄호가 이미 있으면 또 붙이지 않는다 (설계 §2.5 가).
+
+    실물은 'Bruno Andrade (ESPN) (ESPN)' 7건이었다 — 핸들이 개인이 아니라 매체 계정이라
+    표시명에 소속을 넣어 둔 자리다."""
+    directory = {"bruno andrade": {"name": "Bruno Andrade (ESPN)", "outlet": "ESPN"}}
+    e = journalist_entry(_art(journalist="Bruno Andrade", outlet="ESPN"), JSOURCES, directory)
+    assert e["label"] == "Bruno Andrade (ESPN)"
+
+
+def test_country_edition_domain_folds_into_the_outlet_name():
+    """나라판 도메인 표기는 매체명으로 접는다 (설계 §4.5) — 저장된 언론사가 이미 같다."""
+    row = _art(source_id="fmkorea", journalist="ESPN.com.br", outlet="ESPN")
+    e = journalist_entry(row, JSOURCES, DIR)
+    assert e["name"] == "ESPN" and e["label"] == "ESPN"
+
+
+def test_facet_counts_labels_a_name_with_its_most_common_outlet():
+    """이름 하나에 라벨 하나 (설계 §2.3) — 매체가 갈리면 기사가 많은 쪽을 쓴다."""
+    arts = [_art(content_hash=h, source_id="fmkorea", journalist="Isaan Khan", outlet=o)
+            for h, o in [("h1", "Daily Mail"), ("h2", "Daily Mail"), ("h3", "The Sun")]]
+    f = facet_counts(arts, JSOURCES, directory=DIR)
+    got = [it for st in f["journalists"]["stages"]
+           for it in st["unregistered"] + st["items"] if it["value"] == "Isaan Khan"]
+    assert got and got[0]["label"] == "Isaan Khan (Daily Mail)"
+    assert got[0]["count"] == 3          # 소속은 라벨일 뿐 필터 키가 아니라 항목이 안 갈린다
+
+
+def test_facet_counts_first_screen_needs_two_articles():
+    """첫 화면 문턱 (설계 §3.2) — 1건짜리는 사라지지 않고 새 단계로 내려간다."""
+    reg = _Reg(journalists={"온스테인": 1.0, "david ornstein": 1.0})
+    arts = [_art(content_hash="h1", journalist="온스테인"),
+            _art(content_hash="h2", journalist="Sami Mokbel", tier=1.5)]
+    f = facet_counts(arts, JSOURCES, directory=DIR, registry=reg)
+    assert f["journalists"]["initial"] == []
+    single = _stage_named(f, "더보기 · 기사 1건인 기자")
+    assert [i["value"] for i in single["items"]] == ["David Ornstein", "Sami Mokbel"]
+
+    arts.append(_art(content_hash="h3", journalist="온스테인"))
+    f = facet_counts(arts, JSOURCES, directory=DIR, registry=reg)
+    assert [i["value"] for g in f["journalists"]["initial"] for i in g["items"]] == [
+        "David Ornstein"]
+
+
+def test_facet_counts_coauthor_stage_is_judged_before_the_single_article_stage():
+    """둘에 함께 걸리는 항목이 있어 순서가 결과를 가른다 (설계 §3.3)."""
+    arts = [_art(journalist="David Ornstein",
+                 authors_json='["David Ornstein", "James McNicholas"]')]
+    f = facet_counts(arts, JSOURCES, directory=DIR)
+    co = _stage_named(f, "더보기 · 공동 기사에만 나오는 기자")
+    assert [i["value"] for i in co["items"]] == ["David Ornstein", "James McNicholas"]
+    assert not any(st["label"] == "더보기 · 기사 1건인 기자"
+                   for st in f["journalists"]["stages"])
+
+
+def test_facet_counts_first_screen_is_judged_before_the_coauthor_stage():
+    """공동 기사에만 나와도 공신력 상한 안에 2건 이상이면 첫 화면에 남는다 (설계 §3.3)."""
+    reg = _Reg(journalists={"온스테인": 1.0, "david ornstein": 1.0})
+    arts = [_art(content_hash=h, journalist="온스테인",
+                 authors_json='["\uc628\uc2a4\ud14c\uc778", "James McNicholas"]')
+            for h in ("h1", "h2")]
+    f = facet_counts(arts, JSOURCES, directory=DIR, registry=reg)
+    assert [i["value"] for g in f["journalists"]["initial"] for i in g["items"]] == [
+        "David Ornstein"]
+    co = _stage_named(f, "더보기 · 공동 기사에만 나오는 기자")
+    assert [i["value"] for i in co["items"]] == ["James McNicholas"]
+
+
+def test_facet_counts_makes_no_item_for_a_goal_com_journalist():
+    """Goal.com 소속 기자는 항목을 만들지 않는다 (설계 §5.1).
+
+    도달 경로는 언론사 facet 의 Goal.com 항목이 유지한다 — 그 항목이 사라지면 이 결정을
+    다시 봐야 한다."""
+    arts = [_art(source_id="goal", journalist="Kaya Kaynak"),
+            _art(content_hash="h2", journalist="온스테인")]
+    f = facet_counts(arts, JSOURCES, directory=DIR)
+    assert _journalist_items(f) == {"David Ornstein": 1}
+    outlets = [i["value"] for st in f["journalists"]["stages"] for i in st["items"]]
+    assert "Kaya Kaynak" not in outlets
+    # 카드 · 필터 키는 그대로다 (항목만 안 만든다)
+    assert [e["name"] for e in article_journalists(arts[0], JSOURCES, DIR)] == ["Kaya Kaynak"]
+
+
+def test_facet_view_carries_the_item_total_for_the_search_box():
+    """검색칸 placeholder 의 인원수 — 접힌 단계까지 합친 값이다 (설계 §3.3 가)."""
+    arts = [_art(content_hash="h1", journalist="온스테인"),
+            _art(content_hash="h2", journalist="Sami Mokbel")]
+    f = facet_counts(arts, JSOURCES, directory=DIR)
+    assert f["journalists"]["total"] == 2

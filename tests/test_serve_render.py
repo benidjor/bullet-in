@@ -440,12 +440,30 @@ def test_sidebar_omits_more_toggle_when_all_registered():
         outlets = {}
         journalists = {"온스테인": 1.0, "david ornstein": 1.0}
 
-    # 등재 기자만 있고 tier 가 초기 노출 상한(1.5) 이내 → 미등재/더보기 단계가 없어야 함
-    html = render_index([_row(journalist="온스테인")], SOURCES, NOW,
+    # 등재 기자만 있고 tier 가 초기 노출 상한(1.5) 이내 → 미등재/더보기 단계가 없어야 함.
+    # 기사를 둘 두는 것은 첫 화면 2건 문턱 때문이다 (기자 축 설계 §3.2) — 1건이면
+    # 「더보기 · 기사 1건인 기자」 단계로 내려간다.
+    html = render_index([_row(content_hash="h1", journalist="온스테인"),
+                         _row(content_hash="h2", journalist="온스테인")], SOURCES, NOW,
                         directory=directory, registry=_Reg())
     section = _journalist_facet_section(html)
     assert "morestage" not in section
     assert "morebtn" not in section
+
+
+def test_sidebar_renders_a_journalist_search_box_with_the_item_total():
+    """기자 목록 맨 위 검색칸 (기자 축 설계 §3.3 가).
+
+    인원수는 접힌 단계까지 합친 값이다 — 「지금 보이는 목록이 전부가 아니다」 를 그 자리에서
+    알려 주는 것이 검색칸을 넣은 이유다. 언론사 목록에는 붙이지 않는다."""
+    rows = [_row(content_hash="h1", journalist="온스테인"),
+            _row(content_hash="h2", journalist="Sami Mokbel")]
+    directory = {"온스테인": {"name": "David Ornstein", "outlet": "The Athletic"}}
+    html = render_index(rows, SOURCES, NOW, directory=directory)
+    section = _journalist_facet_section(html)
+    assert 'id="jSearch"' in section
+    assert "2명" in section
+    assert html.count('id="jSearch"') == 1
 
 
 def test_journalist_facet_data_value_matches_card_data_journalist():
@@ -488,7 +506,9 @@ def test_unregistered_journalist_grouped_by_row_tier():
     """비전담 (미등재) 기자는 '이름 (소속)' 라벨 + 기사 tier 그룹으로 분류된다
     (미등재 꼬리로 흘리지 않음 — 소스 tier = 비전담 기준선)."""
     sources = {"bbc_sport": {"display_name": "BBC Sport", "outlet": "BBC"}}
-    html = render_index([_row(journalist="Alex Howell", tier=1.5)], sources, NOW)
+    html = render_index([_row(content_hash="h1", journalist="Alex Howell", tier=1.5),
+                         _row(content_hash="h2", journalist="Alex Howell", tier=1.5)],
+                        sources, NOW)
     section = _journalist_facet_section(html)
     assert "공신력 상" in section
     assert 'data-group="journalist" data-value="Alex Howell"' in section
@@ -496,15 +516,18 @@ def test_unregistered_journalist_grouped_by_row_tier():
     assert "미등재" not in section
 
 
-def test_org_byline_folds_to_outlet_name():
-    """조직 바이라인 (BBC Sport 등) 은 outlet 정식명으로 접는다 — 칩 · 카드 키 모두 'BBC'."""
+def test_org_byline_keeps_the_stored_spelling():
+    """조직 바이라인 (BBC Sport 등) 은 원문이 저자로 적은 값 그대로 남긴다.
+
+    옛 규칙은 이 값을 언론사 정식명 'BBC' 로 접었는데, 접어도 기자 항목은 그대로 남아
+    아무것도 못 고쳤다 (기자 축 설계 §4.2 · §4.4 — 전수로 이 규칙이 잡는 자리는 2건뿐).
+    조직 이름이 첫 화면에 올라오는 것은 소스 통칭 라벨 규칙이 따로 막는다."""
     sources = {"bbc_sport": {"display_name": "BBC Sport", "outlet": "BBC"}}
     html = render_index([_row(journalist="BBC Sport", tier=2)], sources, NOW)
-    assert 'data-journalist="BBC"' in html
+    assert 'data-journalist="BBC Sport"' in html
     section = _journalist_facet_section(html)
-    assert 'data-group="journalist" data-value="BBC"' in section
-    assert "BBC Sport" not in section          # 접힌 뒤 원문 표기는 남지 않는다
-    assert "BBC (BBC)" not in html             # name == outlet → 괄호 생략
+    assert 'data-group="journalist" data-value="BBC Sport"' in section
+    assert 'data-value="BBC"' not in section
 
 
 def test_index_card_data_tier_keeps_one_point_five():
