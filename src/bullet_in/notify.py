@@ -154,6 +154,26 @@ def _title_subject(labels: list[str]) -> str:
     return f"{labels[0]} 외 {rest}개 소스" if rest else labels[0]
 
 
+SPACER = "\u200b"   # 폭 없는 공백 — 이 한 줄이 구획 사이의 여백이 된다
+
+
+def _section_fields(sections: list[tuple[str, list[str]]]) -> list[dict]:
+    """구획을 embed 필드로 낸다 — 필드 이름이 디스코드가 직접 그리는 제목이다.
+
+    마크다운 굵기와 달리 크기 · 여백까지 디스코드가 붙여 주고, 렌더가 보장된다
+    (2026-08-23 실물 비교에서 세 서식 중 이것이 이겼다).
+    필드 간격은 고정이라 마지막을 뺀 구획 끝에 폭 없는 공백 한 줄을 더해 띄운다.
+    줄이 없는 구획은 빠진다."""
+    kept = [(name, lines) for name, lines in sections if lines]
+    out = []
+    for i, (name, lines) in enumerate(kept):
+        value = "\n".join(f"- {ln}" for ln in lines)
+        if i < len(kept) - 1:
+            value += "\n" + SPACER
+        out.append({"name": name, "value": value, "inline": False})
+    return out
+
+
 def _sectioned(sections: list[tuple[str, list[str]]]) -> str:
     """구획 제목과 줄 목록을 필드 값으로 엮는다 — 줄이 없는 구획은 빠진다.
 
@@ -189,7 +209,7 @@ def build_freshness_alert(records, default_hours: float, *,
     waiting = len(breaches) - len(targets)
     no_wm = sum(1 for r in records if r.last_fetched_at is None)
     ok = len(records) - len(breaches) - no_wm
-    fields = []
+    per_source: list[tuple[str, list[tuple[str, list[str]]]]] = []
     for b in targets:
         age = [f"⏳ **{b.age_hours:.1f}h** 경과 (임계 {b.threshold_hours:g}h)",
                f"마지막 수집: {_discord_ts(b.last_fetched_at, 'R')} "
@@ -212,14 +232,18 @@ def build_freshness_alert(records, default_hours: float, *,
                 path.append("이번 회차 후보 0건")
             if hint and not n:
                 path.append(f"원인 후보: {hint}")
-        fields.append({
-            "name": _source_field_name(b.source_id, sources),
-            "value": _sectioned([
-                ("얼마나 오래됐나", age),
-                ("수집 경로는 살아 있나", path),
-                ("다음 알림",
-                 [f"{FRESHNESS_REALERT_HOURS:g}시간 더 지나면 다시 알립니다"])]),
-            "inline": False})
+        per_source.append((b.source_id, [
+            ("얼마나 오래됐나", age),
+            ("수집 경로는 살아 있나", path),
+            ("다음 알림",
+             [f"{FRESHNESS_REALERT_HOURS:g}시간 더 지나면 다시 알립니다"])]))
+    # 절벽 알림과 같은 규칙 — 소스가 하나면 구획을 필드로 펼치고 여럿이면 접는다.
+    if len(per_source) == 1:
+        fields = _section_fields(per_source[0][1])
+    else:
+        fields = [{"name": _source_field_name(sid, sources),
+                   "value": _sectioned(sections), "inline": False}
+                  for sid, sections in per_source]
     fields.append({"name": "기본 임계", "value": f"전역 {default_hours:g}h",
                    "inline": True})
     fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
@@ -379,7 +403,7 @@ def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
     판정은 run.py 가 끝냈고 여기서는 표시만 한다 — history[0] 이 직전 회차다.
     ADAPTER_HINTS 를 쓰지 않는다: 후보 0 의 원인은 알림 시점에 알 수 없고,
     같은 함정으로 SLO-5 를 두 번 고쳤다 (#169 · #174)."""
-    fields = []
+    per_source: list[tuple[str, list[tuple[str, list[str]]]]] = []
     for sid in cliffs:
         codes = failure_codes.get(sid) or {}
         blocked = BOT_BLOCK_CODE in codes
@@ -410,12 +434,19 @@ def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
         todo = ["차단은 보통 저절로 풀립니다 — 지금은 조치하지 않습니다"] if blocked else []
         todo += ["확인할 때 사이트에 직접 접속하지 말고 다음 회차 로그를 보십시오",
                  "회차가 계속 0이면 런북 (제목 클릭) 의 절차를 따릅니다"]
-        fields.append({"name": _source_field_name(sid, sources),
-                       "value": _sectioned([("무슨 일이 있었나", happened),
-                                            ("평소와 비교", compared),
-                                            ("지금 어떤 상태인가", state),
-                                            ("무엇을 하나", todo)]),
-                       "inline": False})
+        per_source.append((sid, [("무슨 일이 있었나", happened),
+                                 ("평소와 비교", compared),
+                                 ("지금 어떤 상태인가", state),
+                                 ("무엇을 하나", todo)]))
+    # 소스가 하나면 구획을 필드로 펼친다 (읽기 좋은 쪽). 여럿이면 소스당 한 필드로
+    # 접는다 — 구획을 펼친 채로 소스가 일곱 곳 동시에 끊기면 embed 필드 상한 (25) 을
+    # 넘겨 알림이 발송에 실패한다. 하필 전면 장애 때 알림을 잃는 자리다.
+    if len(per_source) == 1:
+        fields = _section_fields(per_source[0][1])
+    else:
+        fields = [{"name": _source_field_name(sid, sources),
+                   "value": _sectioned(sections), "inline": False}
+                  for sid, sections in per_source]
     fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
     return {"title": _cliff_title(cliffs, sources, failure_codes),
             "description": "직전 회차까지 글을 가져오던 소스가 이번 회차에 한 건도 못 가져왔습니다.",
