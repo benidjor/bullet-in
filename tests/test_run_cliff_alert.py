@@ -32,6 +32,18 @@ def test_payload_built_for_cliff_with_adapter_codes():
     assert "`HTTP 430` 4건" in payload["fields"][0]["value"]
 
 
+def test_payload_carries_the_funnel_from_adapters_that_count_it():
+    """발견 4단 계수를 내놓는 어댑터만 걷는다 — 안 내놓는 어댑터가 섞여도 깨지지 않는다."""
+    quiet = _Adapter("fmkorea")
+    quiet.funnel = {"selected": 13, "deduped": 13, "titled": 7, "passed": 3}
+    payload = cliff_alert_payload(
+        {"goal": 14}, [{"fmkorea": 10, "goal": 13}],
+        adapters=[quiet, _Adapter("goal")],   # goal 은 funnel 속성이 아예 없다
+        sources={"fmkorea": {"display_name": "fmkorea 축구 소식통"}},
+        success_rate=1.0, run_id="3259230a")
+    assert "발견 퍼널: 목록 13 → URL 13 → 제목 7 → 키워드 3" in str(payload["fields"])
+
+
 def test_payload_ignores_source_already_at_zero():
     """arsenal_official 은 직전에도 0 — 전이가 아니므로 알림이 없다."""
     history = [{"arsenal_official": 0, "goal": 13}]

@@ -134,6 +134,15 @@ def serving_rows(rows: list[dict], *, relevance_terms, player_names,
     return keep, hidden
 
 
+def adapter_funnels(adapters) -> dict:
+    """발견 4단 계수를 내놓는 어댑터만 걷는다 (스펙 2026-08-14 §8.2).
+
+    전 어댑터 공통 인터페이스로 강제하지 않는다 — rss · x_playwright 는 발견 단계가
+    달라 억지가 된다. 안 내놓으면 알림에서 그 줄이 빠질 뿐이다."""
+    return {a.source_id: dict(f) for a in adapters
+            if (f := getattr(a, "funnel", None))}
+
+
 def cliff_alert_payload(candidate_counts: dict, history: list[dict], *,
                         adapters, sources: dict, success_rate: float,
                         run_id: str) -> dict | None:
@@ -147,7 +156,8 @@ def cliff_alert_payload(candidate_counts: dict, history: list[dict], *,
                      for a in adapters}
     return notify.build_cliff_alert(
         cliffs, history=history, sources=sources,
-        failure_codes=failure_codes, success_rate=success_rate, run_id=run_id)
+        failure_codes=failure_codes, success_rate=success_rate, run_id=run_id,
+        funnels=adapter_funnels(adapters))
 
 
 async def main(concurrency: int):
@@ -392,7 +402,7 @@ async def main(concurrency: int):
         notify.send_alert(**notify.build_freshness_alert(
             records, default_hours, targets=fresh_targets, sources=sources,
             run_id=run_id, checked_at=checked_at, candidates=candidate_counts,
-            fetch_errors=errors))
+            fetch_errors=errors, funnels=adapter_funnels(adapters)))
     # 안 보낸 이유를 남긴다 — 종전에는 대상이 비면 아무 기록 없이 넘어가 "왜 알림이
     # 안 나갔는가" 를 저널로 답할 수 없었다 (스펙 2026-08-14 §5.4).
     logging.getLogger(__name__).info(

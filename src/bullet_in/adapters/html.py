@@ -19,6 +19,10 @@ class HtmlAdapter:
         self.title_selector = title_selector
         self.title_attr = title_attr
         self.thumbnail_only = thumbnail_only
+        # 발견 4단 계수 (스펙 2026-08-14 §8.2) — 어댑터 인스턴스 속성이라 DB 에 안 남는다.
+        # 기록되는 후보 계수는 마지막 단계뿐이라, 셀렉터가 깨져 첫 단이 0 이 된 것과
+        # 사이트가 조용해 마지막 단이 0 이 된 것이 구분되지 않았다 (§2.5 실측).
+        self.funnel: dict[str, int] = {}
         if title_contains is None:
             self.title_keywords: list[str] | None = None
         elif isinstance(title_contains, str):
@@ -34,7 +38,12 @@ class HtmlAdapter:
             r.raise_for_status()
             soup = BeautifulSoup(r.text, "html.parser")
             now, matched, seen = datetime.now(timezone.utc), [], set()
-            for a in soup.select(self.item_selector):
+            selected = soup.select(self.item_selector)
+            # href 없는 항목은 별도 단을 두지 않고 중복 제거 단에 함께 접는다 —
+            # 둘 다 "URL 을 못 얻은 자리" 라 나눠도 진단이 갈리지 않는다.
+            self.funnel = {"selected": len(selected), "deduped": 0,
+                           "titled": 0, "passed": 0}
+            for a in selected:
                 href = a.get("href")
                 if not href:
                     continue
@@ -42,6 +51,7 @@ class HtmlAdapter:
                 if url in seen:
                     continue
                 seen.add(url)
+                self.funnel["deduped"] += 1
                 if self.title_attr:
                     title = (a.get(self.title_attr) or "").strip()
                     if not title:
@@ -53,9 +63,11 @@ class HtmlAdapter:
                     title = el.get_text(strip=True)
                 else:
                     title = a.get_text(strip=True)
+                self.funnel["titled"] += 1
                 if self.title_keywords and not any(
                         k in title.lower() for k in self.title_keywords):
                     continue
+                self.funnel["passed"] += 1
                 matched.append((title, url))
             out = []
             for title, url in matched:

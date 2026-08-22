@@ -55,6 +55,11 @@
 - **감시 제외 소스 ( `freshness_hours: 0` )** — 판정 루프 자체에서 빠진다.
   stale 이든 아니든 필드에 나타나지 않고, `source_freshness` 이력에도 안 남는다 ( 무알림과 달리 완전히 대상 밖 ) .
   이벤트 구동이라 정상 공백에 상한이 없는 소스에 쓴다 — 유한한 임계는 어떤 값을 골라도 비수기 정상 공백에서 오탐이 재발한다 ( 스펙 `docs/superpowers/specs/2026-08-07-alert-f2-unit-attribution-and-observability-design.md` §1.2 · §3.2 ) .
+- **발견 퍼널 4단** — html 어댑터 소스에는 `발견 퍼널: 목록 13 → URL 13 → 제목 7 → 키워드 3` 이 붙는다.
+  각 단을 통과해 남은 수다.
+  **목록이 0이면 셀렉터가 깨졌다** · **키워드만 0이면 원문이 조용하다**.
+  아래 진단표의 첫 두 줄 ( 셀렉터 드리프트 · 피드 URL 변경 ) 을 라이브 재실행 전에 알림만 보고 가를 수 있다.
+  계수를 안 내놓는 어댑터 ( `rss` · `x_playwright` ) 는 그 줄이 빠진다.
 - **필드 문구는 관측 사실만** — "이번 회차 후보 0건" 처럼 경과만 적고, 원인은 추정하지 않는다.
   2026-08-07 이전에는 "수집 끊김 의심" 을 붙였으나, arsenal_official 이 정상 공백에도 매 회차 발화해 원인 문구를 뺐다.
 - **실물 캡처** — 개편 embed: `docs/assets/discord-alert-embed-after.png` · 개편 전: `docs/assets/discord-alert-embed-before.png`.
