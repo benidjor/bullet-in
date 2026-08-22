@@ -550,6 +550,16 @@ def test_label_omits_the_outlet_when_the_name_already_ends_with_parentheses():
     assert e["label"] == "Bruno Andrade (ESPN)"
 
 
+def test_label_omits_the_outlet_when_the_name_is_the_source_itself():
+    """원문이 저자 자리에 매체 이름을 쓴 자리는 소속을 또 적지 않는다 (사용자 확정 2026-08-23).
+
+    같은 목록의 'Arsenal Official' · 'BBC Gossip' 은 통칭 라벨이라 괄호가 없는데
+    'BBC Sport' 만 '(BBC)' 가 붙어 어색했다. 이름은 원문이 쓴 값이라 그대로 남긴다."""
+    row = _art(source_id="bbc_sport", journalist="BBC Sport")
+    e = journalist_entry(row, JSOURCES, DIR)
+    assert e["name"] == "BBC Sport" and e["label"] == "BBC Sport"
+
+
 def test_country_edition_domain_folds_into_the_outlet_name():
     """나라판 도메인 표기는 매체명으로 접는다 (설계 §4.5) — 저장된 언론사가 이미 같다."""
     row = _art(source_id="fmkorea", journalist="ESPN.com.br", outlet="ESPN")
