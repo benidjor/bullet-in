@@ -40,13 +40,16 @@ COLOR_FAILURE = 0xE01E5A
 COLOR_CANDIDATE = 0x3BA55D
 COLOR_BLOCK = 0xD9534F
 
+# 후보 0건일 때만 붙는 추측 줄이다 — 응답 코드 같은 관측값은 여기 적지 않는다.
+# _failure_code_line 이 서버가 준 코드를 따로 싣고, 두 자리에 같은 값을 두면
+# 한쪽이 낡는다 (fmkorea 힌트가 「429」 로 남아 있었고 실제 차단 응답은 430 이다).
 ADAPTER_HINTS = {
     "x_playwright": "X 쿠키 만료 · 핸들 변경",
     "x_backtrack": "X 쿠키 만료 · 핸들 변경",
     "html": "셀렉터 드리프트 · 사이트 개편",
     "playwright": "셀렉터 · 동의창 드리프트",
     "rss": "피드 URL 변경",
-    "fmkorea": "검색 URL 변경 · 429 차단",
+    "fmkorea": "검색 URL 변경 · 자동 수집 차단",
 }
 RUNBOOK_FRESHNESS = ("https://github.com/benidjor/bullet-in/blob/main/"
                      "docs/runbook/2026-07-13-freshness-watermark-ops.md")
