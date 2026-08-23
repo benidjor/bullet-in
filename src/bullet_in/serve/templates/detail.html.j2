@@ -48,12 +48,12 @@
   </div>
 
   {% if a._excerpt %}
-  <p class="excerpt-note">이 기사는 요약과 앞부분 발췌만 제공합니다 — <a href="{{ a.url }}" target="_blank" rel="noopener">원문 전체 보기 ↗</a></p>
+  <p class="excerpt-note">이 기사는 요약과 앞부분 발췌만 제공합니다 — <a href="{{ a.url }}" target="_blank" rel="noopener" data-exit="excerpt_note" data-hash="{{ a.content_hash }}" data-outlet="{{ a._outlet }}">원문 전체 보기 ↗</a></p>
   {% endif %}
 
   <aside class="origin">
     <div class="ometa"><span>{{ a._outlet }}</span>{% if a._more_authors %}<span>{{ a._authors[0] }} 외 {{ a._more_authors }}명</span>{% elif a.journalist %}<span>{{ a.journalist }}</span>{% endif %}{% if a._date %}<span>{{ a._date }}</span>{% endif %}</div>
-    <a class="obtn" href="{{ a.url }}" target="_blank" rel="noopener">원문 기사 보기 ↗</a>
+    <a class="obtn" href="{{ a.url }}" target="_blank" rel="noopener" data-exit="origin_button" data-hash="{{ a.content_hash }}" data-outlet="{{ a._outlet }}">원문 기사 보기 ↗</a>
   </aside>
 </article>
 

@@ -209,8 +209,6 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .item.ctxdim{opacity:.45}                       /* 필터 밖 대표 — 묶음 문맥용으로만 남김 */
 .item.ctxdim .cardhead::after{content:"묶음 대표 · 필터 밖";font-size:10px;color:var(--dim);
   border:1px solid var(--hair);border-radius:2px;padding:0 4px;white-space:nowrap}
-.dest{display:inline-block;font-size:11px;font-weight:700;color:var(--mut);
-  border:1px solid var(--mut);border-radius:2px;padding:0 6px;margin-right:2px}
 .reltoggle{margin:6px 12px 2px;padding:3px 10px;background:none;border:1px solid var(--hair);
   border-radius:2px;color:var(--mut);font:inherit;font-size:12px;cursor:pointer}
 .reltoggle:hover{color:var(--ink);border-color:var(--mut)}
@@ -334,12 +332,14 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
    red 5.03/5.80 · green 5.14/8.93 · mut 5.20/6.98 로 전부 4.5:1 이상이다. */
 .tbadge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;
   padding:1px 6px;border-radius:2px;letter-spacing:.01em;margin:0 6px 4px 0}
-.t-inlink{color:var(--red);border:1px dashed var(--red)}
-.t-indone{color:var(--red);border:1px solid var(--red)}
-.t-loanin{color:var(--red);border:1px dotted var(--red)}
-.t-outlink{color:var(--green);border:1px dashed var(--green)}
-.t-outdone{color:var(--green);border:1px solid var(--green)}
-.t-loanout{color:var(--green);border:1px dotted var(--green)}
+/* 영입이 초록 · 방출이 빨강이다 (2026-08-23 공개 준비 · 목업으로 고름).
+   반대로 두었던 자리라 처음 보는 사람이 들어오는 선수와 나가는 선수를 뒤집어 읽었다. */
+.t-inlink{color:var(--green);border:1px dashed var(--green)}
+.t-indone{color:var(--green);border:1px solid var(--green)}
+.t-loanin{color:var(--green);border:1px dotted var(--green)}
+.t-outlink{color:var(--red);border:1px dashed var(--red)}
+.t-outdone{color:var(--red);border:1px solid var(--red)}
+.t-loanout{color:var(--red);border:1px dotted var(--red)}
 .t-dropped{color:var(--mut);border:1px solid var(--hair)}
 .t-otherclub{color:var(--mut);border:1px dashed var(--hair)}
 

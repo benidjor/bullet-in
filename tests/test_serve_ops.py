@@ -73,3 +73,10 @@ def test_ops_view_lists_high_retention_rows():
     row = view["high_retention"][0]
     assert row["retention"] == "0.93"
     assert row["href"].endswith(f"article/{'a' * 64}.html")
+
+
+def test_ops_page_is_kept_out_of_search_results():
+    # 운영 뷰는 공개 화면에서 링크하지 않고 색인도 막는다 (2026-08-23 공개 준비).
+    # 배포에는 그대로 올라가므로 주소를 아는 사람은 볼 수 있다 — 접근 차단이 아니다.
+    html = render_ops(build_ops_view(_snapshot(), SOURCES, anomaly_count=0, now=NOW))
+    assert '<meta name="robots" content="noindex,nofollow">' in html

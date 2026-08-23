@@ -32,8 +32,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>{% block title %}Bullet-in{% endblock %}</title>
+{% if meta %}
+{% if meta.robots %}<meta name="robots" content="{{ meta.robots }}">{% endif %}
+{% if meta.desc %}<meta name="description" content="{{ meta.desc }}">{% endif %}
+{% if meta.canonical %}<link rel="canonical" href="{{ meta.canonical }}">{% endif %}
+<meta property="og:site_name" content="Bullet-in">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:type" content="{{ meta.type or 'website' }}">
+<meta property="og:title" content="{{ meta.title }}">
+{% if meta.desc %}<meta property="og:description" content="{{ meta.desc }}">{% endif %}
+{% if meta.canonical %}<meta property="og:url" content="{{ meta.canonical }}">{% endif %}
+{% if meta.image %}<meta property="og:image" content="{{ meta.image }}">
+<meta name="twitter:card" content="summary_large_image">
+{% else %}<meta name="twitter:card" content="summary">{% endif %}
+<meta name="twitter:title" content="{{ meta.title }}">
+{% if meta.desc %}<meta name="twitter:description" content="{{ meta.desc }}">{% endif %}
+{% endif %}
 <script>(function(){try{var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <link rel="stylesheet" href="{{ root }}style.css">
+{% if ga_id %}
+<script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_id }}"></script>
+<script>
+window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
+gtag('js',new Date());
+gtag('config','{{ ga_id }}');
+</script>
+{% endif %}
 </head>
 <body>
 <div class="topbar"><div class="inner">

@@ -31,8 +31,10 @@ def test_transfer_badge_is_none_for_no_axis():
 
 
 def test_transfer_group_splits_eight_values_without_gap():
-    assert transfer_group("in_link") == "진행 중"
-    assert transfer_group("out_link") == "진행 중"
+    # 진행 중은 영입 · 방출로 갈라져 있다 (2026-08-23) — 한 묶음일 때는 들어오는
+    # 선수와 나가는 선수가 섞여 어느 쪽을 보러 왔든 목록을 통째로 훑어야 했다.
+    assert transfer_group("in_link") == "영입 진행 중"
+    assert transfer_group("out_link") == "방출 진행 중"
     assert transfer_group("in_done") == "이적 확정"
     assert transfer_group("out_done") == "이적 확정"
     assert transfer_group("loan_in") == "이적 확정"
@@ -46,7 +48,7 @@ def test_transfer_group_splits_eight_values_without_gap():
 
 def test_transfer_groups_order_and_collapse_flag():
     assert TRANSFER_GROUPS == [
-        ("진행 중", False), ("이적 확정", False),
+        ("영입 진행 중", False), ("방출 진행 중", False), ("이적 확정", False),
         ("이적 무산", True), ("타 클럽행", True)]
 
 
@@ -429,12 +431,38 @@ def test_render_players_omits_badge_in_single_value_groups():
 
 
 def test_render_players_keeps_badge_where_group_has_several_values():
-    # 진행 중 그룹은 영입 링크 · 방출 링크가 섞이므로 배지가 정보를 준다
+    # 이적 확정 그룹은 영입 완료 · 방출 완료 · 임대가 섞이므로 배지가 정보를 준다.
+    # 진행 중을 영입 · 방출로 가른 뒤 (2026-08-23) 값이 여럿인 그룹은 여기 하나다.
+    arts = [_art("h1", 1, "official")]
+    players = [_player(1, "Zubimendi", "수비멘디", "in_done",
+                       [{"content_hash": "h1", "stage": "official"}])]
+    html = render_players(build_player_entries(arts, players), NOW)
+    assert "영입 완료" in html
+
+
+def test_render_players_keeps_the_axis_badge_where_it_carries_a_colour():
+    # 갈라진 두 그룹은 값이 하나씩이라 배지가 그룹 머리를 되풀이하지만, 초록 · 빨강으로
+    # 축을 한 번 더 말한다 — 카드 하나만 떼어 봐도 들어오는 쪽인지 보이게 남긴다
+    # (2026-08-23 · 목업으로 고름).
     arts = [_art("h1", 1, "interest")]
     players = [_player(1, "Zubimendi", "수비멘디", "out_link",
                        [{"content_hash": "h1", "stage": "interest"}])]
     html = render_players(build_player_entries(arts, players), NOW)
-    assert "방출 링크" in html
+    assert "방출 진행 중" in html          # 그룹 머리
+    assert "t-outlink" in html            # 색을 나르는 배지도 함께 남는다
+
+
+def test_render_players_drops_the_axis_badge_where_it_is_only_a_repeat():
+    # 이 둘은 배지가 회색이라 색 신호가 없고 그룹 머리를 되풀이하기만 한다
+    # — 「링크 소멸」 은 같은 값을 다른 말로 부르고, 「타 클럽행」 은 글자까지 같다.
+    arts = [_art("h1", 1, "rumour"), _art("h2", 2, "collapsed")]
+    players = [_player(1, "Nduka", "은두카", "other_club",
+                       [{"content_hash": "h1", "stage": "rumour"}]),
+               _player(2, "Vinicius", "비니시우스", "link_dropped",
+                       [{"content_hash": "h2", "stage": "collapsed"}])]
+    html = render_players(build_player_entries(arts, players), NOW)
+    assert "링크 소멸" not in html
+    assert "t-otherclub" not in html
 
 
 def test_render_players_groups_and_collapses():
@@ -575,14 +603,15 @@ def test_style_css_defines_all_eight_transfer_badge_classes():
 
 
 def test_transfer_badge_color_splits_in_and_out():
-    # 색이 계열을 나른다 — 영입 3종은 red, 방출 3종은 green.
+    # 색이 계열을 나른다 — 영입 3종은 green, 방출 3종은 red (2026-08-23 뒤집음).
+    # 반대로 두었던 자리라 처음 보는 사람이 들어오는 선수와 나가는 선수를 뒤집어 읽었다.
     css = (STATIC / "style.css").read_text(encoding="utf-8")
     for cls in ("t-inlink", "t-indone", "t-loanin"):
         line = next(l for l in css.splitlines() if l.startswith(f".{cls}{{"))
-        assert "var(--red)" in line and "var(--green)" not in line
+        assert "var(--green)" in line and "var(--red)" not in line
     for cls in ("t-outlink", "t-outdone", "t-loanout"):
         line = next(l for l in css.splitlines() if l.startswith(f".{cls}{{"))
-        assert "var(--green)" in line and "var(--red)" not in line
+        assert "var(--red)" in line and "var(--green)" not in line
 
 
 def test_transfer_badge_never_uses_white_fill():
@@ -703,3 +732,16 @@ def test_app_js_guards_sidebar_null_check_for_daylist_items():
     assert 'class="side"' not in html, (
         "선수 페이지가 sidebar 있음 (널 검사 필요성 전제 깨짐)"
     )
+
+
+def test_render_players_sorts_group_members_by_korean_surname():
+    # 색인은 성 (ko_name) 가나다순이다 (2026-08-23 공개 준비).
+    # 최근 보도순이던 자리라, 최근 보도가 앞선 선수에게 뒤 글자의 성을 주어
+    # 정렬 기준이 실제로 바뀌었는지 본다.
+    arts = [_art("h1", 1, "rumour"), _art("h2", 9, "rumour")]
+    players = [_player(1, "Gyokeres", "요케레스", "in_link",
+                       [{"content_hash": "h1", "stage": "rumour"}]),
+               _player(2, "Nelson", "넬슨", "in_link",
+                       [{"content_hash": "h2", "stage": "rumour"}])]
+    html = render_players(build_player_entries(arts, players), NOW)
+    assert html.index("넬슨") < html.index("요케레스")
