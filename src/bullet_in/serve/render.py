@@ -18,6 +18,33 @@ from bullet_in.storage.players import MENTION
 
 log = logging.getLogger(__name__)
 
+# 공개 주소 — canonical · og:url 의 절대 URL 기준 (커스텀 도메인 미사용 · 2026-08-23 확정)
+SITE_URL = "https://bullet-in.pages.dev"
+
+# 목록 · 선수 페이지는 색인하고 기사 상세는 뺀다 (2026-08-23 확정).
+# 상세를 색인시키면 번역문이 원문 대신 검색에 뜬다 — 한 번 색인되면 빼는 데 시간이 걸려
+# 공개 전에 정하는 것이 압도적으로 싸다. follow 는 남겨 목록 · 선수 페이지로 크롤이 흐르게 한다.
+ARTICLE_ROBOTS = "noindex,follow"
+
+_SITE_DESC = ("아스날 이적 · 팀 소식을 BBC · 스카이스포츠 · 가디언 등 여러 매체에서 모아 "
+              "한국어로 정리합니다. 보도마다 공신력 등급과 이적 진행 단계를 함께 표시합니다.")
+
+# GA4 측정 ID — 빈 값이면 계측 스크립트를 아예 넣지 않는다 (로컬 렌더 · 목업에서 계측 0).
+# 공개 값이라 숨길 것이 없으나, 속성을 만들기 전에는 채울 수 없어 환경변수로도 받는다.
+GA_MEASUREMENT_ID = os.environ.get("GA_MEASUREMENT_ID", "")
+
+
+def page_meta(title: str, desc: str, path: str = "", *,
+              robots: str | None = None, og_type: str = "website",
+              image: str | None = None) -> dict:
+    """페이지 <head> 의 검색 · 링크 미리보기 메타. path 는 사이트 루트 기준 경로다.
+
+    링크 미리보기는 태그가 있는 것과 커뮤니티 · 메신저가 그것을 어떻게 그리는가가
+    다른 층이라, 값을 넣은 뒤 실물로 한 번 확인한다 (2026-08-23 공개 준비)."""
+    return {"title": title, "desc": desc, "canonical": f"{SITE_URL}/{path}",
+            "robots": robots, "type": og_type, "image": image}
+
+
 _TPL_DIR = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
 
@@ -855,6 +882,7 @@ def _env() -> Environment:
         autoescape=select_autoescape(default_for_string=True, default=True),
     )
     env.globals["stages"] = _stage.SIDEBAR_STAGES
+    env.globals["ga_id"] = GA_MEASUREMENT_ID
     env.filters["md_bold"] = _md_bold
     return env
 
@@ -1091,7 +1119,9 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
     return _env().get_template("index.html.j2").render(
         lead=top["lead"], mains=top["mains"], day_blocks=day_blocks,
         gossip=gossip, gossip_n=gossip_reps, gossip_hidden=gossip_hidden,
-        facets=facets, active="home", root="")
+        facets=facets, active="home", root="",
+        meta=page_meta("Bullet-in · 아스날 이적 뉴스", _SITE_DESC,
+                       image=(top["lead"] or {}).get("image_url")))
 
 
 def render_all(articles: list[dict], sources: dict, now: datetime,
@@ -1104,7 +1134,10 @@ def render_all(articles: list[dict], sources: dict, now: datetime,
     facets = facet_counts(articles, sources, directory=directory, registry=registry,
                           outlet_dir=outlet_dir)
     return _env().get_template("all.html.j2").render(
-        days=days, facets=facets, active="all", root="")
+        days=days, facets=facets, active="all", root="",
+        meta=page_meta("전체 기사 · Bullet-in",
+                       "아스날 관련 보도를 묶음 없이 시간순으로 모아 봅니다. "
+                       "매체 · 기자 · 이적 단계로 걸러 볼 수 있습니다.", "all.html"))
 
 
 # ── 사건 묶음 (spec2 §4-7) — 선수 사전 (players 확정 표기) 으로 묶는다 ──────
@@ -1142,24 +1175,35 @@ _TRANSFER_BADGE: dict[str, tuple[str, str]] = {
     "other_club": ("타 클럽행", "t-otherclub"),
 }
 
-# 색인 4그룹 (스펙 §4.1) — (그룹명, 기본 접힘).
-# 무산 · 타 클럽행은 되짚기용이라 접어 두고, 접기 · 펼치기는 네 그룹 모두에 둔다.
+# 색인 5그룹 (스펙 §4.1) — (그룹명, 기본 접힘).
+# 무산 · 타 클럽행은 되짚기용이라 접어 두고, 접기 · 펼치기는 다섯 그룹 모두에 둔다.
+#
+# 「진행 중」 을 영입 · 방출로 갈랐다 (2026-08-23 공개 준비 · 사용자 지시).
+# 한 묶음일 때는 들어오는 선수와 나가는 선수가 섞여, 어느 쪽을 보러 왔든 목록을
+# 통째로 훑어야 했다. 두 그룹의 축 배지는 그대로 둔다 (아래 _NO_BADGE_GROUPS).
 TRANSFER_GROUPS: list[tuple[str, bool]] = [
-    ("진행 중", False), ("이적 확정", False),
+    ("영입 진행 중", False), ("방출 진행 중", False), ("이적 확정", False),
     ("이적 무산", True), ("타 클럽행", True),
 ]
 
 _TRANSFER_GROUP_OF: dict[str, str] = {
-    "in_link": "진행 중", "out_link": "진행 중",
+    "in_link": "영입 진행 중", "out_link": "방출 진행 중",
     "in_done": "이적 확정", "out_done": "이적 확정",
     "loan_in": "이적 확정", "loan_out": "이적 확정",
     "link_dropped": "이적 무산", "other_club": "타 클럽행",
 }
 
-# 값이 하나뿐인 그룹 — 색인에서 축 배지가 그룹명을 되풀이하거나 (타 클럽행) 같은 값을
-# 다른 말로 부른다 (이적 무산 그룹의 "링크 소멸"). 그룹 안에서 가릴 것이 없으므로
-# 색인에서는 배지를 생략한다 (2026-08-11). 선수 페이지는 그룹 맥락이 없어 그대로 붙인다.
-_SOLE_VALUE_GROUPS = {g for g, n in Counter(_TRANSFER_GROUP_OF.values()).items() if n == 1}
+# 색인에서 축 배지를 생략하는 그룹 (2026-08-11 신설 · 2026-08-23 기준 개정).
+#
+# 원래 기준은 "값이 하나뿐인 그룹" 이었다 — 배지가 그룹명을 되풀이하거나 (타 클럽행)
+# 같은 값을 다른 말로 부르기 때문이다 (이적 무산 그룹의 "링크 소멸").
+# 진행 중을 영입 · 방출로 가르면서 그 기준이 두 그룹을 더 삼켰고, 배지가 43개에서
+# 9개로 줄었다. 그래서 기준을 "배지가 색을 나르는가" 로 바꿨다.
+# 영입 · 방출 배지는 머리와 말이 겹쳐도 초록 · 빨강으로 축을 한 번 더 말한다 —
+# 카드 하나만 떼어 봐도 들어오는 쪽인지 나가는 쪽인지 보이게 남긴다.
+# 아래 둘은 배지가 회색이라 되풀이만 남으므로 그대로 생략한다.
+# 선수 페이지는 그룹 맥락이 없어 어느 쪽이든 배지를 그대로 붙인다.
+_NO_BADGE_GROUPS = {"이적 무산", "타 클럽행"}
 
 
 def transfer_badge(status: str | None) -> dict | None:
@@ -1370,19 +1414,27 @@ def ended_marker(entries: list[dict], name: str | None = None,
 
 
 def render_players(entries: list[dict], now: datetime) -> str:
-    """선수 색인 (스펙 §4) — 4그룹 · 그룹 안 최근 보도일 내림차순."""
+    """선수 색인 (스펙 §4) — 4그룹 · 그룹 안 한글 성 가나다순.
+
+    최근 보도순에서 성 가나다순으로 바꿨다 (2026-08-23 공개 준비): 찾으려는 선수가
+    어디 있는지 목록을 처음부터 훑어야 알 수 있었다.
+    정렬 키는 성 (ko_name) 이고 화면에 뜨는 것은 전체 이름이라, 카드에 보이는 첫
+    글자와 차례가 어긋나 보일 수 있다 — 명단을 성으로 세우는 관례를 따른 것이다."""
     groups = []
     for name, collapsed in TRANSFER_GROUPS:
         members = [e for e in entries if transfer_group(e["transfer_status"]) == name]
-        members.sort(key=lambda e: e["last_ts"], reverse=True)
+        members.sort(key=lambda e: (e.get("ko_name") or e["name"]))
         for e in members:
-            e["_badge"] = (None if name in _SOLE_VALUE_GROUPS
+            e["_badge"] = (None if name in _NO_BADGE_GROUPS
                            else transfer_badge(e["transfer_status"]))
             e["_stage"] = display_stage(e["stage"])
             e["_last"] = fmt_date(to_kst(e["last_ts"]))
         groups.append({"name": name, "collapsed": collapsed, "members": members})
     return _env().get_template("players.html.j2").render(
-        groups=groups, active="players", root="", solo=True)
+        groups=groups, active="players", root="", solo=True,
+        meta=page_meta("선수 · Bullet-in",
+                       "아스날 이적설이 붙은 선수별로 관련 보도를 모아 "
+                       "어디까지 진행됐는지 정리했습니다.", "players.html"))
 
 
 def render_player(entry: dict, sources: dict, now: datetime,
@@ -1420,7 +1472,11 @@ def render_player(entry: dict, sources: dict, now: datetime,
         stage=display_stage(entry["stage"]), nodes=nodes,
         articles=[decorated[a["content_hash"]] for a in entry["articles"]],
         last=fmt_date(to_kst(entry["last_ts"])),
-        active="players", root="../", solo=True)
+        active="players", root="../", solo=True,
+        meta=page_meta(f"{entry['name']} · Bullet-in",
+                       f"{entry['name']} 관련 아스날 이적 보도 {entry['count']}건을 "
+                       "진행 단계별로 모았습니다.",
+                       f"player/{entry['slug']}.html", og_type="profile"))
 
 
 def load_clubs(path: str = "config/club_map.yaml") -> dict:
@@ -1577,7 +1633,10 @@ def is_gossip_cluster(cluster: dict) -> bool:
 def render_about() -> str:
     """소개 페이지 (spec1 §10) — 사이드바 없는 프로즈 페이지."""
     return _env().get_template("about.html.j2").render(
-        active="about", root="", about_page=True)
+        active="about", root="", about_page=True,
+        meta=page_meta("소개 · Bullet-in",
+                       "Bullet-in 이 어떤 소식을 어떻게 모으고, 공신력 등급을 "
+                       "무엇으로 매기는지 정리한 페이지입니다.", "about.html"))
 
 
 def build_neighbors(ordered: list[dict], idx: int, sources: dict,
@@ -1613,7 +1672,12 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
             article["_body_blocks"], roundup_attrib_counts(article.get("body_source")))
     return _env().get_template("detail.html.j2").render(
         a=article, neighbors=neighbors, active=None, root="../", facets=facets,
-        chips=chips or [])
+        chips=chips or [],
+        meta=page_meta(f"{article['_title']} · Bullet-in",
+                       (article.get("summary_ko") or article["_title"]),
+                       f"article/{current_hash}.html",
+                       robots=ARTICLE_ROBOTS, og_type="article",
+                       image=article.get("image_url")))
 
 
 def player_chips(entries: list[dict]) -> dict[str, list[dict]]:

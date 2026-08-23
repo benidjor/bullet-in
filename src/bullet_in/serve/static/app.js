@@ -5,6 +5,69 @@
 // URL 계약: ?outlet=&journalist=&tier=&stage=&bucket=other&sort=confidence|views&q=  (다중 선택은 키 반복)
 // 결합 규칙 (§8): (소스 OR 기자) AND 공신력 AND 영입 단계 AND 검색어
 
+// ── 계측 (공개 준비 2026-08-23) ─────────────────────────────────────
+// 세는 것은 넷이다 — 유입 경로 · 카드 클릭 · 필터 사용 · 원문 이탈.
+// 고른 기준은 「이 값이 다르게 나오면 내가 다르게 행동할까」 이고, 그렇지 않은 지표는
+// 안 센다. 택소노미 본 설계는 이적시장 마감 뒤로 미루고 이름 규칙만 열어 둔다.
+//
+// 모든 이벤트에 익명 식별자 (bi_cid) 와 시각 (bi_ts) 을 싣는다.
+// 이 둘은 나중에 채울 수 없는 값이라 처음부터 넣는다 — 없이 모으면 공개 주간의
+// 행동을 영영 사람 단위로 못 묶는다.
+// 세션 경계는 여기서 정하지 않는다. 식별자와 시각만 있으면 세션은 나중에 어떤
+// 정의로든 다시 만들 수 있고, 지금 정의를 굳히면 그때 바꾸기 어려워진다.
+const CID_KEY = 'bulletin_cid';
+const BI_CID = (function clientId() {
+  try {
+    let v = localStorage.getItem(CID_KEY);
+    if (!v) {
+      v = (crypto.randomUUID ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      localStorage.setItem(CID_KEY, v);
+    }
+    return v;
+  } catch { return 'nostore'; }   // 저장이 막힌 브라우저 — 이벤트는 그대로 보낸다
+})();
+
+function track(name, params) {
+  if (typeof gtag !== 'function') return;   // 측정 ID 미설정 · 차단기 — 조용히 넘어간다
+  gtag('event', name, Object.assign({}, params,
+    { bi_cid: BI_CID, bi_ts: new Date().toISOString() }));
+}
+
+// ① 유입 경로 — 어느 커뮤니티 글이 사람을 데려오나 (다음에 어디에 알릴지의 근거)
+(function trackEntry() {
+  const p = new URLSearchParams(location.search);
+  track('bi_entry', {
+    entry_path: location.pathname,
+    referrer: document.referrer || '(none)',
+    utm_source: p.get('utm_source') || '',
+    utm_medium: p.get('utm_medium') || '',
+    utm_campaign: p.get('utm_campaign') || '',
+  });
+})();
+
+// ② 카드 클릭 — 이적설인가 오피셜인가 · 무엇을 보러 오나
+document.addEventListener('click', (e) => {
+  const card = e.target.closest?.('a.item, a.relitem, a.mitem, a.pcard, a.tltitle');
+  if (!card) return;
+  track('bi_card_click', {
+    card_hash: card.dataset.hash || '',
+    card_stage: card.dataset.stage || '',
+    card_tier: card.dataset.tier || '',
+    card_outlet: card.dataset.outlet || '',
+    card_surface: card.classList[0] || '',
+  });
+});
+
+// ④ 원문 이탈 — 탐색 도구로 기능하는가 (색인 정책의 근거 데이터이기도 하다)
+document.querySelectorAll('a[data-exit]').forEach(a => {
+  a.addEventListener('click', () => track('bi_origin_exit', {
+    card_hash: a.dataset.hash || '',
+    card_outlet: a.dataset.outlet || '',
+    exit_from: a.dataset.exit,          // origin_button · excerpt_note
+  }));
+});
+
 // ── 조회 기록 (조회순 정렬용) ──────────────────────────────────────
 const VIEWS_KEY = 'bulletin_views';
 function readViews() {
@@ -232,6 +295,27 @@ function syncTierAll(changed) {
   }
 }
 
+// ③ 필터 사용 — 가장 공들인 축 (기자 · 언론사 · 단계) 이 실제로 쓰이나.
+// 「적용」 을 누른 순간에만 센다 — 검색어 입력은 글자마다 applyFilters 를 부르므로
+// 거기에 붙이면 한 번의 검색이 이벤트 수십 건이 된다.
+function trackFilterApply() {
+  const q = (searchInput?.value || '').trim();
+  const outlets = checkedVals('outlet');
+  const journalists = checkedVals('journalist');
+  const tiers = checkedVals('tier').filter(v => v !== 'all');
+  const stages = checkedVals('stage');
+  const other = boxesOf('bucket').some(c => c.checked);
+  track('bi_filter_apply', {
+    n_outlet: outlets.length, n_journalist: journalists.length,
+    n_tier: tiers.length, n_stage: stages.length,
+    has_other: other ? 1 : 0, has_query: q ? 1 : 0,
+    // 어느 축을 실제로 쓰는지 한 칸에 모아 둔다 — 조합을 세기 쉽게
+    axes: [outlets.length && 'outlet', journalists.length && 'journalist',
+           tiers.length && 'tier', stages.length && 'stage',
+           other && 'other', q && 'query'].filter(Boolean).join('+') || '(none)',
+  });
+}
+
 // ── 필터 적용 ──────────────────────────────────────────────────────
 // 기사 단위 도달 (spec2 §6.3): 접힌 관련 보도 · 밴드 재출현 카드까지 판정한다.
 // 블록은 구성 기사 중 하나라도 매칭이면 표시 — 대표가 조건 밖이면 흐림 (.ctxdim),
@@ -437,7 +521,7 @@ if (items.length && side) {                               // 인덱스
     }
     applyBtn?.classList.add('dirty');
   });
-  if (applyBtn) applyBtn.onclick = applyFilters;
+  if (applyBtn) applyBtn.onclick = () => { trackFilterApply(); applyFilters(); };
   if (resetBtn) resetBtn.onclick = () => { resetAll(); applyFilters(); };
   if (sortSel) sortSel.onchange = () => { sortBlocks(); const qs = filterParams().toString();
     history.replaceState(null, '', qs ? `?${qs}` : location.pathname); };
@@ -452,6 +536,7 @@ if (items.length && side) {                               // 인덱스
     applyBtn?.classList.add('dirty');
   });
   if (applyBtn) applyBtn.onclick = () => {
+    trackFilterApply();
     const qs = filterParams().toString();
     location.href = qs ? `${indexHref}?${qs}` : indexHref;
   };

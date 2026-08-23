@@ -310,9 +310,11 @@ def test_app_js_opens_other_when_an_outlet_or_journalist_is_picked():
     assert "isOther ? (showOther || (srcActive && stageEnums.size === 0))" in js
 
 
-def test_index_footer_links_to_ops_page():
+def test_index_footer_does_not_link_to_ops_page():
+    # 운영 뷰는 공개 화면에서 링크하지 않는다 (2026-08-23 공개 준비) — 배포에는
+    # 그대로 올라가므로 주소를 아는 사람은 볼 수 있고, 색인만 ops.html 쪽에서 막는다.
     html = render_index([_row()], SOURCES, NOW)
-    assert '<a href="ops.html">수집 현황</a>' in html
+    assert "ops.html" not in html
 
 
 from bullet_in.serve.render import interleave_body, _decorate as _dec, render_article as _ra
@@ -905,23 +907,27 @@ def test_detail_note_stays_for_translated_body():
     assert "원문 본문을 확보하지 못해" not in html
 
 
-def test_linked_player_badge_names_the_connected_player():
-    # 배지 문구는 연결된 선수 이름 (2026-08-02 확정) — 제목만 봐서는 이 글이 왜
-    # 아스날 피드에 있는지 알 수 없을 때, 이름이 그 이유를 대신 말해 준다
+def test_linked_player_badge_is_not_displayed():
+    # 배지 표시는 걷어냈다 (2026-08-23 공개 준비) — 첫인상에서 뜻이 안 통하는 문구였다.
+    # 값 자체는 남긴다: 이 값이 기타 단계 카드의 노출 예외 근거이자 사이드바 기타
+    # 계수의 분모라, 지우면 화면에서 사라지는 것이 배지 하나가 아니다.
     html = render_index(
         [_row(content_hash="hctx", linked_players="기마랑이스",
               title_ko="뉴캐슬, 에디 하우 감독 즉시 사임")],
         SOURCES, NOW)
-    assert '<span class="ctx">기마랑이스 관련</span>' in html
+    assert '<span class="ctx">' not in html
+    assert "기마랑이스 관련" not in html
+    assert 'data-ctx="1"' in html                 # 노출 예외는 그대로 걸린다
 
 
-def test_linked_player_badge_folds_multiple_names():
-    # 여럿이 연결되면 첫 선수 + 나머지 인원 — 배지가 카드 머리에서 길어지지 않게
-    html = render_index(
-        [_row(content_hash="hmulti", linked_players="기마랑이스|토날리|스콧",
-              title_ko="엘리엇 앤더슨 이적에 따른 미드필더 시장 연쇄 반응")],
-        SOURCES, NOW)
-    assert '<span class="ctx">기마랑이스 외 2명 관련</span>' in html
+from bullet_in.serve.render import linked_player_label
+
+
+def test_linked_player_label_still_folds_multiple_names():
+    # 문구를 만드는 규칙은 그대로 둔다 — 표시만 뗐다는 것을 값 층에서 확인한다.
+    assert linked_player_label("기마랑이스|토날리|스콧",
+                               "엘리엇 앤더슨 이적에 따른 미드필더 시장 연쇄 반응") \
+        == "기마랑이스 외 2명 관련"
 
 
 def test_linked_player_badge_absent_without_linked_names():
@@ -1017,3 +1023,71 @@ def test_detail_origin_block_keeps_the_stored_byline_for_a_single_author():
     # 배포 시점 무변화 — 소급 전에는 authors 가 비어 있고 원문 블록이 안 흔들려야 한다
     a = _dec(_row(journalist="온스테인", body_ko="본문"), SOURCES, NOW, directory=_CO_DIR)
     assert "<span>온스테인</span>" in _ra(a, [], "h1", SOURCES, NOW)
+
+
+# ── 공개 준비 · 검색과 링크 미리보기 메타 (2026-08-23) ────────────────────
+# 태그가 산출물에 있는 것과 커뮤니티 · 메신저가 그것을 어떻게 그리는가는 다른 층이다.
+# 여기서 보는 것은 앞쪽 하나뿐이고, 뒤쪽은 실물 링크로 따로 확인한다.
+from bullet_in.serve.render import SITE_URL, ARTICLE_ROBOTS, render_players as _rp
+
+
+def test_index_carries_description_canonical_and_open_graph():
+    html = render_index([_row()], SOURCES, NOW)
+    assert '<meta name="description" content="' in html
+    assert f'<link rel="canonical" href="{SITE_URL}/">' in html
+    assert f'<meta property="og:url" content="{SITE_URL}/">' in html
+    assert '<meta property="og:title" content="Bullet-in · 아스날 이적 뉴스">' in html
+    assert '<meta property="og:site_name" content="Bullet-in">' in html
+
+
+def test_list_and_player_pages_are_indexable():
+    # 색인 대상 — robots 메타를 아예 달지 않아 기본값 (색인 허용) 으로 둔다
+    assert '<meta name="robots"' not in render_index([_row()], SOURCES, NOW)
+    assert '<meta name="robots"' not in _rp([], NOW)
+
+
+def test_article_detail_is_noindex_but_still_followed():
+    # 번역문이 원문 대신 검색에 뜨는 것을 막는다. follow 는 남겨 목록 · 선수 페이지로
+    # 크롤이 흐르게 한다 (2026-08-23 확정).
+    a = _dec(_row(content_hash="hmeta", body_ko="본문"), SOURCES, NOW)
+    html = _ra(a, [], "hmeta", SOURCES, NOW)
+    assert f'<meta name="robots" content="{ARTICLE_ROBOTS}">' in html
+    assert ARTICLE_ROBOTS == "noindex,follow"
+    assert f'<link rel="canonical" href="{SITE_URL}/article/hmeta.html">' in html
+    assert '<meta property="og:type" content="article">' in html
+
+
+def test_article_with_an_image_uses_the_large_preview_card():
+    a = _dec(_row(content_hash="himg", body_ko="본문",
+                  image_url="https://example.com/a.jpg"), SOURCES, NOW)
+    html = _ra(a, [], "himg", SOURCES, NOW)
+    assert '<meta property="og:image" content="https://example.com/a.jpg">' in html
+    assert '<meta name="twitter:card" content="summary_large_image">' in html
+
+
+def test_no_analytics_script_without_a_measurement_id():
+    # 측정 ID 가 비면 스크립트를 아예 넣지 않는다 — 로컬 렌더 · 목업에서 계측이 0 이어야
+    # 목업을 띄우는 것만으로 공개 주간 수치가 흐려지지 않는다.
+    assert "googletagmanager" not in render_index([_row()], SOURCES, NOW)
+
+
+def test_analytics_script_is_wired_when_a_measurement_id_is_set(monkeypatch):
+    monkeypatch.setattr("bullet_in.serve.render.GA_MEASUREMENT_ID", "G-TEST123")
+    html = render_index([_row()], SOURCES, NOW)
+    assert "googletagmanager.com/gtag/js?id=G-TEST123" in html
+    assert "gtag('config','G-TEST123')" in html
+
+
+def test_origin_links_are_marked_for_the_exit_event():
+    # 원문 이탈은 이 표식으로 센다 — 표식이 없으면 app.js 가 걸 자리를 못 찾는다.
+    a = _dec(_row(content_hash="hexit", body_ko="본문"), SOURCES, NOW)
+    html = _ra(a, [], "hexit", SOURCES, NOW)
+    assert 'data-exit="origin_button"' in html
+    assert 'data-hash="hexit"' in html
+
+
+def test_article_without_an_image_falls_back_to_the_small_preview_card():
+    a = _dec(_row(content_hash="hnoimg", body_ko="본문", image_url=None), SOURCES, NOW)
+    html = _ra(a, [], "hnoimg", SOURCES, NOW)
+    assert "og:image" not in html
+    assert '<meta name="twitter:card" content="summary">' in html
