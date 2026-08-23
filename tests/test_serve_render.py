@@ -1118,3 +1118,26 @@ def test_article_without_an_image_falls_back_to_the_small_preview_card():
     html = _ra(a, [], "hnoimg", SOURCES, NOW)
     assert "og:image" not in html
     assert '<meta name="twitter:card" content="summary">' in html
+
+
+# ── 접속 통계 고지 — 계측이 켜진 렌더에만 싣는다 ─────────────────────────
+# 안 모으면서 모은다고 적으면 그 문장 자체가 사실과 어긋난다. 그래서 고지와 계측
+# 스크립트가 같은 조건에 걸려 있고, 아래 두 검사가 그 짝을 지킨다.
+from bullet_in.serve.render import render_about as _ra_about
+
+
+def test_privacy_notice_is_absent_when_analytics_is_off():
+    assert "접속 통계" not in _ra_about()
+    assert "접속 통계 안내" not in render_index([_row()], SOURCES, NOW)
+
+
+def test_privacy_notice_appears_with_analytics(monkeypatch):
+    monkeypatch.setattr("bullet_in.serve.render.GA_MEASUREMENT_ID", "G-TEST123")
+    about = _ra_about()
+    assert '<h2 id="stats">접속 통계</h2>' in about
+    assert "Google 애널리틱스" in about
+    assert "14개월" in about
+    # 목록 · 상세 어디서든 고지로 갈 수 있어야 한다
+    assert 'href="about.html#stats"' in render_index([_row()], SOURCES, NOW)
+    a = _dec(_row(content_hash="hnote", body_ko="본문"), SOURCES, NOW)
+    assert 'href="../about.html#stats"' in _ra(a, [], "hnote", SOURCES, NOW)

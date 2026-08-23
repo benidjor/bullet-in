@@ -73,6 +73,6 @@
 
 <footer class="sitefoot">
   <p>본문은 자동 번역이며, 저작권은 각 매체에 있습니다. 원문 링크를 통해 원 기사를 확인하실 수 있습니다.</p>
-  <p><a href="{{ root }}about.html">소개</a> · <a href="{{ root }}index.html">목록으로</a></p>
+  <p><a href="{{ root }}about.html">소개</a> · <a href="{{ root }}index.html">목록으로</a>{% if ga_id %} · <a href="{{ root }}about.html#stats">접속 통계 안내</a>{% endif %}</p>
 </footer>
 {% endblock %}
