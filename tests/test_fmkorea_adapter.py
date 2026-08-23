@@ -1314,3 +1314,42 @@ def test_marked_byline_still_wins_over_the_unmarked_rule():
     from bullet_in.adapters.fmkorea import extract_body_authors
     body = "By KIERAN GILL, MAIL SPORT REPORTER 아스날이"
     assert extract_body_authors(body) == ["KIERAN GILL"]
+
+
+SHORT_BODY = ('<div class="xe_content"><p>아스날 본문.</p>'
+              '<p>https://t.co/abcd1234</p></div>')
+
+
+@respx.mock
+def test_short_link_is_stored_as_the_address_it_resolves_to():
+    # 안건 η — 클라이언트가 이미 리다이렉트를 따라가는데 저장만 요청 전 주소로 해서
+    # 단축 주소가 그대로 남았다. 그러면 매체명과 도메인이 어긋나 보인다.
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(
+        return_value=httpx.Response(200, text=(
+            '<a class="hx" href="/index.php?document_srl=111">[A BOLA] 아스날 A</a>')))
+    respx.get("https://www.fmkorea.com/111").mock(
+        return_value=httpx.Response(200, text=SHORT_BODY))
+    respx.get("https://t.co/abcd1234").mock(
+        return_value=httpx.Response(301, headers={"Location": "https://www.abola.pt/x"}))
+    respx.get("https://www.abola.pt/x").mock(return_value=httpx.Response(200, text=FREE_ART))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    [item] = asyncio.run(a.fetch())
+    assert item.url == "https://www.abola.pt/x"
+
+
+@respx.mock
+def test_a_blocked_origin_keeps_the_address_we_parsed():
+    # 접속에 실패하면 리다이렉트 뒤 주소를 알 수 없다 — 원래대로 게시글에서 읽은 주소를 쓴다
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(
+        return_value=httpx.Response(200, text=(
+            '<a class="hx" href="/index.php?document_srl=111">[BBC] 아스날 A</a>')))
+    respx.get("https://www.fmkorea.com/111").mock(
+        return_value=httpx.Response(200, text=FREE_BODY))
+    respx.get("https://ex.test/a").mock(return_value=httpx.Response(403))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    [item] = asyncio.run(a.fetch())
+    assert item.url == "https://ex.test/a"

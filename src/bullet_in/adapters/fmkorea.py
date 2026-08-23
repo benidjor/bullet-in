@@ -2,7 +2,7 @@ from __future__ import annotations
 import asyncio
 from collections import Counter
 from datetime import datetime, timezone, timedelta
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 import re
 import logging
 import httpx
@@ -438,6 +438,7 @@ class FmkoreaAdapter:
             post_body = _body_text(html, self.body_selector)
             post_authors = extract_body_authors(post_body)
             origin_authors: list[str] = []
+            stored_url = orig       # 원문 접속에 성공하면 리다이렉트 뒤 주소로 바뀐다
             if outlet in PAYWALLED_OUTLETS:
                 body = post_body
                 if _is_repost_blocked(html):
@@ -461,6 +462,11 @@ class FmkoreaAdapter:
                     # 원문 차단 (실측 26건 중 25건이 406 · 403 · 페이월) — 게시글 본문으로 폴백.
                     log.info("fmkorea 원문 접속 실패 — 게시글 본문 채택 url=%s", orig)
                 else:
+                    # 리다이렉트를 따라간 뒤의 주소를 저장한다 (안건 η · 2026-08-23).
+                    # 클라이언트가 이미 follow_redirects 로 최종 페이지를 받아 왔는데
+                    # 저장만 요청 전 주소로 해서, 단축 주소 (t.co) 가 그대로 남아
+                    # 매체명과 도메인이 어긋나 보였다. 새 요청은 늘지 않는다.
+                    stored_url = str(ro.url)
                     # 저자는 본문 채택 여부와 무관하다 — 원문이 오류 안내여서 등급이
                     # 1 로 내려가도 페이지의 구조화 정보에는 저자가 남아 있다.
                     origin_authors = extract_authors(ro.text)
@@ -496,8 +502,13 @@ class FmkoreaAdapter:
                 pub = (post_dt, "time") if post_dt else None
             extra = ({"published": pub[0].isoformat(), "published_precision": pub[1]}
                      if pub else {})
+            # 말머리 매체명과 저장 주소의 도메인을 짝으로 남긴다 (안건 η · 2026-08-23).
+            # 판정을 붙이지 않고 짝만 적는다 — 사전으로 불일치를 가리려 하면 사전에
+            # 없는 도메인 (전재 사이트 · 2차 인용) 이 구조적으로 검사에서 빠진다.
+            log.info("fmkorea 매체명 · 도메인 짝 — outlet=%s host=%s url=%s",
+                     outlet or "(없음)", urlparse(stored_url).netloc or "(없음)", stored_url)
             out.append(RawItem(
-                source_id=self.source_id, source_type="html", url=orig,
+                source_id=self.source_id, source_type="html", url=stored_url,
                 fetched_at=now,
                 raw_payload={"title": title, "body": body, "body_level": body_level,
                              "lang": lang,
