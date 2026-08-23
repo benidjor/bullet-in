@@ -1065,6 +1065,33 @@ def test_article_with_an_image_uses_the_large_preview_card():
     assert '<meta name="twitter:card" content="summary_large_image">' in html
 
 
+def test_ending_card_is_not_drawn_on_the_home_page():
+    """결말 카드는 판정만 남기고 홈에는 안 그린다 (2026-08-23 공개 준비).
+
+    그 카드가 왜 붙어 있는지는 행선지 구단 배지가 설명하고 있었는데, 첫인상 정리로
+    배지를 떼자 같은 소식이 두 번 나온 것처럼 읽혔다 (배포 사본 실측 16블록).
+    판정 (ending_card) 은 관련 보도 갈래 라벨이 계속 쓰므로 그대로 두고 화면에서만 뺀다.
+
+    묶음을 만드는 경로는 DB (선수 사전) 를 타므로, 여기서는 결말이 든 블록을 손으로
+    만들어 템플릿에 그대로 넣는다 — 보려는 것이 「블록에 결말이 있을 때 그리는가」다."""
+    from bullet_in.serve.render import _env, _decorate
+    rep = _decorate(_row(content_hash="cr", title_ko="아스날, 로저스 관심"), SOURCES, NOW)
+    end = _decorate(_row(content_hash="ce", title_ko="첼시, 로저스 영입 합의"), SOURCES, NOW)
+    block = {"rep": rep, "ending": {"article": end, "club": "첼시"},
+             "branches": [], "rel_count": 0, "count": 2}
+    html = _env().get_template("index.html.j2").render(
+        lead=None, mains=[], gossip=[], gossip_n=0, gossip_hidden=0,
+        day_blocks=[{"date": "2026-06-29", "label": "오늘", "n": 1, "reports": 2,
+                     "all_dup": False, "blocks": [block]}],
+        facets={"team": {}, "tiers": [], "total": 0, "stage": {}, "stage_groups": [],
+                "other": 0, "outlets": {"initial": [], "stages": []},
+                "journalists": {"initial": [], "stages": [], "total": 0}},
+        active="home", root="", meta=None)
+    assert 'data-hash="cr"' in html          # 대표는 그린다 (검사가 헛돌지 않는지)
+    assert 'data-hash="ce"' not in html      # 결말은 안 그린다
+    assert "첼시, 로저스 영입 합의" not in html
+
+
 def test_no_analytics_script_without_a_measurement_id():
     # 측정 ID 가 비면 스크립트를 아예 넣지 않는다 — 로컬 렌더 · 목업에서 계측이 0 이어야
     # 목업을 띄우는 것만으로 공개 주간 수치가 흐려지지 않는다.
