@@ -465,6 +465,21 @@ def test_render_players_drops_the_axis_badge_where_it_is_only_a_repeat():
     assert "t-otherclub" not in html
 
 
+def test_render_players_drops_the_stage_badge_in_the_other_club_group():
+    # 그룹 머리는 "그 선수가 어디로 갔나" (명단 축) 를, 단계 배지는 "아스날이 어디까지
+    # 갔나" (기사 단계) 를 말한다. 둘 다 사실인데 "타 클럽행 + 관심" 은 모순으로 읽힌다
+    # — 색인에서는 단계 배지를 생략한다 (2026-08-25 · 목업 셋을 렌더해 고름).
+    arts = [_art("h1", 1, "interest"), _art("h2", 2, "collapsed")]
+    players = [_player(1, "Torres", "토레스", "other_club",
+                       [{"content_hash": "h1", "stage": "interest"}]),
+               _player(2, "Vinicius", "비니시우스", "link_dropped",
+                       [{"content_hash": "h2", "stage": "collapsed"}])]
+    html = render_players(build_player_entries(arts, players), NOW)
+    assert "타 클럽행" in html                 # 그룹 머리는 남는다
+    assert "관심" not in html                  # 그 그룹의 단계 배지는 없다
+    assert "무산" in html                      # 이적 무산 그룹은 그대로 둔다
+
+
 def test_render_players_groups_and_collapses():
     arts = [_art("h1", 1, "rumour"), _art("h2", 2, "agreed")]
     players = [_player(1, "Tzolis", "촐리스", "in_link",

@@ -1205,6 +1205,17 @@ _TRANSFER_GROUP_OF: dict[str, str] = {
 # 선수 페이지는 그룹 맥락이 없어 어느 쪽이든 배지를 그대로 붙인다.
 _NO_BADGE_GROUPS = {"이적 무산", "타 클럽행"}
 
+# 색인에서 단계 배지를 생략하는 그룹 (2026-08-25 신설).
+#
+# 그룹 머리와 단계 배지가 서로 다른 질문에 답한다 — 머리는 명단 축 ("그 선수가 어디로
+# 갔나") 이고 배지는 아스날 기사에서 계산한 단계 ("아스날이 어디까지 갔나") 다.
+# 그래서 "타 클럽행" 아래 "무산" · "관심" 이 함께 뜨고, 둘 다 사실인데 모순으로 읽힌다
+# (2026-08-25 실측 12명 중 무산 6 · 관심 4 · 제안 · 협상 1).
+# 세 안 (그대로 · 숨김 · "아스날 관심" 처럼 축 밝힘) 을 렌더해 나란히 두고 숨김을 골랐다.
+# "이적 무산" 은 대상이 아니다 — 거기서는 머리와 배지가 같은 질문에 같은 답을 한다.
+# 선수 페이지는 축 배지가 함께 떠 두 값을 나란히 읽을 수 있으므로 그대로 둔다.
+_NO_STAGE_GROUPS = {"타 클럽행"}
+
 
 def transfer_badge(status: str | None) -> dict | None:
     """선수 이적 축 배지 {label, cls}. 축이 없으면 (none) 배지를 달지 않는다."""
@@ -1427,7 +1438,8 @@ def render_players(entries: list[dict], now: datetime) -> str:
         for e in members:
             e["_badge"] = (None if name in _NO_BADGE_GROUPS
                            else transfer_badge(e["transfer_status"]))
-            e["_stage"] = display_stage(e["stage"])
+            e["_stage"] = (None if name in _NO_STAGE_GROUPS
+                           else display_stage(e["stage"]))
             e["_last"] = fmt_date(to_kst(e["last_ts"]))
         groups.append({"name": name, "collapsed": collapsed, "members": members})
     return _env().get_template("players.html.j2").render(
