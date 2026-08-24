@@ -263,16 +263,26 @@ def test_index_shows_offmission_card_when_linked_player_badged():
     # 기타 숨김 정책의 예외 (2026-08-02 확정): 링크 선수 배지가 붙은 글은 배지가
     # 존재 이유를 설명하므로 기본 화면에 노출한다 — 숨기면 배지를 볼 수 없다
     ot = _row(content_hash="ob", transfer_stage="other", linked_players="기마랑이스",
-              title_ko="뉴캐슬, 에디 하우 감독 즉시 사임")
+              title_ko="뉴캐슬, 기마랑이스 재계약 추진")
     html = render_index([ot], SOURCES, NOW)
     tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/ob\.html"', html).group(0)
     assert "display:none" not in tag
 
 
+def test_index_hides_offmission_card_when_the_report_is_not_about_a_transfer():
+    # 예외의 대상을 거취 소식으로 좁혔다 (2026-08-25) — 링크 선수가 붙어 있어도
+    # 경기 · 수상 · 인터뷰 글은 배지를 못 달고, 배지가 없으면 기타로 숨는다.
+    ot = _row(content_hash="ob", transfer_stage="other", linked_players="기마랑이스",
+              title_ko="뉴캐슬, 에디 하우 감독 즉시 사임")
+    html = render_index([ot], SOURCES, NOW)
+    tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/ob\.html"', html).group(0)
+    assert "display:none" in tag
+
+
 def test_index_badged_card_carries_ctx_data_attr():
     # 필터 JS 가 이 표식으로 기타 숨김 규칙에서 배지 카드를 빼낸다
     ot = _row(content_hash="ob", transfer_stage="other", linked_players="기마랑이스",
-              title_ko="뉴캐슬, 에디 하우 감독 즉시 사임")
+              title_ko="뉴캐슬, 기마랑이스 재계약 추진")
     html = render_index([ot], SOURCES, NOW)
     assert 'data-ctx="1"' in html
 
@@ -907,17 +917,27 @@ def test_detail_note_stays_for_translated_body():
     assert "원문 본문을 확보하지 못해" not in html
 
 
-def test_linked_player_badge_is_not_displayed():
-    # 배지 표시는 걷어냈다 (2026-08-23 공개 준비) — 첫인상에서 뜻이 안 통하는 문구였다.
-    # 값 자체는 남긴다: 이 값이 기타 단계 카드의 노출 예외 근거이자 사이드바 기타
-    # 계수의 분모라, 지우면 화면에서 사라지는 것이 배지 하나가 아니다.
+def test_linked_player_badge_returns_for_a_transfer_report():
+    # 배지는 2026-08-23 첫인상 정리로 뗐다가 2026-08-25 에 되살렸다 — 예외로 노출되는
+    # 글이 왜 거기 있는지 설명하는 것이 그 배지뿐이었기 때문이다.
+    html = render_index(
+        [_row(content_hash="hctx", linked_players="기마랑이스",
+              title_ko="뉴캐슬, 기마랑이스 재계약 추진")],
+        SOURCES, NOW)
+    assert '<span class="ctx">기마랑이스 관련</span>' in html
+    assert 'data-ctx="1"' in html                 # 노출 예외도 함께 걸린다
+
+
+def test_linked_player_badge_skips_a_non_transfer_report():
+    # 거취와 무관한 글에는 배지를 안 단다 — 배지가 설명하려는 것은 "아스날이 노리던
+    # 선수의 거취" 이지 그 선수의 모든 소식이 아니다 (2026-08-25 실측 7건 중 넷).
+    # 배지가 없으면 노출 예외도 안 걸려 그 카드는 기타로 숨는다.
     html = render_index(
         [_row(content_hash="hctx", linked_players="기마랑이스",
               title_ko="뉴캐슬, 에디 하우 감독 즉시 사임")],
         SOURCES, NOW)
-    assert '<span class="ctx">' not in html
-    assert "기마랑이스 관련" not in html
-    assert 'data-ctx="1"' in html                 # 노출 예외는 그대로 걸린다
+    assert 'class="ctx"' not in html
+    assert 'data-ctx="1"' not in html
 
 
 from bullet_in.serve.render import linked_player_label

@@ -722,7 +722,8 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
             if in_stage_filter(s, a.get("transfer_direction")):
                 stage_counts[s] += 1
         elif not linked_player_label(a.get("linked_players"),
-                                     a.get("title_ko") or a.get("title_original") or ""):
+                                     a.get("title_ko") or a.get("title_original") or "",
+                                     a.get("summary_ko")):
             # 링크 선수 배지가 붙은 글은 기타여도 카드가 안 숨는다 (_cards.html.j2 · app.js).
             # 계수만 그 예외를 안 세면 사이드바 기타 건수가 실제 숨김 수보다 많아진다
             # (2026-08-19 실측 88 대 80 · 사이드바 계수 설계 §5.4).
@@ -977,17 +978,39 @@ def sweep_orphan_pages(articles: list[dict], out_dir: str | Path) -> list[str]:
     return removed
 
 
-def linked_player_label(names: str | None, title: str) -> str | None:
+# 링크 선수 배지를 다는 조건에 거취 어휘를 하나 더 건다 (2026-08-25).
+#
+# 배지가 설명하려는 것은 "아스날이 노리던 선수의 거취" 이지 그 선수의 모든 소식이
+# 아니다. 어휘 조건이 없던 동안 실측 7건 중 넷이 경기 · 수상 · 인터뷰였다
+# (영플레이어상 후보 · 상대 수비 비판 · 친선경기 결장 · 감독 데뷔전 각오).
+#
+# 단계 분류로는 못 가른다 — transfer_stage 는 아스날 관점 값이라 (단계 재정의 스펙
+# §9) 제목 · 본문에 아스날이 안 나오는 글은 거취 소식이어도 전부 other 로 떨어진다.
+# 그래서 "그 선수 거취" 라는 축이 우리에게 없고, 이 어휘 조건이 그 자리를 임시로 맡는다.
+#
+# 표본 7건으로 고른 규칙이라 정확도를 아직 모른다 — "복귀" 가 부상 · 대표팀 복귀에도,
+# "계약" 이 스폰서 계약에도 걸린다. 어긋나는 건이 나오면 어휘를 늘리지 말고 단계
+# 분류에 선수 거취 축을 넣는 쪽을 먼저 본다.
+_TRANSFER_WORDS = ("이적", "잔류", "재계약", "계약", "임대", "복귀", "영입",
+                   "매각", "방출", "거취")
+
+
+def linked_player_label(names: str | None, title: str,
+                        summary: str | None = None) -> str | None:
     """링크 선수 배지 문구 — 연결된 선수 이름으로 이 글이 왜 여기 있는지 밝힌다.
 
     이름을 쓰는 이유 (2026-08-02 확정): 일반 문구 "아스날 링크 선수" 는 감독 사임
     같은 글에 붙었을 때 무엇을 가리키는지 알려 주지 못한다.
     제목에 아스날이 이미 있으면 설명할 게 없어 배지를 달지 않는다
     (변형 표기 "아스널" · 영문 제목 Arsenal 포함 — 2026-08-01 오폭 실측).
+    제목 · 요약에 거취 어휘가 없으면 그 선수의 거취 소식이 아니라 배지를 달지 않는다
+    (2026-08-25 · 위 _TRANSFER_WORDS 주석).
     여럿이면 첫 이름만 적고 나머지는 인원으로 접는다 — 카드 머리가 길어지지 않게."""
     if not names:
         return None
     if "아스날" in title or "아스널" in title or "arsenal" in title.lower():
+        return None
+    if not any(w in f"{title} {summary or ''}" for w in _TRANSFER_WORDS):
         return None
     people = [n for n in names.split("|") if n]
     if not people:
@@ -1054,7 +1077,8 @@ def _decorate(row: dict, sources: dict, now: datetime,
     a["_datetime"] = published_datetime(row)
     a["_time"] = time_in_group(row)
     a["_show_summary"] = show_summary(row.get("tier"))
-    a["_ctx"] = linked_player_label(row.get("linked_players"), a["_title"])
+    a["_ctx"] = linked_player_label(row.get("linked_players"), a["_title"],
+                                    row.get("summary_ko"))
     return a
 
 
