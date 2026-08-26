@@ -72,6 +72,17 @@ CREATE TABLE IF NOT EXISTS players (
   confirmed_at DATETIME,
   archived_at DATETIME);
 ALTER TABLE players ADD COLUMN IF NOT EXISTS ko_full_name VARCHAR(60);
+-- 소속 두 축 (2026-08-27) — club 은 **현 소속**, former_club 은 **전 소속**이다.
+--
+-- 그전에는 club 한 칸에 두 뜻이 섞여 있었다 (실측 40행 중 5행) — 타 클럽행인 고든 ·
+-- 토날리에는 전 소속 (Newcastle) 이, 아스날 영입을 마친 콘사에는 전 소속
+-- (Aston Villa) 이 들어 있었고, 같은 타 클럽행인 로저스 · 앤더슨에는 간 곳이 있었다.
+-- 값만 봐서는 어느 쪽인지 못 갈라 화면에 쓸 수 없었다.
+--
+-- 두 칸으로 가르면 이적 축의 여러 자리가 같은 재료를 쓴다 — 타 클럽행은 "어디로
+-- 갔나" (club), 영입 완료는 "어디서 왔나" (former_club), 진행 중은 "지금 어디 있나"
+-- (club) 를 각각 읽는다.
+ALTER TABLE players ADD COLUMN IF NOT EXISTS former_club VARCHAR(50);
 CREATE TABLE IF NOT EXISTS article_players (
   content_hash CHAR(64) NOT NULL,
   player_id INT NOT NULL,

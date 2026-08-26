@@ -1206,6 +1206,47 @@ _TRANSFER_GROUP_OF: dict[str, str] = {
 # 선수 페이지는 그룹 맥락이 없어 어느 쪽이든 배지를 그대로 붙인다.
 _NO_BADGE_GROUPS = {"이적 무산", "타 클럽행"}
 
+# 색인에서 현 소속을 배지로 다는 그룹 (2026-08-27 신설).
+#
+# 「타 클럽행」 은 그룹 머리가 "다른 데로 갔다" 까지만 말하고 어디로 갔는지는 안 말한다.
+# 단계 배지를 생략한 자리 (_NO_STAGE_GROUPS) 에 행선지를 넣어 그 빈칸을 메운다.
+# 값은 players.club (현 소속) 이고, 타 클럽행이면 그것이 곧 간 곳이다.
+# 값이 없으면 배지를 안 단다 — 모르는 것을 빈 배지로 채우지 않는다.
+_CLUB_BADGE_GROUPS = {"타 클럽행"}
+
+# 구단 한글 표기 — 저장은 영문 (roster_seed 가 그렇게 쓴다) · 화면은 한글이다.
+# 선수 이름을 full_name · ko_name 으로 나눠 두는 것과 같은 결이고, 표기를 DB 에 섞어
+# 넣지 않아 시드와 어긋나지 않는다.
+# **없는 구단은 저장값을 그대로 띄운다** — 매핑을 빠뜨려도 배지가 사라지지 않는다.
+_CLUB_KO: dict[str, str] = {
+    "Arsenal": "아스날",
+    "Aston Villa": "아스톤 빌라",
+    "Barcelona": "바르셀로나",
+    "Bayer Leverkusen": "레버쿠젠",
+    "Chelsea": "첼시",
+    "Club Brugge": "클뤼프 브뤼허",
+    "Crystal Palace": "크리스탈 팰리스",
+    "Inter": "인테르",
+    "Leeds": "리즈",
+    "Leicester": "레스터",
+    "Lille": "릴",
+    "Manchester City": "맨체스터 시티",
+    "Manchester United": "맨체스터 유나이티드",
+    "Newcastle": "뉴캐슬",
+    "Nottingham Forest": "노팅엄 포레스트",
+    "Paris Saint-Germain": "파리 생제르맹",
+    "RB Leipzig": "RB 라이프치히",
+    "Real Madrid": "레알 마드리드",
+    "Sporting CP": "스포르팅 CP",
+    "Tottenham": "토트넘",
+    "West Ham": "웨스트햄",
+}
+
+
+def club_ko(name: str | None) -> str | None:
+    """구단 한글 표기. 매핑에 없으면 저장값 그대로 (빈 값은 None)."""
+    return _CLUB_KO.get(name, name) if name else None
+
 # 색인에서 단계 배지를 생략하는 그룹 (2026-08-25 신설).
 #
 # 그룹 머리와 단계 배지가 서로 다른 질문에 답한다 — 머리는 명단 축 ("그 선수가 어디로
@@ -1441,6 +1482,8 @@ def render_players(entries: list[dict], now: datetime) -> str:
                            else transfer_badge(e["transfer_status"]))
             e["_stage"] = (None if name in _NO_STAGE_GROUPS
                            else display_stage(e["stage"]))
+            e["_club"] = (club_ko(e.get("club"))
+                          if name in _CLUB_BADGE_GROUPS else None)
             e["_last"] = fmt_date(to_kst(e["last_ts"]))
         groups.append({"name": name, "collapsed": collapsed, "members": members})
     return _env().get_template("players.html.j2").render(

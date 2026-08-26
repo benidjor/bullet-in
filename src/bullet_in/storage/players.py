@@ -197,7 +197,7 @@ class PlayerStore:
         with self.engine.connect() as c:
             return [dict(r) for r in c.execute(text(
                 "SELECT id, full_name, surname, ko_name, ko_full_name, "
-                "transfer_status "
+                "transfer_status, club, former_club "
                 f"FROM players WHERE {_PAGE_WHERE} AND EXISTS ("
                 "SELECT 1 FROM article_players ap WHERE ap.player_id = players.id) "
                 "ORDER BY id")).mappings().all()]

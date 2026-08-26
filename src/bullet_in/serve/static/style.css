@@ -323,6 +323,11 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
 .pcard:hover{border-color:var(--mut)}
 .pname{display:block;font-family:var(--serif);font-weight:700;font-size:15px;color:var(--ink);margin:0 0 4px}
 .pmeta{display:block;font-size:12px;color:var(--dim);margin-top:4px}
+/* 타 클럽행 선수의 행선지 (2026-08-27) — 그룹 머리는 "다른 데로 갔다" 까지만
+   말하고 어디로 갔는지는 안 말한다. 축 배지가 생략되는 그룹이라 자리가 비어 있다. */
+.pclub{display:inline-flex;align-items:center;font-size:11px;font-weight:700;
+  padding:1px 6px;border-radius:2px;letter-spacing:.01em;margin:0 6px 4px 0;
+  color:var(--ash);border:1px solid var(--hair)}
 
 /* 이적 축 배지 — 색이 계열 (영입 red · 방출 green · 이적 무산과 타 클럽행 mut) 을 나르고,
    테두리가 단계 (링크 파선 · 완료 실선 · 임대 점선) 를 나른다.

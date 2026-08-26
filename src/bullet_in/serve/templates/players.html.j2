@@ -13,6 +13,7 @@
       <span class="pname">{{ e.name }}</span>
       {% if e._badge %}<span class="tbadge {{ e._badge.cls }}">{{ e._badge.label }}</span>{% endif %}
       {% if e._stage %}<span class="stage {{ e._stage.tone }}{{ ' filled' if e._stage.filled }}">{{ e._stage.label }}</span>{% endif %}
+      {% if e._club %}<span class="pclub">{{ e._club }}</span>{% endif %}
       <span class="pmeta">기사 {{ e.count }}건 · 최근 {{ e._last }}</span>
     </a>
   {% endfor %}
