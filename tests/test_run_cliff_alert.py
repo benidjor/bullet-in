@@ -64,8 +64,10 @@ def _row(sid, title="", body="", ko="", h="h1"):
 
 
 def _hide(rows, linked=None):
-    return serving_rows(rows, relevance_terms=TERMS, player_names=NAMES,
-                        linked=linked or set())
+    """무관 필터만 보는 헬퍼 — 옛 글 계수는 아래 전용 테스트가 따로 본다."""
+    keep, hidden, _stale = serving_rows(
+        rows, relevance_terms=TERMS, player_names=NAMES, linked=linked or set())
+    return keep, hidden
 
 
 def test_serving_rows_keeps_other_sources_untouched():
@@ -110,6 +112,50 @@ def test_serving_rows_keeps_article_linked_to_confirmed_player():
     keep, hidden = _hide([_row("fmkorea", "노팅엄, 슐라거 영입 임박", "본문", h="abc")],
                          linked={"abc"})
     assert len(keep) == 1 and hidden == 0
+
+
+def _dt(y, m, d):
+    from datetime import datetime as _datetime
+    return _datetime(y, m, d)
+
+
+def _dated(published, sid="fmkorea", h="hd"):
+    """아스날 맥락은 갖췄고 발행일만 다른 행 — 옛 글 필터만 갈라 본다."""
+    r = _row(sid, "아스날, 영입 추진", "본문", ko="아스날, 영입 추진", h=h)
+    r["published_at"] = published
+    return r
+
+
+def test_serving_rows_drops_fmkorea_published_before_the_window():
+    # fmkorea 검색이 옛 글을 함께 물어 온다 — 2026-02 글이 지금 소식처럼 카드로 떴다
+    # (2026-08-27 실측 275건 중 19건이 2026-06 이전 · 그중 11건 노출).
+    keep, hidden, stale = serving_rows(
+        [_dated(_dt(2026, 2, 9))], relevance_terms=TERMS, player_names=NAMES,
+        linked=set())
+    assert keep == [] and stale == 1
+    assert hidden == 0                      # 무관이 아니라 옛 글이라 빠졌다
+
+
+def test_serving_rows_keeps_fmkorea_inside_the_window():
+    keep, hidden, stale = serving_rows(
+        [_dated(_dt(2026, 8, 23))], relevance_terms=TERMS, player_names=NAMES,
+        linked=set())
+    assert len(keep) == 1 and stale == 0 and hidden == 0
+
+
+def test_serving_rows_keeps_fmkorea_without_a_published_date():
+    # 뺄 근거가 없으면 남긴다 — 발행일 미상을 옛 글로 단정하지 않는다.
+    keep, hidden, stale = serving_rows(
+        [_dated(None)], relevance_terms=TERMS, player_names=NAMES, linked=set())
+    assert len(keep) == 1 and stale == 0
+
+
+def test_serving_rows_window_applies_to_fmkorea_only():
+    # 다른 소스는 아스날 전용 피드라 대상이 아니다 (무관 필터와 같은 경계).
+    keep, hidden, stale = serving_rows(
+        [_dated(_dt(2022, 10, 22), sid="guardian")],
+        relevance_terms=TERMS, player_names=NAMES, linked=set())
+    assert len(keep) == 1 and stale == 0
 
 
 def test_roster_surnames_skips_single_token_and_short_names():
