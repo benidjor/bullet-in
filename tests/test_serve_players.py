@@ -161,13 +161,13 @@ def _art(h, day, stage=None, title="제목"):
             "published_at": datetime(2026, 7, day, 12, 0)}
 
 
-def _player(pid, surname, ko, status, links):
+def _player(pid, surname, ko, status, links, club=None):
     """links = [{"content_hash", "stage", "role"}] — page_player_links 반환 형태.
 
     role 은 컬럼이 NOT NULL 이라 실물에서 늘 실려 온다 — 목록 판정과 무관한
     테스트가 매번 적지 않도록 안 적은 링크는 주역으로 채운다."""
     return {"id": pid, "full_name": f"{ko} {surname}", "surname": surname,
-            "ko_name": ko, "transfer_status": status,
+            "ko_name": ko, "transfer_status": status, "club": club,
             "links": [{"role": "subject", **l} for l in links]}
 
 
@@ -463,6 +463,45 @@ def test_render_players_drops_the_axis_badge_where_it_is_only_a_repeat():
     html = render_players(build_player_entries(arts, players), NOW)
     assert "링크 소멸" not in html
     assert "t-otherclub" not in html
+
+
+def test_render_players_shows_the_destination_club_for_other_club():
+    # 그룹 머리는 「다른 데로 갔다」 까지만 말한다 — 어디로 갔는지는 club 이 채운다
+    # (2026-08-27 · 단계 배지를 생략한 그 자리다).
+    arts = [_art("h1", 1, "interest")]
+    players = [_player(1, "Tonali", "토날리", "other_club",
+                       [{"content_hash": "h1", "stage": "interest"}],
+                       club="Tottenham")]
+    html = render_players(build_player_entries(arts, players), NOW)
+    assert '<span class="pclub">토트넘</span>' in html      # 저장은 영문 · 화면은 한글
+
+
+def test_club_ko_falls_back_to_the_stored_name():
+    # 매핑을 빠뜨려도 배지가 사라지지 않는다 — 영문이라도 띄우는 편이 낫다.
+    from bullet_in.serve.render import club_ko
+    assert club_ko("Manchester City") == "맨체스터 시티"
+    assert club_ko("Some New FC") == "Some New FC"
+    assert club_ko(None) is None
+    assert club_ko("") is None
+
+
+def test_render_players_omits_the_club_badge_when_unknown():
+    # 모르는 것을 빈 배지로 채우지 않는다.
+    arts = [_art("h1", 1, "interest")]
+    players = [_player(1, "Gordon", "고든", "other_club",
+                       [{"content_hash": "h1", "stage": "interest"}])]
+    html = render_players(build_player_entries(arts, players), NOW)
+    assert 'class="pclub"' not in html
+
+
+def test_render_players_club_badge_is_only_for_the_other_club_group():
+    # 진행 중 선수의 현 소속은 「어디로 갔나」 가 아니라서 이 배지를 안 단다.
+    arts = [_art("h1", 1, "interest")]
+    players = [_player(1, "Alvarez", "알바레스", "in_link",
+                       [{"content_hash": "h1", "stage": "interest"}],
+                       club="Atletico Madrid")]
+    html = render_players(build_player_entries(arts, players), NOW)
+    assert 'class="pclub"' not in html
 
 
 def test_render_players_drops_the_stage_badge_in_the_other_club_group():
