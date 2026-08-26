@@ -1,7 +1,7 @@
 from __future__ import annotations
 import argparse, asyncio, json, logging, os, time, uuid, yaml
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from pymongo import MongoClient
 from sqlalchemy import create_engine, text
@@ -80,6 +80,31 @@ LINKED_HASHES_SQL = ("SELECT DISTINCT ap.content_hash FROM article_players ap "
 # 성 매칭 최소 길이 — 두 글자 성 (고든 · 스콧) 은 다른 낱말에 섞여 오탐한다.
 SURNAME_MIN_LEN = 3
 
+# fmkorea 서빙 하한 — 이 날짜보다 앞서 발행된 글은 화면에서 뺀다 (2026-08-27 신설).
+#
+# fmkorea 검색이 옛 글을 함께 물어 온다. 실측 275건 중 19건이 2026-06 이전이었고
+# (2025-01 「본머스, 크루피 영입 협상」 · 2022-10 「벵거 말기 아스날 추억」 등)
+# 그중 11건이 카드로 노출되고 있었다. 이적 기사가 특히 나쁘다 — 반년 전 글인
+# 2026-02-09 「본머스, 크루피에 거액 재계약 추진」 이 링크 선수 배지까지 달고
+# 지금 소식처럼 떠 있었다.
+#
+# 상대 기준 (최근 N일) 이 아니라 절대 날짜를 쓴다. 이 서비스는 이적 창 단위로
+# 읽히고, 창이 닫히면 부상 · 경기 분석 같은 일반 기사도 담을 계획이라 기준선을
+# 창 시작에 맞춰 두는 편이 뜻이 분명하다. 다음 창을 열 때 이 값을 옮긴다.
+#
+# 발행일이 없는 행은 남긴다 — 뺄 근거가 없다 (실측 fmkorea 275건은 전부 있다).
+# 목록에서 빠지면 상세 페이지도 함께 정리되고, 선수 페이지도 같은 rows 로
+# 만들어지므로 과거 글이 그쪽에서도 빠진다 (2026-08-27 사용자 확정).
+FMKOREA_SERVING_SINCE = date(2026, 6, 1)
+
+
+def _published_before(row: dict, since: date | None) -> bool:
+    """발행일이 하한보다 앞서는가. 발행일이 없으면 False (남긴다)."""
+    p = row.get("published_at")
+    if p is None or since is None:
+        return False
+    return (p.date() if hasattr(p, "date") else p) < since
+
 
 def roster_surnames(player_names) -> set[str]:
     """명단 이름에서 한글 성만 추린다 — 두 어절 이상 이름의 마지막 어절.
@@ -113,8 +138,13 @@ def _serving_kept(row: dict, terms, names, surnames, linked) -> bool:
 
 
 def serving_rows(rows: list[dict], *, relevance_terms, player_names,
-                 linked: set[str] | None = None) -> tuple[list[dict], int]:
-    """서빙 목록에서 fmkorea 무관 글을 뺀다 — 렌더 입력만 거르고 DB 는 그대로 둔다.
+                 linked: set[str] | None = None,
+                 since: date | None = FMKOREA_SERVING_SINCE
+                 ) -> tuple[list[dict], int, int]:
+    """서빙 목록에서 fmkorea 무관 글과 옛 글을 뺀다 — 렌더 입력만 거르고 DB 는 둔다.
+
+    (남길 행, 무관으로 뺀 수, 옛 글로 뺀 수) 를 돌려준다. 두 사유를 따로 세는 이유는
+    한 숫자로 합치면 "왜 빠졌나" 를 나중에 못 되짚기 때문이다.
 
     수집 단계 무관 글 필터 (워치리스트 스펙 §3.2) 도입 전에 적재된 타 구단 이적 기사가
     화면에 남아 있다 (2026-08-04 실측 10건 · 전건 노출 · 대부분 온스테인 키워드 유입).
@@ -124,14 +154,17 @@ def serving_rows(rows: list[dict], *, relevance_terms, player_names,
     fmkorea 외 소스는 아스날 전용 피드라 대상이 아니다."""
     surnames = roster_surnames(player_names)
     linked = linked or set()
-    keep, hidden = [], 0
+    keep, hidden, stale = [], 0, 0
     for r in rows:
-        if r.get("source_id") != "fmkorea" or _serving_kept(
-                r, relevance_terms, player_names, surnames, linked):
+        if r.get("source_id") != "fmkorea":
+            keep.append(r)
+        elif _published_before(r, since):
+            stale += 1
+        elif _serving_kept(r, relevance_terms, player_names, surnames, linked):
             keep.append(r)
         else:
             hidden += 1
-    return keep, hidden
+    return keep, hidden, stale
 
 
 def adapter_funnels(adapters) -> dict:
@@ -361,10 +394,14 @@ async def main(concurrency: int):
     if fm is not None:
         with engine.connect() as c:
             linked = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
-        rows, hidden = serving_rows(rows, relevance_terms=fm.relevance_terms,
-                                    player_names=fm.player_names, linked=linked)
+        rows, hidden, stale = serving_rows(rows, relevance_terms=fm.relevance_terms,
+                                           player_names=fm.player_names, linked=linked)
         if hidden:
             logging.getLogger(__name__).info("fmkorea 무관 글 서빙 제외 %d건", hidden)
+        if stale:
+            logging.getLogger(__name__).info(
+                "fmkorea 옛 글 서빙 제외 %d건 (%s 이전 발행)",
+                stale, FMKOREA_SERVING_SINCE)
     write_site(rows, sources, "site",
                directory=journalist_directory("config/credibility.yaml"),
                registry=registry,
