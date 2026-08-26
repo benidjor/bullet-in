@@ -493,14 +493,15 @@ def test_outlet_display_leaves_unknown_spellings_alone():
     assert outlet_display({"outlet": "더 선", "source_id": "x"}, {}) == "더 선"
 
 
-def test_facet_counts_other_skips_linked_player_badged_cards():
-    """링크 선수 배지가 붙은 기타 글은 카드가 안 숨는데 계수는 세고 있었다 (실측 88 대 80)."""
+def test_facet_counts_other_counts_every_hidden_card():
+    """배지 예외를 걷어낸 뒤 (2026-08-27) 기타 계수와 숨는 카드 수가 같아야 한다.
+    둘이 갈리면 사이드바 건수가 실제 숨김 수와 어긋난다 (2026-08-19 실측 88 대 80)."""
     base = {"source_id": "a", "outlet": "BBC", "tier": 1, "team": "arsenal",
             "transfer_stage": "other", "title_ko": "첼시 이적 소식"}
     arts = [dict(base, linked_players=None),
             dict(base, linked_players="에제")]
     f = facet_counts(arts, {"a": {}}, registry=_Reg(outlets={"bbc": 1.0}))
-    assert f["other"] == 1
+    assert f["other"] == 2
 
 
 # ---- 사이드바 기자 축 (설계 2026-08-20 · δ 소속 표기 · ε 목록 길이 · ζ 비인물 항목) ----

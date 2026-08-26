@@ -721,12 +721,9 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
         if s in stage_counts:
             if in_stage_filter(s, a.get("transfer_direction")):
                 stage_counts[s] += 1
-        elif not linked_player_label(a.get("linked_players"),
-                                     a.get("title_ko") or a.get("title_original") or "",
-                                     a.get("summary_ko")):
-            # 링크 선수 배지가 붙은 글은 기타여도 카드가 안 숨는다 (_cards.html.j2 · app.js).
-            # 계수만 그 예외를 안 세면 사이드바 기타 건수가 실제 숨김 수보다 많아진다
-            # (2026-08-19 실측 88 대 80 · 사이드바 계수 설계 §5.4).
+        else:
+            # 링크 선수 배지 예외는 2026-08-27 에 걷어냈다 — 계수와 카드 숨김이
+            # 같은 규칙을 따로 적던 자리가 하나로 줄었다.
             other_count += 1
     # 표시 7묶음 — 라벨 · 저장 enum 목록 (data-value) · 합산 건수 (spec1 §5)
     stage_groups = [{"label": label, "value": ",".join(enums),
@@ -978,47 +975,17 @@ def sweep_orphan_pages(articles: list[dict], out_dir: str | Path) -> list[str]:
     return removed
 
 
-# 링크 선수 배지를 다는 조건에 거취 어휘를 하나 더 건다 (2026-08-25).
+# 링크 선수 배지 (linked_player_label) 는 2026-08-27 에 걷어냈다.
 #
-# 배지가 설명하려는 것은 "아스날이 노리던 선수의 거취" 이지 그 선수의 모든 소식이
-# 아니다. 어휘 조건이 없던 동안 실측 7건 중 넷이 경기 · 수상 · 인터뷰였다
-# (영플레이어상 후보 · 상대 수비 비판 · 친선경기 결장 · 감독 데뷔전 각오).
+# 2026-08-23 첫인상 정리 (#333) 가 표시를 뗐다가 2026-08-25 (#339) 에
+# 거취 어휘 조건을 걸어 되살렸는데, 그 조건이 "어느 선수의 거취인가" 를
+# 못 봐서 실측 3건 중 하나가 엉뚱한 이름을 앞세웠다
+# ("아스톤 빌라, 하파엘 레앙 영입 타진 및 올리 왓킨스 사과" → "왓킨스 외 1명 관련").
+# 이름은 id 순으로 골랐고 기사의 거취 내용은 레앙 쪽이었다.
 #
-# 단계 분류로는 못 가른다 — transfer_stage 는 아스날 관점 값이라 (단계 재정의 스펙
-# §9) 제목 · 본문에 아스날이 안 나오는 글은 거취 소식이어도 전부 other 로 떨어진다.
-# 그래서 "그 선수 거취" 라는 축이 우리에게 없고, 이 어휘 조건이 그 자리를 임시로 맡는다.
-#
-# 표본 7건으로 고른 규칙이라 정확도를 아직 모른다 — "복귀" 가 부상 · 대표팀 복귀에도,
-# "계약" 이 스폰서 계약에도 걸린다. 어긋나는 건이 나오면 어휘를 늘리지 말고 단계
-# 분류에 선수 거취 축을 넣는 쪽을 먼저 본다.
-_TRANSFER_WORDS = ("이적", "잔류", "재계약", "계약", "임대", "복귀", "영입",
-                   "매각", "방출", "거취")
-
-
-def linked_player_label(names: str | None, title: str,
-                        summary: str | None = None) -> str | None:
-    """링크 선수 배지 문구 — 연결된 선수 이름으로 이 글이 왜 여기 있는지 밝힌다.
-
-    이름을 쓰는 이유 (2026-08-02 확정): 일반 문구 "아스날 링크 선수" 는 감독 사임
-    같은 글에 붙었을 때 무엇을 가리키는지 알려 주지 못한다.
-    제목에 아스날이 이미 있으면 설명할 게 없어 배지를 달지 않는다
-    (변형 표기 "아스널" · 영문 제목 Arsenal 포함 — 2026-08-01 오폭 실측).
-    제목 · 요약에 거취 어휘가 없으면 그 선수의 거취 소식이 아니라 배지를 달지 않는다
-    (2026-08-25 · 위 _TRANSFER_WORDS 주석).
-    여럿이면 첫 이름만 적고 나머지는 인원으로 접는다 — 카드 머리가 길어지지 않게."""
-    if not names:
-        return None
-    if "아스날" in title or "아스널" in title or "arsenal" in title.lower():
-        return None
-    if not any(w in f"{title} {summary or ''}" for w in _TRANSFER_WORDS):
-        return None
-    people = [n for n in names.split("|") if n]
-    if not people:
-        return None
-    if len(people) == 1:
-        return f"{people[0]} 관련"
-    return f"{people[0]} 외 {len(people) - 1}명 관련"
-
+# 배지와 함께 그것이 근거이던 기타 카드 노출 예외도 걷었다 — 배지 없이
+# 예외만 남기면 아스날과 무관한 글이 설명 없이 노출되는 #339 이전 상태로
+# 돌아간다. SERVING_SELECT_SQL 의 linked_players 도 읽는 곳이 없어 함께 뺐다.
 
 def _decorate(row: dict, sources: dict, now: datetime,
               directory: dict | None = None, outlet_dir: dict | None = None) -> dict:
@@ -1063,7 +1030,7 @@ def _decorate(row: dict, sources: dict, now: datetime,
     a["_stage_class"] = _stage.css_for(st)
     entries = article_journalists(row, sources, directory, outlet_dir)
     # 카드 data 속성 · 필터 키 — 공저는 저자 전원을 실어야 각자의 필터에서 걸린다.
-    # 구분자는 linked_players 와 같은 관례를 쓴다 (app.js 가 나눠 읽는다).
+    # 구분자는 파이프 하나다 (app.js 가 나눠 읽는다).
     a["_journalist"] = "|".join(e["name"] for e in entries)
     a["_byline"] = entries[0]["label"] if entries else None   # 표시 라벨 — 기자 (언론사)
     a["_authors"] = [e["name"] for e in entries]              # 상세 페이지 전원 나열
@@ -1077,8 +1044,6 @@ def _decorate(row: dict, sources: dict, now: datetime,
     a["_datetime"] = published_datetime(row)
     a["_time"] = time_in_group(row)
     a["_show_summary"] = show_summary(row.get("tier"))
-    a["_ctx"] = linked_player_label(row.get("linked_players"), a["_title"],
-                                    row.get("summary_ko"))
     return a
 
 

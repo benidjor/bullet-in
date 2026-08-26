@@ -1,21 +1,19 @@
 {% macro stage_badge(s) %}{% if s %}<span class="stage {{ s.tone }}{{ ' filled' if s.filled }}">{{ s.label }}</span>{% endif %}{% endmacro %}
 {% macro card(a, when=None, cls='', show_cred=True, thumb=False, hidden=False, show_all=False) %}
 {% set show_thumb = thumb and a.image_url %}
-{# 기타 단계는 기본 숨김 (#22) 이나, 링크 선수 배지가 붙은 글은 예외로 노출한다
-   — 배지가 존재 이유를 설명하는 글이라 숨기면 배지를 볼 수 없다 (2026-08-02).
-   첫인상 정리 (#333) 로 배지를 뗐다가 이 예외의 근거가 사라진 채 남아, 아스날과
-   무관한 경기 · 수상 · 인터뷰 넷이 설명 없이 홈에 떠 있었다 (2026-08-25 실측 7건).
-   배지를 되살리되 거취 어휘 조건을 걸어 대상을 좁혔다 (render.linked_player_label).
+{# 기타 단계는 기본 숨김 (#22).
+   링크 선수 배지가 붙은 글을 예외로 노출하던 규칙은 2026-08-27 에 배지와 함께
+   걷어냈다 — 배지 없이 예외만 남기면 아스날과 무관한 글이 설명 없이 뜬다.
    선수 페이지 (show_all) 는 귀속 기사 전량을 보여줘야 해서 이 기본 숨김을 끈다
    — 머리 건수와 목록 수가 어긋나면 안 되기 때문 (선수 페이지 스펙 §5.3). #}
-<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if hidden or (not show_all and not a._stage_disp and not a._ctx) %} style="display:none"{% endif %} href="{{ root }}article/{{ a.content_hash }}.html"
-   data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-dir="{{ a._dir }}" data-tier="{{ a._tier_key }}"{% if a._ctx %} data-ctx="1"{% endif %}
+<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if hidden or (not show_all and not a._stage_disp) %} style="display:none"{% endif %} href="{{ root }}article/{{ a.content_hash }}.html"
+   data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-dir="{{ a._dir }}" data-tier="{{ a._tier_key }}"
    data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}"
    data-published="{{ a._published_iso }}" data-confidence="{{ a.confidence_score or 0 }}"
    data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">
   {% if show_thumb %}<div class="cimg"><img src="{{ a.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.item').classList.remove('hasthumb');this.closest('.cimg').remove()"></div>{% endif %}
   <div class="body">
-    <div class="cardhead">{{ stage_badge(a._stage_disp) }}<span class="src">{{ a._outlet | replace(' (aggregator)', '') }}</span>{% if show_cred and a._reader_tier %}<span class="cred">{{ a._reader_tier }}</span>{% endif %}{% if a._ctx %}<span class="ctx">{{ a._ctx }}</span>{% endif %}<span class="when">{{ when or a._time }}</span></div>
+    <div class="cardhead">{{ stage_badge(a._stage_disp) }}<span class="src">{{ a._outlet | replace(' (aggregator)', '') }}</span>{% if show_cred and a._reader_tier %}<span class="cred">{{ a._reader_tier }}</span>{% endif %}<span class="when">{{ when or a._time }}</span></div>
     <div class="htitle">{{ a._title }}{% if a._pending %} <span class="pending">번역 대기</span>{% endif %}</div>
     {% if a._show_summary and a.summary_ko %}<p class="dek">{{ a.summary_ko }}</p>{% endif %}
   </div>
