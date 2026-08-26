@@ -348,9 +348,9 @@ function applyFilters() {
       // 걸리면 참 (render.article_journalists 와 같은 계약).
       || (d.journalist || '').split('|').some(j => journalists.includes(j));
     const okTier = tiers.length === 0 || tiers.includes(d.tier);
-    // 링크 선수 배지 (data-ctx) 가 붙은 글은 기타 숨김 규칙에서 뺀다 — 배지가
-    // 존재 이유를 설명하는 글이라, 서버 렌더처럼 여기서도 일반 카드로 다룬다.
-    const isOther = (!d.stage || d.stage === 'other') && !d.ctx;
+    // 링크 선수 배지 (data-ctx) 예외는 2026-08-27 에 배지와 함께 걷어냈다 —
+    // 서버 렌더 (_cards.html.j2) 와 같은 규칙을 여기서도 쓴다.
+    const isOther = (!d.stage || d.stage === 'other');
     // 단계 필터는 방향 in·out (아스날 주체) 한정 — 타 구단 딜 (none) 은 필터 체크 시
     // 제외되고, 필터가 없을 때의 노출 · 기타 토글 분모는 그대로다 (단계 재정의 스펙 §8).
     // 무산 (collapsed) 은 방향을 보지 않는다 (§8 개정) — 잔류 확정 · 재계약 체결이
