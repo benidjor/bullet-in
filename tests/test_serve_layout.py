@@ -427,16 +427,14 @@ def test_article_journalists_empty_when_no_byline_at_all():
     assert article_journalists(_art(journalist=None), JSOURCES, DIR) == []
 
 
-def test_facet_counts_makes_an_item_for_coauthor_only_name():
-    # 옛 정책 C 는 대표가 된 적 있는 이름에만 항목을 만들어서, 공동 기사에만 나오는
-    # 기자는 카드에 실린 채 사이드바에서 빠졌다 (기자 축 설계 §3.4).
-    # 이제 항목을 만들고 대표 여부는 더보기 단계 배치로만 쓴다.
+def test_facet_counts_makes_no_item_for_a_coauthor_only_name():
+    # 항목은 대표로 나온 이름에만 만든다 (2026-08-27 개정) — 저자 전원에 만들었더니
+    # 목록이 266종까지 늘어 한눈에 안 들어왔다 (그중 51종이 공저 전용).
+    # 그 기사는 대표 항목으로 도달하므로 잃는 것이 없다 (실측 도달 불가 0종).
     arts = [_art(journalist="David Ornstein",
                  authors_json='["David Ornstein", "James McNicholas"]')]
     f = facet_counts(arts, JSOURCES, directory=DIR)
-    assert _journalist_items(f) == {"David Ornstein": 1, "James McNicholas": 1}
-    co = _stage_named(f, "더보기 · 공동 기사에만 나오는 기자")
-    assert [i["value"] for i in co["items"]] == ["David Ornstein", "James McNicholas"]
+    assert _journalist_items(f) == {"David Ornstein": 1}
 
 
 def test_facet_counts_counts_article_for_coauthor_that_leads_elsewhere():
@@ -595,19 +593,22 @@ def test_facet_counts_first_screen_needs_two_articles():
         "David Ornstein"]
 
 
-def test_facet_counts_coauthor_stage_is_judged_before_the_single_article_stage():
-    """둘에 함께 걸리는 항목이 있어 순서가 결과를 가른다 (설계 §3.3)."""
+def test_facet_counts_solo_stage_is_judged_before_the_single_article_stage():
+    """둘에 함께 걸리는 항목이 있어 순서가 결과를 가른다 (설계 §3.3).
+    항목이 대표에만 생기게 바뀐 뒤 이 단계는 「대표로는 나오지만 단독 기사가 없는
+    이름」 을 뜻한다 (2026-08-27)."""
     arts = [_art(journalist="David Ornstein",
                  authors_json='["David Ornstein", "James McNicholas"]')]
     f = facet_counts(arts, JSOURCES, directory=DIR)
-    co = _stage_named(f, "더보기 · 공동 기사에만 나오는 기자")
-    assert [i["value"] for i in co["items"]] == ["David Ornstein", "James McNicholas"]
+    co = _stage_named(f, "더보기 · 단독 기사가 없는 기자")
+    assert [i["value"] for i in co["items"]] == ["David Ornstein"]
     assert not any(st["label"] == "더보기 · 기사 1건인 기자"
                    for st in f["journalists"]["stages"])
 
 
-def test_facet_counts_first_screen_is_judged_before_the_coauthor_stage():
-    """공동 기사에만 나와도 공신력 상한 안에 2건 이상이면 첫 화면에 남는다 (설계 §3.3)."""
+def test_facet_counts_first_screen_is_judged_before_the_solo_stage():
+    """공신력 상한 안에 2건 이상이면 첫 화면에 남는다 (설계 §3.3).
+    공저자 (McNicholas) 는 항목 자체가 안 생긴다 (2026-08-27 개정)."""
     reg = _Reg(journalists={"온스테인": 1.0, "david ornstein": 1.0})
     arts = [_art(content_hash=h, journalist="온스테인",
                  authors_json='["\uc628\uc2a4\ud14c\uc778", "James McNicholas"]')
@@ -615,8 +616,7 @@ def test_facet_counts_first_screen_is_judged_before_the_coauthor_stage():
     f = facet_counts(arts, JSOURCES, directory=DIR, registry=reg)
     assert [i["value"] for g in f["journalists"]["initial"] for i in g["items"]] == [
         "David Ornstein"]
-    co = _stage_named(f, "더보기 · 공동 기사에만 나오는 기자")
-    assert [i["value"] for i in co["items"]] == ["James McNicholas"]
+    assert "James McNicholas" not in _journalist_items(f)
 
 
 def test_facet_counts_makes_no_item_for_a_goal_com_journalist():

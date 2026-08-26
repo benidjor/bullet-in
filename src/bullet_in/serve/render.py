@@ -661,11 +661,19 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
         o_ctr[key] += 1
         o_tier[key] = _outlet_tier(key, a, sources, registry)
 
-    # 기자 항목은 카드에 실리는 이름 전부에 만든다 (기자 축 설계 §3.4).
-    # 옛 규칙 (정책 C) 은 어느 기사에서든 대표인 이름에만 만들어서, 공동 기사에만 나오는
-    # 기자는 카드에는 있는데 사이드바 항목이 없었다. 대표 여부는 항목 유무 대신 더보기
-    # 단계 배치에 쓴다 — 그래야 본 목록 길이를 안 늘리고 그 구멍이 메워진다.
-    # 계수는 대표 · 공저를 가리지 않고 그 이름이 걸린 기사 전부를 센다.
+    # 기자 항목은 **대표로 나온 이름에만** 만든다 (2026-08-27 개정).
+    #
+    # 2026-08-20 설계 §3.4 는 카드에 실리는 이름 전부에 항목을 만들었다 — 공동 기사에만
+    # 나오는 기자가 카드에는 있는데 사이드바 항목이 없던 구멍을 메우려던 것이다.
+    # 그런데 쓰는 쪽에서 목록이 너무 길어 한눈에 안 들어왔다 (실측 266종 · 그중 51종이
+    # 공저 전용이고 37종은 기사 1건).
+    #
+    # 공저 전용 이름을 빼도 **그 기사에 도달하지 못하게 되지는 않는다** — 같은 기사의
+    # 대표가 항목에 남아 있어 그 필터로 걸린다 (실측 도달 불가 0종).
+    # 카드의 data-journalist 는 저자 전원을 그대로 실어, 대표로 고른 이름이 자기가
+    # 공저로 참여한 기사까지 함께 걸도록 둔다.
+    #
+    # 계수는 대표 · 공저를 가리지 않고 그 이름이 걸린 기사 전부를 센다 (필터 동작과 일치).
     j_views: dict = {}                  # 이름 -> 뷰
     j_tier: dict = {}
     j_outlets: dict = {}                # 이름 -> 매체별 기사 수 (설계 §2.3)
@@ -680,8 +688,10 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
         # 그 매체가 정한 값이라, 곁들여 실린 이름에 물려주면 그 이름이 첫 화면까지
         # 올라온다. 공저로만 나오는 이름은 등급 없이 자기 단계로 간다 (설계 §3.4).
         j_tier[entries[0]["name"]] = _journalist_tier(a, entries[0], registry)
+        j_views[entries[0]["name"]] = entries[0]          # 항목은 대표에만
         for e in entries:
-            j_views[e["name"]] = e
+            # 라벨의 매체 · 단독 여부는 저자 전원에서 모은다 — 대표로 뽑힌 이름의
+            # 소속이 공저 기사에서만 드러나는 경우가 있다.
             if e["outlet"]:
                 j_outlets.setdefault(e["name"], Counter())[e["outlet"]] += 1
             if len(entries) == 1:
@@ -699,10 +709,12 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
         j_labels[n] = f"{n} ({outlet})" if outlet else n
     j_ctr: Counter = Counter(n for names in reached for n in names if n in j_labels)
 
-    # 더보기 추가 단계 둘 — 첫 화면 → 공동 → 1건 순으로 판정한다 (설계 §3.3).
+    # 더보기 추가 단계 둘 — 첫 화면 → 단독 없음 → 1건 순으로 판정한다 (설계 §3.3).
     # 둘에 함께 걸리는 항목이 있어 순서가 결과를 가른다. 1건이라는 사실은 항목 옆
-    # 건수로 이미 보이지만 「이 사람은 공동 기사에만 나온다」 는 단계로만 보인다.
-    j_extra = [("더보기 · 공동 기사에만 나오는 기자", {n for n in j_labels if n not in solo}),
+    # 건수로 이미 보이지만 「이 사람은 늘 공동 기사다」 는 단계로만 보인다.
+    # 항목이 대표에만 생기게 바뀌면서 (2026-08-27) 이 단계의 뜻도 「공저 전용 이름」 에서
+    # 「대표로는 나오지만 단독 기사가 없는 이름」 으로 좁아졌다 — 라벨을 그에 맞춘다.
+    j_extra = [("더보기 · 단독 기사가 없는 기자", {n for n in j_labels if n not in solo}),
                ("더보기 · 기사 1건인 기자", {n for n, c in j_ctr.items() if c == 1})]
 
     seen = Counter(tier_key(a.get("tier")) for a in articles if a.get("tier") is not None)
