@@ -68,7 +68,10 @@ journalists:
   - {name: Tom Barclay,               outlet: The Sun,        aliases: ["@TomBarclay_", "Tom Barclay"]}
   # X 프로필에서 신원을 확인한 기자 (2026-08-27 · 사용자가 준 주소로 표시 이름 · 소개글 확인).
   - {name: Eduardo Burgos,            outlet: AS,             aliases: ["@edu17burgos"]}
-  - {name: Sébastien Denis,           outlet: Foot Mercato,   aliases: ["@sebnonda"]}
+  - {name: Sébastien Denis,           outlet: Foot Mercato,   aliases: ["@sebnonda", "Sebastien Denis"]}
+  # 한 기사에 「산티 아우나」 와 「Santi Aouna」 가 함께 저자로 들어와 같은 사람이 둘로 보였다
+  # (fmkorea 게시자가 한글 표기와 원문 표기를 나란히 적는다) — 별칭으로 접는다 (2026-08-28).
+  - {name: Santi Aouna,               outlet: Foot Mercato,   tier: 2, aliases: ["@Santi_J_FM", "산티 아우나", "Santi Aouna"]}
   - {name: Sam Tabuteau,              outlet: Evening Standard, aliases: ["@tabuteauS"]}
   - {name: Tomas Taecke,                                      aliases: ["@tomaztaecke"]}
   - {name: David G. Medina,           outlet: Marca,          aliases: ["@medinamarca", "David Medina"]}
