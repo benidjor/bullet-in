@@ -606,17 +606,33 @@ def test_facet_counts_solo_stage_is_judged_before_the_single_article_stage():
                    for st in f["journalists"]["stages"])
 
 
-def test_facet_counts_first_screen_is_judged_before_the_solo_stage():
-    """공신력 상한 안에 2건 이상이면 첫 화면에 남는다 (설계 §3.3).
+def test_facet_counts_solo_stage_is_judged_before_the_first_screen():
+    """단독 기사가 한 건도 없으면 공신력 · 건수가 문턱을 넘어도 첫 화면에 안 둔다
+    (사용자 확정 2026-08-27 · 2026-08-20 설계 §3.3 의 순서를 뒤집는다).
+
+    늘 여럿이 함께 쓴 기사에만 나오는 이름이 첫 화면을 차지하던 자리다 (실물 6종).
+    항목은 그대로 두므로 그 기사에 도달하지 못하게 되지는 않는다.
     공저자 (McNicholas) 는 항목 자체가 안 생긴다 (2026-08-27 개정)."""
     reg = _Reg(journalists={"온스테인": 1.0, "david ornstein": 1.0})
     arts = [_art(content_hash=h, journalist="온스테인",
                  authors_json='["\uc628\uc2a4\ud14c\uc778", "James McNicholas"]')
             for h in ("h1", "h2")]
     f = facet_counts(arts, JSOURCES, directory=DIR, registry=reg)
+    assert f["journalists"]["initial"] == []
+    co = _stage_named(f, "더보기 · 단독 기사가 없는 기자")
+    assert [i["value"] for i in co["items"]] == ["David Ornstein"]
+    assert "James McNicholas" not in _journalist_items(f)
+
+
+def test_facet_counts_first_screen_keeps_a_name_that_has_a_solo_article():
+    """단독 기사가 하나라도 있으면 문턱을 넘는 이름은 첫 화면에 남는다 (설계 §3.2)."""
+    reg = _Reg(journalists={"온스테인": 1.0, "david ornstein": 1.0})
+    arts = [_art(content_hash="h1", journalist="온스테인",
+                 authors_json='["\uc628\uc2a4\ud14c\uc778", "James McNicholas"]'),
+            _art(content_hash="h2", journalist="온스테인")]
+    f = facet_counts(arts, JSOURCES, directory=DIR, registry=reg)
     assert [i["value"] for g in f["journalists"]["initial"] for i in g["items"]] == [
         "David Ornstein"]
-    assert "James McNicholas" not in _journalist_items(f)
 
 
 def test_facet_counts_makes_no_item_for_a_goal_com_journalist():

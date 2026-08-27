@@ -571,8 +571,10 @@ def _facet_rows(counts: Counter, labels: dict, tiers: dict,
     TIER_ORDER 에 없는 tier (설정 오류) 는 미등재로 흘려보낸다.
 
     initial_min — 첫 화면 건수 문턱 (기자 축 설계 §3.2 · 언론사 축은 1 로 그대로).
-    extra — 첫 화면에서 빠진 항목을 데려가는 더보기 추가 단계 (같은 설계 §3.3).
-            앞선 단계가 먼저 가져가므로 순서가 결과를 가른다.
+    extra — 항목을 데려가는 더보기 추가 단계 (같은 설계 §3.3).
+            **첫 화면보다 먼저 판정한다** — 여기 걸리는 이름은 공신력 · 건수가 문턱을
+            넘어도 첫 화면에 안 둔다 (사용자 확정 2026-08-27).
+            앞선 단계가 먼저 가져가므로 단계끼리의 순서도 결과를 가른다.
             **문턱으로 첫 화면에서 빠지는 항목은 이 단계들이 전부 받아야 한다** —
             안 받으면 그 항목은 어느 자리에도 안 실린다."""
     def _item(n, c):
@@ -583,14 +585,14 @@ def _facet_rows(counts: Counter, labels: dict, tiers: dict,
     def _sorted(pairs):
         return [_item(n, c) for n, c in sorted(pairs, key=lambda kv: kv[0].lower())]
 
-    initial_names = {n for n, c in counts.items()
-                     if tiers.get(n) in TIER_ORDER and tiers[n] <= INITIAL_MAX_TIER
-                     and c >= initial_min}
     moved: dict[str, str] = {}
     for label, names in extra or []:
         for n in counts:
-            if n not in initial_names and n not in moved and n in names:
+            if n not in moved and n in names:
                 moved[n] = label
+    initial_names = {n for n, c in counts.items()
+                     if n not in moved and tiers.get(n) in TIER_ORDER
+                     and tiers[n] <= INITIAL_MAX_TIER and c >= initial_min}
 
     def _in_body(n):
         return n not in moved and (tiers.get(n) not in TIER_ORDER
@@ -709,7 +711,9 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
         j_labels[n] = f"{n} ({outlet})" if outlet else n
     j_ctr: Counter = Counter(n for names in reached for n in names if n in j_labels)
 
-    # 더보기 추가 단계 둘 — 첫 화면 → 단독 없음 → 1건 순으로 판정한다 (설계 §3.3).
+    # 더보기 추가 단계 둘 — 단독 없음 → 1건 → 첫 화면 순으로 판정한다 (설계 §3.3 ·
+    # 순서는 2026-08-27 에 뒤집혔다: 늘 공동 기사로만 나오는 이름이 문턱을 넘어 첫 화면을
+    # 차지하던 자리다 · 실물 6종).
     # 둘에 함께 걸리는 항목이 있어 순서가 결과를 가른다. 1건이라는 사실은 항목 옆
     # 건수로 이미 보이지만 「이 사람은 늘 공동 기사다」 는 단계로만 보인다.
     # 항목이 대표에만 생기게 바뀌면서 (2026-08-27) 이 단계의 뜻도 「공저 전용 이름」 에서
