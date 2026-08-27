@@ -1100,9 +1100,17 @@ def _sorted_latest(articles: list[dict]) -> list[dict]:
     return sorted(articles, key=_sort_ts, reverse=True)
 
 
+def story_links(entries: list[dict]) -> dict[str, dict]:
+    """사건 묶음 키 (선수 ko_name) → 그 선수 페이지 (안건 π 후속).
+    페이지가 만들어진 선수만 담는다 — 없는 선수에게 링크를 달면 죽은 링크가 된다."""
+    return {e["ko_name"]: {"slug": e["slug"], "count": e["count"]}
+            for e in entries if e.get("ko_name")}
+
+
 def render_index(articles: list[dict], sources: dict, now: datetime,
                  directory: dict | None = None, registry=None,
-                 outlet_dir: dict | None = None) -> str:
+                 outlet_dir: dict | None = None,
+                 stories: dict | None = None) -> str:
     ordered = [_decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
                for a in _sorted_latest(articles)]
     players, clubs = load_player_names(), load_clubs()
@@ -1141,11 +1149,16 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
         if ending and _is_other_club_report(rep, c["key"], clubs):
             ending = None
         branches = branch_views(related_reports(c, rep, ending, clubs), ending)
-        blocks.append({"rep": rep, "ending": ending, "branches": branches,
+        blocks.append({"rep": rep, "ending": ending, "branches": branches, "key": c["key"],
                        "rel_count": sum(len(br["articles"]) for br in branches),
                        "count": len(c["articles"]), "_articles": list(c["articles"])})
     # 최근 며칠치 기사는 옛 카드 뒤에 접지 않고 자기 날짜에 세운다 (안건 π).
-    blocks.extend(promote_recent(blocks, recent_days(ordered)))
+    lifted = promote_recent(blocks, recent_days(ordered))
+    # 꺼낸 카드는 관련 보도가 없어 어느 이야기인지 화면에 안 남는다 — 그 선수 페이지로
+    # 가는 줄을 달아 맥락을 잇는다 (안건 π 후속 · 2026-08-27 사용자 확정 C안).
+    for b in lifted:
+        b["story"] = (stories or {}).get(b.get("key"))
+    blocks.extend(lifted)
     # 밴드 (히어로 · 주요 소식) 기사도 목록에 숨김 카드로 내보낸다 — 필터가 기사 단위로
     # 전 기사에 닿도록 (spec2 §6.3). 평소엔 숨김, app.js 가 필터 활성 시에만 노출.
     for a in ordered:
@@ -1804,7 +1817,8 @@ def promote_recent(blocks: list[dict], window: set,
                           if a["content_hash"] not in taken]
         b["count"] = len(b["_articles"])
         promoted.extend({"rep": a, "ending": None, "branches": [], "rel_count": 0,
-                         "count": 1, "_articles": [a], "promoted": True}
+                         "count": 1, "_articles": [a], "promoted": True,
+                         "key": b.get("key")}
                         for a in picks)
     return promoted
 
@@ -1916,9 +1930,13 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
     # 만들고, 이미 directory 를 받는 모든 자리 (계수 · 카드 · 상세) 가 같은 맵을 쓴다.
     directory = fold_alias_spellings(articles, directory)
 
+    # 선수 페이지 목록을 인덱스보다 먼저 만든다 — 홈에서 꺼낸 카드가 그 선수 페이지로
+    # 이어지려면 어떤 선수에게 페이지가 생기는지 먼저 알아야 한다 (안건 π 후속).
+    entries = build_player_entries(articles, load_page_players())
+
     (out / "index.html").write_text(
         render_index(articles, sources, now, directory=directory, registry=registry,
-                     outlet_dir=outlet_dir),
+                     outlet_dir=outlet_dir, stories=story_links(entries)),
         encoding="utf-8")
     (out / "all.html").write_text(
         render_all(articles, sources, now, directory=directory, registry=registry,
@@ -1926,7 +1944,6 @@ def write_site(articles: list[dict], sources: dict, out_dir: str | Path,
         encoding="utf-8")
     (out / "about.html").write_text(render_about(), encoding="utf-8")
 
-    entries = build_player_entries(articles, load_page_players())
     write_player_pages(entries, sources, out, now, directory=directory,
                        outlet_dir=outlet_dir)
 

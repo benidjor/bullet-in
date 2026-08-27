@@ -225,6 +225,11 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .reltoggle{margin:6px 12px 2px;padding:3px 10px;background:none;border:1px solid var(--hair);
   border-radius:2px;color:var(--mut);font:inherit;font-size:12px;cursor:pointer}
 .reltoggle:hover{color:var(--ink);border-color:var(--mut)}
+/* 꺼내 온 카드 → 그 선수 페이지 (안건 π 후속) — 관련 보도 버튼과 같은 자리 · 같은 급수 */
+.storylink{display:inline-block;margin:6px 12px 2px;padding:3px 10px;
+  border:1px solid var(--hair);border-radius:2px;color:var(--mut);font-size:12px}
+.storylink::after{content:" ›";color:var(--dim)}
+.storylink:hover{color:var(--ink);border-color:var(--mut)}
 .reltoggle[aria-expanded="true"]{color:var(--red);border-color:var(--red)}
 .related{padding:2px 12px 4px}
 .related[hidden]{display:none}

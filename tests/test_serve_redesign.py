@@ -396,6 +396,22 @@ def test_promote_recent_leaves_hidden_stage_folded():
     assert block["rel_count"] == 2               # 기타 · 무단계 둘은 접힌 채로 남는다
 
 
+def test_story_links_only_for_players_with_a_page():
+    # 페이지가 만들어진 선수만 담는다 — 없는 선수에게 링크를 달면 죽은 링크가 된다
+    entries = [{"ko_name": "알바레스", "slug": "alvarez", "count": 77},
+               {"ko_name": None, "slug": "nameless", "count": 3}]
+    assert R.story_links(entries) == {"알바레스": {"slug": "alvarez", "count": 77}}
+
+
+def test_promote_recent_carries_story_key():
+    # 꺼낸 카드가 어느 선수 이야기에서 나왔는지 들고 나와야 선수 페이지로 이을 수 있다
+    rep, new = _p("rep", 15), _p("new", 21)
+    block = {"rep": rep, "key": "알바레스", "count": 2, "_articles": [rep, new],
+             "rel_count": 1, "branches": [{"label": "", "articles": [new]}]}
+    out = R.promote_recent([block], R.recent_days([rep, new]))
+    assert out[0]["key"] == "알바레스"
+
+
 def test_promote_recent_counts_each_day_separately():
     # 장수는 날짜마다 따로 센다 — 같은 선수라도 날이 다르면 각각 한 장씩 선다
     rep, d20, d21 = _p("rep", 15), _p("d20", 20), _p("d21", 21)
