@@ -114,7 +114,7 @@ outlets:
   - {name: Mundo Deportivo,            aliases: ["Mundo Deportivo", "MD"]}
   - {name: Relevo,                     aliases: ["Relevo"]}
   - {name: COPE,                       aliases: ["COPE"]}
-  - {name: Calciomercato,              aliases: ["Calciomercato", "CM"]}
+  - {name: Calciomercato,              aliases: ["Calciomercato", "CM", "칼쵸메르카토"]}
   - {name: CalcioNapoli24,             aliases: ["CalcioNapoli24", "CN"]}
   - {name: BarcaBuzz,                  aliases: ["BarcaBuzz", "BB"]}
   - {name: Now Arsenal,                aliases: ["Now Arsenal", "NA"]}
@@ -125,3 +125,9 @@ outlets:
   - {name: SPORT24,                    aliases: ["SPORT24"]}
   - {name: africasoccer,               aliases: ["africasoccer"]}
   - {name: afrik foot,                 aliases: ["afrik foot"]}
+  # 약칭 · 한글 표기로만 남아 있던 잔여 4종 (2026-08-27) — 저장값이 원문 도메인과 맞는 것만 등재한다.
+  # 「빌트」 는 저장값이 Bild 인데 원문이 transfermarkt.de 라 여기 안 넣는다 (안건 η · #306 과 같은 판단).
+  - {name: Birmingham Mail,            aliases: ["Birmingham Mail", "BM"]}   # birminghammail.co.uk
+  - {name: Milan News,                 aliases: ["Milan News", "MN"]}        # milannews.it
+  - {name: Milan Vibes,                aliases: ["Milan Vibes", "MV"]}       # milanvibes.it
+  - {name: Metro,                      aliases: ["Metro", "메트로"]}          # metro.co.uk

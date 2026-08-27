@@ -521,6 +521,18 @@ def test_standalone_outlets_fold_to_formal_names():
         assert d[norm_alias(stored)] == name
 
 
+def test_remaining_abbreviated_outlets_fold_to_formal_names():
+    """약칭 · 한글 표기로만 남아 있던 잔여 4종 (2026-08-27).
+
+    도메인이 정체를 알려 준 것만 넣는다 — birminghammail.co.uk · milannews.it ·
+    milanvibes.it · metro.co.uk."""
+    d = outlet_directory(REG)
+    for stored, name in [("BM", "Birmingham Mail"), ("MN", "Milan News"),
+                         ("MV", "Milan Vibes"), ("메트로", "Metro"),
+                         ("칼쵸메르카토", "Calciomercato")]:
+        assert d[norm_alias(stored)] == name
+
+
 def test_display_only_standalone_outlets_stay_out_of_tier_lookup():
     """팬 · 집계 사이트는 표기만 정상화하고 등급은 폴백 4 를 유지한다.
 
@@ -528,7 +540,7 @@ def test_display_only_standalone_outlets_stay_out_of_tier_lookup():
     걸린다 — tier 4 는 min 때문에 무해하지만 애초에 그 경로를 안 타게 둔다."""
     r = load_registry(REG)
     for alias in ["besoccer", "스포르트", "md", "cm", "cn", "bb", "na", "tia",
-                  "sport24", "relevo", "cope"]:
+                  "sport24", "relevo", "cope", "bm", "mn", "mv", "메트로"]:
         assert alias not in r.outlets
 
 
