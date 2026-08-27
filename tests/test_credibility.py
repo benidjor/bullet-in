@@ -144,10 +144,12 @@ def test_registry_registers_french_outlets():
 def test_journalist_directory_maps_alias_and_name():
     from bullet_in.credibility import journalist_directory
     d = journalist_directory("config/credibility.yaml")
-    assert d["온스테인"] == {"name": "David Ornstein", "outlet": "The Athletic"}
+    # tier 는 공저 기사의 대표 선정 입력이다 (2026-08-27) — 등급이 없으면 None 이다.
+    assert d["온스테인"] == {"name": "David Ornstein", "outlet": "The Athletic", "tier": 1}
     assert d["@fabrizioromano"]["name"] == "Fabrizio Romano"
     assert d["fabrizio romano"]["outlet"] is None      # 프리랜서
-    assert d["sami mokbel"] == {"name": "Sami Mokbel", "outlet": "BBC"}
+    assert d["sami mokbel"] == {"name": "Sami Mokbel", "outlet": "BBC", "tier": 1}
+    assert d["mario cortegana"]["tier"] is None        # 등재됐지만 등급 없음
     assert "kaya kaynak" not in d                       # 미등재
 
 def test_fixed_source_promotes_tier_for_affiliated_journalist():

@@ -219,6 +219,82 @@ def _stage_named(f, label):
     return next(st for st in f["journalists"]["stages"] if st["label"] == label)
 
 
+# 대표는 공신력이 가장 높은 저자로 고른다 (사용자 확정 2026-08-27).
+# 등급이 없는 이름이 저장 순서만으로 대표 자리를 차지해 사이드바 항목이 되던 자리다.
+DIR_TIER = _with_norm_keys({
+    "david ornstein": {"name": "David Ornstein", "outlet": "The Athletic", "tier": 1.0},
+    "james mcnicholas": {"name": "James McNicholas", "outlet": "The Athletic", "tier": 1.5},
+    "mario cortegana": {"name": "Mario Cortegana", "outlet": "The Athletic", "tier": None},
+    "chris waugh": {"name": "Chris Waugh", "outlet": "The Athletic", "tier": None}})
+
+
+def test_representative_is_the_highest_graded_author():
+    """공저 기사의 대표 = 등급이 가장 높은 저자 · 나머지는 뒤에 그대로 실린다."""
+    row = _art(journalist="Mario Cortegana",
+               authors_json='["Mario Cortegana", "James McNicholas", "David Ornstein"]')
+    ents = article_journalists(row, JSOURCES, DIR_TIER)
+    assert [e["name"] for e in ents][0] == "David Ornstein"
+    assert set(e["name"] for e in ents) == {"David Ornstein", "James McNicholas",
+                                            "Mario Cortegana"}
+
+
+def test_representative_keeps_stored_order_when_no_author_is_graded():
+    """전원 등급 미상이면 규칙이 아무것도 안 바꾼다 (저장된 대표 유지)."""
+    row = _art(journalist="Mario Cortegana",
+               authors_json='["Mario Cortegana", "Chris Waugh"]')
+    ents = article_journalists(row, JSOURCES, DIR_TIER)
+    assert [e["name"] for e in ents] == ["Mario Cortegana", "Chris Waugh"]
+
+
+def test_ungraded_author_is_ranked_as_the_lowest_graded_coauthor():
+    """등급 없는 저자는 같은 기사의 등재 기자 중 가장 낮은 등급으로 친다 (사용자 확정 2026-08-27).
+
+    미상을 맨 뒤로 두면 매체 기본값으로 이미 높게 보이던 이름 (The Athletic 소속의
+    미등재 기자) 이 등재된 낮은 등급에 밀려 화면 등급이 내려간다."""
+    row = _art(journalist="Chris Waugh",
+               authors_json='["Chris Waugh", "James McNicholas"]')
+    ents = article_journalists(row, JSOURCES, DIR_TIER)
+    assert [e["name"] for e in ents] == ["Chris Waugh", "James McNicholas"]
+
+    # 더 높은 등급이 함께 실리면 그 사람이 대표가 된다
+    row2 = _art(journalist="Chris Waugh",
+                authors_json='["Chris Waugh", "James McNicholas", "David Ornstein"]')
+    ents2 = article_journalists(row2, JSOURCES, DIR_TIER)
+    assert ents2[0]["name"] == "David Ornstein"
+
+
+def test_representative_keeps_the_first_of_equally_graded_authors():
+    """같은 등급이면 순서를 안 흔든다 — 대표가 회차마다 바뀌면 항목도 흔들린다."""
+    row = _art(journalist="James McNicholas",
+               authors_json='["James McNicholas", "Art de Roche"]')
+    d = _with_norm_keys(dict(DIR_TIER, **{
+        "art de roche": {"name": "Art de Roche", "outlet": "The Athletic", "tier": 1.5}}))
+    ents = article_journalists(row, JSOURCES, d)
+    assert [e["name"] for e in ents][0] == "James McNicholas"
+
+
+def test_representative_rule_does_not_touch_a_source_label():
+    """통칭 라벨 소스는 개별 저자를 노출하지 않는다는 기존 결정이 우선한다."""
+    row = _art(source_id="arsenal_official", journalist="Arsenal Official",
+               authors_json='["Arsenal Official", "David Ornstein"]')
+    ents = article_journalists(row, JSOURCES, DIR_TIER)
+    assert [e["name"] for e in ents] == ["Arsenal Official"]
+
+
+def test_facet_grades_the_item_by_the_representative_not_the_stored_column():
+    """항목 등급은 대표의 것이어야 한다 — 저장 칸에 남은 옛 대표를 따라가면 안 된다."""
+    reg = _Reg(journalists={"david ornstein": 1.0, "james mcnicholas": 1.5})
+    row = _art(journalist="James McNicholas",
+               authors_json='["James McNicholas", "David Ornstein"]')
+    f = facet_counts([row], JSOURCES, directory=DIR_TIER, registry=reg)
+    items = {i["value"]: i["tier"] for g in f["journalists"]["initial"] for i in g["items"]}
+    items.update({i["value"]: i["tier"] for st in f["journalists"]["stages"]
+                  for i in st["items"] + st["unregistered"]})
+    items.update({i["value"]: i["tier"] for st in f["journalists"]["stages"]
+                  for g in st["groups"] for i in g["items"]})
+    assert items.get("David Ornstein") == "1"
+
+
 def test_journalist_entry_normalizes_alias_and_labels_outlet():
     e = journalist_entry({"journalist": "온스테인", "source_id": "bbc_sport"}, JSOURCES, DIR)
     assert e == {"name": "David Ornstein", "label": "David Ornstein (The Athletic)",
