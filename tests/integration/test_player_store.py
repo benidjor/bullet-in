@@ -354,3 +354,47 @@ def test_confirm_without_full_name_keeps_stored_value(engine):
     store.confirm(pid, ko_name="푸빌", ko_full_name="마르크 푸빌")
     store.confirm(pid, ko_name="푸빌")
     assert store.get_player("Marc Pubill")["ko_full_name"] == "마르크 푸빌"
+
+
+def _article(engine, h, *, days_ago=1):
+    from sqlalchemy import text
+    with engine.begin() as c:
+        c.execute(text(
+            "INSERT INTO articles (content_hash,url,published_at) VALUES "
+            "(:h,:u, UTC_TIMESTAMP() - INTERVAL :d DAY)"),
+            {"h": h, "u": "https://example.test/" + h, "d": days_ago})
+
+
+def _confirmed(store, *, full_name, ko_name, transfer_status):
+    pid = store.insert_candidate(full_name=full_name, first_name="X",
+                                 surname=full_name.split()[-1],
+                                 ko_candidate=None, first_seen=None)
+    store.confirm(pid, ko_name=ko_name, category="external",
+                  transfer_status=transfer_status)
+    return pid
+
+
+def test_cycle_pairs_excludes_mention(engine):
+    # 남의 이적 기사에 배경으로 이름만 걸린 귀속은 명단 값이 낡았다는 근거가 못 된다
+    store = PlayerStore(engine)
+    pid = _confirmed(store, full_name="Reiss Nelson", ko_name="넬슨",
+                     transfer_status="out_link")
+    _article(engine, "h_subj")
+    _article(engine, "h_ment")
+    store.link_article("h_subj", pid, "official", "subject")
+    store.link_article("h_ment", pid, "official", "mention")
+    got = store.cycle_pairs(["h_subj", "h_ment"])
+    assert [r["stage"] for r in got] == ["official"]      # 언급 행은 안 들어온다
+
+
+def test_recent_stage_counts_excludes_mention(engine):
+    # 방아쇠와 같은 술어 — 여기 남기면 오탐끼리 서로를 뒷받침해 문턱을 넘는다
+    store = PlayerStore(engine)
+    pid = _confirmed(store, full_name="Illan Meslier", ko_name="멜리에",
+                     transfer_status="out_link")
+    for i in range(3):
+        _article(engine, "h_m%d" % i)
+        store.link_article("h_m%d" % i, pid, "done", "mention")
+    _article(engine, "h_s0")
+    store.link_article("h_s0", pid, "done", "subject")
+    assert store.recent_stage_counts([pid]) == {(pid, "done"): 1}
