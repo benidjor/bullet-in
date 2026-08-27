@@ -5,8 +5,9 @@ journalists:
   - {name: James McNicholas,  tier: 1.5, outlet: The Athletic,    aliases: ["@_JamesMcNicholas", "@gunnerblog", "맥니콜라스", "McNicholas", "제임스 맥니콜라스"]}
   - {name: handofarsnal,      tier: 1.5, aliases: ["@handofarsnal"]}
   - {name: Dharmesh Sheth,    tier: 1.5, outlet: Sky Sports,      aliases: ["@skysports_sheth", "셰스", "Sheth"]}
+  - {name: Lyall Thomas,      tier: 1.5, outlet: Sky Sports,      aliases: ["@SkySportsLyall", "라이얼 토머스", "Lyall Thomas"]}
   - {name: Charles Watts,     tier: 3,   aliases: ["@charles_watts", "찰스 왓츠", "Watts"]}
-  - {name: Amy Lawrence,      tier: 2,   outlet: The Athletic,    aliases: ["@amylawrence71", "에이미 로런스", "Lawrence"]}
+  - {name: Amy Lawrence,      tier: 1.5, outlet: The Athletic,    aliases: ["@amylawrence71", "에이미 로런스", "Lawrence"]}
   - {name: Teamnewsandtix,    tier: 2,   aliases: ["@Teamnewsandtix", "팀뉴스앤틱스"]}
   - {name: James Olley,       tier: 2,   outlet: ESPN,            aliases: ["@JamesOlley", "올리", "Olley"]}
   - {name: Gary Jacob,        tier: 2,   outlet: The Times,       aliases: ["@garyjacob", "게리 제이콥"]}   # 바 별칭 "Jacob" 제거 — Ben Jacobs "Jacobs" 부분 매칭 함정
@@ -58,7 +59,7 @@ journalists:
 outlets:
   # 아래 별칭 중 도메인 교차 계수로 짝이 확정된 것들은 언론사 표기 통일 설계 §2.1 의 표에서 왔다
   # (같은 도메인에서 온 기사면 표기가 달라도 같은 매체다 · 사람의 이름 판단이 안 들어간다).
-  - {name: The Athletic,    tier: 1,   aliases: ["디 애슬레틱", "애슬레틱", "The Athletic", "The Athletics"]}
+  - {name: The Athletic,    tier: 1.5, aliases: ["디 애슬레틱", "애슬레틱", "The Athletic", "The Athletics"]}   # 비전담 기준선 (2026-08-27 사용자 결정 · BBC 와 같은 급) — 전담 (Ornstein) 은 기자 tier 1 로 승격
   - {name: BBC,             tier: 1.5, aliases: ["BBC"]}   # 비전담 기준선 — 전담 (Mokbel) 은 기자 tier 1 로 승격
   - {name: The Guardian,    tier: 3,   aliases: ["가디언", "The Guardian"]}
   # "Sky" 별칭은 독일 (sport.sky.de) · 스위스 (www.sky-sport.ch) Sky 도 함께 데려온다 —
@@ -85,7 +86,7 @@ outlets:
   - {name: HITC,            tier: 4,   aliases: ["HITC"]}
   - {name: arseblog,        tier: 2,   aliases: ["arseblog"]}
   - {name: L'Équipe,        tier: 3,   aliases: ["레키프", "L'Equipe", "L'Équipe", "lequipe"]}
-  - {name: RMC Sport,       tier: 1,   aliases: ["RMC", "RMC 스포르", "RMC Sport"]}
+  - {name: RMC Sport,       tier: 1.5, aliases: ["RMC", "RMC 스포르", "RMC Sport"]}   # 비전담 기준선 (2026-08-27 사용자 결정)
   - {name: Foot Mercato,    tier: 4,   aliases: ["풋 메르카토", "Foot Mercato", "footmercato", "FM"]}   # 저장값 약칭 "FM" 이 별칭에 없어 안 접히고 있었다
   - {name: talkSPORT,       tier: 4,   aliases: ["talkSPORT"]}   # 백트래킹 domains 승격용 (@JacobsBen 인용 원문 — 기자 미등재라 아웃렛 폴백 경로)
   # 합칠 짝이 없던 단독 매체 (안건 γ 잔여 · 2026-08-20 사용자 결정). 등급은 사용자가 정했다.

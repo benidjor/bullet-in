@@ -13,7 +13,8 @@ def test_load_registry_maps_aliases_lowercased():
     r = load_registry(REG)
     assert r.journalists["@david_ornstein"] == 1.0
     assert r.journalists["온스테인"] == 1.0
-    assert r.outlets["디 애슬레틱"] == 1.0
+    # 매체 기본값은 비전담 기준선이다 (2026-08-27 사용자 결정 · 전담은 기자 등급으로 승격)
+    assert r.outlets["디 애슬레틱"] == 1.5
     assert r.outlets["데일리 메일"] == 3.0
 
 def test_load_registry_rejects_duplicate_alias(tmp_path):
@@ -57,7 +58,7 @@ def test_resolve_fmkorea_outlet_bracket():
     r = load_registry(REG)
     sources = {"fmkorea": {"credibility": "fmkorea"}}
     it = _item("fmkorea", {"title": "[디 애슬레틱] 사카 재계약", "body": "내용"})
-    assert resolve_tier(it, sources, r) == 1.0
+    assert resolve_tier(it, sources, r) == 1.5   # 매체 기본값 (2026-08-27 개정)
 
 def test_resolve_fmkorea_fallback_tier_four():
     r = load_registry(REG)
@@ -138,7 +139,7 @@ def test_registry_registers_french_outlets():
     r = load_registry(REG)
     assert r.outlets["l'équipe"] == 3.0
     assert r.outlets["레키프"] == 3.0
-    assert r.outlets["rmc"] == 1.0
+    assert r.outlets["rmc"] == 1.5
     assert r.outlets["foot mercato"] == 4.0
 
 def test_journalist_directory_maps_alias_and_name():
