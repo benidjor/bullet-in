@@ -51,7 +51,7 @@
     {# 꺼내 온 카드는 관련 보도가 없어 어느 이야기인지 화면에 안 남는다 — 그 선수
        페이지로 가는 줄을 달아 맥락을 잇는다 (안건 π 후속). 페이지가 있는 선수만 건다. #}
     {% if b.story %}
-    <a class="storylink" href="player/{{ b.story.slug }}.html">{{ b.key }} 이야기 · 기사 {{ b.story.count }}건</a>
+    <a class="storylink" href="player/{{ b.story.slug }}.html">{{ b.key }} 더보기 · 기사 {{ b.story.count }}건</a>
     {% endif %}
     {% if b.rel_count %}
     <button class="reltoggle" type="button" aria-expanded="false">관련 보도 {{ b.rel_count }}건</button>
