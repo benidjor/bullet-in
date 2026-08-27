@@ -3,12 +3,12 @@ journalists:
   - {name: Sami Mokbel,       tier: 1,   outlet: BBC,             aliases: ["@SamiMokbel1_DM", "@SamiMokbel_BBC", "목벨", "Mokbel"]}
   - {name: Fabrizio Romano,   tier: 1.5, aliases: ["@FabrizioRomano", "로마노", "Romano"]}
   - {name: James McNicholas,  tier: 1.5, outlet: The Athletic,    aliases: ["@_JamesMcNicholas", "@gunnerblog", "맥니콜라스", "McNicholas", "제임스 맥니콜라스"]}
-  - {name: handofarsnal,      tier: 1.5, aliases: ["@handofarsnal"]}
+  - {name: HandofArsenal (ITK), tier: 1,  aliases: ["@HandofArsenal", "@handofarsnal"]}   # 아스날 ITK
   - {name: Dharmesh Sheth,    tier: 1.5, outlet: Sky Sports,      aliases: ["@skysports_sheth", "셰스", "Sheth"]}
   - {name: Lyall Thomas,      tier: 1.5, outlet: Sky Sports,      aliases: ["@SkySportsLyall", "라이얼 토머스", "Lyall Thomas"]}
   - {name: Charles Watts,     tier: 3,   aliases: ["@charles_watts", "찰스 왓츠", "Watts"]}
   - {name: Amy Lawrence,      tier: 1.5, outlet: The Athletic,    aliases: ["@amylawrence71", "에이미 로런스", "Lawrence"]}
-  - {name: Teamnewsandtix,    tier: 2,   aliases: ["@Teamnewsandtix", "팀뉴스앤틱스"]}
+  - {name: Teamnewsandtix (ITK), tier: 1.5, aliases: ["@Teamnewsandtix", "팀뉴스앤틱스"]}   # 아스날 ITK
   - {name: James Olley,       tier: 2,   outlet: ESPN,            aliases: ["@JamesOlley", "올리", "Olley"]}
   - {name: Gary Jacob,        tier: 2,   outlet: The Times,       aliases: ["@garyjacob", "게리 제이콥"]}   # 바 별칭 "Jacob" 제거 — Ben Jacobs "Jacobs" 부분 매칭 함정
   - {name: Ben Jacobs,        tier: 3,   outlet: talkSPORT,       aliases: ["@JacobsBen", "벤 제이콥스"]}   # 핸들 매칭이 talkSPORT outlet 폴백(4)보다 우선
@@ -66,6 +66,51 @@ journalists:
   - {name: Luca Bendoni,                                      aliases: ["@LucaBendoni", "Luca Bendoni"]}
   - {name: Graeme Bailey,                                     aliases: ["@GraemeBailey", "Graeme Bailey"]}
   - {name: Tom Barclay,               outlet: The Sun,        aliases: ["@TomBarclay_", "Tom Barclay"]}
+  # X 프로필에서 신원을 확인한 기자 (2026-08-27 · 사용자가 준 주소로 표시 이름 · 소개글 확인).
+  - {name: Eduardo Burgos,            outlet: AS,             aliases: ["@edu17burgos"]}
+  - {name: Sébastien Denis,           outlet: Foot Mercato,   aliases: ["@sebnonda"]}
+  - {name: Sam Tabuteau,              outlet: Evening Standard, aliases: ["@tabuteauS"]}
+  - {name: Tomas Taecke,                                      aliases: ["@tomaztaecke"]}
+  - {name: David G. Medina,           outlet: Marca,          aliases: ["@medinamarca", "David Medina"]}
+  - {name: Patrick Berger,                                    aliases: ["@berger_pj"]}
+  - {name: Mark Douglas,                                      aliases: ["@MsiDouglas"]}
+  - {name: Pete O'Rourke,                                     aliases: ["@SportsPeteO"]}
+  - {name: Gianluigi Longari,                                 aliases: ["@Glongari"]}
+  - {name: Jose Alvarez Haya,                                 aliases: ["@10JoseAlvarez"]}
+  - {name: Connor Humm,                                       aliases: ["@TikiTakaConnor"]}
+  - {name: TheSecretScout,                                    aliases: ["@TheSecretScout_"]}
+  - {name: Men in Blazers,                                    aliases: ["@MenInBlazers"]}
+  - {name: Rodra,                                             aliases: ["@Rodra10_97"]}
+  - {name: Jacob Tanswell,            outlet: The Athletic,   aliases: ["@J_Tanswell", "Jacob Tanswell", "탠스웰"]}
+  - {name: Cahê Mota,                 outlet: Globo,          aliases: ["@cahemota"]}
+  - {name: Venê Casagrande,                                   aliases: ["@venecasagrande"]}
+  - {name: Víctor Llebaría,                                   aliases: ["@victor_llebaria"]}
+  - {name: Massimo Pavan,                                     aliases: ["@pavanmassimo"]}
+  - {name: Hugo Guillemet,            outlet: L'Équipe,       aliases: ["@hugoguillemet"]}
+  - {name: Haluk Yürekli,                                     aliases: ["@Haluk_Yurekli"]}
+  - {name: Pedro Morata,                                      aliases: ["@pedro_morata"]}
+  - {name: Alfredo Pedullà,                                   aliases: ["@AlfredoPedulla"]}
+  - {name: Gary Cotterill,            outlet: Sky Sports,     aliases: ["@gary_cotterill"]}
+  - {name: Tom Collomosse,                                    aliases: ["@TomCollomosse"]}
+  - {name: Ed Aarons,                 outlet: The Guardian,   aliases: ["@ed_aarons", "Ed Aarons"]}
+  - {name: James Benge,                                       aliases: ["@jamesbenge"]}
+  - {name: Alex Kirkland,             outlet: ESPN,           aliases: ["@alexkirkland"]}
+  - {name: Rob Dorsett,               outlet: Sky Sports,     aliases: ["@RobDorsettSky", "Rob Dorsett"]}
+  - {name: Ryan Taylor,                                       aliases: ["@RyanTaylorSport"]}
+  - {name: Matt Verri,                outlet: Evening Standard, aliases: ["@MattVerri"]}
+  - {name: Ian Wright,                                        aliases: ["@IanWright0"]}   # 해설자 · 전 아스날 선수
+  # 매체 · 집계 계정 — 사람이 아니다
+  - {name: Cadena SER,                outlet: Cadena SER,     aliases: ["@La_SER"]}
+  - {name: RTI Esporte,               outlet: RTI Esporte,    aliases: ["@rtiesporte"]}
+  - {name: Haber Kartalı,             outlet: Haber Kartalı,  aliases: ["@HaberKartali"]}
+  - {name: Footy Headlines,           outlet: Footy Headlines, aliases: ["@Footy_Headlines"]}
+  - {name: RoversXtra,                                        aliases: ["@RoversXtra"]}   # 블랙번 집계 계정
+  # ITK 계정 — 사용자 확인 (2026-08-27) · 등급은 아직 안 매김
+  - {name: DarrenArsenal1 (ITK),                              aliases: ["@DarrenArsenal1"]}   # 아스날 ITK
+  - {name: AFCAMDEN (ITK),                                    aliases: ["@AFCAMDEN"]}         # 아스날 ITK
+  - {name: siphillipssport (ITK),                             aliases: ["@siphillipssport"]}  # 첼시 ITK
+  - {name: pepealvarezzz (ITK),                               aliases: ["@pepealvarezzz"]}    # 레알 마드리드 ITK
+  - {name: ElBobble (ITK),                                    aliases: ["@ElBobble"]}         # 에버튼 ITK
   # 조직 계정 핸들 — 사람이 아니라 매체다. 기자 축 표시는 언론사 사전을 안 보므로
   # 여기에 매체 이름으로 등재해 「@MailSport」 대신 「Daily Mail」 로 접는다 (2026-08-27).
   - {name: Daily Mail,                outlet: Daily Mail,     aliases: ["@MailSport"]}
