@@ -185,6 +185,7 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 /* 행 우선 배치 — 묶음이 최신순으로 왼→오 · 위→아래로 읽히고 행마다 위끝이 맞음 */
 .daylist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 26px;align-items:start}
 .daylist.flatlist{align-items:stretch}          /* 전체 기사 — 행 높이를 채워 구분선이 행 단위로 정렬 */
+.daylist.solo,.gossiplist.solo{grid-template-columns:1fr}   /* 남은 카드가 하나면 한 열로 (JS 표식) */
 .secside{display:flex;align-items:center;gap:10px}
 .seclink{display:inline-block;padding:5px 12px;border:1.5px solid var(--red);border-radius:2px;
   color:var(--red);font-size:12.5px;font-weight:700;white-space:nowrap}

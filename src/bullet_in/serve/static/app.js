@@ -137,14 +137,22 @@ function setupFacetSearch(input) {
   const opts = [...scope.querySelectorAll('label.opt')].map(o => [o,
     [...o.childNodes].filter(n => n.nodeType === 3)
       .map(n => n.textContent).join(' ').trim().toLowerCase()]);
-  input.addEventListener('input', () => {
+  const run = () => {
     const q = input.value.trim().toLowerCase();
     heads.forEach(h => { h.hidden = !!q; });
     btns.forEach(b => { if (q) b.hidden = true; });
     opts.forEach(([o, key]) => { o.hidden = !!q && !key.includes(q); });
     if (q) stages.forEach(s => { s.hidden = false; });
     else scope._moreSync?.();
+  };
+  // 이름 찾기도 엔터에서만 걸린다 (기사 검색과 같은 규칙) — 비우면 그 자리에서 되돌린다.
+  input.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    run();
   });
+  input.addEventListener('input', () => { if (!input.value.trim()) run(); });
+  input.addEventListener('search', run);
 }
 
 // ── 필터 요소 ──────────────────────────────────────────────────────
@@ -427,6 +435,14 @@ function applyFilters() {
   history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
 }
 
+// 목록은 2열 격자다 — 보이는 카드가 하나뿐이면 오른쪽 열이 빈 채로 남아 기사가
+// 화면 절반으로 찌그러진다. 그 줄만 한 열로 되돌린다 (필터가 걸릴 때 자주 생긴다).
+function soloWidth(list) {
+  const vis = [...list.children].filter(el => el.style.display !== 'none'
+    && !el.hidden && getComputedStyle(el).display !== 'none');
+  list.classList.toggle('solo', vis.length === 1);
+}
+
 function hideEmpty() {
   // 사건 블록 — 보이는 카드가 없으면 블록째 숨김
   document.querySelectorAll('.block').forEach(bl => {
@@ -438,12 +454,14 @@ function hideEmpty() {
     const div = dl.previousElementSibling;               // .daydiv
     if (div && div.classList.contains('daydiv')) div.style.display = vis ? '' : 'none';
     dl.style.display = vis ? '' : 'none';
+    soloWidth(dl);
   }
   const gl = document.querySelector('.gossiplist');
   if (gl) {
     const vis = [...gl.querySelectorAll('.item')].some(i => i.style.display !== 'none');
     document.querySelectorAll('.gossiphead, .gossipnote').forEach(e => { e.style.display = vis ? '' : 'none'; });
     gl.style.display = vis ? '' : 'none';
+    soloWidth(gl);
   }
 }
 
@@ -525,7 +543,17 @@ if (items.length && side) {                               // 인덱스
   if (resetBtn) resetBtn.onclick = () => { resetAll(); applyFilters(); };
   if (sortSel) sortSel.onchange = () => { sortBlocks(); const qs = filterParams().toString();
     history.replaceState(null, '', qs ? `?${qs}` : location.pathname); };
-  if (searchInput) searchInput.addEventListener('input', applyFilters);
+  if (searchInput) {
+    // 입력할 때마다 목록이 튀지 않게 — 엔터 · 「필터 적용」 에서만 반영한다.
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      applyFilters();
+    });
+    searchInput.addEventListener('input', () => { applyBtn?.classList.add('dirty'); });
+    // 검색칸의 × 로 비우면 그 자리에서 되돌린다 (엔터를 누를 값이 없다)
+    searchInput.addEventListener('search', () => { if (!searchInput.value.trim()) applyFilters(); });
+  }
   if (restoreFromQuery()) applyFilters();
   else { sortBlocks(); hideEmpty(); }
 } else if (side) {                                         // 상세 — 필터는 인덱스로 이동
