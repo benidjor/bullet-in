@@ -431,3 +431,39 @@ def test_promote_recent_counts_each_day_separately():
              "branches": [{"label": "", "articles": [d21, d20]}]}
     out = R.promote_recent([block], R.recent_days([rep, d20, d21]), cap=1)
     assert sorted(b["rep"]["content_hash"] for b in out) == ["d20", "d21"]
+
+
+# 성이 겹치는 남의 이름 (2026-08-28) — 사전은 대부분 성만 담아 부분 매치로 걸린다
+NAMESAKE_PLAYERS = ["넬슨", "딕슨", "화이트", "두에", "래시포드", "로저스"]
+
+
+def test_protagonist_skips_other_person_with_same_surname():
+    # 레스터의 벤 넬슨 기사가 아스날 리스 넬슨 묶음으로 들어가던 자리
+    assert R.protagonist(
+        "맨체스터 유나이티드·웨스트햄, 레스터 시티 벤 넬슨 영입 주시",
+        NAMESAKE_PLAYERS) is None
+
+
+def test_protagonist_keeps_our_player_with_same_surname():
+    # 같은 성이라도 우리 선수 기사는 그대로 묶인다
+    assert R.protagonist("아스날, 리스 넬슨과 계약 해지 합의",
+                         NAMESAKE_PLAYERS) == "넬슨"
+
+
+def test_protagonist_skips_hyphenated_other_name():
+    # 「깁스-화이트」 는 벤 화이트가 아니다 — 사전에 없는 긴 이름이라 위치 규칙이 못 막는다
+    assert R.protagonist("아스날, 깁스-화이트 영입 경쟁… PSG 가세",
+                         NAMESAKE_PLAYERS) is None
+
+
+def test_protagonist_falls_through_to_real_subject():
+    # 남의 이름을 지우면 그 기사의 진짜 주인공이 드러난다 (리 딕슨 -> 래시포드)
+    assert R.protagonist(
+        "아스날 레전드 리 딕슨, 마커스 래시포드-마일스 루이스-스켈리 스왑딜 제안",
+        NAMESAKE_PLAYERS) == "래시포드"
+
+
+def test_mask_keeps_title_length():
+    # 길이를 그대로 둬야 전환어 위치 비교가 안 흔들린다
+    t = "아스날 레전드 리 딕슨, 스왑딜 제안"
+    assert len(R.mask_other_people(t)) == len(t)

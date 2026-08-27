@@ -1197,6 +1197,27 @@ def render_all(articles: list[dict], sources: dict, now: datetime,
 # 전환어 (spec2 §4.3) — 뒤에 나온 선수가 주인공. 3.1 모델 실측 표현 '불발' 을 포함한다.
 _TRANSITION_WORDS = ["놓친", "대신", "대체", "무산", "불발", "결렬", "실패", "포기", "떠난"]
 
+# 우리 선수가 아닌 사람인데 성이 겹쳐 제목 매치에 걸리는 이름 (2026-08-28 전수 조사).
+#
+# 사전은 대부분 성만 담고 (97개 중 87개) 매치는 부분 문자열이라, 같은 성을 쓰는
+# 다른 사람이 제목에 나오면 그 기사가 우리 선수의 사건 묶음으로 들어간다.
+# 사전의 '긴 이름 우선' 규칙은 그 긴 이름도 사전에 있을 때만 듣는데, 여기 넷은
+# 우리 선수가 아니라 사전에 없다.
+#
+# 제목 문자열만으로 가르는 자동 규칙은 두 가지를 대 봤고 둘 다 더 크게 망가졌다
+# — 「성 앞이 붙어 있으면 버린다」 는 「주니오르크루피」 를, 「성 앞말이 우리 이름이
+# 아니면 버린다」 는 「수비수 콘사」 · 「유망주 은와네리」 를 함께 버렸다.
+# 그래서 사람이 확인한 이름만 담는다 (전체 913건 전수 대조 · 이 넷이 전부).
+_NOT_OUR_PLAYERS = ("벤 넬슨", "리 딕슨", "깁스-화이트", "겔라두에", "겔라 두에")
+
+
+def mask_other_people(title: str) -> str:
+    """제목에서 남의 이름을 지운다 — 길이는 그대로 둬 전환어 위치 비교를 안 흔든다."""
+    for name in _NOT_OUR_PLAYERS:
+        if name in title:
+            title = title.replace(name, " " * len(name))
+    return title
+
 
 def load_player_names(engine=None) -> list[str]:
     """서빙 사건 사전 — players 확정 ko_name (DB 단일 원천 · 스펙 §5 · §8).
@@ -1611,8 +1632,11 @@ def club_in_title(first_clause: str, club_map: dict) -> str | None:
 
 
 def protagonist(title: str, players: list[str]) -> str | None:
-    """사건 주인공 선수 (spec2 §4.3) — 전환어 뒤 선수를 우선, 없으면 첫 등장 선수."""
-    title = title or ""
+    """사건 주인공 선수 (spec2 §4.3) — 전환어 뒤 선수를 우선, 없으면 첫 등장 선수.
+
+    성이 겹치는 남의 이름은 먼저 지운다 (`_NOT_OUR_PLAYERS`) — 안 지우면 그 기사가
+    우리 선수의 사건 묶음에 들어간다 (실측: 「벤 넬슨」 기사가 리스 넬슨 묶음에)."""
+    title = mask_other_people(title or "")
     found = sorted((title.find(p), p) for p in players if p in title)
     if not found:
         return None
