@@ -228,6 +228,11 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 /* 꺼내 온 카드 → 그 선수 페이지 (안건 π 후속) — 관련 보도 버튼과 같은 자리 · 같은 급수 */
 .storylink{display:inline-block;margin:6px 12px 2px;padding:3px 10px;
   border:1px solid var(--hair);border-radius:2px;color:var(--mut);font-size:12px}
+/* 그 줄과 관련 보도 버튼을 카드 아래끝에 붙인다 — 행 높이를 채우고 있으므로 사진 ·
+   요약 유무로 카드 키가 달라도 같은 행에서는 같은 높이에 놓인다 (최신 소식 한정). */
+.daylist:not(.flatlist) .block{display:flex;flex-direction:column}
+.daylist:not(.flatlist) .storylink,
+.daylist:not(.flatlist) .reltoggle{margin-top:auto;align-self:flex-start}
 .storylink::after{content:" ›";color:var(--dim)}
 .storylink:hover{color:var(--ink);border-color:var(--mut)}
 .reltoggle[aria-expanded="true"]{color:var(--red);border-color:var(--red)}
