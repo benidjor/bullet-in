@@ -1143,7 +1143,9 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
         branches = branch_views(related_reports(c, rep, ending, clubs), ending)
         blocks.append({"rep": rep, "ending": ending, "branches": branches,
                        "rel_count": sum(len(br["articles"]) for br in branches),
-                       "count": len(c["articles"]), "_articles": c["articles"]})
+                       "count": len(c["articles"]), "_articles": list(c["articles"])})
+    # 최근 며칠치 기사는 옛 카드 뒤에 접지 않고 자기 날짜에 세운다 (안건 π).
+    blocks.extend(promote_recent(blocks, recent_days(ordered)))
     # 밴드 (히어로 · 주요 소식) 기사도 목록에 숨김 카드로 내보낸다 — 필터가 기사 단위로
     # 전 기사에 닿도록 (spec2 §6.3). 평소엔 숨김, app.js 가 필터 활성 시에만 노출.
     for a in ordered:
@@ -1714,6 +1716,73 @@ def branch_views(related: dict, ending: dict | None) -> list[dict]:
     if len(branches) == 1:
         branches[0]["label"] = ""
     return branches
+
+
+# ── 최근 며칠치 기사는 따로 세운다 (안건 π) ─────────────────────────────
+# 홈은 기사 한 건이 아니라 한 선수 이야기를 카드 한 장으로 보여 준다. 그래서 그
+# 이야기의 대표 기사가 오래됐으면, 오늘 새로 들어온 기사도 그 옛 카드 뒤로 접혀
+# 들어간다 (2026-08-27 실측 — 전날은 카드가 한 장도 없었고 그날 기사 9건이 전부
+# 접혀 있었다). 최근 며칠치 기사는 접지 않고 자기 날짜에 카드로 세운다.
+#
+# 세우는 장수를 제한하는 이유는 「같은 기사가 두 번 나와서」 가 아니다. 이 코드는
+# 중복인지 아닌지를 보지 않는다 — 제목에서 뽑은 선수 이름 (protagonist) 만 보고
+# 같은 이야기로 묶는다. 그래서 걸리는 두 장이 사실상 같은 소식일 때도 있고 같은
+# 선수의 전혀 다른 소식일 때도 있다. 제한이 없으면 한 선수가 그날 카드를 거의 다
+# 가져간다 (2026-08-27 실측 — 꺼낼 수 있는 18장 중 14장이 세 선수 것이었다).
+#
+# 원래부터 서 있던 대표 카드는 이 장수에 안 들어간다 (꺼내 온 것끼리만 센다).
+PROMOTE_DAYS = 3
+PROMOTE_PER_PLAYER_DAY = 2
+
+
+def recent_days(articles: list[dict], n: int = PROMOTE_DAYS) -> set:
+    """따로 세울 날짜 — 기사가 있는 최신 n개 날짜 (홈이 펼치는 날짜 그룹 수와 같다).
+    카드가 아니라 기사에서 뽑는다 — 따로 세운 결과가 이 범위를 다시 흔들면 안 된다."""
+    days = set()
+    for a in articles:
+        ts = _group_ts(a)
+        if ts is not None:
+            days.add(to_kst(ts).date())
+    return set(sorted(days, reverse=True)[:n])
+
+
+def promote_recent(blocks: list[dict], window: set,
+                   cap: int = PROMOTE_PER_PLAYER_DAY) -> list[dict]:
+    """접혀 있던 기사 중 최근 날짜 것을 꺼내 낱개 카드로 돌려준다 (안건 π).
+    한 선수 소식은 하루 cap 장까지만 꺼내고, 못 꺼낸 것은 접힌 채로 남는다.
+    꺼낸 기사는 원래 카드의 관련 보도와 기사 목록에서 빼 준다 — 안 그러면 같은
+    기사가 카드와 접힘에 두 번 나오고 날짜 머리글의 보도 건수도 두 번 센다."""
+    promoted = []
+    for b in blocks:
+        by_day: dict = {}
+        for br in b["branches"]:
+            for a in br["articles"]:
+                ts = _group_ts(a)
+                if ts is not None and to_kst(ts).date() in window:
+                    by_day.setdefault(to_kst(ts).date(), []).append(a)
+        picks = []
+        for _, arts in sorted(by_day.items(), reverse=True):
+            arts.sort(key=_sort_ts, reverse=True)                     # 같은 등급이면 최신
+            arts.sort(key=lambda a: float(a["tier"])
+                      if a.get("tier") is not None else 99.0)         # 공신력 높은 쪽부터
+            picks.extend(arts[:cap])
+        if not picks:
+            continue
+        taken = {a["content_hash"] for a in picks}
+        for br in b["branches"]:
+            br["articles"] = [a for a in br["articles"]
+                              if a["content_hash"] not in taken]
+        b["branches"] = [br for br in b["branches"] if br["articles"]]
+        if len(b["branches"]) == 1:
+            b["branches"][0]["label"] = ""      # 갈래가 하나면 이름표 생략 (branch_views)
+        b["rel_count"] = sum(len(br["articles"]) for br in b["branches"])
+        b["_articles"] = [a for a in b["_articles"]
+                          if a["content_hash"] not in taken]
+        b["count"] = len(b["_articles"])
+        promoted.extend({"rep": a, "ending": None, "branches": [], "rel_count": 0,
+                         "count": 1, "_articles": [a], "promoted": True}
+                        for a in picks)
+    return promoted
 
 
 def is_gossip_cluster(cluster: dict) -> bool:

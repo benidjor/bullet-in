@@ -1,5 +1,5 @@
 """UI 개편 뷰모델 헬퍼 단위 테스트 (docs/superpowers/plans/2026-07-22-serve-ui-redesign.md)."""
-from datetime import datetime
+from datetime import date, datetime
 
 from bullet_in.serve import render as R
 
@@ -297,3 +297,71 @@ def test_top_stories_dedup_by_event():
             for a in ([picks["lead"]] + picks["mains"])]
     assert keys.count("트로사르") == 1        # 같은 사건은 한 번만
     assert "로저스" in keys
+
+
+# ── 최근 며칠치 기사는 따로 세운다 (안건 π) ─────────────────────────
+
+def _p(h, day, tier=1.0, hour=1):
+    """시험용 기사 — 날짜 · 공신력만 다르게 둔다."""
+    return _row(content_hash=h, tier=tier,
+                published_at=datetime(2026, 7, day, hour, 0),
+                fetched_at=datetime(2026, 7, day, hour, 0))
+
+
+def test_recent_days_counts_articles_not_blocks():
+    # 날짜 범위는 카드가 아니라 기사에서 뽑는다 — 꺼낸 결과가 범위를 흔들면 안 된다
+    arts = [_p("a", 21), _p("b", 20), _p("c", 20), _p("d", 18), _p("e", 15)]
+    assert R.recent_days(arts) == {date(2026, 7, 21), date(2026, 7, 20), date(2026, 7, 18)}
+
+
+def test_promote_recent_lifts_folded_article_in_window():
+    # 최근 날짜에 든 기사는 접힘에서 나와 자기 카드를 갖는다
+    rep, new = _p("rep", 15), _p("new", 21)
+    block = {"rep": rep, "count": 2, "_articles": [rep, new], "rel_count": 1,
+             "branches": [{"label": "", "articles": [new]}]}
+    out = R.promote_recent([block], R.recent_days([rep, new]))
+    assert [b["rep"]["content_hash"] for b in out] == ["new"]
+    assert out[0]["rel_count"] == 0 and out[0]["branches"] == []
+    assert block["rel_count"] == 0 and block["branches"] == []
+    assert block["_articles"] == [rep]          # 날짜 머리글 건수가 두 번 세지 않게
+
+
+def test_promote_recent_keeps_articles_outside_window_folded():
+    rep, old = _p("rep", 15), _p("old", 16)
+    block = {"rep": rep, "count": 2, "_articles": [rep, old], "rel_count": 1,
+             "branches": [{"label": "", "articles": [old]}]}
+    window = R.recent_days([rep, old, _p("x", 21), _p("y", 20), _p("z", 19)])
+    assert R.promote_recent([block], window) == []
+    assert block["rel_count"] == 1
+
+
+def test_promote_recent_caps_per_player_and_day():
+    # 한 선수가 그날 카드를 다 가져가지 않게 — 꺼내는 것은 공신력 높은 쪽부터
+    rep = _p("rep", 15)
+    low, mid, high = _p("low", 21, tier=4.0), _p("mid", 21, tier=2.0), _p("high", 21, tier=1.0)
+    block = {"rep": rep, "count": 4, "_articles": [rep, low, mid, high], "rel_count": 3,
+             "branches": [{"label": "", "articles": [low, mid, high]}]}
+    out = R.promote_recent([block], R.recent_days([rep, low]), cap=1)
+    assert [b["rep"]["content_hash"] for b in out] == ["high"]
+    assert block["rel_count"] == 2               # 못 꺼낸 둘은 접힌 채로 남는다
+
+
+def test_promote_recent_default_is_two_per_player_a_day():
+    # 기본값 = 한 선수 소식 하루 두 장 (2026-08-27 사용자 확정)
+    rep = _p("rep", 15)
+    low, mid, high = _p("low", 21, tier=4.0), _p("mid", 21, tier=2.0), _p("high", 21, tier=1.0)
+    block = {"rep": rep, "count": 4, "_articles": [rep, low, mid, high], "rel_count": 3,
+             "branches": [{"label": "", "articles": [low, mid, high]}]}
+    out = R.promote_recent([block], R.recent_days([rep, low]))
+    assert R.PROMOTE_PER_PLAYER_DAY == 2
+    assert [b["rep"]["content_hash"] for b in out] == ["high", "mid"]
+    assert block["rel_count"] == 1
+
+
+def test_promote_recent_counts_each_day_separately():
+    # 장수는 날짜마다 따로 센다 — 같은 선수라도 날이 다르면 각각 한 장씩 선다
+    rep, d20, d21 = _p("rep", 15), _p("d20", 20), _p("d21", 21)
+    block = {"rep": rep, "count": 3, "_articles": [rep, d20, d21], "rel_count": 2,
+             "branches": [{"label": "", "articles": [d21, d20]}]}
+    out = R.promote_recent([block], R.recent_days([rep, d20, d21]), cap=1)
+    assert sorted(b["rep"]["content_hash"] for b in out) == ["d20", "d21"]
