@@ -61,12 +61,13 @@ def load_registry(path) -> Registry:
     return Registry(jour, out, j_outlets)
 
 def journalist_directory(path) -> dict[str, dict]:
-    """alias · 정식명(lower) -> {"name": 정식 영문명, "outlet": 소속 | None}.
-    바이라인 표기 · facet 정규화 · 등재 판정을 한 번에 해결하는 서빙용 조회 맵."""
+    """alias · 정식명(lower) -> {"name": 정식 영문명, "outlet": 소속 | None, "tier": 등급 | None}.
+    바이라인 표기 · facet 정규화 · 등재 판정을 한 번에 해결하는 서빙용 조회 맵.
+    tier 는 공저 기사의 대표를 고를 때 쓴다 (2026-08-27) — 등급이 없는 이름은 None 이다."""
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     out: dict[str, dict] = {}
     for e in data.get("journalists", []) or []:
-        entry = {"name": e["name"], "outlet": e.get("outlet")}
+        entry = {"name": e["name"], "outlet": e.get("outlet"), "tier": e.get("tier")}
         for key in [e["name"], *e["aliases"]]:
             out.setdefault(key.lower(), entry)
             out.setdefault(norm_alias(key), entry)

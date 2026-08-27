@@ -503,7 +503,26 @@ def article_journalists(row: dict, sources: dict, directory: dict | None,
         view = _journalist_view(a, src, directory, art_outlet, outlet_dir)
         if all(view["name"] != e["name"] for e in out):
             out.append(view)
-    return out
+    return _lead_by_tier(out, directory)
+
+
+def _lead_by_tier(views: list[dict], directory: dict | None) -> list[dict]:
+    """대표를 등급이 가장 높은 저자로 올린다 (사용자 확정 2026-08-27).
+
+    등급 없는 이름이 저장 순서만으로 대표가 되어 사이드바 항목까지 차지하던 자리다
+    (실측 17건 · 항목 5종 감소 · 첫 화면 무이동).
+    등급이 같거나 전원 미상이면 순서를 안 흔든다 — 대표가 회차마다 바뀌면 항목도 흔들린다."""
+    if len(views) < 2:
+        return views
+
+    def rank(v):
+        t = (directory or {}).get(norm_alias(v["name"]), {}).get("tier")
+        return float(t) if t is not None else float("inf")
+
+    best = min(views, key=rank)                 # 동점이면 앞선 것이 남는다
+    if best is views[0]:
+        return views
+    return [best] + [v for v in views if v is not best]
 
 
 def journalist_entry(row: dict, sources: dict, directory: dict | None,
@@ -553,10 +572,11 @@ def _outlet_tier(key: str, row: dict, sources: dict, registry) -> float | None:
 
 def _journalist_tier(row: dict, entry: dict, registry) -> float | None:
     if entry["registered"] and registry is not None:
-        j = norm_alias(row.get("journalist") or "")
-        t = registry.journalists.get(j)
+        # 대표가 저장 칸과 다를 수 있어 (2026-08-27 등급 우선 대표) 항목 이름을 먼저 본다 —
+        # 저장 칸을 먼저 보면 옛 대표의 등급이 새 대표 항목에 붙는다.
+        t = registry.journalists.get(norm_alias(entry["name"]))
         if t is None:
-            t = registry.journalists.get(norm_alias(entry["name"]))
+            t = registry.journalists.get(norm_alias(row.get("journalist") or ""))
         if t is not None:
             return float(t)
     # 비전담 · 조직 · 통칭 → 기사 저장 tier (비전담 기준선) 그룹으로 분류
