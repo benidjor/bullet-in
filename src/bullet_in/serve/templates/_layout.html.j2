@@ -73,7 +73,7 @@ gtag('config','{{ ga_id }}');
   </nav>
   <label class="search">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
-    <input id="q" placeholder="선수·구단·이적 키워드 검색">
+    <input id="q" type="search" placeholder="선수·구단·이적 키워드 검색 — 엔터">
   </label>
   <span class="spacer"></span>
   {% if active in ('home', 'all') %}
@@ -129,7 +129,7 @@ gtag('config','{{ ga_id }}');
       <div class="grpbody">
         <label class="facetsearch">
           <input type="search" id="jSearch" autocomplete="off"
-                 placeholder="이름으로 찾기 · {{ facets.journalists['total'] }}명">
+                 placeholder="이름으로 찾기 · {{ facets.journalists['total'] }}명 — 엔터">
         </label>
         {{ facet_block('journalist', facets.journalists) }}
       </div>
