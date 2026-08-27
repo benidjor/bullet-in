@@ -13,7 +13,8 @@ def test_load_registry_maps_aliases_lowercased():
     r = load_registry(REG)
     assert r.journalists["@david_ornstein"] == 1.0
     assert r.journalists["온스테인"] == 1.0
-    assert r.outlets["디 애슬레틱"] == 1.0
+    # 매체 기본값은 비전담 기준선이다 (2026-08-27 사용자 결정 · 전담은 기자 등급으로 승격)
+    assert r.outlets["디 애슬레틱"] == 1.5
     assert r.outlets["데일리 메일"] == 3.0
 
 def test_load_registry_rejects_duplicate_alias(tmp_path):
@@ -57,7 +58,7 @@ def test_resolve_fmkorea_outlet_bracket():
     r = load_registry(REG)
     sources = {"fmkorea": {"credibility": "fmkorea"}}
     it = _item("fmkorea", {"title": "[디 애슬레틱] 사카 재계약", "body": "내용"})
-    assert resolve_tier(it, sources, r) == 1.0
+    assert resolve_tier(it, sources, r) == 1.5   # 매체 기본값 (2026-08-27 개정)
 
 def test_resolve_fmkorea_fallback_tier_four():
     r = load_registry(REG)
@@ -138,7 +139,7 @@ def test_registry_registers_french_outlets():
     r = load_registry(REG)
     assert r.outlets["l'équipe"] == 3.0
     assert r.outlets["레키프"] == 3.0
-    assert r.outlets["rmc"] == 1.0
+    assert r.outlets["rmc"] == 1.5
     assert r.outlets["foot mercato"] == 4.0
 
 def test_journalist_directory_maps_alias_and_name():
@@ -479,13 +480,18 @@ def test_two_spellings_of_the_same_person_share_one_entry():
 
 
 def test_spelling_only_journalists_carry_no_tier():
-    """표기를 합치면서 공신력은 한 칸도 안 준다 (설계 §4.2)."""
+    """표기를 합치면서 공신력은 한 칸도 안 준다 (설계 §4.2).
+
+    등급은 사용자가 따로 정할 때만 붙는다 — Nizaar Kinsella 는 2026-08-27 에 1.5 를 받아
+    이 목록에서 빠졌다."""
     r = load_registry(REG)
-    for key in ["simon jones", "사이먼 존스", "isaan khan", "mario cortegana",
+    for key in ["simon jones", "사이먼 존스", "mario cortegana",
                 "james pearce", "sam wallace", "dominic king",
-                "크리스 워", "chris waugh", "호펠디", "josé félix díaz",
-                "니자르 킨셀라", "nizaar kinsella"]:
+                "크리스 워", "chris waugh", "호펠디", "josé félix díaz"]:
         assert key not in r.journalists
+    # 등급을 받은 둘은 이 목록에서 졸업했다 (2026-08-27)
+    assert r.journalists["nizaar kinsella"] == 1.5
+    assert r.journalists["isaan khan"] == 3.0
 
 
 def test_split_outlet_spellings_fold_to_one_name():
