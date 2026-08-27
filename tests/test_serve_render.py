@@ -760,11 +760,18 @@ FILTER_SOURCES = {
 
 def test_index_relitem_carries_filter_data_attrs():
     # 접힌 관련 보도도 필터 대상 — 대표 카드와 같은 필터 키를 data 속성으로 가진다
+    # 이 선수 이야기는 최근 날짜 밖에 둔다 (안건 π) — 최근 날짜에 걸리면 r2 가 접히지
+    # 않고 자기 카드로 서서 relitem 이 아예 안 나온다. 최신 세 날짜는 다른 선수로 채운다.
     rep = _row(content_hash="r1", source_id="skysports", tier=2,
-               title_ko="아스날, 에제 영입 합의", transfer_stage="agreed")
+               title_ko="아스날, 에제 영입 합의", transfer_stage="agreed",
+               published_at=datetime(2026, 6, 20, 10, 0, 0))
     rel = _row(content_hash="r2", source_id="goal", tier=4, summary_ko="한 줄",
-               title_ko="아스날, 에제 이적 임박", transfer_stage="rumour")
-    html = render_index([rep, rel], FILTER_SOURCES, NOW)
+               title_ko="아스날, 에제 이적 임박", transfer_stage="rumour",
+               published_at=datetime(2026, 6, 20, 9, 0, 0))
+    fill = [_row(content_hash=f"f{d}", source_id="skysports", tier=2,
+                 title_ko=f"아스날, 6월 {d}일 소식", transfer_stage="rumour",
+                 published_at=datetime(2026, 6, d, 10, 0, 0)) for d in (29, 28, 27)]
+    html = render_index([rep, rel] + fill, FILTER_SOURCES, NOW)
     i = html.index('href="article/r2.html"')
     seg = html[max(0, i - 200):i + 700]
     assert 'class="relitem"' in seg
