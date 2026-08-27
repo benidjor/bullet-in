@@ -31,7 +31,8 @@ journalists:
   # 등급을 안 매기는 이유는 「이 기자를 얼마나 믿을 것인가」 가 표기 통일과 다른 판단이기 때문이다.
   - {name: Simon Jones,       outlet: Daily Mail,     aliases: ["사이먼 존스", "SIMON JONES"]}
   - {name: Isaan Khan,                                aliases: ["이산 칸", "ISAAN KHAN", "@IsaanKhan_"]}
-  - {name: Mario Cortegana,                           aliases: ["마리오 코르테가나", "Mario Cortegana"]}
+  # 소속을 채운다 (2026-08-27) — 저장된 기사 14건이 전부 The Athletic 이다.
+  - {name: Mario Cortegana,        outlet: The Athletic,   aliases: ["마리오 코르테가나", "Mario Cortegana"]}
   - {name: James Pearce,      outlet: The Athletic,   aliases: ["제임스 피어스", "James Pearce"]}
   # 아래 둘은 핸들과 영문명이 갈린 자리다 — 등재된 Sam Dean · Matt Law 는 사전이 접었는데
   # 미등재라 안 접혔다 (2026-08-20 텔레그래프 저자 회수 실측).
@@ -50,12 +51,12 @@ journalists:
   - {name: Mike McGrath,              outlet: The Telegraph,  aliases: ["마이크 맥그라스"]}
   - {name: John Percy,                outlet: The Telegraph,  aliases: ["존 퍼시"]}
   - {name: Jack Rosser,               outlet: The Sun,        aliases: ["잭 로서"]}
-  - {name: Nizaar Kinsella,           outlet: BBC,            aliases: ["니자르 킨셀라"]}
+  - {name: Nizaar Kinsella,      tier: 1.5, outlet: BBC,            aliases: ["니자르 킨셀라"]}
   # 「호펠디」 는 호 (세) · 펠 (릭스) · 디 (아스) 를 줄여 부른 별명이라 음역으로는 원래 이름에 못 닿는다.
   - {name: José Félix Díaz,           outlet: AS,             aliases: ["호펠디"]}
   - {name: Daniele Longo,             outlet: Calciomercato,  aliases: ["다니엘레 롱고"]}
   - {name: Lee Ryder,                 outlet: ChronicleLive,  aliases: ["리 라이더"]}
-  - {name: Florian Plettenberg,       outlet: Sky Sports,     aliases: ["플로리안 플라텐버그"]}
+  - {name: Florian Plettenberg,  tier: 1.5, outlet: Sky Sports,     aliases: ["플로리안 플라텐버그"]}
 outlets:
   # 아래 별칭 중 도메인 교차 계수로 짝이 확정된 것들은 언론사 표기 통일 설계 §2.1 의 표에서 왔다
   # (같은 도메인에서 온 기사면 표기가 달라도 같은 매체다 · 사람의 이름 판단이 안 들어간다).

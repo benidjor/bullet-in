@@ -478,13 +478,16 @@ def test_two_spellings_of_the_same_person_share_one_entry():
 
 
 def test_spelling_only_journalists_carry_no_tier():
-    """표기를 합치면서 공신력은 한 칸도 안 준다 (설계 §4.2)."""
+    """표기를 합치면서 공신력은 한 칸도 안 준다 (설계 §4.2).
+
+    등급은 사용자가 따로 정할 때만 붙는다 — Nizaar Kinsella 는 2026-08-27 에 1.5 를 받아
+    이 목록에서 빠졌다."""
     r = load_registry(REG)
     for key in ["simon jones", "사이먼 존스", "isaan khan", "mario cortegana",
                 "james pearce", "sam wallace", "dominic king",
-                "크리스 워", "chris waugh", "호펠디", "josé félix díaz",
-                "니자르 킨셀라", "nizaar kinsella"]:
+                "크리스 워", "chris waugh", "호펠디", "josé félix díaz"]:
         assert key not in r.journalists
+    assert r.journalists["nizaar kinsella"] == 1.5
 
 
 def test_split_outlet_spellings_fold_to_one_name():
