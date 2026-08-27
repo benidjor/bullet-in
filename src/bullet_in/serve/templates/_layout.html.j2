@@ -71,10 +71,12 @@ gtag('config','{{ ga_id }}');
     <a class="{{ 'active' if active == 'players' else '' }}" href="{{ root }}players.html">선수</a>
     <a class="{{ 'active' if active == 'about' else '' }}" href="{{ root }}about.html">소개</a>
   </nav>
-  <label class="search">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
-    <input id="q" type="search" placeholder="선수·구단·이적 키워드 검색 — 엔터">
-  </label>
+  <div class="search">
+    <input id="q" type="search" placeholder="선수·구단·이적 키워드 검색">
+    <button class="searchgo" id="qGo" type="button" aria-label="검색">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+    </button>
+  </div>
   <span class="spacer"></span>
   {% if active in ('home', 'all') %}
   <select class="sortsel" id="sortSel" title="정렬 — 조회순은 이 기기에서 연 기사 기록 기준">
@@ -127,10 +129,13 @@ gtag('config','{{ ga_id }}');
     <div class="grp collapsed" data-grp="journalist">
       <button class="grphead" type="button"><h4>기자</h4><span class="caret">▾</span></button>
       <div class="grpbody">
-        <label class="facetsearch">
+        <div class="facetsearch">
           <input type="search" id="jSearch" autocomplete="off"
-                 placeholder="이름으로 찾기 · {{ facets.journalists['total'] }}명 — 엔터">
-        </label>
+                 placeholder="이름으로 찾기 · {{ facets.journalists['total'] }}명">
+          <button class="facetgo" id="jSearchGo" type="button" aria-label="기자 찾기">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+          </button>
+        </div>
         {{ facet_block('journalist', facets.journalists) }}
       </div>
     </div>

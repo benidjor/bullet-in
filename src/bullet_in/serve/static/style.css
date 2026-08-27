@@ -74,7 +74,11 @@ h1,h2,h3,h4{margin:0}
 .search{flex:0 1 380px;min-width:0;display:flex;align-items:center;gap:8px;
   background:var(--sunk);border:1px solid var(--hair);border-radius:2px;padding:8px 12px}
 .search input{border:0;background:transparent;outline:none;width:100%;font:inherit;font-size:14px;color:var(--ink)}
-.search svg{flex:0 0 auto;opacity:.55}
+/* 검색 버튼 — 엔터를 안 눌러도 걸리게 (2026-08-27) · 돋보기는 장식이 아니라 실제 버튼이다 */
+.search .searchgo{flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  border:0;background:none;color:var(--mut);padding:2px;cursor:pointer;border-radius:2px}
+.search .searchgo:hover{color:var(--ink)}
+.search .searchgo:focus-visible{outline:2px solid var(--mut);outline-offset:1px}
 .spacer{flex:1 1 auto}
 .iconbtn,.sortsel{border:1px solid var(--hair);background:var(--paper);color:var(--ink);
   border-radius:2px;height:38px;cursor:pointer;flex:0 0 auto;font:inherit}
@@ -124,10 +128,16 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .morebtn:hover{color:var(--ink);border-color:var(--mut)}
 /* 기자 이름 검색칸 (기자 축 설계 §3.3) — 검색 중에는 견출 · 더보기 버튼을 감추고
    안 맞는 항목만 가린다. hidden 속성이 .opt 의 display:flex 에 지므로 규칙을 따로 둔다. */
-.facetsearch{display:block;margin:2px 0 6px}
-.facetsearch input{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--hair);
+.facetsearch{display:flex;align-items:center;gap:4px;margin:2px 0 6px}
+.facetsearch input{flex:1 1 auto;min-width:0;box-sizing:border-box;padding:6px 8px;
+  border:1px solid var(--hair);
   border-radius:2px;background:none;color:inherit;font:inherit;font-size:12.5px}
 .facetsearch input:focus{outline:none;border-color:var(--mut)}
+.facetsearch .facetgo{flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  padding:6px;border:1px solid var(--hair);border-radius:2px;background:none;
+  color:var(--mut);cursor:pointer}
+.facetsearch .facetgo:hover{color:var(--ink);border-color:var(--mut)}
+.facetsearch .facetgo:focus-visible{outline:2px solid var(--mut);outline-offset:1px}
 .opt[hidden],.tierhead[hidden],.unreghead[hidden]{display:none}
 .fstatus{font-size:12px;color:var(--mut);padding:14px 0 2px;line-height:1.5}
 .actions{position:sticky;bottom:0;background:var(--paper);padding:10px 0;margin-top:8px;

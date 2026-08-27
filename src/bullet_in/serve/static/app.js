@@ -145,7 +145,7 @@ function setupFacetSearch(input) {
     if (q) stages.forEach(s => { s.hidden = false; });
     else scope._moreSync?.();
   };
-  // 이름 찾기도 엔터에서만 걸린다 (기사 검색과 같은 규칙) — 비우면 그 자리에서 되돌린다.
+  // 엔터 · 돋보기 버튼에서 걸린다 (기사 검색과 같은 규칙) — 비우면 그 자리에서 되돌린다.
   input.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
@@ -153,6 +153,7 @@ function setupFacetSearch(input) {
   });
   input.addEventListener('input', () => { if (!input.value.trim()) run(); });
   input.addEventListener('search', run);
+  document.getElementById('jSearchGo')?.addEventListener('click', run);
 }
 
 // ── 필터 요소 ──────────────────────────────────────────────────────
@@ -544,7 +545,7 @@ if (items.length && side) {                               // 인덱스
   if (sortSel) sortSel.onchange = () => { sortBlocks(); const qs = filterParams().toString();
     history.replaceState(null, '', qs ? `?${qs}` : location.pathname); };
   if (searchInput) {
-    // 입력할 때마다 목록이 튀지 않게 — 엔터 · 「필터 적용」 에서만 반영한다.
+    // 입력할 때마다 목록이 튀지 않게 — 엔터 · 돋보기 버튼 · 「필터 적용」 에서만 반영한다.
     searchInput.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       e.preventDefault();
@@ -553,6 +554,10 @@ if (items.length && side) {                               // 인덱스
     searchInput.addEventListener('input', () => { applyBtn?.classList.add('dirty'); });
     // 검색칸의 × 로 비우면 그 자리에서 되돌린다 (엔터를 누를 값이 없다)
     searchInput.addEventListener('search', () => { if (!searchInput.value.trim()) applyFilters(); });
+    document.getElementById('qGo')?.addEventListener('click', () => {
+      trackFilterApply();
+      applyFilters();
+    });
   }
   if (restoreFromQuery()) applyFilters();
   else { sortBlocks(); hideEmpty(); }
