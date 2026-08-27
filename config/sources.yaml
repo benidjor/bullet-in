@@ -135,6 +135,9 @@ sources:
     fallback_tier: 4
     freshness_hours: 24   # 공백 95% 15h (21일 실측) — 집계 계정이라 하루 다건
     config: { handle: "afcstuff", max_tweets: 30, cookies_path: "x_cookies.json", backtrack_config: "config/backtrack.yaml" }
+    # 기자가 아닌 인용처 (2026-08-27 사용자 결정) — @clubgame 은 판타지 축구 게임 앱이라
+    # 그 글이 「아스날 26/27 선수 능력치」 처럼 이적 뉴스가 아니다.
+    journalist_denylist: ["@clubgame"]
     enabled: true
   - source_id: x_ornstein
     display_name: David Ornstein (X)

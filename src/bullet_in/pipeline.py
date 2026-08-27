@@ -91,6 +91,13 @@ def to_articles(raw: list[RawItem], sources: dict[str, dict],
         if allowlist and journalist not in allowlist:
             author_drop_count += 1     # 전담 외 기자 · 저자 미상 drop (spec §3.1)
             continue
+        # 기자가 아닌 인용처 drop (2026-08-27) — 집계 계정이 게임 · 홍보 계정을 인용하면
+        # 그 글이 이적 뉴스로 들어온다 (실물 @clubgame = 판타지 축구 앱의 선수 능력치).
+        # 등재로는 못 막는다 — 이름을 고쳐 줄 뿐 글은 그대로 남는다.
+        denylist = src.get("journalist_denylist")
+        if denylist and journalist in denylist:
+            author_drop_count += 1
+            continue
         tier = resolve_tier(item, sources, registry, journalist=journalist)
         if tier is None:
             continue

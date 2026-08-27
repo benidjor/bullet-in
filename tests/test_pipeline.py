@@ -236,6 +236,24 @@ def test_to_articles_allowlist_drops_journalist_none():
     arts, stats = to_articles(raw, sources, seen={}, registry=REG)
     assert arts == [] and stats["author_drop_count"] == 1
 
+def test_to_articles_denylist_drops_a_non_journalist_source():
+    """기자가 아닌 인용처는 버린다 (2026-08-27) — 집계 계정이 게임 앱을 인용한 자리."""
+    now = datetime.now(timezone.utc)
+    raw = [
+        RawItem(source_id="x_afcstuff", source_type="x", url="https://x.com/afcstuff/status/1",
+                fetched_at=now, raw_payload={"text": "Arsenal 26/27 ratings [@clubgame]",
+                                             "journalist": "@clubgame"}),
+        RawItem(source_id="x_afcstuff", source_type="x", url="https://x.com/afcstuff/status/2",
+                fetched_at=now, raw_payload={"text": "Arsenal bid [@David_Ornstein]",
+                                             "journalist": "@David_Ornstein"}),
+    ]
+    sources = {"x_afcstuff": {"source_id": "x_afcstuff", "credibility": "x_mentions",
+                              "fallback_tier": 4, "journalist_denylist": ["@clubgame"]}}
+    arts, stats = to_articles(raw, sources, seen={}, registry=REG)
+    assert [a.url for a in arts] == ["https://x.com/afcstuff/status/2"]
+    assert stats["author_drop_count"] == 1
+
+
 def test_to_articles_no_allowlist_source_unaffected():
     raw = [RawItem(source_id="bbc_sport", source_type="html", url="https://x.test/b1",
                    fetched_at=datetime.now(timezone.utc),
