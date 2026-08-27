@@ -1750,6 +1750,14 @@ def _mid_tier_rank(row: dict) -> int:
     return 0 if (row.get("_outlet") or row.get("outlet")) == MID_TIER_PREFERRED_OUTLET else 1
 
 
+def _shown_as_card(row: dict) -> bool:
+    """필터를 안 걸어도 카드로 보이는 기사인가 (app.js 의 isOther 와 같은 판정).
+    단계가 비었거나 「기타」 면 첫 화면에서 카드가 감춰진다. 그런 기사를 꺼내면
+    관련 보도 안에서는 보이던 것이 아무 데서도 안 보이게 되므로 접힌 채로 둔다."""
+    stage = row.get("transfer_stage")
+    return bool(stage) and stage != "other"
+
+
 def recent_days(articles: list[dict], n: int = PROMOTE_DAYS) -> set:
     """따로 세울 날짜 — 기사가 있는 최신 n개 날짜 (홈이 펼치는 날짜 그룹 수와 같다).
     카드가 아니라 기사에서 뽑는다 — 따로 세운 결과가 이 범위를 다시 흔들면 안 된다."""
@@ -1773,7 +1781,7 @@ def promote_recent(blocks: list[dict], window: set,
         for br in b["branches"]:
             for a in br["articles"]:
                 ts = _group_ts(a)
-                if ts is not None and to_kst(ts).date() in window:
+                if ts is not None and to_kst(ts).date() in window and _shown_as_card(a):
                     by_day.setdefault(to_kst(ts).date(), []).append(a)
         picks = []
         for _, arts in sorted(by_day.items(), reverse=True):

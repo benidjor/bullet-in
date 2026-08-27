@@ -382,6 +382,20 @@ def test_promote_recent_sky_preference_does_not_beat_credibility():
     assert [b["rep"]["content_hash"] for b in out] == ["ath"]
 
 
+def test_promote_recent_leaves_hidden_stage_folded():
+    # 「기타」 단계는 첫 화면에서 카드가 감춰진다 — 꺼내면 관련 보도에서도 사라져
+    # 아무 데서도 안 보이게 되므로 접힌 채로 둔다
+    rep = _p("rep", 15)
+    other = _p("other", 21) | {"transfer_stage": "other"}
+    blank = _p("blank", 21) | {"transfer_stage": None}
+    ok = _p("ok", 21)
+    block = {"rep": rep, "count": 4, "_articles": [rep, other, blank, ok], "rel_count": 3,
+             "branches": [{"label": "", "articles": [other, blank, ok]}]}
+    out = R.promote_recent([block], R.recent_days([rep, ok]))
+    assert [b["rep"]["content_hash"] for b in out] == ["ok"]
+    assert block["rel_count"] == 2               # 기타 · 무단계 둘은 접힌 채로 남는다
+
+
 def test_promote_recent_counts_each_day_separately():
     # 장수는 날짜마다 따로 센다 — 같은 선수라도 날이 다르면 각각 한 장씩 선다
     rep, d20, d21 = _p("rep", 15), _p("d20", 20), _p("d21", 21)
