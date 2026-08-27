@@ -346,16 +346,40 @@ def test_promote_recent_caps_per_player_and_day():
     assert block["rel_count"] == 2               # 못 꺼낸 둘은 접힌 채로 남는다
 
 
-def test_promote_recent_default_is_two_per_player_a_day():
-    # 기본값 = 한 선수 소식 하루 두 장 (2026-08-27 사용자 확정)
+def test_promote_recent_default_is_three_per_player_a_day():
+    # 기본값 = 한 선수 소식 하루 세 장 (2026-08-27 사용자 확정)
     rep = _p("rep", 15)
-    low, mid, high = _p("low", 21, tier=4.0), _p("mid", 21, tier=2.0), _p("high", 21, tier=1.0)
-    block = {"rep": rep, "count": 4, "_articles": [rep, low, mid, high], "rel_count": 3,
-             "branches": [{"label": "", "articles": [low, mid, high]}]}
+    worst, low = _p("worst", 21, tier=4.0), _p("low", 21, tier=3.0)
+    mid, high = _p("mid", 21, tier=2.0), _p("high", 21, tier=1.0)
+    block = {"rep": rep, "count": 5, "_articles": [rep, worst, low, mid, high],
+             "rel_count": 4,
+             "branches": [{"label": "", "articles": [worst, low, mid, high]}]}
     out = R.promote_recent([block], R.recent_days([rep, low]))
-    assert R.PROMOTE_PER_PLAYER_DAY == 2
-    assert [b["rep"]["content_hash"] for b in out] == ["high", "mid"]
-    assert block["rel_count"] == 1
+    assert R.PROMOTE_PER_PLAYER_DAY == 3
+    assert [b["rep"]["content_hash"] for b in out] == ["high", "mid", "low"]
+    assert block["rel_count"] == 1              # 공신력 최하 한 장만 접힌 채로 남는다
+
+
+def test_promote_recent_prefers_sky_within_mid_tier():
+    # 공신력 중끼리 겹치면 Sky Sports 를 먼저 세운다 (2026-08-27 사용자 결정)
+    rep = _p("rep", 15)
+    espn = _p("espn", 21, tier=2.0, hour=9) | {"_outlet": "ESPN"}
+    sky = _p("sky", 21, tier=2.0, hour=2) | {"_outlet": "Sky Sports"}
+    block = {"rep": rep, "count": 3, "_articles": [rep, espn, sky], "rel_count": 2,
+             "branches": [{"label": "", "articles": [espn, sky]}]}
+    out = R.promote_recent([block], R.recent_days([rep, espn]), cap=1)
+    assert [b["rep"]["content_hash"] for b in out] == ["sky"]   # 더 옛 기사인데도 Sky
+
+
+def test_promote_recent_sky_preference_does_not_beat_credibility():
+    # 등급이 먼저다 — 공신력 상 기사가 있으면 Sky (중) 보다 그쪽이 선다
+    rep = _p("rep", 15)
+    sky = _p("sky", 21, tier=2.0, hour=9) | {"_outlet": "Sky Sports"}
+    athletic = _p("ath", 21, tier=1.5, hour=2) | {"_outlet": "The Athletic"}
+    block = {"rep": rep, "count": 3, "_articles": [rep, sky, athletic], "rel_count": 2,
+             "branches": [{"label": "", "articles": [sky, athletic]}]}
+    out = R.promote_recent([block], R.recent_days([rep, sky]), cap=1)
+    assert [b["rep"]["content_hash"] for b in out] == ["ath"]
 
 
 def test_promote_recent_counts_each_day_separately():

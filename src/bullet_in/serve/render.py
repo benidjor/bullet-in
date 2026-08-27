@@ -1732,7 +1732,22 @@ def branch_views(related: dict, ending: dict | None) -> list[dict]:
 #
 # 원래부터 서 있던 대표 카드는 이 장수에 안 들어간다 (꺼내 온 것끼리만 센다).
 PROMOTE_DAYS = 3
-PROMOTE_PER_PLAYER_DAY = 2
+PROMOTE_PER_PLAYER_DAY = 3
+
+# 공신력 중 (tier 2) 에는 매체가 여덟이라 (Sky Sports · ESPN · The Times ·
+# The Telegraph · arseblog · Globo · UOL · O Jogo) 같은 등급끼리 자주 겹친다.
+# 그때는 Sky Sports 를 먼저 세운다 (2026-08-27 사용자 결정).
+MID_TIER = 2.0
+MID_TIER_PREFERRED_OUTLET = "Sky Sports"
+
+
+def _mid_tier_rank(row: dict) -> int:
+    """공신력 중 안에서의 매체 순서 — Sky Sports 가 0, 나머지가 1.
+    다른 등급은 전부 1이라 그 등급 안에서는 아무것도 안 바꾼다."""
+    tier = row.get("tier")
+    if tier is None or float(tier) != MID_TIER:
+        return 1
+    return 0 if (row.get("_outlet") or row.get("outlet")) == MID_TIER_PREFERRED_OUTLET else 1
 
 
 def recent_days(articles: list[dict], n: int = PROMOTE_DAYS) -> set:
@@ -1762,9 +1777,10 @@ def promote_recent(blocks: list[dict], window: set,
                     by_day.setdefault(to_kst(ts).date(), []).append(a)
         picks = []
         for _, arts in sorted(by_day.items(), reverse=True):
-            arts.sort(key=_sort_ts, reverse=True)                     # 같은 등급이면 최신
+            arts.sort(key=_sort_ts, reverse=True)                     # 셋째 — 최신
+            arts.sort(key=_mid_tier_rank)                             # 둘째 — 중이면 Sky
             arts.sort(key=lambda a: float(a["tier"])
-                      if a.get("tier") is not None else 99.0)         # 공신력 높은 쪽부터
+                      if a.get("tier") is not None else 99.0)         # 첫째 — 공신력
             picks.extend(arts[:cap])
         if not picks:
             continue
