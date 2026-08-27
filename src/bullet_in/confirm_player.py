@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+from bullet_in.backfill_ko_full_name import resolve as resolve_ko_full_name
 from bullet_in.enrich import (BODY_AS_TITLE_SOURCES, NAME_MISSING_PREFIX,
                               detect_title_hallucination, detect_title_mistranslation)
 
@@ -155,8 +156,12 @@ def main(argv=None) -> int:
         print(f"[dry-run] 등장 기사 {len(hashes)} · 재번역 대상 {len(suspects)}")
         return 0
 
+    # 표시용 풀네임은 확정과 같은 회에 채운다 — 뒤로 미루면 그 선수 페이지가 다음
+    # 적재 때까지 성만 달고 서 있는다 (푸빌 · 콴사 등 2026-08-27 확정분 7명).
     pstore.confirm(player["id"], ko_name=args.ko, category=args.category,
-                   transfer_status=args.transfer_status, club=args.club)
+                   transfer_status=args.transfer_status, club=args.club,
+                   ko_full_name=resolve_ko_full_name(
+                       player["full_name"], args.ko, player.get("ko_candidate")))
     suspects = recheck_titles(mart.rows_for_hashes(hashes),
                               pstore.gate_name_map())
     remaining = 0
