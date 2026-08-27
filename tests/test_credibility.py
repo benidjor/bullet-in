@@ -66,6 +66,32 @@ def test_resolve_fmkorea_fallback_tier_four():
     it = _item("fmkorea", {"title": "[무명 블로그] 카더라", "body": "출처 불명"})
     assert resolve_tier(it, sources, r) == 4.0
 
+
+def test_resolve_fmkorea_uses_outlet_field_when_title_has_none():
+    # 제목에 매체가 없어도 게시자가 적어 둔 매체 칸을 본다 — 매체를 알면서 등급을
+    # 최하로 두면 화면은 「Sky Sports」 인데 가십 절에 놓인다 (2026-08-28 실측 14건)
+    r = load_registry(REG)
+    sources = {"fmkorea": {"credibility": "fmkorea"}}
+    it = _item("fmkorea", {"title": "레버쿠젠, 콴사 판매 불가 선언", "body": "내용",
+                           "outlet": "Sky Sports"})
+    assert resolve_tier(it, sources, r) == 2.0
+
+
+def test_resolve_fmkorea_outlet_field_does_not_beat_journalist():
+    # 순서는 그대로 — 등재 기자가 먼저다
+    r = load_registry(REG)
+    sources = {"fmkorea": {"credibility": "fmkorea"}}
+    it = _item("fmkorea", {"title": "콴사 이적", "body": "온스테인에 따르면 사실이다",
+                           "outlet": "Sky Sports"})
+    assert resolve_tier(it, sources, r) == 1.0
+
+
+def test_resolve_fmkorea_unregistered_outlet_field_stays_four():
+    r = load_registry(REG)
+    sources = {"fmkorea": {"credibility": "fmkorea"}}
+    it = _item("fmkorea", {"title": "카더라", "body": "출처 불명", "outlet": "무명 블로그"})
+    assert resolve_tier(it, sources, r) == 4.0
+
 def test_resolve_fmkorea_de_roche_journalist_tier():
     r = load_registry(REG)
     sources = {"fmkorea": {"credibility": "fmkorea"}}

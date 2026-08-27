@@ -117,6 +117,12 @@ def resolve_tier(item, sources: dict, registry: "Registry | None",
         ot = [t for a, t in registry.outlets.items() if a in title]
         if ot:
             return min(ot)
+        # 게시자가 적어 둔 매체 칸도 본다 (x_mentions 갈래의 아웃렛 폴백과 같은 규칙).
+        # 제목만 훑던 동안, 매체를 알면서도 그 등급을 못 쓰는 자리가 있었다 — 화면은
+        # 「Sky Sports」 라고 적는데 등급은 최하로 남아 가십 절에 놓였다 (2026-08-28 실측).
+        outlet = norm_alias(item.raw_payload.get("outlet") or "")
+        if outlet and outlet in registry.outlets:
+            return registry.outlets[outlet]
         return 4.0
 
     # 고정 소스: tier 미지정(설정 누락 등)이면 None → 항목 drop
