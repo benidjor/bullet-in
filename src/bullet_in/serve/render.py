@@ -511,13 +511,26 @@ def _lead_by_tier(views: list[dict], directory: dict | None) -> list[dict]:
 
     등급 없는 이름이 저장 순서만으로 대표가 되어 사이드바 항목까지 차지하던 자리다
     (실측 17건 · 항목 5종 감소 · 첫 화면 무이동).
+
+    **등급이 없는 저자는 같은 기사에 실린 등재 기자 중 가장 낮은 등급으로 친다**
+    (사용자 확정 2026-08-27). 미상을 맨 뒤로 두면 매체 기본값으로 이미 높게 보이던
+    이름이 등재된 낮은 등급에 밀려 화면 등급이 내려간다 (실측 1건).
     등급이 같거나 전원 미상이면 순서를 안 흔든다 — 대표가 회차마다 바뀌면 항목도 흔들린다."""
     if len(views) < 2:
         return views
 
-    def rank(v):
+    def listed(v):
         t = (directory or {}).get(norm_alias(v["name"]), {}).get("tier")
-        return float(t) if t is not None else float("inf")
+        return float(t) if t is not None else None
+
+    graded = [t for t in (listed(v) for v in views) if t is not None]
+    if not graded:
+        return views
+    unknown = max(graded)                       # 미상의 가정 등급
+
+    def rank(v):
+        t = listed(v)
+        return t if t is not None else unknown
 
     best = min(views, key=rank)                 # 동점이면 앞선 것이 남는다
     if best is views[0]:

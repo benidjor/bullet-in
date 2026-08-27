@@ -246,6 +246,23 @@ def test_representative_keeps_stored_order_when_no_author_is_graded():
     assert [e["name"] for e in ents] == ["Mario Cortegana", "Chris Waugh"]
 
 
+def test_ungraded_author_is_ranked_as_the_lowest_graded_coauthor():
+    """등급 없는 저자는 같은 기사의 등재 기자 중 가장 낮은 등급으로 친다 (사용자 확정 2026-08-27).
+
+    미상을 맨 뒤로 두면 매체 기본값으로 이미 높게 보이던 이름 (The Athletic 소속의
+    미등재 기자) 이 등재된 낮은 등급에 밀려 화면 등급이 내려간다."""
+    row = _art(journalist="Chris Waugh",
+               authors_json='["Chris Waugh", "James McNicholas"]')
+    ents = article_journalists(row, JSOURCES, DIR_TIER)
+    assert [e["name"] for e in ents] == ["Chris Waugh", "James McNicholas"]
+
+    # 더 높은 등급이 함께 실리면 그 사람이 대표가 된다
+    row2 = _art(journalist="Chris Waugh",
+                authors_json='["Chris Waugh", "James McNicholas", "David Ornstein"]')
+    ents2 = article_journalists(row2, JSOURCES, DIR_TIER)
+    assert ents2[0]["name"] == "David Ornstein"
+
+
 def test_representative_keeps_the_first_of_equally_graded_authors():
     """같은 등급이면 순서를 안 흔든다 — 대표가 회차마다 바뀌면 항목도 흔들린다."""
     row = _art(journalist="James McNicholas",
