@@ -87,14 +87,31 @@ def _converge(mart, pstore, engine, targets: set[str]) -> None:
 
 
 def _render(engine) -> None:
-    """run.py 서빙 경로와 1:1 재렌더 (SERVING_SELECT_SQL import — 런북 스니펫 드리프트 방지)."""
+    """run.py 서빙 경로와 1:1 재렌더 (SERVING_SELECT_SQL import — 런북 스니펫 드리프트 방지).
+
+    SELECT 뒤의 serving_rows 까지 taking — 이 한 줄이 빠져 있던 동안 fmkorea 무관 글과
+    옛 글이 산출물로 돌아왔다 (2026-08-28 실측 — 838행이어야 할 것이 907행으로 나왔다).
+    """
+    import yaml
+    from pathlib import Path
     from sqlalchemy import text
-    from bullet_in.run import SERVING_SELECT_SQL
+    from bullet_in.run import SERVING_SELECT_SQL, LINKED_HASHES_SQL, serving_rows
+    from bullet_in.adapters.factory import build_adapters
     from bullet_in.score import load_sources
     from bullet_in.credibility import load_registry, journalist_directory, outlet_directory
     from bullet_in.serve.render import write_site
+    from bullet_in.storage.players import PlayerStore
     with engine.connect() as c:
         rows = [dict(r) for r in c.execute(text(SERVING_SELECT_SQL)).mappings().all()]
+        linked = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
+    cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
+    adapters = build_adapters(cfg,
+                              fmkorea_player_names=PlayerStore(engine).confirmed_ko_names())
+    fm = next((a for a in adapters if a.source_id == "fmkorea"), None)
+    if fm is not None:
+        rows, hidden, stale = serving_rows(rows, relevance_terms=fm.relevance_terms,
+                                           player_names=fm.player_names, linked=linked)
+        log.info("서빙 제외 — 무관 %d건 · 옛 글 %d건", hidden, stale)
     write_site(rows, load_sources("config/sources.yaml"), "site",
                directory=journalist_directory("config/credibility.yaml"),
                registry=load_registry("config/credibility.yaml"),
