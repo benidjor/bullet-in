@@ -396,6 +396,18 @@ def test_promote_recent_leaves_hidden_stage_folded():
     assert block["rel_count"] == 2               # 기타 · 무단계 둘은 접힌 채로 남는다
 
 
+def test_promote_recent_leaves_lowest_tier_folded():
+    # 원래 최신 소식에는 최하 카드가 설 수 없었다 (대표 선정의 not_lowest · 전부 최하인
+    # 묶음은 가십 절로) — 꺼내기가 그 불변 조건을 깨지 않게 한다
+    rep = _p("rep", 15)
+    lowest, ok = _p("lowest", 21, tier=4.0), _p("ok", 21, tier=3.0)
+    block = {"rep": rep, "count": 3, "_articles": [rep, lowest, ok], "rel_count": 2,
+             "branches": [{"label": "", "articles": [lowest, ok]}]}
+    out = R.promote_recent([block], R.recent_days([rep, ok]))
+    assert [b["rep"]["content_hash"] for b in out] == ["ok"]
+    assert block["rel_count"] == 1              # 최하는 접힌 채로 남는다
+
+
 def test_story_links_only_for_players_with_a_page():
     # 페이지가 만들어진 선수만 담는다 — 없는 선수에게 링크를 달면 죽은 링크가 된다
     entries = [{"ko_name": "알바레스", "slug": "alvarez", "count": 77},

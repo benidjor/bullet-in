@@ -1763,12 +1763,22 @@ def _mid_tier_rank(row: dict) -> int:
     return 0 if (row.get("_outlet") or row.get("outlet")) == MID_TIER_PREFERRED_OUTLET else 1
 
 
-def _shown_as_card(row: dict) -> bool:
-    """필터를 안 걸어도 카드로 보이는 기사인가 (app.js 의 isOther 와 같은 판정).
-    단계가 비었거나 「기타」 면 첫 화면에서 카드가 감춰진다. 그런 기사를 꺼내면
-    관련 보도 안에서는 보이던 것이 아무 데서도 안 보이게 되므로 접힌 채로 둔다."""
+def _promotable(row: dict) -> bool:
+    """접힘에서 꺼내 카드로 세워도 되는 기사인가 — 안 되는 자리가 둘이다.
+
+    하나는 단계가 비었거나 「기타」 인 기사다. 첫 화면에서 카드가 감춰지므로
+    (app.js 의 isOther) 꺼내면 관련 보도에서도 빠져 아무 데서도 안 보이게 된다.
+
+    다른 하나는 공신력 최하다. 원래 최신 소식에는 최하 카드가 설 수 없었다 —
+    대표 선정이 최하가 아닌 기사를 먼저 고르고 (pick_representative 의 not_lowest),
+    전부 최하인 묶음은 통째로 가십 절로 간다 (is_gossip_cluster). 꺼내기가 그
+    불변 조건을 깨지 않도록 최하는 접힌 채로 둔다 — 상위 묶음 안의 최하를 그대로
+    두는 것은 사건 맥락을 지키려는 설계다 (사건 묶음 스펙 §7)."""
     stage = row.get("transfer_stage")
-    return bool(stage) and stage != "other"
+    if not stage or stage == "other":
+        return False
+    tier = row.get("tier")
+    return tier is None or float(tier) < 4.0
 
 
 def recent_days(articles: list[dict], n: int = PROMOTE_DAYS) -> set:
@@ -1794,7 +1804,7 @@ def promote_recent(blocks: list[dict], window: set,
         for br in b["branches"]:
             for a in br["articles"]:
                 ts = _group_ts(a)
-                if ts is not None and to_kst(ts).date() in window and _shown_as_card(a):
+                if ts is not None and to_kst(ts).date() in window and _promotable(a):
                     by_day.setdefault(to_kst(ts).date(), []).append(a)
         picks = []
         for _, arts in sorted(by_day.items(), reverse=True):

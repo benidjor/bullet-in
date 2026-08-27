@@ -140,7 +140,9 @@ gtag('config','{{ ga_id }}');
       </div>
     </div>
 
-    <div class="fstatus" id="fstatus">전체 표시</div>
+    {# 첫 화면에는 조건이 없다 — 「전체 표시」 라고만 쓰면 무엇이 전체인지 안 보여
+       건수를 함께 적는다. 필터를 걸면 app.js 가 「조건 N개 · M건」 으로 바꾼다. #}
+    <div class="fstatus" id="fstatus">조건 없음 · 전체 {{ facets.total }}건</div>
     <div class="actions">
       <button class="btn reset" id="resetBtn">초기화</button>
       <button class="btn apply" id="applyBtn">필터 적용</button>

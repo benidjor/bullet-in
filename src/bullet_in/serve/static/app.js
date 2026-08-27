@@ -430,7 +430,7 @@ function applyFilters() {
 
   const touched = userTouchedSrc ? ' · 직접 고름' : '';
   if (fstatus) fstatus.textContent = active
-    ? `조건 ${conds}개 · ${shown}건${touched}` : `전체 ${shown}건`;
+    ? `조건 ${conds}개 · ${shown}건${touched}` : `조건 없음 · 전체 ${shown}건`;
   applyBtn?.classList.remove('dirty');
   const qs = filterParams().toString();
   history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
