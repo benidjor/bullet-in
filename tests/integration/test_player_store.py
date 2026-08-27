@@ -332,3 +332,25 @@ def test_record_article_players_reports_duplicate_suspects(engine):
     created = record_article_players(store, "1" * 64, pairs, _ARTICLE)
     assert len(created) == 1                       # 자동 병합하지 않는다
     assert [s["full_name"] for s in created[0]["dup_suspects"]] == ["Ilan Meslier"]
+
+
+def test_confirm_writes_ko_full_name(engine):
+    # 확정 시점에 표시용 풀네임을 함께 채운다 — 미루면 그 선수 페이지가 성만 달고 선다
+    store = PlayerStore(engine)
+    pid = store.insert_candidate(full_name="Marc Pubill", first_name="Marc",
+                                 surname="Pubill", ko_candidate="마르크 푸빌",
+                                 first_seen=None)
+    store.confirm(pid, ko_name="푸빌", category="external",
+                  transfer_status="in_link", ko_full_name="마르크 푸빌")
+    assert store.get_player("Marc Pubill")["ko_full_name"] == "마르크 푸빌"
+
+
+def test_confirm_without_full_name_keeps_stored_value(engine):
+    # 정할 수 없는 회차가 이미 적힌 표기를 지우지 않는다 (COALESCE)
+    store = PlayerStore(engine)
+    pid = store.insert_candidate(full_name="Marc Pubill", first_name="Marc",
+                                 surname="Pubill", ko_candidate="마르크 푸빌",
+                                 first_seen=None)
+    store.confirm(pid, ko_name="푸빌", ko_full_name="마르크 푸빌")
+    store.confirm(pid, ko_name="푸빌")
+    assert store.get_player("Marc Pubill")["ko_full_name"] == "마르크 푸빌"

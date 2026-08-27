@@ -219,13 +219,18 @@ class PlayerStore:
 
     def confirm(self, player_id: int, *, ko_name: str,
                 category: str | None = None, transfer_status: str | None = None,
-                club: str | None = None) -> None:
-        """후보 승격 (스펙 §4.3 1단계) — ko_name 기입 · 분류는 지정한 것만 갱신."""
+                club: str | None = None, ko_full_name: str | None = None) -> None:
+        """후보 승격 (스펙 §4.3 1단계) — ko_name 기입 · 분류는 지정한 것만 갱신.
+
+        ko_full_name 은 화면 표시용이라 정할 수 없으면 비워 둔다 (렌더가 ko_name 으로
+        떨어진다). 값이 없다고 이미 적힌 표기를 지우지는 않는다."""
         with self.engine.begin() as c:
             c.execute(text(
                 "UPDATE players SET status='confirmed', ko_name=:ko, "
                 "confirmed_at=:now, category=COALESCE(:cat, category), "
                 "transfer_status=COALESCE(:ts, transfer_status), "
-                "club=COALESCE(:club, club) WHERE id=:id"),
+                "club=COALESCE(:club, club), "
+                "ko_full_name=COALESCE(:kofull, ko_full_name) WHERE id=:id"),
                 {"ko": ko_name, "now": _utcnow(), "cat": category,
-                 "ts": transfer_status, "club": club, "id": player_id})
+                 "ts": transfer_status, "club": club,
+                 "kofull": ko_full_name, "id": player_id})
