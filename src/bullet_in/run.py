@@ -61,9 +61,23 @@ CANDIDATE_HISTORY_SQL = ("SELECT candidate_counts FROM pipeline_runs "
 # 미기입 (NULL) 은 옛 판정대로 남긴다 — 값을 만드는 쪽이 응답을 못 내거나 회차가 끊기면
 # 상시로 다시 생기는데, 그때 언급으로 읽으면 본인 기사가 화면에서 조용히 사라진다
 # (선수 목록의 전환 규칙과 같은 취급 · docs/runbook/2026-08-12-serving-rule-swap-with-unfilled-field.md).
+#
+# 보관 (archived) 선수도 함께 본다 (2026-08-28 사용자 결정). 보관은 아스날과 링크됐다가
+# 행선지가 정해진 선수라, 「우리가 노리던 선수가 어디로 갔나」 가 그 자리에서 나온다.
+# 제목에 아스날이 없어 그 기사들이 화면에서 빠지고 있었다 (실측 — 모건 로저스의 첼시행 ·
+# 비니시우스의 레알 재계약 · 부아디의 맨시티행).
+#
+# 이름 문자열로 넓히지 않고 귀속으로 넓히는 이유는, 이름 매칭이 성 충돌을 못 가리고
+# (「디오망데」 가 둘이다) 제목에 이름이 없는 기사를 놓치기 때문이다. 추출이 이미
+# 「이 기사의 주역」 을 판정해 두었으므로 그 판정을 그대로 쓴다.
+#
+# 보관은 사람이 정하는 값이라 자동 문턱을 두지 않는다 — 명단에서 빼야 할 선수가 생기면
+# 그 선수의 status 를 고치는 것이 아니라 (사전 · 수집 필터가 함께 움직인다) 이 질의에
+# 제외 조건을 더한다.
 LINKED_HASHES_SQL = ("SELECT DISTINCT ap.content_hash FROM article_players ap "
                      "JOIN players p ON p.id = ap.player_id "
-                     "WHERE p.status = 'confirmed' AND ap.role <> 'mention'")
+                     "WHERE p.status IN ('confirmed','archived') "
+                     "AND ap.role <> 'mention'")
 
 # 성 매칭 최소 길이 — 두 글자 성 (고든 · 스콧) 은 다른 낱말에 섞여 오탐한다.
 SURNAME_MIN_LEN = 3

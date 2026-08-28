@@ -166,9 +166,13 @@ const daylists = [...document.querySelectorAll('.daylist')];
 const items = [...document.querySelectorAll('.daylist .item, .gossiplist .item')];
 
 // 관련 보도 펼치기 (사건 블록 안 접힌 갈래)
+// 버튼은 .blocknav 안에 있고 관련 보도 목록은 그 밖의 형제라, 형제 관계로 찾으면
+// 안 잡힌다 (2026-08-28 에 두 버튼을 한 줄로 묶으면서 깨졌다 — 클릭해도 안 펼쳐졌다).
+// 블록을 기준으로 찾는다 — 아래 필터 코드가 쓰는 것과 같은 방식이다.
 document.querySelectorAll('.reltoggle').forEach(btn => {
   btn.onclick = () => {
-    const rel = btn.nextElementSibling;
+    const rel = btn.closest('.block')?.querySelector('.related');
+    if (!rel) return;
     rel.hidden = !rel.hidden;
     btn.setAttribute('aria-expanded', rel.hidden ? 'false' : 'true');
   };
