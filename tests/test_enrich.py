@@ -52,7 +52,8 @@ def test_enrich_skips_bad_row_without_aborting_batch():
             self.n += 1
             class R: pass
             r = R()
-            r.text = "garbage no json" if self.n == 1 else '{"title_ko":"제","summary_ko":"요","summary3_ko":["a","b","c"],"body_ko":"b"}'
+            # 재시도 셋을 다 쓰고도 못 읽는 행이라야 스킵된다 (안건 ψ 이후)
+            r.text = "garbage no json" if self.n <= 3 else '{"title_ko":"제","summary_ko":"요","summary3_ko":["a","b","c"],"body_ko":"b"}'
             return r
     class C:
         def __init__(self): self.models = M()
@@ -1438,3 +1439,94 @@ def test_extract_players_rows_raises_output_cap_above_observed_max():
     extract_players_rows([{"content_hash": "h1", "title_original": "T",
                            "body_source": "B"}], client, "m")
     assert seen["max_output_tokens"] >= 4096
+
+
+# --- 안건 ψ · 회차 내 재시도 (번역 파싱 실패) -------------------------------
+# 파싱 실패는 지금까지 행을 다음 회차로 넘겨 「번역 대기」 배지를 최대 한 회차 살렸다.
+# 재작성 게이트와 같은 방식 (max_attempts + 실패 유형별 피드백) 으로 회차 안에서 받는다.
+
+from bullet_in.enrich import parse_failure_note
+
+_GOOD = ('{"title_ko":"제","summary_ko":"요","summary3_ko":["a","b","c"],'
+         '"body_ko":"본문"}')
+
+
+class _Scripted:
+    """호출마다 정해진 응답을 돌려주고 받은 프롬프트를 기록한다."""
+    def __init__(self, texts):
+        self.texts, self.n, self.prompts = list(texts), 0, []
+        self.models = self
+
+    def generate_content(self, **kw):
+        self.prompts.append(kw["contents"])
+        text = self.texts[min(self.n, len(self.texts) - 1)]
+        self.n += 1
+        if isinstance(text, Exception):
+            raise text
+        class R: pass
+        r = R(); r.text = text
+        return r
+
+
+def _prow(h="h"):
+    return {"content_hash": h, "title_original": "T", "body_excerpt": "B"}
+
+
+def test_parse_failure_note_classifies_truncated_response():
+    note, label = parse_failure_note('{"title_ko":"제","summary_ko":"요"')
+    assert label == "응답 잘림"
+    assert "잘림" in note
+
+
+def test_parse_failure_note_classifies_missing_json():
+    note, label = parse_failure_note("설명만 있고 JSON 이 없다")
+    assert label == "JSON 없음"
+    assert "JSON" in note
+
+
+def test_parse_failure_note_names_the_missing_keys():
+    note, label = parse_failure_note('{"title_ko":"제","summary_ko":"요"}')
+    assert label == "키 누락"
+    assert "summary3_ko" in note and "body_ko" in note
+
+
+def test_parse_failure_note_classifies_broken_json_syntax():
+    _, label = parse_failure_note('{"title_ko":"제",}')
+    assert label == "JSON 문법"
+
+
+def test_enrich_retries_parse_failure_inside_the_cycle():
+    client = _Scripted(["쓰레기 응답", _GOOD])
+    out = enrich_rows([_prow()], client, "m")
+    assert out["h"]["title_ko"] == "제"
+    assert client.n == 2
+
+
+def test_enrich_retry_prompt_carries_the_failure_reason():
+    client = _Scripted(['{"title_ko":"제"', _GOOD])
+    enrich_rows([_prow()], client, "m")
+    assert "[응답 잘림]" in client.prompts[1]
+    assert "[응답 잘림]" not in client.prompts[0]
+
+
+def test_enrich_gives_up_after_max_attempts_and_logs_the_reason(caplog):
+    client = _Scripted(["쓰레기 응답"])
+    with caplog.at_level(logging.WARNING):
+        out = enrich_rows([_prow()], client, "m", max_attempts=3)
+    assert out == {}
+    assert client.n == 3
+    assert any("JSON 없음" in r.message and "시도=3" in r.message
+               for r in caplog.records)
+
+
+def test_enrich_rate_limit_during_retry_still_stops_the_cycle():
+    client = _Scripted(["쓰레기 응답", _RateLimit("429 RESOURCE_EXHAUSTED")])
+    out = enrich_rows([_prow("a"), _prow("b")], client, "m")
+    assert out == {}
+    assert client.n == 2   # 둘째 행은 호출조차 안 함
+
+
+def test_enrich_successful_first_attempt_costs_one_call():
+    client = _Scripted([_GOOD])
+    enrich_rows([_prow()], client, "m")
+    assert client.n == 1
