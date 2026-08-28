@@ -251,6 +251,9 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .reltoggle[aria-expanded="true"]{color:var(--red);border-color:var(--red)}
 .related{padding:2px 12px 4px}
 .related[hidden]{display:none}
+/* 관련 보도 목록은 카드가 선 칸 안에 그대로 둔다 (2026-08-28 사용자 확정).
+   두 칸을 쓰게 해 봤더니 같은 행의 옆 카드가 한 줄 위로 올라가 화면이 크게 움직였다
+   — 목록이 길어지는 문제는 아래 더보기 (relmore) 로 푼다. */
 .branchlabel{font-size:11px;font-weight:700;color:var(--dim);margin:9px 0 3px;letter-spacing:.02em}
 .relitem{display:flex;gap:10px;align-items:baseline;justify-content:space-between;
   padding:5px 0;border-top:1px solid var(--hair)}
@@ -266,10 +269,16 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .gossiplist .item{padding:10px 0 12px}
 .gossiplist.weekcut .item.gwk{display:none}      /* 초기 7일 컷 (서버 표식) */
 .gossiplist .item.wcut{display:none}              /* 주 단위 더보기 — JS 관리 */
-.gossipmore,.latestmore{display:block;width:100%;margin:14px 0 0;padding:10px;border:1px solid var(--hair);
+.gossipmore,.latestmore,.relmore{display:block;width:100%;margin:14px 0 0;padding:10px;border:1px solid var(--hair);
   border-radius:2px;background:none;color:var(--mut);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
-.gossipmore:hover,.latestmore:hover{color:var(--ink);border-color:var(--mut)}
-.gossipmore[hidden],.latestmore[hidden]{display:none}
+.gossipmore:hover,.latestmore:hover,.relmore:hover{color:var(--ink);border-color:var(--mut)}
+.gossipmore[hidden],.latestmore[hidden],.relmore[hidden]{display:none}
+/* 관련 보도 목록의 더보기 (2026-08-28) — 갈래가 하나면 10건, 둘 이상이면 갈래마다
+   5건까지 먼저 보이고 누를 때마다 10건씩 편다. 63건짜리 목록이 펼치자마자 화면을
+   가득 채우던 것을 줄인다. 필터가 켜지면 이 접기는 걷는다 (조건에 맞는 것을 감추면
+   「몇 건」 과 목록이 또 어긋난다). */
+.relitem.relcut{display:none}
+.relmore{margin:10px 0 2px;font-size:12px;padding:8px}
 .latestmore{margin:18px 0 0}
 .gossipnote{font-size:12px;color:var(--dim);margin:12px 0 0}
 /* 카드 상단 줄 (§ 리뷰) — 영입 단계 · 언론사 · 공신력 왼쪽, 시각 오른쪽 */
