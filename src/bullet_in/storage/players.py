@@ -161,13 +161,18 @@ class PlayerStore:
 
     def cycle_pairs(self, hashes: list[str]) -> list[dict]:
         """이번 회차에 만진 기사들의 (확정 선수, 단계) 귀속 — 축 낡음 관측 재료
-        (스펙 2026-08-10 §3). 후보 · 보관 선수는 명단 운영 대상이 아니라 뺀다."""
+        (스펙 2026-08-10 §3). 후보 · 보관 선수는 명단 운영 대상이 아니라 뺀다.
+
+        언급 (`mention`) 귀속은 뺀다 — 남의 이적 기사에 배경 · 경쟁자로 이름만 걸린
+        것이라 그 선수의 명단 값이 낡았다는 근거가 못 된다 (2026-08-28 실측: 30일
+        창에서 언급만으로 걸리던 다섯이 전부 남의 소식이었고 놓친 신호는 0)."""
         if not hashes:
             return []
         q = text(
             "SELECT ap.player_id, p.ko_name, p.transfer_status, ap.stage "
             "FROM article_players ap JOIN players p ON p.id = ap.player_id "
-            "WHERE ap.content_hash IN :hashes AND p.status = 'confirmed'"
+            "WHERE ap.content_hash IN :hashes AND p.status = 'confirmed' "
+            f"AND ap.role <> '{MENTION}'"
         ).bindparams(bindparam("hashes", expanding=True))   # text() 의 IN 은 expanding 필수
         with self.engine.connect() as c:
             return [dict(r) for r in
@@ -176,7 +181,10 @@ class PlayerStore:
     def recent_stage_counts(self, player_ids: list[int],
                             days: int = 7) -> dict[tuple[int, str], int]:
         """선수별 최근 N일 단계 귀속 계수 (published_at 기준) — 단발 거름용
-        (스펙 2026-08-10 §3)."""
+        (스펙 2026-08-10 §3).
+
+        방아쇠와 같은 술어로 언급을 뺀다 — 여기에 남겨 두면 오탐끼리 서로를 뒷받침해
+        문턱을 넘는다 (2026-08-28 실측: 멜리에가 언급 20건으로 넘고 있었다)."""
         if not player_ids:
             return {}
         q = text(
@@ -185,6 +193,7 @@ class PlayerStore:
             "JOIN articles a ON a.content_hash = ap.content_hash "
             "WHERE ap.player_id IN :pids "
             "AND a.published_at >= UTC_TIMESTAMP() - INTERVAL :days DAY "
+            f"AND ap.role <> '{MENTION}' "
             "GROUP BY ap.player_id, ap.stage"
         ).bindparams(bindparam("pids", expanding=True))   # text() 의 IN 은 expanding 필수
         with self.engine.connect() as c:
