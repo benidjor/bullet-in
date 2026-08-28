@@ -1599,16 +1599,30 @@ _PHOTO_SKIP_SOURCES = {"bbc_gossip"}   # 가십은 소스 고정 배너라 선�
 def assign_player_photos(entries: list[dict]) -> None:
     """선수마다 카드 사진 하나를 고른다 (`_photo` 를 넣는다 · 없으면 None).
 
-    후보는 그 선수 페이지에 실리는 기사뿐이다 — entries 의 articles 는 이미 주역
-    귀속만 남아 있어 (player_entries), 언급으로 스쳐 간 기사는 후보가 아니다.
+    `players.photo_url` 이 박혀 있으면 그것이 이긴다 — 자동 선택은 그 선수의 가장
+    최근 기사 사진이라 새 기사가 들어올 때마다 갈아탄다 (30일에 177회 · 선수당 3.2회
+    실측). 얼굴이 어긋난 선수만 손으로 박고, 박은 뒤로는 안 바뀐다.
+    박는 곳은 `python -m bullet_in.set_player_photo` 하나다.
+
+    자동 선택의 후보는 그 선수 페이지에 실리는 기사뿐이다 — entries 의 articles 는
+    이미 주역 귀속만 남아 있어 (player_entries), 언급으로 스쳐 간 기사는 후보가 아니다.
     가십 소스는 뺀다 — 배너가 고정이라 안 빼면 여러 선수가 같은 「GOSSIP」 글자판을
     단다 (실측 8명).
     같은 사진이 둘에게 걸리면 앞 선수만 쓰고 뒤 선수는 다음 후보로 내린다 — 둘이
     함께 찍힌 사진이 서로 다른 카드에 걸리면 어느 쪽도 못 믿는다 (실측 3장 · 7명).
+    손으로 박은 사진도 이 자리를 차지한다 — 자동 선택이 같은 장을 또 집으면 박은
+    뜻이 없어진다.
     최근 보도가 있는 선수부터 골라 새 사진이 활발한 쪽으로 가게 한다."""
     taken: set[str] = set()
-    for e in sorted(entries, key=lambda x: x["last_ts"], reverse=True):
-        e["_photo"] = None
+    auto: list[dict] = []
+    for e in entries:
+        pinned = (e.get("photo_url") or "").strip()
+        e["_photo"] = pinned or None
+        if pinned:
+            taken.add(pinned)
+        else:
+            auto.append(e)
+    for e in sorted(auto, key=lambda x: x["last_ts"], reverse=True):
         for a in e.get("articles") or []:            # 최신순 · 색인만 만드는 호출은 비어 있다
             img = (a.get("image_url") or "").strip()
             if not img or img in taken or a.get("source_id") in _PHOTO_SKIP_SOURCES:

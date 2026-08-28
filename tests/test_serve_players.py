@@ -877,3 +877,30 @@ def test_player_photo_removes_its_slot_when_the_image_fails():
     assert 'referrerpolicy="no-referrer"' in html
     assert "classList.remove('hasphoto')" in html
     assert "closest('.pphoto').remove()" in html
+
+
+def test_pinned_photo_beats_the_automatic_pick():
+    # 자동 선택은 회차마다 갈아타므로 (30일에 177회 실측) 어긋난 선수만 손으로 박는다.
+    e = _pe("알렉스 스콧", "scott", datetime(2026, 8, 27),
+            articles=[_pimg("h1", "남의-얼굴.jpg")])
+    e["photo_url"] = "https://x/scott.jpg"
+    assign_player_photos([e])
+    assert e["_photo"] == "https://x/scott.jpg"
+
+
+def test_pinned_photo_is_not_reused_by_the_automatic_pick():
+    # 박은 사진을 다른 선수가 또 가져가면 박은 뜻이 없어진다.
+    pinned = _pe("스콧", "scott", datetime(2026, 8, 20), articles=[])
+    pinned["photo_url"] = "https://x/shared.jpg"
+    auto = _pe("래시포드", "rashford", datetime(2026, 8, 28),
+               articles=[_pimg("h1", "https://x/shared.jpg"), _pimg("h2", "own.jpg")])
+    assign_player_photos([pinned, auto])
+    assert pinned["_photo"] == "https://x/shared.jpg"
+    assert auto["_photo"] == "own.jpg"
+
+
+def test_blank_pin_falls_back_to_the_automatic_pick():
+    e = _pe("콘사", "konsa", datetime(2026, 8, 28), articles=[_pimg("h1", "auto.jpg")])
+    e["photo_url"] = "   "
+    assign_player_photos([e])
+    assert e["_photo"] == "auto.jpg"
