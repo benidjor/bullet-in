@@ -11,3 +11,32 @@ def test_content_hash_stable_and_title_insensitive_to_whitespace():
     h1 = content_hash("  Arteta speaks  ", "https://x.test/a")
     h2 = content_hash("Arteta speaks", "https://x.test/a")
     assert h1 == h2 and len(h1) == 64
+
+def test_canonical_folds_bbc_uk_host_into_com():
+    uk = canonical_url("https://www.bbc.co.uk/sport/football/articles/c4gd1r1nel2o")
+    com = canonical_url("https://www.bbc.com/sport/football/articles/c4gd1r1nel2o")
+    assert uk == com == "https://www.bbc.com/sport/football/articles/c4gd1r1nel2o"
+
+def test_canonical_drops_sky_section_number():
+    a = canonical_url("https://www.skysports.com/football/news/11095/13574990/ezri-konsa-arsenal")
+    b = canonical_url("https://www.skysports.com/football/news/11677/13574990/ezri-konsa-arsenal")
+    assert a == b == "https://www.skysports.com/football/news/13574990"
+
+def test_canonical_drops_sky_section_on_live_blog_too():
+    assert (canonical_url("https://www.skysports.com/football/live-blog/11661/13570000/x")
+            == "https://www.skysports.com/football/live-blog/13570000")
+
+def test_canonical_keeps_sky_section_shape_on_other_hosts():
+    url = "https://other.test/football/news/11095/13574990/x"
+    assert canonical_url(url) == url
+
+def test_canonical_drops_athletic_slug():
+    a = canonical_url("https://www.nytimes.com/athletic/7451792/2026/08/19/ezri-konsa-aston-villa")
+    b = canonical_url("https://www.nytimes.com/athletic/7451792/2026/08/19/ezri-konsa-aston-vila")
+    assert a == b == "https://www.nytimes.com/athletic/7451792/2026/08/19"
+
+def test_canonical_drops_added_tracking_params():
+    a = canonical_url("https://www.nytimes.com/athletic/7460471/2026/07/21/x?smid=tw-share")
+    b = canonical_url("https://www.nytimes.com/athletic/7460471/2026/07/21/x"
+                      "?source=articleShare&unlocked_article_code=abc")
+    assert a == b == "https://www.nytimes.com/athletic/7460471/2026/07/21"
