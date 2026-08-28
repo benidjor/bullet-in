@@ -169,10 +169,71 @@ const items = [...document.querySelectorAll('.daylist .item, .gossiplist .item')
 // 버튼은 .blocknav 안에 있고 관련 보도 목록은 그 밖의 형제라, 형제 관계로 찾으면
 // 안 잡힌다 (2026-08-28 에 두 버튼을 한 줄로 묶으면서 깨졌다 — 클릭해도 안 펼쳐졌다).
 // 블록을 기준으로 찾는다 — 아래 필터 코드가 쓰는 것과 같은 방식이다.
+// ── 관련 보도 — 펼치기 · 목록 접기 · 더보기 (2026-08-28) ──────────────
+// 갈래가 하나면 10건, 둘 이상이면 갈래마다 5건까지 먼저 보인다 (63건짜리 목록이
+// 펼치자마자 화면을 덮었다). 더보기는 누를 때마다 10건씩 편다.
+const REL_FIRST_ONE = 10, REL_FIRST_MANY = 5, REL_STEP = 10;
+
+function relBranches(rel) {
+  // 갈래 = 이름표 뒤에 이어지는 .relitem 묶음. 이름표가 없으면 전체가 한 갈래다.
+  const labels = [...rel.querySelectorAll('.branchlabel')];
+  if (!labels.length) return [[...rel.querySelectorAll('.relitem')]];
+  return labels.map(lb => {
+    const out = [];
+    let n = lb.nextElementSibling;
+    while (n && n.classList.contains('relitem')) { out.push(n); n = n.nextElementSibling; }
+    return out;
+  });
+}
+
+function relTrim(rel) {
+  const groups = relBranches(rel);
+  const first = groups.length > 1 ? REL_FIRST_MANY : REL_FIRST_ONE;
+  let cut = 0;
+  groups.forEach(g => g.forEach((it, i) => {
+    const hide = i >= first;
+    it.classList.toggle('relcut', hide);
+    if (hide) cut++;
+  }));
+  let more = rel.querySelector('.relmore');
+  if (cut > 0 && !more) {
+    more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'relmore';
+    more.onclick = () => {
+      const rest = [...rel.querySelectorAll('.relitem.relcut')];
+      rest.slice(0, REL_STEP).forEach(it => it.classList.remove('relcut'));
+      relSyncMore(rel);
+    };
+    rel.appendChild(more);
+  }
+  relSyncMore(rel);
+}
+
+function relSyncMore(rel) {
+  const more = rel.querySelector('.relmore');
+  if (!more) return;
+  const left = rel.querySelectorAll('.relitem.relcut').length;
+  more.hidden = left === 0;
+  more.textContent = `관련 보도 더보기 · 남은 ${left}건`;
+}
+
+function relUntrim(rel) {          // 필터가 켜지면 접기를 걷는다 — 조건에 맞는 것을
+  rel.querySelectorAll('.relitem.relcut')   // 감추면 「몇 건」 과 목록이 또 어긋난다
+     .forEach(it => it.classList.remove('relcut'));
+  const more = rel.querySelector('.relmore');
+  if (more) more.hidden = true;
+}
+
+document.querySelectorAll('.related').forEach(relTrim);
+
 document.querySelectorAll('.reltoggle').forEach(btn => {
   btn.onclick = () => {
-    const rel = btn.closest('.block')?.querySelector('.related');
+    const bl = btn.closest('.block');
+    const rel = bl?.querySelector('.related');
     if (!rel) return;
+    // 목록은 카드가 선 칸 안에 그대로 둔다 (2026-08-28 사용자 확정) — 두 칸을 쓰게
+    // 해 봤더니 같은 행의 옆 카드가 한 줄 위로 올라가 화면이 크게 움직였다.
     rel.hidden = !rel.hidden;
     btn.setAttribute('aria-expanded', rel.hidden ? 'false' : 'true');
   };
@@ -369,10 +430,13 @@ function applyFilters() {
     // 무산 (collapsed) 은 방향을 보지 않는다 (§8 개정) — 잔류 확정 · 재계약 체결이
     // 방향 none 이라 걸러지면 무산 필터가 제 내용물을 잃는다. render.in_stage_filter 와 같은 규칙.
     const dirOk = d.stage === 'collapsed' || d.dir === 'in' || d.dir === 'out';
-    // 언론사 · 기자로 좁히면 기타도 함께 연다 — 사이드바가 적어 둔 건수에는 기타 기사가
-    // 들어 있는데 기타 토글 말고는 그것을 열 수단이 없었다 (사이드바 계수 설계 §5.1).
+    // 언론사 · 기자 · 공신력으로 좁히면 기타도 함께 연다 — 사이드바가 적어 둔 건수에는
+    // 기타 기사가 들어 있는데 기타 토글 말고는 그것을 열 수단이 없었다 (사이드바 계수
+    // 설계 §5.1). 공신력 축은 그 예외에서 빠져 있어 사이드바 숫자와 필터 결과가 갈렸다
+    // (2026-08-28 실측 — 「최상 94」 를 누르면 91건 · 그 차이의 일부가 기타 6건이다).
     // 단계를 함께 고른 경우는 그대로 뺀다 — 기타는 어느 단계에도 안 속한다.
-    const okStage = isOther ? (showOther || (srcActive && stageEnums.size === 0))
+    const narrowed = srcActive || tiers.length > 0;
+    const okStage = isOther ? (showOther || (narrowed && stageEnums.size === 0))
       : (stageEnums.size === 0 || (stageEnums.has(d.stage) && dirOk));
     return okText && okSrc && okTier && okStage;
   };
@@ -406,6 +470,7 @@ function applyFilters() {
     const rel = bl.querySelector('.related');
     const tog = bl.querySelector('.reltoggle');
     if (active) {
+      if (rel) relUntrim(rel);        // 조건이 걸린 동안은 목록 접기를 걷는다
       rels.forEach(r => { r.style.display = relHits.includes(r) ? '' : 'none'; });
       if (rel) rel.hidden = relHits.length === 0;
       if (tog) {
@@ -422,7 +487,7 @@ function applyFilters() {
       });
     } else {                                             // 조건 없음 — 접힌 원상태로
       rels.forEach(r => { r.style.display = ''; });
-      if (rel) rel.hidden = true;
+      if (rel) { rel.hidden = true; relTrim(rel); }      // 목록 접기도 처음 상태로
       if (tog) { tog.style.display = ''; tog.setAttribute('aria-expanded', 'false'); }
       bl.querySelectorAll('.branchlabel').forEach(lb => { lb.style.display = ''; });
     }

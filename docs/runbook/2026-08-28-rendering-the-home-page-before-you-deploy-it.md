@@ -135,6 +135,35 @@ cd <스크래치패드> && nohup python3 -m http.server 8777 >/dev/null 2>&1 &
               return [it?.dataset.stage, it?.classList.contains('dupcard')]; })
 ```
 
+### 5.1. 동작 (클릭) 은 눌러 보고 잰다 — 2026-08-28 추가
+
+카드가 그려지는 것과 버튼이 눌리는 것은 다른 질문이다.
+「관련 보도를 눌러야 이름표가 보인다」 를 코드만 읽고 적었다가, 그 버튼이 라이브에서 아예 안 눌리는 상태를 한 회차 더 살렸다
+(`docs/troubleshooting/2026-08-28-the-button-stopped-working-when-we-moved-it.md`).
+
+**자리가 움직였는지는 클릭 전후의 좌표 차이로 잰다** — 눈으로는 몇 px 인지 못 센다.
+
+```javascript
+const b = [...document.querySelectorAll('.reltoggle')][0];
+const bl = b.closest('.block');
+const before = bl.querySelector('.item').getBoundingClientRect();
+b.click();
+const after = bl.querySelector('.item').getBoundingClientRect();
+({가로: Math.round(after.left - before.left), 세로: Math.round(after.top - before.top)})
+```
+
+**옆 카드도 함께 잰다** — 펼침이 그리드 행을 바꾸면 같은 행의 다른 카드가 움직인다.
+이번에 `grid-column:1/-1` 로 두 칸을 쓰게 했더니 카드는 제자리인데 옆 카드가 한 줄 위로 올라가, 사용자가 그것을 보고 되돌리기로 했다.
+
+### 5.2. 계수를 재현할 때는 분기 구조까지 옮긴다 — 2026-08-28 추가
+
+화면 계수를 파이썬으로 재현할 때 `app.js` 의 `if / else if` 를 **두 개의 독립 조건**으로 풀어 적어, 두 조건에 다 걸리는 요소를 두 번 셌다.
+그 값으로 「원래 있던 자리」 라는 틀린 결론을 사용자에게 보고했다
+(`docs/troubleshooting/2026-08-28-two-counts-that-counted-different-things.md` §3).
+
+- 재현 대상이 분기면 **분기 자체를 옮긴다** (`elif`).
+- 개정 전후를 비교할 때는 **같은 도구**를 양쪽에 댄다 — 그래야 도구 결함이 드러난다.
+
 ## 6. 말할 때 조건을 붙인다
 
 이 절차의 결과는 **아직 배포되지 않은 코드의 화면**이다.

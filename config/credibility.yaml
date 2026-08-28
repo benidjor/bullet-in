@@ -157,7 +157,12 @@ outlets:
   - {name: L'Équipe,        tier: 3,   aliases: ["레키프", "L'Equipe", "L'Équipe", "lequipe"]}
   - {name: RMC Sport,       tier: 1.5, aliases: ["RMC", "RMC 스포르", "RMC Sport"]}   # 비전담 기준선 (2026-08-27 사용자 결정)
   - {name: Foot Mercato,    tier: 4,   aliases: ["풋 메르카토", "Foot Mercato", "footmercato", "FM"]}   # 저장값 약칭 "FM" 이 별칭에 없어 안 접히고 있었다
-  - {name: talkSPORT,       tier: 4,   aliases: ["talkSPORT"]}   # 백트래킹 domains 승격용 (@JacobsBen 인용 원문 — 기자 미등재라 아웃렛 폴백 경로)
+  - {name: talkSPORT,       tier: 4,   aliases: ["talkSPORT", "토크스포츠"]}   # 백트래킹 domains 승격용 (@JacobsBen 인용 원문 — 기자 미등재라 아웃렛 폴백 경로)
+  # 「세르」 는 별칭으로 두지 않는다 (2026-08-28 사용자 결정 · 등급은 중).
+  # 두 글자라 제목 부분 문자열 매칭에서 「세르히오」 · 「세르비아」 · 「세르주」 에 걸린다
+  # — 위 ge → Globo 와 같은 판단이고, 저장돼 있던 1행은 Cadena SER 로 고쳤다.
+  # 다시 「세르」 로 들어오는 행이 생기면 별칭이 아니라 그 행을 고친다.
+  - {name: Cadena SER,      tier: 2,   aliases: ["Cadena SER"]}
   # 합칠 짝이 없던 단독 매체 (안건 γ 잔여 · 2026-08-20 사용자 결정). 등급은 사용자가 정했다.
   # ge.globo.com 은 저장값이 「ge」 였는데 2026-08-20 에 운영 1행을 Globo 로 고쳤다.
   # 두 글자 별칭 "ge" 를 등급 사전에 두면 제목 부분 문자열 매칭에 걸리므로 (당시 노출은 0 이었지만
