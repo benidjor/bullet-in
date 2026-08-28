@@ -71,13 +71,28 @@ CANDIDATE_HISTORY_SQL = ("SELECT candidate_counts FROM pipeline_runs "
 # (「디오망데」 가 둘이다) 제목에 이름이 없는 기사를 놓치기 때문이다. 추출이 이미
 # 「이 기사의 주역」 을 판정해 두었으므로 그 판정을 그대로 쓴다.
 #
-# 보관은 사람이 정하는 값이라 자동 문턱을 두지 않는다 — 명단에서 빼야 할 선수가 생기면
-# 그 선수의 status 를 고치는 것이 아니라 (사전 · 수집 필터가 함께 움직인다) 이 질의에
-# 제외 조건을 더한다.
-LINKED_HASHES_SQL = ("SELECT DISTINCT ap.content_hash FROM article_players ap "
-                     "JOIN players p ON p.id = ap.player_id "
-                     "WHERE p.status IN ('confirmed','archived') "
-                     "AND ap.role <> 'mention'")
+# 보관은 조건을 하나 더 건다 — **아스날과 링크된 적이 있는 선수만** 인정한다.
+# 자동 등재 (origin=extracted) 가 아스날 링크가 한 번도 없는 선수를 명단에 올려 두는
+# 경우가 있다 (실측 — 우스망 디오망데는 주역 3건이 전부 리즈 · 노팅엄 · 라이프치히
+# 이야기이고 아스날이 제목에 한 번도 안 나온다). 그런 선수의 거취는 우리 소식이 아니다.
+#
+# 문턱은 1 이다 — 「링크된 적이 있나」 만 묻고 몇 번인지는 세지 않는다. 세기 시작하면
+# 실측에서 순서가 뒤집힌다 (얀 디오망데 12 가 아유브 부아디 6 보다 위라, 부아디를
+# 살리는 어떤 문턱도 디오망데를 함께 들인다). 확정 선수는 이 조건 없이 그대로 둔다.
+#
+# 명단에서 빼야 할 선수가 생겨도 그 선수의 status 를 고치지 않는다 — 사전 · 선수 페이지 ·
+# fmkorea 수집 필터가 함께 움직인다 (2026-08-27 실측 26건). 이 질의에 조건을 더한다.
+_ARSENAL_TITLE = ("(a2.title_ko LIKE '%아스날%' OR a2.title_ko LIKE '%아스널%' "
+                  "OR LOWER(a2.title_original) LIKE '%arsenal%' "
+                  "OR a2.title_original LIKE '%아스날%' "
+                  "OR a2.title_original LIKE '%아스널%')")
+LINKED_HASHES_SQL = (
+    "SELECT DISTINCT ap.content_hash FROM article_players ap "
+    "JOIN players p ON p.id = ap.player_id "
+    "WHERE ap.role <> 'mention' AND (p.status = 'confirmed' OR (p.status = 'archived' "
+    "AND EXISTS (SELECT 1 FROM article_players ap2 "
+    "JOIN articles a2 ON a2.content_hash = ap2.content_hash "
+    f"WHERE ap2.player_id = p.id AND ap2.role <> 'mention' AND {_ARSENAL_TITLE})))")
 
 # 성 매칭 최소 길이 — 두 글자 성 (고든 · 스콧) 은 다른 낱말에 섞여 오탐한다.
 SURNAME_MIN_LEN = 3
