@@ -912,6 +912,19 @@ def test_club_map_key_matches_glossary_normal_form():
         assert clubs[wrong] == clubs[right], (
             f"{wrong} 와 {right} 의 별칭 목록이 달라 동의 그룹이 갈라진다")
 
+    # 위 루프는 **이미 club_map 에 있는 키만** 돈다. 그래서 「구단으로 수렴하는데 원문 쪽
+    # 표기가 club_map 에 아예 없는」 항목을 못 본다 — 검사가 없는 자리를 못 보는 모양이다.
+    # 2026-08-29 회차 저널이 그 구멍을 잡았다: 사전에 「베식타시 → 베식타스」 를 넣고
+    # club_map 짝을 빠뜨려, fmkorea 원문이 「베식타시」 로 적은 기사에서 번역만 바뀌자
+    # ko 경로 근거가 끊겼고 title_ko 가 NULL 로 재번역 큐에 들어갔다 (실측 1건).
+    for wrong, right in glossary.items():
+        if right in clubs:
+            assert wrong in clubs, (
+                f"「{wrong} → {right}」 는 구단으로 수렴하는데 {wrong} 가 club_map 에 없다 "
+                f"— 원문이 {wrong} 로 적으면 게이트가 근거를 못 찾아 오탐한다 (규칙 ④)")
+            assert clubs[wrong] == clubs[right], (
+                f"{wrong} 와 {right} 의 별칭 목록이 달라 동의 그룹이 갈라진다")
+
 def test_glossary_is_idempotent_over_all_keys_and_values():
     # 사전은 단순 문자열 치환이라, 교정 결과가 다른 규칙의 대상이 되면 두 번째 적용에서 또 바뀐다.
     # 실사례로 막은 것: '라일리' → '오라일리' 를 넣었다면 '오라일리' 가 '오오라일리' 가 된다.

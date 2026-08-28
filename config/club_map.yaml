@@ -98,3 +98,10 @@ clubs:
   클럽 브뤼헤: [Club Brugge, Brugge]
   클럽 브뤼허: [Club Brugge, Brugge]
   클뤼프 브뤼헤: [Club Brugge, Brugge]
+  # 베식타스 변이 두 개 (2026-08-29 회차 저널이 잡았다). 사전에는 「베식타시 → 베식타스」 ·
+  # 「베식타슈 → 베식타스」 가 있는데 여기 짝이 없어 게이트가 오탐했다 — fmkorea 원문이
+  # 「베식타시」 로 적은 기사에서 번역만 「베식타스」 가 되자 근거가 끊겨 title_ko 가
+  # NULL 로 큐에 들어갔다 (실측 1건 · content_hash 4ef0373f).
+  # 「베식타슈」 는 이 회차 전부터 사전에 있던 항목이라 같은 구멍이 원래 있었다.
+  베식타시: [Besiktas]
+  베식타슈: [Besiktas]
