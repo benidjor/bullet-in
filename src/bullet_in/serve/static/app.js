@@ -654,6 +654,28 @@ document.querySelectorAll('.plgrp .plfold').forEach(btn => {
   });
 });
 
+// ── 선수 색인 — 정렬 전환 (2026-08-28 사용자 확정) ────────────────────
+// 기본은 최근 보도순이고 단추가 이름순으로 바꾼다. 두 차례가 서로를 지운다 —
+// 최근 보도순은 오늘 움직인 소식을 위로 올리고, 이름순은 찾으려는 선수를 집게 한다.
+// 정렬 키는 서버가 카드의 data-last · data-name 에 실어 둔다 (render_players).
+// 그룹마다 따로 세운다 — 이적 축 그룹 경계는 정렬로 넘지 않는다.
+const plSort = document.getElementById('plSort');
+if (plSort) {
+  const lists = [...document.querySelectorAll('.playerlist')];
+  plSort.addEventListener('click', () => {
+    const byName = plSort.dataset.mode === 'recent';   // 누르면 반대쪽으로 넘어간다
+    lists.forEach(list => {
+      const cards = [...list.querySelectorAll('.pcard')];
+      cards.sort((a, b) => byName
+        ? (a.dataset.name || '').localeCompare(b.dataset.name || '', 'ko')
+        : (b.dataset.last || '').localeCompare(a.dataset.last || ''));
+      cards.forEach(c => list.appendChild(c));
+    });
+    plSort.dataset.mode = byName ? 'name' : 'recent';
+    plSort.textContent = byName ? '이름순' : '최근 보도순';
+  });
+}
+
 // ── 선수 페이지 — 기사 10건 단위 더보기 · 접기 (사다리 스펙 §5.2) ────
 // 서버가 11번째 블록부터 pl-extra 를 붙여 두고, 여기서는 노출 건수 shown 기준으로
 // 매번 다시 계산한다. 선수 페이지엔 사이드바가 없어 applyFilters 가 배선되지

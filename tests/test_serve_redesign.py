@@ -213,6 +213,23 @@ def test_protagonist_transition_without_dict_player_keeps_first():
     assert R.protagonist("아스날, 로저스 놓친 후 다른 선수 물색", PLAYERS) == "로저스"
 
 
+def test_protagonist_after_release_word():
+    # 「A 방출 … B 영입」 — 앞 선수가 나가고 뒤 선수가 그 소식의 주인공이다 (2026-08-28).
+    # 실물: 「가브리엘 마르티넬리 방출 결정에 내부적 의문 제기…마커스 래시포드 임대 영입설」
+    assert R.protagonist("로저스 방출 결정에 의문…디오망데 임대 영입설", PLAYERS) == "디오망데"
+
+
+def test_protagonist_after_vacancy_word():
+    # 「A 공백 … B」 — 앞 선수가 비운 자리를 뒤 선수가 메운다 (2026-08-28).
+    # 실물: 「윌리엄 살리바 공백 메울 적임자로 낙점된 에즈리 콘사」
+    assert R.protagonist("로저스 공백 메울 적임자로 낙점된 디오망데", PLAYERS) == "디오망데"
+
+
+def test_protagonist_release_without_a_player_after_it_keeps_first():
+    # 「A 방출」 로 끝나면 뒤에 선수가 없으므로 A 가 그대로 주인공이다.
+    assert R.protagonist("아스날, 트로사르 방출", PLAYERS) == "트로사르"
+
+
 def test_protagonist_none_when_no_player():
     assert R.protagonist("아스날, 여름 이적 시장 대비", PLAYERS) is None
 

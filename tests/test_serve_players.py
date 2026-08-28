@@ -788,14 +788,92 @@ def test_app_js_guards_sidebar_null_check_for_daylist_items():
     )
 
 
-def test_render_players_sorts_group_members_by_korean_surname():
-    # 색인은 성 (ko_name) 가나다순이다 (2026-08-23 공개 준비).
-    # 최근 보도순이던 자리라, 최근 보도가 앞선 선수에게 뒤 글자의 성을 주어
-    # 정렬 기준이 실제로 바뀌었는지 본다.
+def test_render_players_sorts_group_members_by_latest_report():
+    # 색인은 최근 보도순이다 (2026-08-23 에 성 가나다순으로 갔다가 2026-08-28 되돌림).
+    #
+    # 두 차례를 실제로 가르는 배치여야 한다 — 이 테스트는 되돌리기 전까지 가나다
+    # 앞선 선수에게 최신 기사를 줘서 어느 정렬이든 같은 답이 나왔고, 그래서 정렬을
+    # 바꿔도 통과했다. 이제는 가나다 앞선 넬슨에게 옛 기사를 준다.
     arts = [_art("h1", 1, "rumour"), _art("h2", 9, "rumour")]
-    players = [_player(1, "Gyokeres", "요케레스", "in_link",
+    players = [_player(1, "Nelson", "넬슨", "in_link",
                        [{"content_hash": "h1", "stage": "rumour"}]),
-               _player(2, "Nelson", "넬슨", "in_link",
+               _player(2, "Gyokeres", "요케레스", "in_link",
                        [{"content_hash": "h2", "stage": "rumour"}])]
     html = render_players(build_player_entries(arts, players), NOW)
-    assert html.index("넬슨") < html.index("요케레스")
+    assert html.index("요케레스") < html.index("넬슨")
+
+
+# --- 선수 색인 개정 2026-08-28 (정렬 되돌림 · 전환 단추 · 카드 사진) ----------
+
+from bullet_in.serve.render import assign_player_photos
+
+
+def _pe(name, slug, last, status="in_link", articles=None):
+    return {"name": name, "ko_name": name, "slug": slug, "transfer_status": status,
+            "stage": "interest", "count": len(articles or []) or 1,
+            "last_ts": last, "articles": articles or []}
+
+
+def _pimg(h, img, source_id="skysports"):
+    return {"content_hash": h, "image_url": img, "source_id": source_id}
+
+
+def test_player_index_defaults_to_most_recent_first():
+    entries = [_pe("가온", "a", datetime(2026, 7, 1)),
+               _pe("하온", "h", datetime(2026, 8, 28)),
+               _pe("나온", "n", datetime(2026, 8, 10))]
+    html = render_players(entries, datetime(2026, 8, 28))
+    assert html.index("하온") < html.index("나온") < html.index("가온")
+
+
+def test_player_index_carries_both_sort_keys_for_the_toggle():
+    html = render_players([_pe("촐리스", "tzolis", datetime(2026, 8, 2))],
+                          datetime(2026, 8, 3))
+    assert 'data-last="2026-08-02T00:00:00"' in html
+    assert 'data-name="촐리스"' in html
+    assert 'id="plSort"' in html and ">최근 보도순<" in html
+
+
+def test_player_photo_comes_from_the_newest_article_with_an_image():
+    e = _pe("알바레스", "alvarez", datetime(2026, 8, 28),
+            articles=[_pimg("h1", None), _pimg("h2", "img-new"), _pimg("h3", "img-old")])
+    assign_player_photos([e])
+    assert e["_photo"] == "img-new"
+
+
+def test_player_photo_skips_the_gossip_banner():
+    e = _pe("콘사", "konsa", datetime(2026, 8, 28),
+            articles=[_pimg("h1", "banner", source_id="bbc_gossip"),
+                      _pimg("h2", "real")])
+    assign_player_photos([e])
+    assert e["_photo"] == "real"
+
+
+def test_two_players_never_share_one_photo():
+    # 둘이 함께 찍힌 사진이 서로 다른 카드에 걸리면 어느 쪽도 못 믿는다.
+    hot = _pe("래시포드", "rashford", datetime(2026, 8, 28),
+              articles=[_pimg("h1", "both")])
+    cold = _pe("마르티넬리", "martinelli", datetime(2026, 8, 20),
+               articles=[_pimg("h1", "both"), _pimg("h2", "own")])
+    assign_player_photos([hot, cold])
+    assert hot["_photo"] == "both"      # 최근 보도가 있는 쪽이 먼저 가져간다
+    assert cold["_photo"] == "own"
+
+
+def test_player_with_no_usable_image_gets_no_photo():
+    e = _pe("스벤손", "svensson", datetime(2026, 8, 1),
+            articles=[_pimg("h1", None), _pimg("h2", "")])
+    assign_player_photos([e])
+    assert e["_photo"] is None
+    html = render_players([e], datetime(2026, 8, 2))
+    assert "hasphoto" not in html
+
+
+def test_player_photo_removes_its_slot_when_the_image_fails():
+    # onerror 가 없으면 실패한 사진 자리에 빈 회색 상자가 남는다 (기사 썸네일과 같은 규약).
+    e = _pe("알바레스", "alvarez", datetime(2026, 8, 28),
+            articles=[_pimg("h1", "https://x/img.jpg")])
+    html = render_players([e], datetime(2026, 8, 28))
+    assert 'referrerpolicy="no-referrer"' in html
+    assert "classList.remove('hasphoto')" in html
+    assert "closest('.pphoto').remove()" in html
