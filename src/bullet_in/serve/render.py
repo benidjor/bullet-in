@@ -1052,6 +1052,12 @@ def sweep_orphan_pages(articles: list[dict], out_dir: str | Path) -> list[str]:
         (art_dir / name).unlink()
     if removed:
         log.info("잔여 페이지 %d건 삭제 (DB 에서 빠진 기사)", len(removed))
+        # 파일명을 함께 남긴다 — 개수만으로는 "무엇이 사라졌나" 를 사후에 못 묻는다
+        # (2026-08-29 회차에서 실제로 막혔다). 한 줄에 몰아 담으면 저널이 자르므로
+        # 열 개씩 끊어 여러 줄로 남긴다.
+        for i in range(0, len(removed), 10):
+            log.info("잔여 페이지 삭제 목록 %d-%d %s",
+                     i + 1, min(i + 10, len(removed)), " ".join(removed[i:i + 10]))
     return removed
 
 
