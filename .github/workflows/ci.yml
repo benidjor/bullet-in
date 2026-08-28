@@ -44,6 +44,11 @@ jobs:
       - name: 의존성 설치
         run: uv sync --locked --extra dev
 
+      # test_playwright_adapter 가 실제 크로미움을 띄운다 — 로컬은 셋업 절차에 이 명령이
+      # 들어 있어 가려져 있었고, 브라우저 없는 러너에서 처음 드러났다.
+      - name: 크로미움 설치
+        run: uv run playwright install --with-deps chromium
+
       - name: 테스트
         run: uv run pytest -q -rs --junitxml=report.xml
 
@@ -52,6 +57,26 @@ jobs:
         # 허용치 1 = tests/test_dag_import.py (airflow 미설치 · 안건 2ε 에서 결론이 난다).
         # DB 가 안 뜨면 통합 테스트 69건이 여기에 더해져 빨간불이 된다.
         run: python3 .github/scripts/summarize-skips.py report.xml --max-skips 1
+
+      # 모델 참조가 깨진 것을 DB 없이 잡는다 (실측 — `ref` 오타는 잡고 테스트 이름 오타는
+      # 못 잡는다 · 후자는 `dbt compile` 이 잡지만 라이브 MariaDB attach 가 필요하다).
+      - name: dbt 파싱
+        working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
+        run: uv run dbt parse
+
+      - name: 이 CI 가 안 보는 것
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ### 이 CI 가 안 보는 것
+
+          - **dbt 컬럼 테스트 10개** — DuckDB `mysql_scanner` 로 라이브 MariaDB 를 붙여야 돌아 러너에서 못 돎 (안건 2γ) · `dbt parse` 는 모델 참조까지만 봄
+          - **라이브 소스 셀렉터** — 외부 사이트에 의존하는 자리라 단위 테스트가 모킹으로 지나감
+          - **배포와 운영 회차** — VM 반영 · 재렌더 · 화면 확인은 사람의 몫
+          - **PR 본문 규약** — 검사는 돌지만 알림만 하고 막지 않음
+          EOF
 
   docs-format:
     name: 문서 서식
