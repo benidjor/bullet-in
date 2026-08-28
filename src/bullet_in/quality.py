@@ -237,3 +237,52 @@ def roster_axis_staleness(cycle_pairs: list[dict],
         if total >= min_recent:
             out.append({**case, "recent_total": total})
     return sorted(out, key=lambda c: c["ko_name"] or "")
+
+
+# 미등재 구단 탐지 (2026-08-28 사용자 결정) — 자동 등재가 아니라 자동 관측이다.
+#
+# `club_map.yaml` 은 번역 환각 검출 사전이라 (`enrich.detect_club_injection`) 번역
+# 결과에서 뽑아 자동으로 등재하면 모델이 지어낸 이름이 자기 환각을 승인하는 되먹임이
+# 생긴다. 그래서 후보만 모아 사람에게 알리고 등재는 사람이 한다.
+#
+# 구단이 오는 자리는 제목 첫 절의 머리말이다 (「알 힐랄, 마르티넬리 영입 임박」).
+# 그 자리에는 사람 이름도 자주 와서 (「아르테타 감독, …」) 선수 · 기자 사전으로 거른다.
+# 남는 잡음은 **되풀이되지 않는다** — 실제 구단은 여러 기사에 나오고 문장 조각은 한 번
+# 나온다. 그래서 문턱을 두는 것이 필터의 본체다 (2026-08-28 실측: 문턱 3 에서 알 힐랄 7 ·
+# 에버튼 3 을 잡고 오탐 0 · 문턱이 없으면 후보가 45종으로 늘어 읽을 수 없다).
+_CLUB_HEAD_SPLIT = re.compile(r"[,·:]")
+_CLUB_HEAD_MAX = 14
+
+
+def club_head(title: str) -> str | None:
+    """제목 첫 절의 머리말 — 구단이 오는 자리. 없거나 문장 조각이면 None."""
+    fc = (title or "").split("…")[0].split("...")[0]
+    head = _CLUB_HEAD_SPLIT.split(fc)[0].strip()
+    if not head or len(head) > _CLUB_HEAD_MAX:
+        return None
+    return head
+
+
+def missing_club_candidates(titles: list[str], clubs, people, journalists,
+                            min_count: int = 3) -> list[dict]:
+    """구단 목록에 없는 구단 후보 — 되풀이되는 것만 (관측 전용).
+
+    titles 는 대조할 제목 전량, clubs 는 `club_map.yaml` 의 키, people 은 선수 · 스태프
+    표기, journalists 는 기자 사전 키다. 아스날로 시작하는 제목은 우리 관점이라 뺀다."""
+    counts: dict[str, int] = {}
+    example: dict[str, str] = {}
+    for t in titles:
+        head = club_head(t)
+        if not head or head.startswith("아스날") or head.startswith("아스널"):
+            continue
+        if any(c and c in head for c in clubs):
+            continue                      # 이미 등재된 구단
+        if any(p and p in head for p in people):
+            continue                      # 선수 · 스태프
+        if any(j and j in head for j in journalists):
+            continue                      # 기자
+        counts[head] = counts.get(head, 0) + 1
+        example.setdefault(head, t)
+    return sorted(({"name": h, "count": n, "example": example[h]}
+                   for h, n in counts.items() if n >= min_count),
+                  key=lambda c: (-c["count"], c["name"]))

@@ -25,7 +25,8 @@ from bullet_in import roster
 from bullet_in.serve.render import write_site, write_ops, unmatched_articles
 from bullet_in.quality import (success_rate, volume_anomalies, evaluate_freshness,
                                evaluate_coverage, candidate_cliffs, filter_miss_suspects,
-                               roster_axis_staleness, freshness_alert_split)
+                               roster_axis_staleness, freshness_alert_split,
+                               missing_club_candidates, club_head)
 from bullet_in import notify
 
 GEMINI_MODEL = "gemini-3.1-flash-lite"
@@ -327,6 +328,24 @@ async def main(concurrency: int):
     except Exception:
         logging.getLogger(__name__).warning(
             "명단 축 관측 판정 실패 — 이번 회차 건너뜀 (수집 · 번역에는 영향 없음)",
+            exc_info=True)
+
+    # 미등재 구단 관측 (2026-08-28 사용자 결정) — 자동 등재가 아니라 알림이다.
+    # 이번 회차가 만진 제목에 후보가 있을 때만 보낸다 — 안 그러면 등재할 때까지
+    # 회차마다 같은 알림이 온다. 세는 것은 코퍼스 전량이다 (되풀이가 판정 축이라
+    # 이번 회차 것만 세면 문턱을 못 넘는다).
+    try:
+        from bullet_in.credibility import journalist_directory
+        cands = missing_club_candidates(
+            mart.all_titles(), club_map, pstore.serving_names(),
+            journalist_directory("config/credibility.yaml"))
+        cycle_heads = {club_head(v[0]) for v in finals.values() if v and v[0]}
+        fresh = [c for c in cands if c["name"] in cycle_heads]
+        if fresh:
+            notify.send_alert(**notify.build_missing_club_alert(fresh, run_id=run_id))
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "미등재 구단 관측 실패 — 이번 회차 건너뜀 (수집 · 번역에는 영향 없음)",
             exc_info=True)
 
     for h, (title_ko, s_ko, s3_ko, body_ko, _) in finals.items():

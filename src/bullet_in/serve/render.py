@@ -1159,6 +1159,15 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
     for b in lifted:
         b["story"] = (stories or {}).get(b.get("key"))
     blocks.extend(lifted)
+    # 대표 카드에도 같은 줄을 단다 (2026-08-28 사용자 확정) — 그전에는 꺼낸 카드에만
+    # 붙어 두 종류의 카드가 다르게 보였다. 관련 보도는 그대로 둔다: 두 줄은 서로
+    # 대체재가 아니라 다른 축이다 (관련 보도 = 이 사건의 다른 보도 · 선수 페이지 =
+    # 그 선수의 모든 소식). 실측에서 관련 보도 681건 중 79건은 선수 페이지로는 닿을
+    # 수 없었다 (선수 페이지가 없는 사람 60건 + 축이 갈려 빠지는 19건).
+    for b in blocks:
+        b.setdefault("story", None)
+        if b["story"] is None and not b.get("band_dup"):
+            b["story"] = (stories or {}).get(b.get("key"))
     # 밴드 (히어로 · 주요 소식) 기사도 목록에 숨김 카드로 내보낸다 — 필터가 기사 단위로
     # 전 기사에 닿도록 (spec2 §6.3). 평소엔 숨김, app.js 가 필터 활성 시에만 노출.
     for a in ordered:
