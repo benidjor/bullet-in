@@ -1306,9 +1306,11 @@ _TRANSFER_BADGE: dict[str, tuple[str, str]] = {
 # 「진행 중」 을 영입 · 방출로 갈랐다 (2026-08-23 공개 준비 · 사용자 지시).
 # 한 묶음일 때는 들어오는 선수와 나가는 선수가 섞여, 어느 쪽을 보러 왔든 목록을
 # 통째로 훑어야 했다. 두 그룹의 축 배지는 그대로 둔다 (아래 _NO_BADGE_GROUPS).
+# 타 클럽행을 이적 무산 위로 올렸다 (2026-08-28 사용자 지시) — 「어디로 갔나」 는
+# 행선지가 있는 소식이고 「무산」 은 남는 것이 없는 자리라, 되짚을 값이 큰 쪽을 먼저 둔다.
 TRANSFER_GROUPS: list[tuple[str, bool]] = [
     ("영입 진행 중", False), ("방출 진행 중", False), ("이적 확정", False),
-    ("이적 무산", True), ("타 클럽행", True),
+    ("타 클럽행", True), ("이적 무산", True),
 ]
 
 _TRANSFER_GROUP_OF: dict[str, str] = {
@@ -1345,6 +1347,7 @@ _CLUB_BADGE_GROUPS = {"타 클럽행"}
 _CLUB_KO: dict[str, str] = {
     "Arsenal": "아스날",
     "Aston Villa": "아스톤 빌라",
+    "Atletico Madrid": "아틀레티코 마드리드",
     "Barcelona": "바르셀로나",
     "Bayer Leverkusen": "레버쿠젠",
     "Chelsea": "첼시",

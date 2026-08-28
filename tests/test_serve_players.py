@@ -47,9 +47,10 @@ def test_transfer_group_splits_eight_values_without_gap():
 
 
 def test_transfer_groups_order_and_collapse_flag():
+    # 타 클럽행이 이적 무산 위다 (2026-08-28) — 행선지가 있는 소식을 먼저 둔다.
     assert TRANSFER_GROUPS == [
         ("영입 진행 중", False), ("방출 진행 중", False), ("이적 확정", False),
-        ("이적 무산", True), ("타 클럽행", True)]
+        ("타 클럽행", True), ("이적 무산", True)]
 
 
 def test_player_slug_is_lowercased_surname():
