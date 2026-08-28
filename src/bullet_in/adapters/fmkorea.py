@@ -11,7 +11,11 @@ from bullet_in.models import RawItem
 
 log = logging.getLogger(__name__)
 
-_BODY_MAX_CHARS = 2000
+# 게시글 본문 상한 — 원문 기사 경로 (extract_article_body) 의 8000 보다 낮게 둔다.
+# 2000 이던 동안 Mongo 실측 332건 중 100건 (30.1%) 이 문장 중간에서 잘렸고, 잘린
+# 본문이 그대로 번역 · 요약 재료가 됐다 (2026-08-28 사용자 지적). 4000 이면 89.2%
+# 가 온전히 들어온다. 더 올리면 번역 토큰이 함께 늘어 비용 축 (안건 ξ) 과 부딪힌다.
+_BODY_MAX_CHARS = 4000
 
 ORIGIN_BODY_MIN_CHARS = 200
 
@@ -481,6 +485,18 @@ class FmkoreaAdapter:
                                  len((origin_body or "").strip()), orig)
                 if material_level == 1:
                     body = post_body
+                    # 원문 이미지를 못 얻은 채 게시글 본문으로 떨어지면 카드에 이미지가
+                    # 없다 (2026-08-28 사용자 지적 — 텔레그래프처럼 자동 접속을 막는
+                    # 매체에서 그렇다). 페이월 갈래와 같은 규칙으로 게시글 이미지를 쓴다.
+                    # 퍼가기 금지 글은 여기서도 제외한다 — 본문은 재작성할 수 있어도
+                    # 이미지는 못 해 위험의 성격이 다르다 (E안 정책).
+                    if not image and not images:
+                        if _is_repost_blocked(html):
+                            log.info("fmkorea 퍼가기 금지 — 이미지 폴백 안 함 url=%s", url)
+                        else:
+                            images = extract_body_images(html, self.body_selector,
+                                                         base_url=url)
+                            image = images[0] if images else None
             body = strip_publish_datetime(body)
             if not self._relevant(title, body):
                 self.relevance_dropped += 1

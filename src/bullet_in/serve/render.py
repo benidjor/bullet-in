@@ -329,6 +329,15 @@ def show_summary(tier: float | None) -> bool:
 # 순서: 상위 3등급만 → 아스날 주체 → 공신력 → 영입 단계 → 최신 → 이미지 유무.
 # arsenal.com 배제 규칙은 넣지 않는다 (앞 스펙 §16.1 재측정으로 무효 · spec2 §5.1).
 _TOP_TIERS = {0.0, 1.0, 1.5}
+# 히어로 · 주요 소식에서 뺄 주소 (2026-08-28 사용자 결정) — 모아 주는 계정은 원문이
+# 아니라 남의 보도를 옮긴 것이라, 첫 화면의 얼굴로 세우면 출처가 한 겹 멀어진다.
+# 등급은 이미 _TOP_TIERS 가 거르므로 여기서는 주소만 본다.
+_AGGREGATOR_HOSTS = ("x.com/afcstuff", "twitter.com/afcstuff")
+
+
+def _is_aggregator_url(url: str) -> bool:
+    u = (url or "").lower()
+    return any(h in u for h in _AGGREGATOR_HOSTS)
 # done 은 종전 체계에서 agreed 로 저장되던 "타 매체 완료 보도" 의 거처라 상위 유지
 # (빠뜨리면 완료 당일 보도가 rank 0 으로 추락) · collapsed 는 결말 카드 문턱
 # (ending_card 의 >= 1) 을 넘도록 negotiating 급 (단계 재정의 2026-08-10 반영).
@@ -362,6 +371,8 @@ def pick_top_stories(articles: list[dict], now: datetime,
     for a in articles:
         tier = a.get("tier")
         if tier is None or float(tier) not in _TOP_TIERS:
+            continue
+        if _is_aggregator_url(a.get("url") or ""):
             continue
         ts = _group_ts(a)
         if ts is None or (now - ts).days > _TOP_HORIZON_DAYS:
