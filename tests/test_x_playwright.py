@@ -263,3 +263,44 @@ def test_bracket_citation_wins_over_colon_form():
     it = parse_afcstuff_tweets("x_afcstuff", "afcstuff",
                                [_rt(text=text, status_id="7")], NOW)[0]
     assert it.raw_payload["journalist"] == "@David_Ornstein"
+
+
+# 우리가 본인 계정을 따로 수집하는 기자 (2026-08-28) — 속보만 빼고 논평은 남긴다.
+# 본문은 실제 수집분에서 가져왔다 (afcstuff status/2092998834066460937 · 2092270631760933195).
+_BREAKING = ("𝐁𝐑𝐄𝐀𝐊𝐈𝐍𝐆: Reiss Nelson has agreed a deal with Arsenal to terminate "
+             "his contract by mutual consent. [ @David_Ornstein ]")
+_COMMENTARY = ('@David_Ornstein : “You could say Christos Tzolis replaced Leandro '
+               'Trossard, so who’s going to replace Gabriel Martinelli?”')
+
+
+def test_own_source_breaking_is_dropped():
+    # 같은 속보가 x_ornstein 으로도 들어와 두 행이 되던 자리
+    items = parse_afcstuff_tweets("x_afcstuff", "afcstuff",
+                                  [_rt(text=_BREAKING, status_id="1")], NOW,
+                                  own_source_handles=["David_Ornstein"])
+    assert items == []
+
+
+def test_own_source_commentary_is_kept():
+    # 논평은 본인이 트윗한 적이 없어 afcstuff 로만 들어온다
+    items = parse_afcstuff_tweets("x_afcstuff", "afcstuff",
+                                  [_rt(text=_COMMENTARY, status_id="2")], NOW,
+                                  own_source_handles=["David_Ornstein"])
+    assert len(items) == 1
+    assert items[0].raw_payload["journalist"] == "@David_Ornstein"
+
+
+def test_other_journalist_breaking_is_kept():
+    # 본인 계정을 안 받는 기자는 속보도 그대로 받는다 (유일한 경로다)
+    txt = "Arsenal agree deal for Ezri Konsa. [ @SamiMokbel_BBC ]"
+    items = parse_afcstuff_tweets("x_afcstuff", "afcstuff",
+                                  [_rt(text=txt, status_id="3")], NOW,
+                                  own_source_handles=["David_Ornstein"])
+    assert len(items) == 1
+
+
+def test_no_own_source_config_keeps_everything():
+    # 설정이 없으면 종전 동작 (회귀 가드)
+    items = parse_afcstuff_tweets("x_afcstuff", "afcstuff",
+                                  [_rt(text=_BREAKING, status_id="4")], NOW)
+    assert len(items) == 1

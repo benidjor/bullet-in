@@ -47,7 +47,8 @@ def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None) -> l
                                           c.get("max_tweets", 20),
                                           c.get("cookies_path", "x_cookies.json"),
                                           c.get("backtrack_config"),
-                                          self_source=c.get("self_source", False)))
+                                          self_source=c.get("self_source", False),
+                                          own_source_handles=c.get("own_source_handles")))
         elif kind == "fmkorea":
             out.append(FmkoreaAdapter(
                 sid, c["search_url"], c["search_keywords"],

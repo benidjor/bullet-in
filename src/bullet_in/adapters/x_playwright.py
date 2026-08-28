@@ -119,11 +119,12 @@ class XPlaywrightAdapter:
 
     def __init__(self, source_id: str, handle: str, max_tweets: int = 20,
                  cookies_path: str = "x_cookies.json", backtrack_config_path: str | None = None,
-                 self_source: bool = False):
+                 self_source: bool = False, own_source_handles: list[str] | None = None):
         self.source_id, self.handle = source_id, handle
         self.max_tweets, self.cookies_path = max_tweets, cookies_path
         self.backtrack_config_path = backtrack_config_path
         self.self_source = self_source
+        self.own_source_handles = own_source_handles or []
 
     async def fetch(self) -> list[RawItem]:
         from datetime import timezone
@@ -188,21 +189,44 @@ class XPlaywrightAdapter:
         """파서 선택 — self_source 면 본인 트윗 경로, 아니면 기존 인용 경로 (spec §5.2)."""
         if self.self_source:
             return parse_self_tweets(self.source_id, self.handle, raw_tweets, now)
-        return parse_afcstuff_tweets(self.source_id, self.handle, raw_tweets, now)
+        return parse_afcstuff_tweets(self.source_id, self.handle, raw_tweets, now,
+                                     own_source_handles=self.own_source_handles)
+
+
+# 큰따옴표 (곧은 것 · 둥근 것) — 기자의 '말' 을 옮긴 트윗의 표지.
+_QUOTED_RE = re.compile(r'["\u201c\u201d]')
+
+
+def is_commentary(text: str) -> bool:
+    """기자의 말을 옮긴 트윗인가 (속보 전달과 구분) — 큰따옴표 유무로 가른다.
+
+    실측 (2026-08-28 · 온스테인 인용 16건) 에서 둘이 깨끗이 갈렸다. 속보 12건은
+    afcstuff 가 원문을 다시 쓴 것이라 따옴표가 없고, 논평 4건은 방송 · 팟캐스트
+    발언을 옮긴 것이라 전부 따옴표 안에 들어 있다."""
+    return bool(_QUOTED_RE.search(text or ""))
 
 
 def parse_afcstuff_tweets(source_id: str, handle: str,
-                          raw_tweets: list[dict], now: datetime) -> list[RawItem]:
+                          raw_tweets: list[dict], now: datetime,
+                          own_source_handles: list[str] | None = None) -> list[RawItem]:
     """DOM에서 뽑은 트윗 dict → 인용 있는 것만 RawItem.
 
     인용 형태는 둘이다 — 대괄호 (`[ @handle ]`) 와 콜론 (`@handle : "…"`).
     인용 주체가 없는 트윗 (생일 축하 · 훈련 사진 · 기자회견 발언) 은 기자 tier 를
-    매길 근거가 없어 제외한다."""
+    매길 근거가 없어 제외한다.
+
+    own_source_handles 는 우리가 그 기자의 계정을 따로 수집하는 핸들이다. 그런
+    기자의 **속보** 인용은 원문이 다른 경로로 이미 들어오므로 같은 소식이 두 행이
+    된다 (실측: 온스테인 속보 12건 전량이 x_ornstein 에도 있었다). 그래서 속보만
+    빼고 **논평은 남긴다** — 논평은 본인이 트윗한 적이 없어 여기서만 들어온다."""
+    own = {h.lstrip("@").lower() for h in (own_source_handles or [])}
     out: list[RawItem] = []
     for t in raw_tweets:
         text = t.get("text") or ""
         cited = cited_handles(text)
         if not cited:
+            continue
+        if own and cited[-1].lstrip("@").lower() in own and not is_commentary(text):
             continue
         sid = t.get("status_id") or ""
         out.append(RawItem(
