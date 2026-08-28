@@ -241,6 +241,13 @@ class MartStore:
         with self.engine.connect() as c:
             return [dict(r) for r in c.execute(sql, {"hs": hashes}).mappings().all()]
 
+    def all_titles(self) -> list[str]:
+        """번역된 제목 전량 — 미등재 구단 관측의 대조 재료 (되풀이가 판정 축이라
+        회차분만으로는 문턱을 못 넘는다)."""
+        with self.engine.connect() as c:
+            return [r[0] for r in c.execute(text(
+                "SELECT title_ko FROM articles WHERE title_ko IS NOT NULL")).all()]
+
     def clear_translation(self, hashes: list[str]) -> int:
         """번역 4필드 초기화 — 재번역 큐 투입 (title_ko 만 지우면 재시도 판정이 어긋난다,
         런북 2026-07-19 §5.2 와 같은 이유로 4필드 전부)."""

@@ -1159,6 +1159,15 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
     for b in lifted:
         b["story"] = (stories or {}).get(b.get("key"))
     blocks.extend(lifted)
+    # 대표 카드에도 같은 줄을 단다 (2026-08-28 사용자 확정) — 그전에는 꺼낸 카드에만
+    # 붙어 두 종류의 카드가 다르게 보였다. 관련 보도는 그대로 둔다: 두 줄은 서로
+    # 대체재가 아니라 다른 축이다 (관련 보도 = 이 사건의 다른 보도 · 선수 페이지 =
+    # 그 선수의 모든 소식). 실측에서 관련 보도 681건 중 79건은 선수 페이지로는 닿을
+    # 수 없었다 (선수 페이지가 없는 사람 60건 + 축이 갈려 빠지는 19건).
+    for b in blocks:
+        b.setdefault("story", None)
+        if b["story"] is None and not b.get("band_dup"):
+            b["story"] = (stories or {}).get(b.get("key"))
     # 밴드 (히어로 · 주요 소식) 기사도 목록에 숨김 카드로 내보낸다 — 필터가 기사 단위로
     # 전 기사에 닿도록 (spec2 §6.3). 평소엔 숨김, app.js 가 필터 활성 시에만 노출.
     for a in ordered:
@@ -1673,8 +1682,24 @@ def _arsenal_subject_rank(a: dict) -> int:
     return 2 if "아스날" in (a.get("body_ko") or "") else 1
 
 
+def _has_body(a: dict) -> int:
+    """본문이 있는 기사인가 (1) 트윗 · 제목뿐인 행인가 (0).
+
+    트윗은 한두 문장이라 같은 소식의 원문 기사보다 대표로 세울 값이 낮다. 그런데
+    시각만 보면 집계 계정이 원문보다 몇 분 늦게 올리는 것이 흔해 트윗이 이긴다
+    (실측: 넬슨 계약 해지에서 afcstuff 트윗 00:33 이 The Athletic 원문 00:31 을
+    눌렀다)."""
+    lvl = a.get("body_level")
+    return 1 if lvl is not None and int(lvl) > 0 else 0
+
+
 def pick_representative(articles: list[dict]) -> dict | None:
-    """묶음 대표 (spec2 §6.1) — 구단 공식 → 최하 제외 → 아스날 주어 → 최신 → 공신력 → 단계."""
+    """묶음 대표 (spec2 §6.1) — 구단 공식 → 최하 제외 → 아스날 주어 → 최신 날짜 → 본문 → 최신 → 공신력 → 단계.
+
+    최신을 **날짜와 시각 두 단계**로 나눠 본다 (2026-08-28). 시각 하나로 보면 몇 분
+    늦게 올라온 트윗이 같은 날 같은 소식의 원문 기사를 이긴다. 날짜로 먼저 자르면
+    옛 기사가 본문을 갖고 있다고 최신 소식을 밀어내는 일도 없다 (그 실수를 한 번
+    했다 — 본문을 최신보다 앞에 뒀더니 7월 기사가 대표가 됐다)."""
     if not articles:
         return None
     has_higher = any(a.get("tier") is not None and float(a["tier"]) < 4.0 for a in articles)
@@ -1684,8 +1709,10 @@ def pick_representative(articles: list[dict]) -> dict | None:
         tv = float(tier) if tier is not None else 99.0
         official = 1 if tv == 0.0 else 0
         not_lowest = 0 if (has_higher and tv >= 4.0) else 1
-        return (official, not_lowest, _arsenal_subject_rank(a), _sort_ts(a)[0],
-                -tv, _LEAD_STAGE_RANK.get(a.get("transfer_stage") or "", 0))
+        ts = _sort_ts(a)[0]
+        return (official, not_lowest, _arsenal_subject_rank(a),
+                to_kst(ts).date(), _has_body(a), ts, -tv,
+                _LEAD_STAGE_RANK.get(a.get("transfer_stage") or "", 0))
 
     return max(articles, key=key)
 
@@ -1821,15 +1848,27 @@ def promote_recent(blocks: list[dict], window: set,
     """접혀 있던 기사 중 최근 날짜 것을 꺼내 낱개 카드로 돌려준다 (안건 π).
     한 선수 소식은 하루 cap 장까지만 꺼내고, 못 꺼낸 것은 접힌 채로 남는다.
     꺼낸 기사는 원래 카드의 관련 보도와 기사 목록에서 빼 준다 — 안 그러면 같은
-    기사가 카드와 접힘에 두 번 나오고 날짜 머리글의 보도 건수도 두 번 센다."""
+    기사가 카드와 접힘에 두 번 나오고 날짜 머리글의 보도 건수도 두 번 센다.
+
+    **대표 카드가 이미 서 있는 날짜에서는 안 꺼낸다** (2026-08-28). 그 날짜에는
+    그 이야기의 카드가 이미 있어서, 꺼내면 같은 소식이 나란히 두 장으로 선다
+    (실측: 넬슨 계약 해지가 트윗 카드와 The Athletic 카드로 두 번 섰다 — 2분 차이의
+    같은 소식이다). 이 코드는 중복인지 아닌지를 안 보므로 날짜로만 막는다."""
     promoted = []
     for b in blocks:
+        rep_ts = _group_ts(b["rep"]) if b.get("rep") else None
+        rep_day = to_kst(rep_ts).date() if rep_ts is not None else None
         by_day: dict = {}
         for br in b["branches"]:
             for a in br["articles"]:
                 ts = _group_ts(a)
-                if ts is not None and to_kst(ts).date() in window and _promotable(a):
-                    by_day.setdefault(to_kst(ts).date(), []).append(a)
+                if ts is None or not _promotable(a):
+                    continue
+                day = to_kst(ts).date()
+                if day == rep_day:
+                    continue          # 그 날짜엔 대표 카드가 이미 서 있다
+                if day in window:
+                    by_day.setdefault(day, []).append(a)
         picks = []
         for _, arts in sorted(by_day.items(), reverse=True):
             arts.sort(key=_sort_ts, reverse=True)                     # 셋째 — 최신

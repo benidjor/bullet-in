@@ -556,3 +556,26 @@ def build_roster_staleness_alert(cases: list[dict], *, run_id: str) -> dict:
                             "어긋난다. 명단 런북 §6 절차로 값을 확인한다."),
             "color": COLOR_ANOMALY, "fields": fields, "url": RUNBOOK_ROSTER,
             "footer": "bullet-in", "channel": CHANNEL_REVIEW}
+
+
+def build_missing_club_alert(cands: list[dict], *, run_id: str) -> dict:
+    """구단 목록에 없는 구단 후보 알림 (2026-08-28) — 등재는 사람이 한다.
+
+    자동 등재를 안 하는 까닭을 문안에 적는다. `club_map.yaml` 은 번역 환각 검출
+    사전이라 후보를 자동으로 넣으면 그 가드가 자기 환각을 승인하게 된다."""
+    fields = [{"name": c["name"],
+               "value": "\n".join([f"- 제목 {c['count']}건",
+                                   f"- 예: {c['example'][:80]}"]),
+               "inline": False}
+              for c in cands]
+    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    return {"title": f"🏟️ 구단 목록 확인 — 등재 안 된 이름 {len(cands)}종",
+            "description": ("제목 앞머리에 되풀이해 나오는데 `config/club_map.yaml` 에 "
+                            "없는 이름입니다. 구단이면 등재하고, 사람 · 문구면 두면 "
+                            "됩니다.\n"
+                            "**자동 등재는 하지 않습니다** — 이 사전은 번역 환각 검출에도 "
+                            "쓰여, 지어낸 이름이 들어가면 그 검사가 무력해집니다.\n"
+                            "등재 규칙은 파일 머리 주석 (짧은 한글 표기 · 복수 표기) 을 "
+                            "따릅니다."),
+            "color": COLOR_ANOMALY, "fields": fields,
+            "footer": "bullet-in", "channel": CHANNEL_REVIEW}

@@ -65,3 +65,19 @@ clubs:
   베식타스: [Besiktas]
   갈라타사라이: [Galatasaray]
   페네르바체: [Fenerbahce]
+  # 사우디 — 아웃바운드 이적설의 상대 구단. 목록에 없어서 「알 힐랄, {선수} 영입 임박」 이
+  # 다른 구단 관점으로 안 잡히고 「아스날 쪽 보도」 로 새고 있었다 (2026-08-28 실측 19건 ·
+  # 마르티넬리 묶음의 갈래 이름표가 그래서 어긋났다). 규칙 ④ 로 띄어쓰기 두 표기를 각각 등재.
+  알 힐랄: [Al Hilal, Al-Hilal]
+  알힐랄: [Al Hilal, Al-Hilal]
+  알 나스르: [Al Nassr, Al-Nassr]
+  알 아흘리: [Al Ahli, Al-Ahli]
+  # 2026-08-28 코퍼스 전수 대조로 찾은 누락분. 규칙 ② 에 걸리는 짧은 표기 (릴 · 렌 · 니스) 는
+  # 뺐다 — 릴레이 · 렌즈 · 니스칠 같은 일반어에 후행 결합으로 걸린다.
+  # 에버튼은 이미 있는 「에버턴」 의 표기 변형이라 규칙 ④ 로 별칭 목록을 똑같이 준다.
+  에버튼: [Everton, Toffees]
+  레스터: [Leicester, Leicester City]
+  카디프: [Cardiff, Cardiff City]
+  입스위치: [Ipswich, Ipswich Town]
+  마르세유: [Marseille, Olympique Marseille]
+  피오렌티나: [Fiorentina]

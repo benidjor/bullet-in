@@ -228,11 +228,24 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 /* 꺼내 온 카드 → 그 선수 페이지 (안건 π 후속) — 관련 보도 버튼과 같은 자리 · 같은 급수 */
 .storylink{display:inline-block;margin:6px 12px 2px;padding:3px 10px;
   border:1px solid var(--hair);border-radius:2px;color:var(--mut);font-size:12px}
-/* 그 줄과 관련 보도 버튼을 카드 아래끝에 붙인다 — 행 높이를 채우고 있으므로 사진 ·
-   요약 유무로 카드 키가 달라도 같은 행에서는 같은 높이에 놓인다 (최신 소식 한정). */
+/* 두 버튼을 한 줄에 나란히 둔다 (2026-08-28 사용자 확정) — 위아래로 쌓으면 카드마다
+   높이가 달라져 같은 행의 카드 아래끝이 어긋난다. 좁은 화면에서는 접힌다. */
+.blocknav{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:6px 12px 2px}
+.blocknav:empty{display:none}
+.blocknav .storylink,.blocknav .reltoggle{margin:0}
+/* 그 줄을 카드 아래끝에 붙인다 — 행 높이를 채우고 있으므로 사진 · 요약 유무로 카드
+   키가 달라도 같은 행에서는 같은 높이에 놓인다 (최신 소식 한정). */
 .daylist:not(.flatlist) .block{display:flex;flex-direction:column}
-.daylist:not(.flatlist) .storylink,
-.daylist:not(.flatlist) .reltoggle{margin-top:auto;align-self:flex-start}
+.daylist:not(.flatlist) .blocknav{margin-top:auto}
+/* 공신력 배경을 블록 하나로 칠한다 (2026-08-28 사용자 확정) — 카드에만 배경이 있으면
+   그 아래 버튼이 판 밖에 떠 보인다. 배경을 블록으로 올리고 카드 자신의 배경은 끈다
+   (블록에 등급이 실린 홈에서만 · all · 선수 페이지의 .block 은 등급이 없어 그대로다). */
+.block.g0{background:var(--g0-bg)}
+.block.g1{background:var(--g1-bg)}
+.block.g0 .item.g0,.block.g1 .item.g1{background:none}
+/* 판의 아래 여백은 블록이 갖는다 — 버튼이 배경 안쪽에 놓이게. */
+.block.g0,.block.g1{padding-bottom:10px}
+.block.g0 .blocknav,.block.g1 .blocknav{margin-bottom:0}
 .storylink::after{content:" ›";color:var(--dim)}
 .storylink:hover{color:var(--ink);border-color:var(--mut)}
 .reltoggle[aria-expanded="true"]{color:var(--red);border-color:var(--red)}

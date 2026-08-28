@@ -134,7 +134,11 @@ sources:
     credibility: x_mentions
     fallback_tier: 4
     freshness_hours: 24   # 공백 95% 15h (21일 실측) — 집계 계정이라 하루 다건
-    config: { handle: "afcstuff", max_tweets: 30, cookies_path: "x_cookies.json", backtrack_config: "config/backtrack.yaml" }
+    # own_source_handles — 그 기자의 계정을 우리가 따로 수집하는 핸들 (2026-08-28 사용자 결정).
+    # 그런 기자의 **속보** 인용은 원문이 x_ornstein 으로도 들어와 같은 소식이 두 행이 된다
+    # (실측: 온스테인 속보 12건 전량이 x_ornstein raw 에도 있었다). 속보만 빼고 논평은 남긴다
+    # — 논평은 방송 · 팟캐스트 발언이라 본인이 트윗한 적이 없고 여기서만 들어온다.
+    config: { handle: "afcstuff", max_tweets: 30, cookies_path: "x_cookies.json", backtrack_config: "config/backtrack.yaml", own_source_handles: ["David_Ornstein"] }
     # 기자가 아닌 인용처 (2026-08-27 사용자 결정) — @clubgame 은 판타지 축구 게임 앱이라
     # 그 글이 「아스날 26/27 선수 능력치」 처럼 이적 뉴스가 아니다.
     journalist_denylist: ["@clubgame"]
