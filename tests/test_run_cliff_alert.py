@@ -82,10 +82,29 @@ def test_serving_rows_drops_nonarsenal_fmkorea():
     assert keep == [] and hidden == 1
 
 
-def test_serving_rows_keeps_club_term_variant_in_body():
-    """표기 변형 3종을 본문에서도 본다 (수집 필터와 같은 규칙)."""
+def test_serving_rows_drops_club_term_that_only_appears_in_body():
+    """본문에만 있는 구단 키워드로는 안 남긴다 (2026-08-28 개정).
+
+    본문은 배경 설명에 남의 구단을 흔히 적어 타 구단 기사를 끌고 온다 — 실측 14건.
+    수집 필터는 종전대로 본문을 보므로 이 행은 DB 에 남고 화면에서만 빠진다.
+    """
     keep, hidden = _hide([_row("fmkorea", "제목에는 없음", "아스널이 영입을 추진한다")])
+    assert keep == [] and hidden == 1
+
+
+def test_serving_rows_keeps_club_term_variant_in_original_title():
+    """표기 변형은 제목에서 본다 — 「아스널」 도 「아스날」 과 같게 친다."""
+    keep, hidden = _hide([_row("fmkorea", "아스널, 영입 추진", "본문")])
     assert len(keep) == 1 and hidden == 0
+
+
+def test_serving_rows_drops_passing_mention_of_arsenal_in_body():
+    """실물 재현 — 6년 전 이적을 설명하는 배경 문장 하나로 남던 첼시 기사."""
+    keep, hidden = _hide([_row(
+        "fmkorea", "[디 애슬레틱] 첼시, 에밀리아노 마르티네스 영입 합의",
+        "마르티네스는 2020년 9월 아스널을 떠나 빌라에 합류한 뒤 총 256경기에 출전했다.",
+        ko="첼시, 에밀리아노 마르티네스 영입 합의")])
+    assert keep == [] and hidden == 1
 
 
 def test_serving_rows_keeps_full_name_in_original_title():

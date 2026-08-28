@@ -112,8 +112,12 @@ def _serving_kept(row: dict, terms, names, surnames, linked) -> bool:
     """fmkorea 글을 화면에 남길지 — 네 신호 중 하나라도 걸리면 남긴다."""
     title_o = row.get("title_original") or ""
     title_k = row.get("title_ko") or ""
-    # ① 수집 때와 같은 판정 (구단 키워드는 제목 · 본문, 풀네임은 제목)
-    if is_arsenal_relevant(title_o, row.get("body_ko") or "", terms, names):
+    # ① 수집 때와 같은 판정이되 본문은 안 본다 (구단 키워드 · 풀네임 둘 다 제목만).
+    # 본문은 배경 설명에 남의 구단을 흔히 적는다 — 「마르티네스는 2020년 9월 아스널을
+    # 떠나 빌라에 합류한 뒤」 한 줄로 첼시 이적 기사가 화면에 남았다 (2026-08-28 실측
+    # 14건 · 전부 타 구단 기사). 아래 주석이 본문 이름 매칭을 뺀 것과 같은 이유인데,
+    # 그때 구단 키워드를 함께 빼지 않아 같은 고장이 남아 있었다.
+    if is_arsenal_relevant(title_o, "", terms, names):
         return True
     # ② 번역 제목 — 번역이 아스날 맥락이나 풀네임을 복원하는 경우가 있다
     if is_arsenal_relevant(title_k, "", terms, names):
@@ -136,9 +140,9 @@ def serving_rows(rows: list[dict], *, relevance_terms, player_names,
 
     수집 단계 무관 글 필터 (워치리스트 스펙 §3.2) 도입 전에 적재된 타 구단 이적 기사가
     화면에 남아 있다 (2026-08-04 실측 10건 · 전건 노출 · 대부분 온스테인 키워드 유입).
-    서빙 판정은 수집보다 관대하다 — 적재 뒤에야 생기는 번역 제목과 확정 선수 연결을
-    함께 볼 수 있기 때문이다. 본문 이름 매칭은 쓰지 않는다 (실측 결과 스치는 언급으로
-    타 구단 기사 4건이 딸려 왔다).
+    서빙 판정은 수집보다 관대한 축과 엄한 축이 함께 있다 — 적재 뒤에야 생기는 번역
+    제목과 확정 선수 연결을 더 보는 대신, 본문은 이름도 구단 키워드도 보지 않는다
+    (스치는 언급으로 타 구단 기사가 딸려 온다 · 이름 4건 · 구단 키워드 14건).
     fmkorea 외 소스는 아스날 전용 피드라 대상이 아니다."""
     surnames = roster_surnames(player_names)
     linked = linked or set()
