@@ -81,3 +81,20 @@ clubs:
   입스위치: [Ipswich, Ipswich Town]
   마르세유: [Marseille, Olympique Marseille]
   피오렌티나: [Fiorentina]
+  # 표기 흔들림 정리 (2026-08-29 · 안건 υ) 동반 등재 — 규칙 ④ 로 별칭 목록을 똑같이 준다.
+  # glossary 가 번역문을 통용 표기로 모으는데 원문 (특히 한국어 원문인 fmkorea) 은 그대로라,
+  # 이 줄들이 없으면 ko 경로 근거가 끊겨 게이트가 오탐한다 (전량 대조 실측 — 의심 27 → 45).
+  # 여기 등재하면 30 으로 내려오고, 남는 셋 중 둘은 게이트가 원래 못 보던 진짜 주입이었다
+  # (afcstuff 트윗이 원문에 없는 뇌르고르의 소속 구단을 지어냈다).
+  # 「빌라」 홑말은 뺐다 — 넣으면 오탐 하나가 줄고 다른 데서 하나가 생겨 순증이 0이다 (규칙 ②).
+  애스턴 빌라: [Aston Villa, Villa]
+  아스턴 빌라: [Aston Villa, Villa]
+  브라이튼: [Brighton]
+  브렌트포드: [Brentford]
+  가라타사라이: [Galatasaray]
+  클루브 브뤼허: [Club Brugge, Brugge]
+  클뤼브 브뤼허: [Club Brugge, Brugge]
+  클루브 브뤼헤: [Club Brugge, Brugge]
+  클럽 브뤼헤: [Club Brugge, Brugge]
+  클럽 브뤼허: [Club Brugge, Brugge]
+  클뤼프 브뤼헤: [Club Brugge, Brugge]
