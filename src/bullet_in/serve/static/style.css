@@ -80,6 +80,13 @@ h1,h2,h3,h4{margin:0}
 .search .searchgo:hover{color:var(--ink)}
 .search .searchgo:focus-visible{outline:2px solid var(--mut);outline-offset:1px}
 .spacer{flex:1 1 auto}
+/* 이적시장 타이머 (2026-08-28) — 테마 단추 왼쪽. 남은 시간은 자릿수가 바뀌어도
+   글자가 안 흔들리게 tabular-nums 로 세운다. 창이 열려 있고 하루 안쪽이면 빨강. */
+.mktclock{display:inline-flex;align-items:baseline;gap:7px;padding:0 10px;
+  white-space:nowrap;font-size:12.5px;color:var(--mut)}
+.mktclock[hidden]{display:none}
+.mktclock .mkt-time{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+.mktclock.urgent .mkt-time{color:var(--red)}
 .iconbtn,.sortsel{border:1px solid var(--hair);background:var(--paper);color:var(--ink);
   border-radius:2px;height:38px;cursor:pointer;flex:0 0 auto;font:inherit}
 .iconbtn{width:38px;display:grid;place-items:center}
@@ -463,4 +470,8 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
   .lead h2{font-size:23px}
   .topbar .inner{gap:10px;padding:10px 14px}
   .gossiplist{grid-template-columns:1fr}
+  /* 좁은 화면에서는 남은 시간만 남긴다 — 「여름 이적시장 마감까지」 를 함께 두면
+     로고와 단추 사이가 모자라 줄이 접힌다. title 에 전체 문구가 그대로 있다. */
+  .mktclock{padding:0 4px}
+  .mktclock .mkt-label{display:none}
 }

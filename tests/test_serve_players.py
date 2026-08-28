@@ -905,3 +905,46 @@ def test_blank_pin_falls_back_to_the_automatic_pick():
     e["photo_url"] = "   "
     assign_player_photos([e])
     assert e["_photo"] == "auto.jpg"
+
+
+# --- 이적시장 타이머 일정 (2026-08-28) --------------------------------------
+# 계산은 app.js 가 하고 여기서는 재료만 본다 — 값이 틀리면 화면이 조용히 어긋난다.
+
+from datetime import timezone as _tz  # noqa: E402
+
+from bullet_in.serve.render import TRANSFER_WINDOWS  # noqa: E402
+
+
+def _iso(s):
+    return datetime.fromisoformat(s)
+
+
+def test_transfer_windows_carry_an_explicit_utc_offset():
+    # 「9월 1일 23시」 만 적으면 읽는 쪽 시간대에 따라 어긋난다 — 오프셋을 못박는다.
+    for w in TRANSFER_WINDOWS:
+        for key in ("open", "close"):
+            assert _iso(w[key]).tzinfo is not None, f"{w['name']} {key} 에 오프셋이 없다"
+
+
+def test_transfer_windows_are_ordered_and_non_overlapping():
+    for a, b in zip(TRANSFER_WINDOWS, TRANSFER_WINDOWS[1:]):
+        assert _iso(a["open"]) < _iso(a["close"]) <= _iso(b["open"])
+
+
+def test_summer_deadline_is_the_announced_instant():
+    # 현지 2026-09-01 23:00 (BST) = 한국 2026-09-02 07:00 · 사용자가 준 값이다.
+    close = _iso(next(w for w in TRANSFER_WINDOWS if w["name"] == "여름")["close"])
+    assert close.astimezone(_tz.utc) == datetime(2026, 9, 1, 22, 0, tzinfo=_tz.utc)
+
+
+def test_winter_window_opens_new_year_and_closes_february_first():
+    w = next(w for w in TRANSFER_WINDOWS if w["name"] == "겨울")
+    assert _iso(w["open"]).astimezone(_tz.utc) == datetime(2027, 1, 1, 0, 0, tzinfo=_tz.utc)
+    assert _iso(w["close"]).astimezone(_tz.utc) == datetime(2027, 2, 1, 23, 0, tzinfo=_tz.utc)
+
+
+def test_layout_carries_the_schedule_to_the_page():
+    html = render_players([_pe("촐리스", "tzolis", datetime(2026, 8, 2))],
+                          datetime(2026, 8, 3))
+    assert 'id="mktClock"' in html and "data-windows=" in html
+    assert "여름" in html and "겨울" in html

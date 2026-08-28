@@ -85,6 +85,11 @@ gtag('config','{{ ga_id }}');
     <option value="views">조회순</option>
   </select>
   {% endif %}
+  {# 이적시장 타이머 — 재료는 render.TRANSFER_WINDOWS 하나이고 계산은 app.js 가 한다.
+     일정 밖이면 app.js 가 hidden 을 그대로 둬 자리째 사라진다. #}
+  <span class="mktclock" id="mktClock" data-windows="{{ transfer_windows }}" hidden>
+    <span class="mkt-label"></span><span class="mkt-time"></span>
+  </span>
   <button class="iconbtn" id="themeBtn" aria-label="라이트·다크 전환">
     <svg class="ic-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
     <svg class="ic-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>

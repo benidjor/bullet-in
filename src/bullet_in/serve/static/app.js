@@ -92,6 +92,64 @@ if (themeBtn) themeBtn.onclick = () => {
   try { localStorage.setItem('theme', next); } catch {}
 };
 
+// ── 이적시장 타이머 (2026-08-28) ───────────────────────────────────
+// 일정은 서버가 data-windows 로 실어 준다 (render.TRANSFER_WINDOWS 가 단일 원천).
+// 여기서 하는 것은 「지금이 어느 구간인가」 와 「얼마 남았나」 뿐이다 — 렌더는 세
+// 시간에 한 번이라 서버가 계산해 박으면 그사이에 낡는다.
+//
+// 네 갈래 = 여름 개장 전 · 여름 창 중 · 겨울 개장 전 · 겨울 창 중.
+// 목록의 마지막 마감을 지나면 다음 시즌 일정을 모르므로 타이머를 아예 안 띄운다.
+const mktClock = document.getElementById('mktClock');
+if (mktClock) {
+  const wins = JSON.parse(mktClock.dataset.windows || '[]')
+    .map(w => ({ name: w.name, open: Date.parse(w.open), close: Date.parse(w.close) }))
+    .sort((a, b) => a.open - b.open);
+  const labelEl = mktClock.querySelector('.mkt-label');
+  const timeEl = mktClock.querySelector('.mkt-time');
+
+  // 지금 기준으로 다음에 올 일 하나 — 개장 전이면 개장, 창 중이면 마감.
+  const nextEvent = now => {
+    for (const w of wins) {
+      if (now < w.open) return { at: w.open, what: '개장', name: w.name, live: false };
+      if (now < w.close) return { at: w.close, what: '마감', name: w.name, live: true };
+    }
+    return null;
+  };
+
+  const pad = n => String(n).padStart(2, '0');
+  const remain = ms => {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const d = Math.floor(s / 86400);
+    // 하루가 넘게 남으면 초까지 세는 것이 되레 안 읽힌다 — 하루 안쪽부터 초를 센다.
+    return d >= 1
+      ? `${d}일 ${Math.floor((s % 86400) / 3600)}시간`
+      : `${Math.floor(s / 3600)}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
+  };
+
+  let last = '';
+  const tick = () => {
+    const now = Date.now();
+    const ev = nextEvent(now);
+    if (!ev) { mktClock.hidden = true; return; }
+    const left = ev.at - now;
+    const text = `${ev.name} 이적시장 ${ev.what}까지`;
+    const value = remain(left);
+    if (text + value !== last) {
+      labelEl.textContent = text;
+      timeEl.textContent = value;
+      // 창이 열려 있고 하루 안쪽이면 빨간 강조 — 상태를 색으로도 읽게 한다.
+      mktClock.classList.toggle('urgent', ev.live && left < 86400000);
+      mktClock.title = `${new Date(ev.at).toLocaleString('ko-KR', {
+        timeZone: 'Asia/Seoul', dateStyle: 'medium', timeStyle: 'short',
+      })} KST ${ev.what}`;
+      last = text + value;
+    }
+    mktClock.hidden = false;
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+
 // ── 모바일 사이드바 ────────────────────────────────────────────────
 const side = document.querySelector('.side');
 const scrim = document.getElementById('scrim');
