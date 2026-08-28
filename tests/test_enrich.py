@@ -890,12 +890,27 @@ def test_glossary_file_normalizes_brugge_variants_in_order():
 
 def test_club_map_key_matches_glossary_normal_form():
     # 사전이 만들어 내는 정규형과 club_map 등록 키가 어긋나면 구단명 게이트가 침묵한다.
+    #
+    # 2026-08-29 (안건 υ) 에 계약을 좁혔다. 그전에는 「club_map 키가 사전의 교정 대상이면
+    # 안 된다」 로 통째로 막았는데, 그러면 원문 쪽 표기를 등재할 길이 없다.
+    # club_map 키는 역할이 둘이고 검사도 둘로 갈려야 한다.
+    #   ① 검출 — 번역문에 그 표기가 있는가 (_ko_present(joined, ko))
+    #   ② 근거 — 원문에 같은 별칭 목록의 다른 표기가 있는가 (_ko_present(src, k2))
+    # 사전이 번역문만 통일하고 원문 (한국어 원문인 fmkorea) 은 그대로 두므로, 원문 쪽
+    # 표기를 ② 용으로 등재해야 근거가 안 끊긴다 (전량 대조 실측 — 의심 27 → 45 → 30).
+    #
+    # 그래서 지킬 것은 「교집합이 비었는가」 가 아니라 「정규형이 등재돼 있고 별칭 목록이
+    # 같은가」 다. 별칭이 다르면 동의 그룹이 갈라져 ② 가 도로 끊긴다.
     import yaml
     from pathlib import Path
     clubs = (yaml.safe_load(Path("config/club_map.yaml").read_text()) or {})["clubs"]
     glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text()) or {})["replacements"]
     assert "클뤼프 브뤼허" in clubs
-    assert not (set(glossary) & set(clubs)), "club_map 키가 사전의 교정 대상(오표기)이면 안 됨"
+    for wrong in set(glossary) & set(clubs):
+        right = glossary[wrong]
+        assert right in clubs, f"{wrong} 의 정규형 {right} 가 club_map 에 없어 게이트가 침묵한다"
+        assert clubs[wrong] == clubs[right], (
+            f"{wrong} 와 {right} 의 별칭 목록이 달라 동의 그룹이 갈라진다")
 
 def test_glossary_is_idempotent_over_all_keys_and_values():
     # 사전은 단순 문자열 치환이라, 교정 결과가 다른 규칙의 대상이 되면 두 번째 적용에서 또 바뀐다.
@@ -1558,3 +1573,95 @@ def test_glossary_correction_is_idempotent_for_tyjon():
     once = apply_glossary({"title_ko": "이고르 티욘 영입"}, g)
     twice = apply_glossary(once, g)
     assert once["title_ko"] == "이고르 타이욘 영입" == twice["title_ko"]
+
+
+def _glossary():
+    import yaml
+    from pathlib import Path
+    return (yaml.safe_load(Path("config/glossary.yaml").read_text()) or {})["replacements"]
+
+
+# ── 표기 흔들림 정리 (2026-08-29 · 안건 υ) ──────────────────────────────────
+# 서빙 858행을 전량 대조해 갈린 표기 55종을 찾았고 61항목을 등재했다. 아래 넷은 그
+# 과정에서 「넣었으면 깨졌을 것」 을 실측으로 걸러낸 자리다 — 주석만으로는 재발을 못 막는다.
+
+def test_glossary_does_not_touch_sporting_director_or_kansas_city():
+    # 「스포팅」 을 Sporting CP 로 모으려다 전량 대조에서 걸렀다 — 4자리가 전부 다른 뜻이었다
+    # (「스포팅 캔자스 시티」 2 · 「스포팅 디렉터」 2). 「티전」 과 같은 갈래다.
+    g = _glossary()
+    assert "스포팅" not in g
+    out = apply_glossary(
+        {"body_ko": "베르타 스포팅 디렉터는 스포팅 캔자스 시티와 접촉했다"}, g)
+    assert out["body_ko"] == "베르타 스포팅 디렉터는 스포팅 캔자스 시티와 접촉했다"
+
+
+def test_glossary_normalizes_stadium_but_leaves_airline_alone():
+    # 「에미레이트」 홑말은 사전에 넣으면 안 된다 — 실측 86자리 중 21자리가 항공사이고
+    # 「에미레이트 항공」 이 그 회사의 공식 한글명이다. 경기장 구절만 잡는다.
+    g = _glossary()
+    assert "에미레이트" not in g
+    out = apply_glossary(
+        {"body_ko": "에미레이트 스타디움에서 열렸다. 에미레이트 항공은 스폰서다."}, g)
+    assert out["body_ko"] == "에미레이츠 스타디움에서 열렸다. 에미레이트 항공은 스폰서다."
+
+
+def test_glossary_nico_williams_does_not_touch_neco_williams():
+    # 스페인 Nico Williams 를 「니코 윌리암스」 로 모은다 (사용자 확정 · players#142 선언).
+    # 노팅엄의 Neco Williams 는 다른 사람인데, 「네코 윌리엄스」 가 「니코 윌리엄스」 를
+    # 품지 않아 안 걸린다. 원문 대조로 8행을 전수 확인한 자리라 계약으로 고정한다.
+    g = _glossary()
+    out = apply_glossary(
+        {"body_ko": "니코 윌리엄스와 네코 윌리엄스는 다른 선수다"}, g)
+    assert out["body_ko"] == "니코 윌리암스와 네코 윌리엄스는 다른 선수다"
+
+
+def test_glossary_folds_mourinho_and_leaves_jose_sa_alone():
+    # José Mourinho 는 「주제 무리뉴」 로 모은다 (사용자 확정 2026-08-29 · 포르투갈어 José).
+    # 두 가지를 함께 고정한다.
+    #  ① 역방향 규칙이 없어야 한다 — 「주제 무리뉴 → 조제 무리뉴」 를 남기면 사전이 순환한다.
+    #  ② 키는 「무리뉴」 를 붙인 전체 구절이다 — 홑말 「조제」 는 울브스 골키퍼 조제 사
+    #     (José Sá) 를 가리키는 자리가 실측 1자리 있어 함께 바꾸면 남의 이름이 깨진다.
+    g = _glossary()
+    assert "조제" not in g and "주제" not in g
+    out = apply_glossary(
+        {"body_ko": "조제 무리뉴와 조세 무리뉴, 호세 무리뉴는 같은 사람이다. "
+                    "울브스는 조제 사를 지켰다."}, g)
+    assert out["body_ko"] == ("주제 무리뉴와 주제 무리뉴, 주제 무리뉴는 같은 사람이다. "
+                              "울브스는 조제 사를 지켰다.")
+
+
+def test_glossary_folds_prestianni_from_every_direction():
+    # 「지안루카 프레스티아니」 로 모은다 (사용자 확정 2026-08-29 · 처음에 반대로 넣었다 뒤집음).
+    # 이 이름은 표기가 셋이었는데 (지안루카 프레스티안니 · 지안루카 프레스티아니 ·
+    # 잔루카 프레스티아니) 처음에 사용자가 준 짝만 보고 군을 닫아 셋째를 놓쳤다.
+    # 성을 홑말로 먼저 고치는 순서라야 「잔루카 프레스티안니」 도 한 번에 수렴한다.
+    g = _glossary()
+    for before in ("지안루카 프레스티안니", "잔루카 프레스티아니",
+                   "잔루카 프레스티안니", "지안루카 프레스티아니"):
+        out = apply_glossary({"body_ko": f"벤피카의 {before}가 논란이 됐다"}, g)
+        assert out["body_ko"] == "벤피카의 지안루카 프레스티아니가 논란이 됐다", before
+    # 성만 나와도 잡힌다
+    assert apply_glossary({"body_ko": "프레스티안니는 6경기 징계"}, g)["body_ko"] \
+        == "프레스티아니는 6경기 징계"
+
+
+def test_glossary_bernardo_is_a_bare_word_replacement_with_a_known_limit():
+    # 「베르나르도 → 베르나르두」 는 홑말 치환이라 근거를 계약으로 남긴다.
+    # 코퍼스의 Bernardo 는 베르나르두 실바 하나뿐이고 (「베르나르도」 2자리 · 「베르나르두」
+    # 20자리 · 전부 같은 사람) 스페인 · 이탈리아계 Bernardo 는 0이다.
+    # 어말 -o 를 「우」 로 바꾸는 일반 규칙은 세우지 않았다 — 걸면 「브루노 기마랑이스」
+    # 193행 702자리가 함께 뒤집히는데 그쪽은 국내 통용도 players 정본도 「오」 쪽이다.
+    g = _glossary()
+    out = apply_glossary(
+        {"body_ko": "베르나르도가 도착한다. 브루노 기마랑이스는 남는다."}, g)
+    assert out["body_ko"] == "베르나르두가 도착한다. 브루노 기마랑이스는 남는다."
+
+
+def test_glossary_folds_club_spelling_variants():
+    # 구단 축이 가장 무거웠다 (갈린 10종 · 비통용 표기가 낀 행 158). 통용 값은 내가 고르지
+    # 않고 club_map.yaml 키에서 가져왔다 — 정본은 그 파일이 갖고 이 사전은 집행만 한다.
+    g = _glossary()
+    out = apply_glossary({"body_ko": "아스널, 애스턴 빌라, 에버튼, 브라이튼, "
+                                     "브렌트포드, 코벤트리 시티"}, g)
+    assert out["body_ko"] == ("아스날, 아스톤 빌라, 에버턴, 브라이턴, "
+                              "브렌트퍼드, 코번트리 시티")
