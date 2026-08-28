@@ -46,15 +46,22 @@
      그 배지를 떼자 같은 소식이 두 번 나온 것처럼 읽혔다 (실측 16블록).
      b.ending 은 관련 보도 갈래 라벨 (branch_views) 이 계속 쓰므로 값은 그대로 둔다.
      이 16건은 전체 기사 · 선수 페이지에는 남고 홈에서만 빠진다. #}
-  <div class="block"{% if b.band_dup %} style="display:none"{% endif %}>
+  {# 대표의 공신력 등급을 블록에도 싣는다 — 아래 두 버튼이 카드와 같은 배경을 쓰게
+     (2026-08-28). 등급이 카드 안쪽에만 있으면 버튼만 흰 바탕으로 떠 보인다. #}
+  <div class="block {{ b.rep._grade }}"{% if b.band_dup %} style="display:none"{% endif %}>
     {{ card(b.rep, thumb=True, cls='dupcard' if b.band_dup else '', hidden=b.band_dup) }}
     {# 꺼내 온 카드는 관련 보도가 없어 어느 이야기인지 화면에 안 남는다 — 그 선수
-       페이지로 가는 줄을 달아 맥락을 잇는다 (안건 π 후속). 페이지가 있는 선수만 건다. #}
+       페이지로 가는 줄을 달아 맥락을 잇는다 (안건 π 후속). 페이지가 있는 선수만 건다.
+       관련 보도 버튼과 한 줄에 나란히 놓는다 (2026-08-28 사용자 확정). #}
+    <div class="blocknav">
     {% if b.story %}
     <a class="storylink" href="player/{{ b.story.slug }}.html">{{ b.key }} 더보기 · 기사 {{ b.story.count }}건</a>
     {% endif %}
     {% if b.rel_count %}
     <button class="reltoggle" type="button" aria-expanded="false">관련 보도 {{ b.rel_count }}건</button>
+    {% endif %}
+    </div>
+    {% if b.rel_count %}
     <div class="related" hidden>
       {% for br in b.branches %}
       {% if br.label %}<div class="branchlabel">{{ br.label }}</div>{% endif %}

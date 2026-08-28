@@ -37,7 +37,7 @@ GEMINI_MODEL = "gemini-3.1-flash-lite"
 SERVING_SELECT_SQL = (
     "SELECT content_hash,url,source_id,title_original,title_ko,summary_ko,"
     "summary3_ko,body_ko,body_source,image_url,images_json,outlet,journalist,authors_json,team,"
-    "transfer_stage,transfer_direction,tier,confidence_score,published_at,"
+    "transfer_stage,transfer_direction,tier,confidence_score,body_level,published_at,"
     "published_precision,fetched_at "
     "FROM articles")
 
