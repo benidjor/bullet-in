@@ -1754,16 +1754,19 @@ def related_reports(cluster: dict, rep: dict | None, ending: dict | None,
     if ending:
         excluded.add(ending["article"]["content_hash"])
     arsenal_side, other_side = [], []
+    other_clubs: Counter = Counter()
     for a in cluster["articles"]:
         if a["content_hash"] in excluded:
             continue
-        if _is_other_club_report(a, cluster["key"], club_map):
+        club = _is_other_club_report(a, cluster["key"], club_map)
+        if club:
             other_side.append(a)
+            other_clubs[club] += 1
         else:
             arsenal_side.append(a)
     arsenal_side.sort(key=_sort_ts, reverse=True)
     other_side.sort(key=_sort_ts, reverse=True)
-    return {"arsenal": arsenal_side, "other": other_side}
+    return {"arsenal": arsenal_side, "other": other_side, "other_clubs": other_clubs}
 
 
 def branch_views(related: dict, ending: dict | None) -> list[dict]:
@@ -1772,7 +1775,12 @@ def branch_views(related: dict, ending: dict | None) -> list[dict]:
     ars, oth = related["arsenal"], related["other"]
     if ending:
         club = ending["club"]
-        branches = ([{"label": f"{club}행 관련", "articles": oth}] if oth else []) + \
+        # 결말 기사 한 건의 구단명이 갈래 전체의 이름표가 되던 자리 (안건 τ-ⓐ).
+        # 그 갈래가 실제로 그 구단 이야기가 아니면 구단명을 빼고 일반 이름표로 돌린다
+        # — 결말 카드는 홈에 안 그려지므로 (2026-08-23) 틀린 구단명이 남는 자리는 여기뿐이다.
+        named = bool(oth) and related.get("other_clubs", Counter()).get(club, 0) / len(oth) >= 0.5
+        label = f"{club}행 관련" if named else "영입 경쟁"
+        branches = ([{"label": label, "articles": oth}] if oth else []) + \
                    ([{"label": "아스날 쪽 보도", "articles": ars}] if ars else [])
     else:
         branches = ([{"label": "아스날 쪽 보도", "articles": ars}] if ars else []) + \

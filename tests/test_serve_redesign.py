@@ -1,4 +1,5 @@
 """UI 개편 뷰모델 헬퍼 단위 테스트 (docs/superpowers/plans/2026-07-22-serve-ui-redesign.md)."""
+from collections import Counter
 from datetime import date, datetime
 
 from bullet_in.serve import render as R
@@ -467,3 +468,30 @@ def test_mask_keeps_title_length():
     # 길이를 그대로 둬야 전환어 위치 비교가 안 흔들린다
     t = "아스날 레전드 리 딕슨, 스왑딜 제안"
     assert len(R.mask_other_people(t)) == len(t)
+
+
+def test_branch_label_keeps_club_when_branch_is_mostly_that_club():
+    # 갈래의 다수가 결말 구단이면 이름표에 구단명이 그대로 남는다 (안건 τ-ⓐ)
+    oth = [_row(content_hash="o1"), _row(content_hash="o2")]
+    related = {"arsenal": [_row(content_hash="a1")], "other": oth,
+               "other_clubs": Counter({"첼시": 2})}
+    labels = [b["label"] for b in R.branch_views(related, {"club": "첼시"})]
+    assert labels == ["첼시행 관련", "아스날 쪽 보도"]
+
+
+def test_branch_label_drops_club_when_branch_is_mostly_other_clubs():
+    # 결말 한 건의 구단명이 갈래 전체를 대표하지 못하면 구단명을 뺀다 (안건 τ-ⓐ)
+    oth = [_row(content_hash="o%d" % i) for i in range(4)]
+    related = {"arsenal": [_row(content_hash="a1")], "other": oth,
+               "other_clubs": Counter({"토트넘": 3, "첼시": 1})}
+    labels = [b["label"] for b in R.branch_views(related, {"club": "첼시"})]
+    assert labels == ["영입 경쟁", "아스날 쪽 보도"]
+
+
+def test_related_reports_counts_other_clubs():
+    rep = _row(content_hash="rep", title_ko="아스날, 로저스 영입 추진")
+    a = _row(content_hash="a", title_ko="첼시, 로저스 영입 임박")
+    b = _row(content_hash="b", title_ko="첼시, 로저스 메디컬 진행")
+    cluster = {"key": "로저스", "articles": [rep, a, b]}
+    rel = R.related_reports(cluster, rep, None, CLUBS)
+    assert rel["other_clubs"] == Counter({"첼시": 2})
