@@ -1,4 +1,4 @@
-from bullet_in.enrich import enrich_rows, extract_players_rows
+from bullet_in.enrich import apply_glossary, enrich_rows, extract_players_rows
 
 class FullClient:
     """백필 테스트용 — 사전 payload 반환 클라이언트."""
@@ -1530,3 +1530,31 @@ def test_enrich_successful_first_attempt_costs_one_call():
     client = _Scripted([_GOOD])
     enrich_rows([_prow()], client, "m")
     assert client.n == 1
+
+
+def test_glossary_maps_both_tyjon_misspellings():
+    # 저장된 오표기가 둘이었다 — 공홈 번역이 「티존」 · afcstuff 번역이 「티욘」 (2026-08-29).
+    import yaml
+    from pathlib import Path
+    g = (yaml.safe_load(Path("config/glossary.yaml").read_text()) or {})["replacements"]
+    assert g["티존"] == "타이욘" and g["티욘"] == "타이욘"
+
+
+def test_glossary_does_not_touch_city_match_wording():
+    # 「티전」 은 「맨시티전」 · 「스완지 시티전」 의 일부다 (실측 8건) — 사전에 넣으면 안 된다.
+    import yaml
+    from pathlib import Path
+    g = (yaml.safe_load(Path("config/glossary.yaml").read_text()) or {})["replacements"]
+    assert "티전" not in g
+    fixed = apply_glossary({"body_ko": "맨체스터 시티전 결승골"}, g)
+    assert fixed["body_ko"] == "맨체스터 시티전 결승골"
+
+
+def test_glossary_correction_is_idempotent_for_tyjon():
+    # 「타이욘」 은 「티욘」 을 부분 문자열로 품지 않아 두 번 걸려도 안 망가진다.
+    import yaml
+    from pathlib import Path
+    g = (yaml.safe_load(Path("config/glossary.yaml").read_text()) or {})["replacements"]
+    once = apply_glossary({"title_ko": "이고르 티욘 영입"}, g)
+    twice = apply_glossary(once, g)
+    assert once["title_ko"] == "이고르 타이욘 영입" == twice["title_ko"]
