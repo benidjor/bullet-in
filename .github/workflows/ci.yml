@@ -1,0 +1,109 @@
+# PR 과 main push 에서 테스트 · 문서 서식 · PR 규약을 자동으로 돌린다.
+# 통합 테스트가 DB 없이 조용히 빠지는 것을 막으려고 러너에 MariaDB 를 띄우고,
+# 건너뛴 수를 허용치와 대 본다 (.github/scripts/summarize-skips.py).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: pytest
+    runs-on: ubuntu-latest
+    services:
+      # 통합 테스트 69건이 이 접속으로 붙는다 (tests/integration/conftest.py 가 주소를 고정한다).
+      # 스키마의 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 는 MariaDB 문법이라 MySQL 로 못 바꾼다.
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: bulletin
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v7
+
+      # v7 부터 이동하는 major 태그를 안 내므로 정확한 버전으로 고정한다.
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.11"
+
+      - name: 의존성 설치
+        run: uv sync --locked --extra dev
+
+      - name: 테스트
+        run: uv run pytest -q -rs --junitxml=report.xml
+
+      - name: 건너뜀 요약 · 허용치 검사
+        if: always()
+        # 허용치 1 = tests/test_dag_import.py (airflow 미설치 · 안건 2ε 에서 결론이 난다).
+        # DB 가 안 뜨면 통합 테스트 69건이 여기에 더해져 빨간불이 된다.
+        run: python3 .github/scripts/summarize-skips.py report.xml --max-skips 1
+
+  docs-format:
+    name: 문서 서식
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # 바뀐 파일만 본다 — 2026-07 이전 문서 21개에 남은 위반은 이 PR 의 몫이 아니다.
+      # 그 문서를 손대는 PR 은 해당 파일의 위반을 함께 고쳐야 통과한다.
+      - name: 바뀐 docs/*.md 서식 검사
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          fail=0
+          for f in $(git diff --name-only --diff-filter=d "$BASE_SHA" HEAD -- 'docs/**/*.md'); do
+            if ! printf '{"tool_input":{"file_path":"%s"}}' "$PWD/$f" \
+                 | python3 .claude/hooks/check-doc-format.py; then
+              echo "::error file=$f::문서 서식 위반 (컨벤션 §2.2)"
+              fail=1
+            fi
+          done
+          exit $fail
+
+  pr-format:
+    name: PR 규약
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # 제목은 squash merge 로 커밋 제목이 되고 머지 뒤에는 못 고친다 — 그래서 차단한다.
+      - name: 제목 (차단)
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: python3 .claude/tools/check-pr-format.py --title "$PR_TITLE"
+
+      # 본문은 알림만 한다 — 최근 머지된 PR 여덟 중 여섯이 이 검사에 걸리는데
+      # 「라벨 없는 불릿」 은 참고 절의 정상 표기이고 「임 종결」 은 도구가 소프트 경고로 낸다.
+      # 차단으로 걸면 정상 PR 이 빨간불이 나고, 그 빨간불은 곧 무시된다.
+      - name: 본문 (알림만)
+        if: always()
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > pr_body.md
+          {
+            echo "## PR 본문 규약 (알림만 · 차단 안 함)"
+            echo
+            echo '```'
+            python3 .claude/tools/check-pr-format.py --body pr_body.md || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
