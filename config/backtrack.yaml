@@ -25,3 +25,10 @@ domains:                 # 무료 아웃렛 도메인 → 아웃렛명 (credibil
   mirror.co.uk: Mirror
   express.co.uk: Express
   talksport.com: talkSPORT
+  # 아래 다섯은 저널이 「미등록 도메인」 으로 버린 실물이다 (2026-07-20 ~ 08-29 전 구간 · 고유 5건).
+  # globo 는 관측된 축구 서브도메인만 적는다 — globo.com 뿌리는 종합 뉴스 포털이라 넓다.
+  lequipe.fr: L'Équipe
+  cbssports.com: CBS Sports
+  teamtalk.com: TeamTalk
+  ge.globo.com: Globo
+  alfredopedulla.com: Alfredo Pedullà

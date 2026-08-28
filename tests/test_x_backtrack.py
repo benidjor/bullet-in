@@ -185,3 +185,62 @@ def test_promote_images_default_empty():
                  raw_payload={"text": "Tweet", "journalist": "@x"})
     p = promote_cited_item(it, "https://bbc.co.uk/a", "BBC", None, "B", None)
     assert p.raw_payload["images"] == []
+
+def _matched_timeline(card):
+    return {"gunnerblog": [{"text": "Arsenal sign Bruno Guimaraes Newcastle package worth",
+                            "created_at": "2026-07-02T19:30:00Z", "card_href": card}]}
+
+def _fake_resolve(final_url, body="Paywalled body."):
+    async def _f(_client, _url):
+        return final_url, body, "Head", "https://img", []
+    return _f
+
+def test_backtrack_paywall_swaps_url_and_keeps_tweet_payload(monkeypatch):
+    # 페이월은 승격을 포기하는 대신 주소만 기사 것으로 바꾼다 (자매 함수 resolve_card_urls 와 같게).
+    from bullet_in.adapters import x_backtrack
+    monkeypatch.setattr(x_backtrack, "resolve_and_fetch",
+                        _fake_resolve("https://www.nytimes.com/athletic/1/2026/08/27/nelson/"))
+    it = _cited("@gunnerblog", "Arsenal sign Bruno Guimaraes Newcastle package worth",
+                "2026-07-02T20:00:00Z")
+    out = asyncio.run(backtrack_promote([it], _matched_timeline("https://t.co/x"), _CFG))
+    assert out[0] is it
+    assert out[0].url == "https://www.nytimes.com/athletic/1/2026/08/27/nelson/"
+    assert out[0].source_type == "x"
+    assert out[0].raw_payload["tweet_url"] == "https://x.com/afcstuff/status/9"
+    assert "body" not in out[0].raw_payload
+
+def test_backtrack_unregistered_domain_keeps_tweet_url(monkeypatch):
+    # 도메인이 사전에 없으면 승격하지 않는다 — 페이월 교체가 이 분기를 삼키지 않는지 함께 본다.
+    from bullet_in.adapters import x_backtrack
+    monkeypatch.setattr(x_backtrack, "resolve_and_fetch", _fake_resolve("https://example.com/a"))
+    it = _cited("@gunnerblog", "Arsenal sign Bruno Guimaraes Newcastle package worth",
+                "2026-07-02T20:00:00Z")
+    out = asyncio.run(backtrack_promote([it], _matched_timeline("https://t.co/x"), _CFG))
+    assert out[0].url == "https://x.com/afcstuff/status/9"
+    assert "tweet_url" not in out[0].raw_payload
+
+def test_backtrack_registered_domain_still_promotes(monkeypatch):
+    from bullet_in.adapters import x_backtrack
+    monkeypatch.setattr(x_backtrack, "resolve_and_fetch",
+                        _fake_resolve("https://www.bbc.co.uk/sport/a"))
+    it = _cited("@gunnerblog", "Arsenal sign Bruno Guimaraes Newcastle package worth",
+                "2026-07-02T20:00:00Z")
+    out = asyncio.run(backtrack_promote([it], _matched_timeline("https://t.co/x"), _CFG))
+    assert out[0].url == "https://www.bbc.co.uk/sport/a"
+    assert out[0].source_type == "html"
+    assert out[0].raw_payload["outlet"] == "BBC"
+
+def test_backtrack_config_registers_the_five_dropped_domains():
+    # 저널 전 구간에서 「미등록 도메인」 으로 버려진 다섯 (2026-07-20 ~ 08-29 실측).
+    d = load_backtrack_config("config/backtrack.yaml")["domains"]
+    assert d["lequipe.fr"] == "L'Équipe"
+    assert d["cbssports.com"] == "CBS Sports"
+    assert d["teamtalk.com"] == "TeamTalk"
+    assert d["ge.globo.com"] == "Globo"
+    assert d["alfredopedulla.com"] == "Alfredo Pedullà"
+
+def test_outlet_for_domain_resolves_globo_subdomain():
+    # 저널의 실물은 ge.globo.com 이라 서브도메인으로 걸려야 한다.
+    domains = load_backtrack_config("config/backtrack.yaml")["domains"]
+    assert outlet_for_domain(
+        "https://ge.globo.com/futebol/noticia/2026/08/23/martinelli.ghtml", domains) == "Globo"

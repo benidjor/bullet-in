@@ -129,7 +129,13 @@ async def backtrack_promote(items, timelines, cfg):
                 if final_url is None or not body:
                     out.append(it); continue
                 if is_paywalled(final_url):
-                    log.info("backtrack 페이월 (Athletic) url=%s", final_url)
+                    # 본문은 저장하지 않고 주소만 기사 것으로 바꾼다 — 자매 함수 resolve_card_urls
+                    # 와 같은 동작이다 (흡수 설계 2026-08-14 §2.2). 전문이 뒤늦게 오면 기존
+                    # dedup 이 같은 키를 보고 한 행으로 접는다.
+                    log.info("backtrack 페이월 URL 교체 (본문 미저장) url=%s tweet=%s",
+                             final_url, it.url)
+                    it.raw_payload["tweet_url"] = it.url
+                    it.url = final_url
                     out.append(it); continue
                 outlet = outlet_for_domain(final_url, domains)
                 if outlet is None:
