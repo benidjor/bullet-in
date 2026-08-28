@@ -206,7 +206,7 @@ class PlayerStore:
         with self.engine.connect() as c:
             return [dict(r) for r in c.execute(text(
                 "SELECT id, full_name, surname, ko_name, ko_full_name, "
-                "transfer_status, club, former_club "
+                "transfer_status, club, former_club, photo_url "
                 f"FROM players WHERE {_PAGE_WHERE} AND EXISTS ("
                 "SELECT 1 FROM article_players ap WHERE ap.player_id = players.id) "
                 "ORDER BY id")).mappings().all()]
@@ -225,6 +225,20 @@ class PlayerStore:
         with self.engine.connect() as c:
             return {r[0] for r in c.execute(text(
                 "SELECT DISTINCT content_hash FROM article_players")).all()}
+
+    def set_photo(self, player_id: int, url: str | None) -> None:
+        """카드 사진을 손으로 고정한다 (None 이면 풀어 자동 선택으로 되돌린다)."""
+        with self.engine.begin() as c:
+            c.execute(text("UPDATE players SET photo_url=:u WHERE id=:id"),
+                      {"u": url, "id": player_id})
+
+    def pinned_photos(self) -> list[dict]:
+        """지금 고정돼 있는 것 전부 — 무엇을 손으로 박아 뒀는지 되짚는 창구."""
+        with self.engine.connect() as c:
+            return [dict(r) for r in c.execute(text(
+                "SELECT id, full_name, ko_name, photo_url FROM players "
+                "WHERE photo_url IS NOT NULL AND photo_url <> '' "
+                "ORDER BY ko_name")).mappings().all()]
 
     def confirm(self, player_id: int, *, ko_name: str,
                 category: str | None = None, transfer_status: str | None = None,

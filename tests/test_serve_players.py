@@ -47,9 +47,10 @@ def test_transfer_group_splits_eight_values_without_gap():
 
 
 def test_transfer_groups_order_and_collapse_flag():
+    # 타 클럽행이 이적 무산 위다 (2026-08-28) — 행선지가 있는 소식을 먼저 둔다.
     assert TRANSFER_GROUPS == [
         ("영입 진행 중", False), ("방출 진행 중", False), ("이적 확정", False),
-        ("이적 무산", True), ("타 클럽행", True)]
+        ("타 클럽행", True), ("이적 무산", True)]
 
 
 def test_player_slug_is_lowercased_surname():
@@ -788,14 +789,162 @@ def test_app_js_guards_sidebar_null_check_for_daylist_items():
     )
 
 
-def test_render_players_sorts_group_members_by_korean_surname():
-    # 색인은 성 (ko_name) 가나다순이다 (2026-08-23 공개 준비).
-    # 최근 보도순이던 자리라, 최근 보도가 앞선 선수에게 뒤 글자의 성을 주어
-    # 정렬 기준이 실제로 바뀌었는지 본다.
+def test_render_players_sorts_group_members_by_latest_report():
+    # 색인은 최근 보도순이다 (2026-08-23 에 성 가나다순으로 갔다가 2026-08-28 되돌림).
+    #
+    # 두 차례를 실제로 가르는 배치여야 한다 — 이 테스트는 되돌리기 전까지 가나다
+    # 앞선 선수에게 최신 기사를 줘서 어느 정렬이든 같은 답이 나왔고, 그래서 정렬을
+    # 바꿔도 통과했다. 이제는 가나다 앞선 넬슨에게 옛 기사를 준다.
     arts = [_art("h1", 1, "rumour"), _art("h2", 9, "rumour")]
-    players = [_player(1, "Gyokeres", "요케레스", "in_link",
+    players = [_player(1, "Nelson", "넬슨", "in_link",
                        [{"content_hash": "h1", "stage": "rumour"}]),
-               _player(2, "Nelson", "넬슨", "in_link",
+               _player(2, "Gyokeres", "요케레스", "in_link",
                        [{"content_hash": "h2", "stage": "rumour"}])]
     html = render_players(build_player_entries(arts, players), NOW)
-    assert html.index("넬슨") < html.index("요케레스")
+    assert html.index("요케레스") < html.index("넬슨")
+
+
+# --- 선수 색인 개정 2026-08-28 (정렬 되돌림 · 전환 단추 · 카드 사진) ----------
+
+from bullet_in.serve.render import assign_player_photos
+
+
+def _pe(name, slug, last, status="in_link", articles=None):
+    return {"name": name, "ko_name": name, "slug": slug, "transfer_status": status,
+            "stage": "interest", "count": len(articles or []) or 1,
+            "last_ts": last, "articles": articles or []}
+
+
+def _pimg(h, img, source_id="skysports"):
+    return {"content_hash": h, "image_url": img, "source_id": source_id}
+
+
+def test_player_index_defaults_to_most_recent_first():
+    entries = [_pe("가온", "a", datetime(2026, 7, 1)),
+               _pe("하온", "h", datetime(2026, 8, 28)),
+               _pe("나온", "n", datetime(2026, 8, 10))]
+    html = render_players(entries, datetime(2026, 8, 28))
+    assert html.index("하온") < html.index("나온") < html.index("가온")
+
+
+def test_player_index_carries_both_sort_keys_for_the_toggle():
+    html = render_players([_pe("촐리스", "tzolis", datetime(2026, 8, 2))],
+                          datetime(2026, 8, 3))
+    assert 'data-last="2026-08-02T00:00:00"' in html
+    assert 'data-name="촐리스"' in html
+    assert 'id="plSort"' in html and ">최근 보도순<" in html
+
+
+def test_player_photo_comes_from_the_newest_article_with_an_image():
+    e = _pe("알바레스", "alvarez", datetime(2026, 8, 28),
+            articles=[_pimg("h1", None), _pimg("h2", "img-new"), _pimg("h3", "img-old")])
+    assign_player_photos([e])
+    assert e["_photo"] == "img-new"
+
+
+def test_player_photo_skips_the_gossip_banner():
+    e = _pe("콘사", "konsa", datetime(2026, 8, 28),
+            articles=[_pimg("h1", "banner", source_id="bbc_gossip"),
+                      _pimg("h2", "real")])
+    assign_player_photos([e])
+    assert e["_photo"] == "real"
+
+
+def test_two_players_never_share_one_photo():
+    # 둘이 함께 찍힌 사진이 서로 다른 카드에 걸리면 어느 쪽도 못 믿는다.
+    hot = _pe("래시포드", "rashford", datetime(2026, 8, 28),
+              articles=[_pimg("h1", "both")])
+    cold = _pe("마르티넬리", "martinelli", datetime(2026, 8, 20),
+               articles=[_pimg("h1", "both"), _pimg("h2", "own")])
+    assign_player_photos([hot, cold])
+    assert hot["_photo"] == "both"      # 최근 보도가 있는 쪽이 먼저 가져간다
+    assert cold["_photo"] == "own"
+
+
+def test_player_with_no_usable_image_gets_no_photo():
+    e = _pe("스벤손", "svensson", datetime(2026, 8, 1),
+            articles=[_pimg("h1", None), _pimg("h2", "")])
+    assign_player_photos([e])
+    assert e["_photo"] is None
+    html = render_players([e], datetime(2026, 8, 2))
+    assert "hasphoto" not in html
+
+
+def test_player_photo_removes_its_slot_when_the_image_fails():
+    # onerror 가 없으면 실패한 사진 자리에 빈 회색 상자가 남는다 (기사 썸네일과 같은 규약).
+    e = _pe("알바레스", "alvarez", datetime(2026, 8, 28),
+            articles=[_pimg("h1", "https://x/img.jpg")])
+    html = render_players([e], datetime(2026, 8, 28))
+    assert 'referrerpolicy="no-referrer"' in html
+    assert "classList.remove('hasphoto')" in html
+    assert "closest('.pphoto').remove()" in html
+
+
+def test_pinned_photo_beats_the_automatic_pick():
+    # 자동 선택은 회차마다 갈아타므로 (30일에 177회 실측) 어긋난 선수만 손으로 박는다.
+    e = _pe("알렉스 스콧", "scott", datetime(2026, 8, 27),
+            articles=[_pimg("h1", "남의-얼굴.jpg")])
+    e["photo_url"] = "https://x/scott.jpg"
+    assign_player_photos([e])
+    assert e["_photo"] == "https://x/scott.jpg"
+
+
+def test_pinned_photo_is_not_reused_by_the_automatic_pick():
+    # 박은 사진을 다른 선수가 또 가져가면 박은 뜻이 없어진다.
+    pinned = _pe("스콧", "scott", datetime(2026, 8, 20), articles=[])
+    pinned["photo_url"] = "https://x/shared.jpg"
+    auto = _pe("래시포드", "rashford", datetime(2026, 8, 28),
+               articles=[_pimg("h1", "https://x/shared.jpg"), _pimg("h2", "own.jpg")])
+    assign_player_photos([pinned, auto])
+    assert pinned["_photo"] == "https://x/shared.jpg"
+    assert auto["_photo"] == "own.jpg"
+
+
+def test_blank_pin_falls_back_to_the_automatic_pick():
+    e = _pe("콘사", "konsa", datetime(2026, 8, 28), articles=[_pimg("h1", "auto.jpg")])
+    e["photo_url"] = "   "
+    assign_player_photos([e])
+    assert e["_photo"] == "auto.jpg"
+
+
+# --- 이적시장 타이머 일정 (2026-08-28) --------------------------------------
+# 계산은 app.js 가 하고 여기서는 재료만 본다 — 값이 틀리면 화면이 조용히 어긋난다.
+
+from datetime import timezone as _tz  # noqa: E402
+
+from bullet_in.serve.render import TRANSFER_WINDOWS  # noqa: E402
+
+
+def _iso(s):
+    return datetime.fromisoformat(s)
+
+
+def test_transfer_windows_carry_an_explicit_utc_offset():
+    # 「9월 1일 23시」 만 적으면 읽는 쪽 시간대에 따라 어긋난다 — 오프셋을 못박는다.
+    for w in TRANSFER_WINDOWS:
+        for key in ("open", "close"):
+            assert _iso(w[key]).tzinfo is not None, f"{w['name']} {key} 에 오프셋이 없다"
+
+
+def test_transfer_windows_are_ordered_and_non_overlapping():
+    for a, b in zip(TRANSFER_WINDOWS, TRANSFER_WINDOWS[1:]):
+        assert _iso(a["open"]) < _iso(a["close"]) <= _iso(b["open"])
+
+
+def test_summer_deadline_is_the_announced_instant():
+    # 현지 2026-09-01 23:00 (BST) = 한국 2026-09-02 07:00 · 사용자가 준 값이다.
+    close = _iso(next(w for w in TRANSFER_WINDOWS if w["name"] == "여름")["close"])
+    assert close.astimezone(_tz.utc) == datetime(2026, 9, 1, 22, 0, tzinfo=_tz.utc)
+
+
+def test_winter_window_opens_new_year_and_closes_february_first():
+    w = next(w for w in TRANSFER_WINDOWS if w["name"] == "겨울")
+    assert _iso(w["open"]).astimezone(_tz.utc) == datetime(2027, 1, 1, 0, 0, tzinfo=_tz.utc)
+    assert _iso(w["close"]).astimezone(_tz.utc) == datetime(2027, 2, 1, 23, 0, tzinfo=_tz.utc)
+
+
+def test_layout_carries_the_schedule_to_the_page():
+    html = render_players([_pe("촐리스", "tzolis", datetime(2026, 8, 2))],
+                          datetime(2026, 8, 3))
+    assert 'id="mktClock"' in html and "data-windows=" in html
+    assert "여름" in html and "겨울" in html

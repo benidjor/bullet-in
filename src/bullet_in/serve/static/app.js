@@ -92,6 +92,64 @@ if (themeBtn) themeBtn.onclick = () => {
   try { localStorage.setItem('theme', next); } catch {}
 };
 
+// ── 이적시장 타이머 (2026-08-28) ───────────────────────────────────
+// 일정은 서버가 data-windows 로 실어 준다 (render.TRANSFER_WINDOWS 가 단일 원천).
+// 여기서 하는 것은 「지금이 어느 구간인가」 와 「얼마 남았나」 뿐이다 — 렌더는 세
+// 시간에 한 번이라 서버가 계산해 박으면 그사이에 낡는다.
+//
+// 네 갈래 = 여름 개장 전 · 여름 창 중 · 겨울 개장 전 · 겨울 창 중.
+// 목록의 마지막 마감을 지나면 다음 시즌 일정을 모르므로 타이머를 아예 안 띄운다.
+const mktClock = document.getElementById('mktClock');
+if (mktClock) {
+  const wins = JSON.parse(mktClock.dataset.windows || '[]')
+    .map(w => ({ name: w.name, open: Date.parse(w.open), close: Date.parse(w.close) }))
+    .sort((a, b) => a.open - b.open);
+  const labelEl = mktClock.querySelector('.mkt-label');
+  const timeEl = mktClock.querySelector('.mkt-time');
+
+  // 지금 기준으로 다음에 올 일 하나 — 개장 전이면 개장, 창 중이면 마감.
+  const nextEvent = now => {
+    for (const w of wins) {
+      if (now < w.open) return { at: w.open, what: '개장', name: w.name, live: false };
+      if (now < w.close) return { at: w.close, what: '마감', name: w.name, live: true };
+    }
+    return null;
+  };
+
+  const pad = n => String(n).padStart(2, '0');
+  const remain = ms => {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const d = Math.floor(s / 86400);
+    // 하루가 넘게 남으면 초까지 세는 것이 되레 안 읽힌다 — 하루 안쪽부터 초를 센다.
+    return d >= 1
+      ? `${d}일 ${Math.floor((s % 86400) / 3600)}시간`
+      : `${Math.floor(s / 3600)}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
+  };
+
+  let last = '';
+  const tick = () => {
+    const now = Date.now();
+    const ev = nextEvent(now);
+    if (!ev) { mktClock.hidden = true; return; }
+    const left = ev.at - now;
+    const text = `${ev.name} 이적시장 ${ev.what}까지`;
+    const value = remain(left);
+    if (text + value !== last) {
+      labelEl.textContent = text;
+      timeEl.textContent = value;
+      // 창이 열려 있고 하루 안쪽이면 빨간 강조 — 상태를 색으로도 읽게 한다.
+      mktClock.classList.toggle('urgent', ev.live && left < 86400000);
+      mktClock.title = `${new Date(ev.at).toLocaleString('ko-KR', {
+        timeZone: 'Asia/Seoul', dateStyle: 'medium', timeStyle: 'short',
+      })} KST ${ev.what}`;
+      last = text + value;
+    }
+    mktClock.hidden = false;
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+
 // ── 모바일 사이드바 ────────────────────────────────────────────────
 const side = document.querySelector('.side');
 const scrim = document.getElementById('scrim');
@@ -653,6 +711,28 @@ document.querySelectorAll('.plgrp .plfold').forEach(btn => {
     btn.textContent = folded ? '펼치기' : '접기';
   });
 });
+
+// ── 선수 색인 — 정렬 전환 (2026-08-28 사용자 확정) ────────────────────
+// 기본은 최근 보도순이고 단추가 이름순으로 바꾼다. 두 차례가 서로를 지운다 —
+// 최근 보도순은 오늘 움직인 소식을 위로 올리고, 이름순은 찾으려는 선수를 집게 한다.
+// 정렬 키는 서버가 카드의 data-last · data-name 에 실어 둔다 (render_players).
+// 그룹마다 따로 세운다 — 이적 축 그룹 경계는 정렬로 넘지 않는다.
+const plSort = document.getElementById('plSort');
+if (plSort) {
+  const lists = [...document.querySelectorAll('.playerlist')];
+  plSort.addEventListener('click', () => {
+    const byName = plSort.dataset.mode === 'recent';   // 누르면 반대쪽으로 넘어간다
+    lists.forEach(list => {
+      const cards = [...list.querySelectorAll('.pcard')];
+      cards.sort((a, b) => byName
+        ? (a.dataset.name || '').localeCompare(b.dataset.name || '', 'ko')
+        : (b.dataset.last || '').localeCompare(a.dataset.last || ''));
+      cards.forEach(c => list.appendChild(c));
+    });
+    plSort.dataset.mode = byName ? 'name' : 'recent';
+    plSort.textContent = byName ? '이름순' : '최근 보도순';
+  });
+}
 
 // ── 선수 페이지 — 기사 10건 단위 더보기 · 접기 (사다리 스펙 §5.2) ────
 // 서버가 11번째 블록부터 pl-extra 를 붙여 두고, 여기서는 노출 건수 shown 기준으로

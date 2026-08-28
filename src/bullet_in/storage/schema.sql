@@ -83,6 +83,11 @@ ALTER TABLE players ADD COLUMN IF NOT EXISTS ko_full_name VARCHAR(60);
 -- 갔나" (club), 영입 완료는 "어디서 왔나" (former_club), 진행 중은 "지금 어디 있나"
 -- (club) 를 각각 읽는다.
 ALTER TABLE players ADD COLUMN IF NOT EXISTS former_club VARCHAR(50);
+-- 손으로 고정한 카드 사진 (2026-08-28). 비어 있으면 렌더가 그 선수의 최근 기사
+-- 사진을 자동으로 고른다 (serve.render.assign_player_photos). 자동 선택은 새 기사가
+-- 들어올 때마다 갈아타므로 (30일에 177회 실측) 얼굴이 어긋난 선수만 여기에 박는다.
+-- 값을 넣는 곳은 `python -m bullet_in.set_player_photo` 하나다.
+ALTER TABLE players ADD COLUMN IF NOT EXISTS photo_url VARCHAR(1024);
 CREATE TABLE IF NOT EXISTS article_players (
   content_hash CHAR(64) NOT NULL,
   player_id INT NOT NULL,

@@ -934,6 +934,25 @@ def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int,
                                for r in high],
             "high_retention_count": len(high)}
 
+# 이적시장 창 — 상단 바 타이머의 단일 원천 (2026-08-28 사용자 요청).
+#
+# 시각은 **현지 (런던) 기준을 오프셋까지 적어 절대 시각으로** 둔다. 「9월 1일 23시」
+# 한 줄만 적으면 읽는 쪽 시간대에 따라 여덟 시간이 어긋난다 — 여름은 BST (+01:00),
+# 겨울은 GMT (Z) 라 오프셋도 창마다 다르다.
+# 계산 (지금이 어느 구간인가 · 얼마 남았나) 은 app.js 가 한다 — 렌더는 세 시간에 한
+# 번이라 서버가 계산해 박으면 그사이에 낡는다. 여기는 재료만 둔다.
+#
+# **목록이 끝나면 타이머는 사라진다** — 다음 시즌 일정은 확정되면 여기에 더한다.
+# 여름 개장일 (6월 1일) 은 프리미어리그 통상값을 쓴 가정이다 (사용자가 준 것은 마감
+# 시각 셋뿐) — 2027 여름이 오기 전에 확인해서 고친다.
+TRANSFER_WINDOWS: list[dict] = [
+    {"name": "여름", "open": "2026-06-01T00:00:00+01:00",
+     "close": "2026-09-01T23:00:00+01:00"},
+    {"name": "겨울", "open": "2027-01-01T00:00:00+00:00",
+     "close": "2027-02-01T23:00:00+00:00"},
+]
+
+
 def _env() -> Environment:
     env = Environment(
         loader=FileSystemLoader(_TPL_DIR),
@@ -941,6 +960,7 @@ def _env() -> Environment:
     )
     env.globals["stages"] = _stage.SIDEBAR_STAGES
     env.globals["ga_id"] = GA_MEASUREMENT_ID
+    env.globals["transfer_windows"] = json.dumps(TRANSFER_WINDOWS, ensure_ascii=False)
     env.filters["md_bold"] = _md_bold
     return env
 
@@ -1223,8 +1243,30 @@ def render_all(articles: list[dict], sources: dict, now: datetime,
 # 서빙 전량에 대 본 결과 바뀌는 기사는 각각 1건 · 2건이고 셋 다 바뀌는 쪽이 맞다
 # (「이어」 가 든 제목은 전부 「A 이어 B」 구문이라 오탐 0 · 다른 후보 「무관」 ·
 # 「상관없」 · 「외에」 · 「뿐 아니라」 · 「함께」 는 바뀌는 것이 0이라 안 넣었다).
+#
+# 「방출」 과 「공백」 을 더했다 (2026-08-28 · 사용자가 화면을 보고 지적).
+# 「가브리엘 마르티넬리 방출 결정에 내부적 의문 제기…마커스 래시포드 임대 영입설」 이
+# 마르티넬리 묶음에 들어가 있었다 — 이 목록의 「떠난」 과 같은 뜻이고 방향만 반대다
+# (앞 선수가 나가고 뒤 선수가 그 소식의 주인공).
+# 「공백」 은 앞 선수가 비운 자리를 뒤 선수가 메우는 구문이라 같은 갈래다.
+# 후보 열 개를 서빙 861건 · 사전 97종에 대 보고 바뀌는 기사를 전수로 읽었다
+# (재는 사전은 반드시 load_player_names 여야 한다 — 처음엔 players.status='confirmed'
+# 로 뽑아 사전이 달랐고, 그래서 「이탈」 후보의 판정이 뒤집혀 나왔다).
+# 넣은 둘이 바꾸는 것은 이 셋이고 전부 옳은 쪽이다.
+#   「마르티넬리 방출 결정에 내부적 의문 제기…래시포드 임대 영입설」 마르티넬리 → 래시포드
+#   「아스날, 살리바 부상 공백 대비 존 스톤스 영입 고려」            살리바 → 스톤스
+#   「윌리엄 살리바 공백 메울 적임자로 낙점된 에즈리 콘사」           살리바 → 콘사
+#
+# 안 넣은 것들의 이유다.
+# 「…」 은 9건이 바뀌는데 그중 넷이 나빠진다 — 「7,500만에 기마랑이스 영입…라이스와
+# 화해」 가 라이스로, 「푸빌 영입 제안 거절당해…제주스 이적설」 이 제주스로 간다.
+# 「매각」 은 3건 중 둘이 「A 매각 및 B 이적설」 처럼 둘 다 나가는 소식이라 뒤를 고를
+# 이유가 없다.
+# 「떠나」 · 「내보내」 · 「정리」 · 「빈자리」 · 「대신할」 은 바뀌는 것이 0건이다.
+# 「이탈」 은 1건 (「벤 화이트 이탈 우려 속 완-비사카 영입 고려」 화이트 → 완-비사카) 이
+# 옳은 쪽이지만, 표본이 하나뿐이라 다음에 같은 낱말이 다른 구문으로 올 때를 못 봤다.
 _TRANSITION_WORDS = ["놓친", "대신", "대체", "무산", "불발", "결렬", "실패", "포기", "떠난",
-                     "별개", "이어"]
+                     "별개", "이어", "방출", "공백"]
 
 # 우리 선수가 아닌 사람인데 성이 겹쳐 제목 매치에 걸리는 이름 (2026-08-28 전수 조사).
 #
@@ -1284,9 +1326,11 @@ _TRANSFER_BADGE: dict[str, tuple[str, str]] = {
 # 「진행 중」 을 영입 · 방출로 갈랐다 (2026-08-23 공개 준비 · 사용자 지시).
 # 한 묶음일 때는 들어오는 선수와 나가는 선수가 섞여, 어느 쪽을 보러 왔든 목록을
 # 통째로 훑어야 했다. 두 그룹의 축 배지는 그대로 둔다 (아래 _NO_BADGE_GROUPS).
+# 타 클럽행을 이적 무산 위로 올렸다 (2026-08-28 사용자 지시) — 「어디로 갔나」 는
+# 행선지가 있는 소식이고 「무산」 은 남는 것이 없는 자리라, 되짚을 값이 큰 쪽을 먼저 둔다.
 TRANSFER_GROUPS: list[tuple[str, bool]] = [
     ("영입 진행 중", False), ("방출 진행 중", False), ("이적 확정", False),
-    ("이적 무산", True), ("타 클럽행", True),
+    ("타 클럽행", True), ("이적 무산", True),
 ]
 
 _TRANSFER_GROUP_OF: dict[str, str] = {
@@ -1323,6 +1367,7 @@ _CLUB_BADGE_GROUPS = {"타 클럽행"}
 _CLUB_KO: dict[str, str] = {
     "Arsenal": "아스날",
     "Aston Villa": "아스톤 빌라",
+    "Atletico Madrid": "아틀레티코 마드리드",
     "Barcelona": "바르셀로나",
     "Bayer Leverkusen": "레버쿠젠",
     "Chelsea": "첼시",
@@ -1568,17 +1613,61 @@ def ended_marker(entries: list[dict], name: str | None = None,
     return {"row": rep["row"], "stage": rep["stage"], "count": len(b)}
 
 
-def render_players(entries: list[dict], now: datetime) -> str:
-    """선수 색인 (스펙 §4) — 4그룹 · 그룹 안 한글 성 가나다순.
+# 선수 카드 사진 — 밖에서 새로 긁지 않고 우리가 이미 저장한 기사 이미지를 쓴다
+# (2026-08-28 사용자 확정). 트랜스퍼마르크트 같은 곳을 받아 저장하면 초상 · 저작권
+# 판단이 새로 생기는데, 기사 사진은 이미 카드에 쓰고 있어 새로 지는 위험이 없다.
+_PHOTO_SKIP_SOURCES = {"bbc_gossip"}   # 가십은 소스 고정 배너라 선수와 무관하다
 
-    최근 보도순에서 성 가나다순으로 바꿨다 (2026-08-23 공개 준비): 찾으려는 선수가
-    어디 있는지 목록을 처음부터 훑어야 알 수 있었다.
-    정렬 키는 성 (ko_name) 이고 화면에 뜨는 것은 전체 이름이라, 카드에 보이는 첫
-    글자와 차례가 어긋나 보일 수 있다 — 명단을 성으로 세우는 관례를 따른 것이다."""
+
+def assign_player_photos(entries: list[dict]) -> None:
+    """선수마다 카드 사진 하나를 고른다 (`_photo` 를 넣는다 · 없으면 None).
+
+    `players.photo_url` 이 박혀 있으면 그것이 이긴다 — 자동 선택은 그 선수의 가장
+    최근 기사 사진이라 새 기사가 들어올 때마다 갈아탄다 (30일에 177회 · 선수당 3.2회
+    실측). 얼굴이 어긋난 선수만 손으로 박고, 박은 뒤로는 안 바뀐다.
+    박는 곳은 `python -m bullet_in.set_player_photo` 하나다.
+
+    자동 선택의 후보는 그 선수 페이지에 실리는 기사뿐이다 — entries 의 articles 는
+    이미 주역 귀속만 남아 있어 (player_entries), 언급으로 스쳐 간 기사는 후보가 아니다.
+    가십 소스는 뺀다 — 배너가 고정이라 안 빼면 여러 선수가 같은 「GOSSIP」 글자판을
+    단다 (실측 8명).
+    같은 사진이 둘에게 걸리면 앞 선수만 쓰고 뒤 선수는 다음 후보로 내린다 — 둘이
+    함께 찍힌 사진이 서로 다른 카드에 걸리면 어느 쪽도 못 믿는다 (실측 3장 · 7명).
+    손으로 박은 사진도 이 자리를 차지한다 — 자동 선택이 같은 장을 또 집으면 박은
+    뜻이 없어진다.
+    최근 보도가 있는 선수부터 골라 새 사진이 활발한 쪽으로 가게 한다."""
+    taken: set[str] = set()
+    auto: list[dict] = []
+    for e in entries:
+        pinned = (e.get("photo_url") or "").strip()
+        e["_photo"] = pinned or None
+        if pinned:
+            taken.add(pinned)
+        else:
+            auto.append(e)
+    for e in sorted(auto, key=lambda x: x["last_ts"], reverse=True):
+        for a in e.get("articles") or []:            # 최신순 · 색인만 만드는 호출은 비어 있다
+            img = (a.get("image_url") or "").strip()
+            if not img or img in taken or a.get("source_id") in _PHOTO_SKIP_SOURCES:
+                continue
+            taken.add(img)
+            e["_photo"] = img
+            break
+
+
+def render_players(entries: list[dict], now: datetime) -> str:
+    """선수 색인 (스펙 §4) — 5그룹 · 그룹 안 최근 보도순 · 이름순 전환 단추.
+
+    2026-08-23 에 성 가나다순으로 바꿨다가 2026-08-28 에 최근 보도순으로 되돌렸다
+    (사용자 확정). 이름순은 찾으려는 선수를 빨리 집게 해 주지만, 오늘 움직인 소식이
+    목록 한가운데로 내려간다 (실측: 기사 141건짜리 알바레스가 28명 중 16번째).
+    두 차례를 다 살리려고 기본은 최근 보도순으로 두고 전환 단추를 둔다 — 정렬 키는
+    카드의 data 속성에 실어 app.js 가 자리만 바꾼다."""
+    assign_player_photos(entries)
     groups = []
     for name, collapsed in TRANSFER_GROUPS:
         members = [e for e in entries if transfer_group(e["transfer_status"]) == name]
-        members.sort(key=lambda e: (e.get("ko_name") or e["name"]))
+        members.sort(key=lambda e: e["last_ts"], reverse=True)
         for e in members:
             e["_badge"] = (None if name in _NO_BADGE_GROUPS
                            else transfer_badge(e["transfer_status"]))
@@ -1587,6 +1676,9 @@ def render_players(entries: list[dict], now: datetime) -> str:
             e["_club"] = (club_ko(e.get("club"))
                           if name in _CLUB_BADGE_GROUPS else None)
             e["_last"] = fmt_date(to_kst(e["last_ts"]))
+            # 전환 단추가 쓰는 두 정렬 키 — 이름순 키는 되돌리기 전과 같은 성 (ko_name).
+            e["_lastkey"] = e["last_ts"].isoformat()
+            e["_namekey"] = e.get("ko_name") or e["name"]
         groups.append({"name": name, "collapsed": collapsed, "members": members})
     return _env().get_template("players.html.j2").render(
         groups=groups, active="players", root="", solo=True,
