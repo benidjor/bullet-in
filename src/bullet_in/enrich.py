@@ -494,20 +494,39 @@ def retranslation_summary(finals: dict[str, tuple], by_hash: dict[str, dict]
             resolved += 1
     return new_q, adopted, resolved
 
-def _extract_full(text: str) -> dict | None:
-    m = re.search(r"\{.*\}", text, re.DOTALL)
+FULL_KEYS = ("title_ko", "summary_ko", "summary3_ko", "body_ko")
+
+def _parse_full(text: str) -> tuple[dict | None, str, list[str]]:
+    """(결과, 실패 유형, 빠진 키). 성공이면 유형은 빈 문자열.
+
+    유형 판정을 _extract_full 과 따로 두면 두 분기가 어긋난다 — 실패 사유를 알려면
+    같은 분기를 한 번만 타야 한다 (docs/troubleshooting/2026-08-28-two-counts-that-
+    counted-different-things.md)."""
+    m = re.search(r"\{.*\}", text or "", re.DOTALL)
     if not m:
-        return None
+        # 여는 괄호만 있으면 응답이 닫히기 전에 끊긴 것이다 (출력 토큰 상한).
+        return None, ("응답 잘림" if "{" in (text or "") else "JSON 없음"), []
     try:
         d = json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return None, "JSON 문법", []
+    if not isinstance(d, dict):
+        return None, "JSON 없음", []
+    missing = [k for k in FULL_KEYS if k not in d]
+    if missing:
+        return None, "키 누락", missing
+    try:
         s3 = d["summary3_ko"]
         s3 = "\n".join(s3) if isinstance(s3, list) else str(s3)
         pairs = d.get("players")
-        return {"title_ko": d["title_ko"], "summary_ko": d["summary_ko"],
-                "summary3_ko": s3, "body_ko": d["body_ko"],
-                "players": pairs if isinstance(pairs, list) else []}
-    except (json.JSONDecodeError, KeyError, TypeError):
-        return None
+        return ({"title_ko": d["title_ko"], "summary_ko": d["summary_ko"],
+                 "summary3_ko": s3, "body_ko": d["body_ko"],
+                 "players": pairs if isinstance(pairs, list) else []}, "", [])
+    except TypeError:
+        return None, "값 형식", []
+
+def _extract_full(text: str) -> dict | None:
+    return _parse_full(text)[0]
 
 POST_BODY_LEVEL = 1     # 게시글 본문 — 커뮤니티가 옮긴 것 (수집 라인 트랙 계약)
 
@@ -561,33 +580,77 @@ def extract_players_rows(rows: list[dict], client, model: str,
     return result
 
 
+TRUNCATED_RETRY = (
+    "\n\n[응답 잘림] 직전 시도는 JSON 이 닫히기 전에 끊겼다.\n"
+    "body_ko 를 더 짧게 써서 응답 전체가 한 번에 끝나게 한다.")
+NO_JSON_RETRY = (
+    "\n\n[JSON 없음] 직전 시도는 JSON 객체를 내지 않았다.\n"
+    "머리말 · 설명 · 코드 울타리 없이 JSON 객체 하나만 출력한다.")
+BAD_JSON_RETRY = (
+    "\n\n[JSON 문법] 직전 시도의 JSON 을 읽을 수 없었다.\n"
+    "따옴표 · 쉼표 · 괄호를 맞춰 유효한 JSON 으로 다시 낸다.")
+MISSING_KEY_RETRY = (
+    "\n\n[키 누락] 직전 시도에 다음 키가 없었다 — {keys}.\n"
+    "네 키 (title_ko · summary_ko · summary3_ko · body_ko) 를 모두 채운다.")
+BAD_VALUE_RETRY = (
+    "\n\n[값 형식] 직전 시도의 값 타입이 어긋났다.\n"
+    "title_ko · summary_ko · body_ko 는 문자열, summary3_ko 는 문자열 배열로 낸다.")
+
+_PARSE_RETRY = {"응답 잘림": TRUNCATED_RETRY, "JSON 없음": NO_JSON_RETRY,
+                "JSON 문법": BAD_JSON_RETRY, "값 형식": BAD_VALUE_RETRY}
+
+
+def parse_failure_note(text: str) -> tuple[str, str]:
+    """(재시도 지시, 실패 유형). 같은 프롬프트를 다시 부르면 같은 실패가 나므로,
+    무엇이 어긋났는지를 붙여야 재시도가 값을 한다 (재작성 게이트와 같은 방식)."""
+    _, label, missing = _parse_full(text)
+    if label == "키 누락":
+        return MISSING_KEY_RETRY.format(keys=", ".join(missing)), label
+    return _PARSE_RETRY[label], label
+
+
 def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate",
-                roster: str = "(없음)") -> dict[str, dict]:
+                roster: str = "(없음)", max_attempts: int = 3) -> dict[str, dict]:
     """번역 · 요약 · 추출 쌍 생성. roster 는 확정 링크 명단 문자열이며 아스날
-    미언급 기사의 판단 근거로 프롬프트에 실린다 (스펙 §6.5)."""
+    미언급 기사의 판단 근거로 프롬프트에 실린다 (스펙 §6.5).
+
+    파싱 실패는 회차 안에서 다시 부른다 (안건 ψ) — 넘기면 그 행이 다음 회차까지
+    「번역 대기」 로 남는다. 429 는 그대로 회차 즉시 중단이다 (분당 속도 한도라
+    재시도가 대기를 부르고 요금이 된다 · CLAUDE.md)."""
     prompt = PARAPHRASE_PROMPT if mode == "paraphrase" else TRANSLATE_PROMPT
     result: dict[str, dict] = {}
     for r in rows:
         h = r["content_hash"]
-        try:
-            msg = client.models.generate_content(
-                model=model,
-                contents=prompt.format(title=r["title_original"],
-                                       body=r.get("body_source") or r.get("body_excerpt") or "",
-                                       roster=roster),
-                config={"max_output_tokens": 8192,
-                        "response_mime_type": "application/json"})
-        except Exception as e:
-            if _is_rate_limit(e):
-                log.warning("Gemini rate limit(429), enrich 중단 — 남은 행 다음 사이클")
+        base = prompt.format(title=r["title_original"],
+                             body=r.get("body_source") or r.get("body_excerpt") or "",
+                             roster=roster)
+        note, rate_limited = "", False
+        for attempt in range(1, max_attempts + 1):
+            try:
+                msg = client.models.generate_content(
+                    model=model, contents=base + note,
+                    config={"max_output_tokens": 8192,
+                            "response_mime_type": "application/json"})
+            except Exception as e:
+                if _is_rate_limit(e):
+                    log.warning("Gemini rate limit(429), enrich 중단 — 남은 행 다음 사이클")
+                    rate_limited = True
+                else:
+                    log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
                 break
-            log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
-            continue
-        parsed = _extract_full(msg.text)
-        if parsed is None:
-            log.warning("Gemini 응답 파싱 실패, 스킵 content_hash=%s", h)
-            continue
-        result[h] = parsed
+            parsed = _extract_full(msg.text)
+            if parsed is not None:
+                if attempt > 1:
+                    log.info("Gemini 응답 파싱 재시도 성공 content_hash=%s 시도=%d",
+                             h, attempt)
+                result[h] = parsed
+                break
+            note, label = parse_failure_note(msg.text)
+            if attempt == max_attempts:
+                log.warning("Gemini 응답 파싱 실패, 스킵 content_hash=%s 사유=%s 시도=%d",
+                            h, label, attempt)
+        if rate_limited:
+            break
     return result
 
 MISSING_RETRY = (
