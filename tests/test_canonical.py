@@ -17,14 +17,15 @@ def test_canonical_folds_bbc_uk_host_into_com():
     com = canonical_url("https://www.bbc.com/sport/football/articles/c4gd1r1nel2o")
     assert uk == com == "https://www.bbc.com/sport/football/articles/c4gd1r1nel2o"
 
-def test_canonical_drops_sky_section_number():
-    a = canonical_url("https://www.skysports.com/football/news/11095/13574990/ezri-konsa-arsenal")
-    b = canonical_url("https://www.skysports.com/football/news/11677/13574990/ezri-konsa-arsenal")
-    assert a == b == "https://www.skysports.com/football/news/13574990"
+def test_canonical_keeps_sky_section_number():
+    # 섹션 번호를 지우면 키로는 맞지만 주소로는 못 쓴다 — 기사에 못 가고 축구 섹션
+    # 첫 화면으로 떨어진다 (2026-08-29 실측 8건 전부 · 안건 2ζ 로 규칙을 걷어냄).
+    url = "https://www.skysports.com/football/news/11095/13574990/ezri-konsa-arsenal"
+    assert canonical_url(url) == url
 
-def test_canonical_drops_sky_section_on_live_blog_too():
-    assert (canonical_url("https://www.skysports.com/football/live-blog/11661/13570000/x")
-            == "https://www.skysports.com/football/live-blog/13570000")
+def test_canonical_keeps_sky_live_blog_section_number():
+    url = "https://www.skysports.com/football/live-blog/11661/13570000/x"
+    assert canonical_url(url) == url
 
 def test_canonical_keeps_sky_section_shape_on_other_hosts():
     url = "https://other.test/football/news/11095/13574990/x"
