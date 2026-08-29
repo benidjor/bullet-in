@@ -168,6 +168,16 @@ PR #225 부터 run.py 서빙 경로는 `write_site` 전에 `serving_rows` 로 fm
 필터 없는 옛 스니펫으로 재생성하면 서빙에서 감춰 둔 타 구단 기사 (2026-08-07 실측 12건) 가 목록 · 상세 · 선수 페이지에 다시 노출된다.
 아래 스니펫은 그 필터까지 포함해 run.py 서빙 경로와 1:1 이다 (2026-08-07 사다리 배포에서 실사용).
 
+**반환값이 셋이다 (2026-08-29 정정).**
+`serving_rows` 는 `(남길 행, 무관 제외 수, 옛 글 제외 수)` 를 돌려주는데 이 스니펫이 오래 두 값으로 받고 있었다.
+두 회차에서 각각 걸렸다 — **스니펫을 옮겨 적는 쪽이 매번 고쳐 쓰고 런북은 안 고쳐져 같은 자리가 반복됐다.**
+**손으로 옮겨 적지 말고 `bullet_in.confirm_player._render` 를 부르는 편이 안전하다** — 그 함수는 run.py 서빙 경로와 1:1 로 유지된다.
+
+```python
+from bullet_in.confirm_player import _render
+_render(create_engine(os.environ["MARIADB_URL"]))     # site/ 에 재생성
+```
+
 ```bash
 uv run python - <<'EOF'
 import os, yaml
@@ -188,11 +198,11 @@ assert blank == 0, f"stage 빈 행 {blank} — 재분류 수렴 후 다시 실�
 # fmkorea 무관 글 서빙 제외 (PR #225) — 어댑터 생성 없이 config 에서 같은 인정 집합을 만든다
 cfg = yaml.safe_load(open("config/sources.yaml", encoding="utf-8"))
 fm_cfg = next(s for s in cfg["sources"] if s.get("adapter") == "fmkorea")
-rows, hidden = serving_rows(rows,
+rows, hidden, stale = serving_rows(rows,
     relevance_terms=fm_cfg.get("config", {}).get("relevance_terms", []),
     player_names=PlayerStore(engine).confirmed_ko_names(),
     linked=linked)
-print(f"무관 글 서빙 제외 {hidden}건")
+print(f"서빙 제외 — 무관 {hidden}건 · 옛 글 {stale}건")
 write_site(rows, load_sources("config/sources.yaml"), "site",
            directory=journalist_directory("config/credibility.yaml"),
            registry=load_registry("config/credibility.yaml"),
@@ -203,6 +213,14 @@ EOF
 
 **배포 후 확인은 보이는 자리에서 한다** — 배지 · 카드 요소는 `index.html` · `all.html` 에서,
 본문 · 원문 링크는 `article/<hash>.html` 에서 grep 한다.
+
+**소급 뒤 옛 값이 남아도 정상인 자리가 둘 있다 (2026-08-29 추가).**
+모르고 보면 「소급이 덜 됐다」 로 읽힌다.
+
+- **`title_original`** — 원문 제목은 게이트의 근거라 바꾸지 않는다. 표기 소급은 번역 4필드 (`title_ko` · `summary_ko` · `summary3_ko` · `body_ko`) 만 만진다.
+- **`ops.html`** — 회차 스냅숏이라 소급 이전에 찍힌 제목이 그대로 남는다.
+
+**본문에만 나오는 값은 목록 페이지에서 안 잡힌다** — `all.html` 에 0 이 나와도 상세 페이지에서 따로 센다.
 상세 페이지에서 카드 요소를 찾으면 항상 빈 결과가 나와 이상을 놓친다
 (`docs/troubleshooting/2026-08-02-badge-condition-collides-with-hide-policy.md`).
 
