@@ -1688,3 +1688,158 @@ def test_glossary_folds_club_spelling_variants():
                                      "브렌트포드, 코벤트리 시티"}, g)
     assert out["body_ko"] == ("아스날, 아스톤 빌라, 에버턴, 브라이턴, "
                               "브렌트퍼드, 코번트리 시티")
+
+
+# --- 안건 2η · 본문 없는 트윗은 요약을 만들지 않는다 -------------------------------
+
+def test_tweet_mode_leaves_summary_fields_empty():
+    # 트윗 경로는 요약 두 필드를 아예 안 받는다 — 재료가 트윗 한 줄뿐이라 요구하면
+    # 모델이 배경지식으로 채운다 (실측: 아홉 단어 트윗에서 「현지 소식통에 따르면」).
+    payload = {"title_ko": "아스날, 알바레스 영입 가능성",
+               "body_ko": "아스날이 알바레스를 영입할 가능성이 커지고 있다.",
+               "players": []}
+    rows = [{"content_hash": "t1", "source_id": "x_afcstuff",
+             "title_original": "Arsenal are increasingly likely to sign Julian Alvarez."}]
+    out = enrich_rows(rows, FullClient(payload), "m", mode="tweet")
+    assert out["t1"]["title_ko"] == "아스날, 알바레스 영입 가능성"
+    assert out["t1"]["summary_ko"] is None
+    assert out["t1"]["summary3_ko"] is None
+
+
+def test_translate_mode_still_requires_summary_fields():
+    # 트윗 키 완화가 번역 경로로 새면 요약 없는 응답이 조용히 채택된다.
+    payload = {"title_ko": "제목", "body_ko": "본문"}
+    out = enrich_rows([{"content_hash": "h", "title_original": "T", "body_source": "B"}],
+                      FullClient(payload), "m", mode="translate")
+    assert "h" not in out
+
+
+def test_tweet_prompt_bans_added_context_and_asks_no_summary():
+    from bullet_in.enrich import TWEET_PROMPT
+    assert "summary_ko" not in TWEET_PROMPT and "summary3_ko" not in TWEET_PROMPT
+    assert "덧붙이지" in TWEET_PROMPT and "분량을 채우려" in TWEET_PROMPT
+    assert "players" in TWEET_PROMPT      # 선수 추출은 트윗에서도 계속 받는다
+
+
+def test_partition_bodyless_tweets_keeps_tweets_that_have_a_body():
+    from bullet_in.enrich import partition_bodyless_tweets
+    rows = [{"content_hash": "bare", "source_id": "x_afcstuff", "body_source": ""},
+            {"content_hash": "quoted", "source_id": "x_afcstuff",
+             "body_source": "인용 트윗 본문"},
+            {"content_hash": "article", "source_id": "bbc_sport",
+             "body_source": "기사 본문"}]
+    tweets, rest = partition_bodyless_tweets(rows)
+    assert [r["content_hash"] for r in tweets] == ["bare"]
+    assert [r["content_hash"] for r in rest] == ["quoted", "article"]
+
+
+def test_parse_full_keeps_null_summary3_as_none_not_the_string_none():
+    # str(None) 이 "None" 으로 저장되면 화면에 그 글자가 그대로 뜬다.
+    from bullet_in.enrich import _parse_full
+    parsed, label, _ = _parse_full('{"title_ko":"T","summary_ko":"S",'
+                                   '"summary3_ko":null,"body_ko":"B"}')
+    assert label == "" and parsed["summary3_ko"] is None
+
+
+# --- 안건 2η · 재시도에 사유를 싣는다 ---------------------------------------------
+
+def test_retry_note_revives_injected_club_from_stored_output():
+    # 직전 회차가 남긴 산출물에 같은 게이트를 다시 대면 사유가 그대로 나온다 —
+    # 사유를 저장할 컬럼을 새로 두지 않아도 된다.
+    from bullet_in.enrich import retry_note
+    row = {"content_hash": "h", "title_original": "Arsenal want Alvarez.",
+           "summary_ko": "맨체스터 시티의 공격수 알바레스가 아스날행에 근접했다.",
+           "summary3_ko": None, "body_ko": None}
+    note = retry_note(row, {}, {"맨체스터 시티": ["Manchester City", "Man City"]})
+    assert "[구단 주입]" in note and "맨체스터 시티" in note
+
+
+def test_retry_note_is_empty_on_the_first_pass():
+    from bullet_in.enrich import retry_note
+    row = {"content_hash": "h", "title_original": "Arsenal want Alvarez.",
+           "summary_ko": None, "summary3_ko": None, "body_ko": None}
+    assert retry_note(row, {}, {"맨체스터 시티": ["Manchester City"]}) == ""
+
+
+def test_enrich_rows_appends_the_retry_reason_to_the_prompt():
+    seen = {}
+
+    class _NoteModels:
+        def generate_content(self, **kw):
+            seen["contents"] = kw["contents"]
+            class R: pass
+            r = R()
+            r.text = ('{"title_ko":"T","summary_ko":"S",'
+                      '"summary3_ko":["a"],"body_ko":"B"}')
+            return r
+
+    class _NoteClient:
+        def __init__(self): self.models = _NoteModels()
+
+    enrich_rows([{"content_hash": "h", "title_original": "T", "body_source": "B"}],
+                _NoteClient(), "m", notes={"h": "\n\n[구단 주입] 사유"})
+    assert seen["contents"].endswith("[구단 주입] 사유")
+
+
+# --- 안건 2η · 재작성 잔존은 다음 회차에 한 번 더 -----------------------------------
+
+def test_already_generated_counts_a_row_that_has_only_a_body():
+    # 트윗 경로는 요약을 안 만든다 — 요약만 보면 영원히 첫 회차로 읽혀 회차마다
+    # 같은 행을 다시 부른다.
+    from bullet_in.enrich import already_generated
+    assert already_generated({"summary_ko": None, "body_ko": "본문"}) is True
+    assert already_generated({"summary_ko": "요약", "body_ko": None}) is True
+    assert already_generated({"summary_ko": None, "body_ko": None}) is False
+
+
+def test_rewrite_requeue_fires_once_and_not_twice():
+    from bullet_in.enrich import rewrite_requeue
+    reports = {"first": {"residual": True}, "second": {"residual": True},
+               "clean": {"residual": False}}
+    by_hash = {"first": {"summary_ko": None, "body_ko": None},        # 첫 회차
+               "second": {"summary_ko": "요약", "body_ko": "본문"},   # 이미 한 번 돌았다
+               "clean": {"summary_ko": None, "body_ko": None}}
+    assert rewrite_requeue(reports, by_hash) == {"first"}
+
+
+def test_rewrite_keeps_the_previous_body_when_this_cycle_is_worse():
+    # 재큐는 회차를 넘긴다 — 옛 값을 후보로 안 넣으면 새 최선이 더 나빠도 덮어쓴다.
+    # 2026-08-30 실측: 재시도한 30건 중 6건이 더 나빠졌다.
+    from bullet_in.enrich import rewrite_rows_guarded
+    payload = {"title_ko": "새 제목", "summary_ko": "요약", "summary3_ko": ["a"],
+               "body_ko": "아스날이 선수를 영입했다."}          # 5000만이 빠졌다
+    rows = [{"content_hash": "h", "title_original": "제목",
+             "body_source": "아스날이 5000만 파운드에 선수를 영입했다.",
+             "body_ko": "아스날이 5000만 파운드에 영입을 마쳤다."}]   # 앞 회차 산출물
+    results, reports = rewrite_rows_guarded(rows, FullClient(payload), "m")
+    assert results["h"]["body_ko"] == "아스날이 5000만 파운드에 영입을 마쳤다."
+    assert results["h"]["title_ko"] == "새 제목"   # 제목은 이번 회차 것
+    assert not reports["h"]["missing"]
+
+
+def test_rewrite_takes_this_cycle_when_it_is_better():
+    from bullet_in.enrich import rewrite_rows_guarded
+    payload = {"title_ko": "새 제목", "summary_ko": "요약", "summary3_ko": ["a"],
+               "body_ko": "아스날이 5000만 파운드를 들여 영입을 마쳤다."}
+    rows = [{"content_hash": "h", "title_original": "제목",
+             "body_source": "아스날이 5000만 파운드에 선수를 영입했다.",
+             "body_ko": "아스날이 영입을 마쳤다."}]              # 앞 회차가 수치를 흘렸다
+    results, _ = rewrite_rows_guarded(rows, FullClient(payload), "m")
+    assert "5000만" in results["h"]["body_ko"]
+
+
+def test_stored_attempt_is_none_without_a_previous_body():
+    from bullet_in.enrich import stored_attempt
+    assert stored_attempt({"body_ko": None}, "원문", "원문", 0.6, {}, {}) is None
+
+
+def test_rewrite_report_marks_residual_when_a_number_is_missing():
+    # 재큐 판정과 경고 로그가 같은 값을 보게 하는 필드다.
+    from bullet_in.enrich import rewrite_rows_guarded
+    payload = {"title_ko": "제목", "summary_ko": "요약", "summary3_ko": ["a"],
+               "body_ko": "아스날이 선수를 영입했다."}
+    rows = [{"content_hash": "h", "title_original": "제목",
+             "body_source": "아스날이 5000만 파운드에 선수를 영입했다."}]
+    _, reports = rewrite_rows_guarded(rows, FullClient(payload), "m")
+    assert reports["h"]["residual"] is True
+    assert reports["h"]["missing"]
