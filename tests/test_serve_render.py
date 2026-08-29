@@ -706,6 +706,21 @@ def test_sweep_orphan_pages_returns_removed_names(tmp_path):
     assert removed == ["old1.html", "old2.html"]
     assert (art / "keep1.html").exists()
 
+def test_sweep_orphan_pages_logs_every_removed_name(tmp_path, caplog):
+    # 개수만 남기면 "무엇이 사라졌나" 를 사후에 못 묻는다 — 목록이 길어도 다 남아야 한다.
+    art = tmp_path / "article"
+    art.mkdir(parents=True)
+    (art / "keep1.html").write_text("x", encoding="utf-8")
+    names = ["old%02d.html" % i for i in range(25)]
+    for n in names:
+        (art / n).write_text("x", encoding="utf-8")
+    with caplog.at_level("INFO", logger="bullet_in.serve.render"):
+        sweep_orphan_pages([{"content_hash": "keep1"}], tmp_path)
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "잔여 페이지 25건 삭제" in logged
+    for n in names:
+        assert n in logged
+
 # ── bbc_gossip 라운드업 항목화 — 원문 '(출처) , external' 표지 앵커 (옵션 B) ──
 from bullet_in.serve.render import gossip_itemize
 
