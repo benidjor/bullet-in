@@ -331,15 +331,19 @@ h1.title{font-family:var(--serif);font-weight:900;font-size:36px;line-height:1.2
 .summary .auto{font-size:11px;color:var(--dim)}
 .summary ul{margin:0;padding-left:18px}
 .summary li{margin:0 0 9px;line-height:1.6;font-size:15px}
+/* 문단 간격은 「줄 사이 빈 공간 대비 몇 배인가」 로 고른다.
+   line-height 는 글자 높이를 포함하므로 margin 과 직접 비교하면 안 된다.
+   17px × 1.88 → 줄 사이 빈 공간 15px · margin 30px → 문단 사이 45px = 3.0배
+   (18px 이던 때는 33px = 2.2배였다 · 2026-08-30 실물 네 안 비교로 확정). */
 .body{font-size:17px;line-height:1.88}
-.body p{margin:0 0 18px}
+.body p{margin:0 0 30px}
 .body h3{font-family:var(--serif);font-size:20px;margin:28px 0 12px}
 .body blockquote{margin:20px 0;padding:4px 0 4px 18px;border-left:2px solid var(--red);
   color:var(--mut);font-style:italic}
 .body figure{margin:24px 0}
 .body figure img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;border-radius:1px}
 /* 라운드업 단신 — 좌측 2px 괘선 + 들여쓰기 · 출처는 작은 회색 글자 (spec2 §9.1) */
-.body p.gossip-item{margin:0 0 16px;padding-left:14px;border-left:2px solid var(--hair)}
+.body p.gossip-item{margin:0 0 24px;padding-left:14px;border-left:2px solid var(--hair)}
 .src-tag{display:inline;margin-left:6px;font-size:12px;color:var(--dim);font-weight:600;white-space:nowrap}
 .excerpt-note{margin:18px 0 0;padding:12px 14px;border:1px solid var(--hair);
   border-radius:2px;font-size:14px;color:var(--mut)}
