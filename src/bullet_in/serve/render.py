@@ -1483,8 +1483,10 @@ def build_player_entries(articles: list[dict], players: list[dict]) -> list[dict
         ladder = stage_ladder(timeline, ko)
         slug = player_slug(p.get("surname") or "", p["id"], dupes)
         if folded[p["id"]] in dupes:
-            log.warning("동성 복수 — slug 를 id 로 떨어뜨림: %s → %s",
-                        p["full_name"], slug)
+            # 정상 폴백이라 INFO 다 — 렌더마다 (하루 여덟 번) 같은 줄이 나오므로
+            # WARNING 으로 두면 회차 로그를 훑을 때 사고처럼 읽힌다.
+            log.info("동성 복수 — slug 를 id 로 떨어뜨림: %s → %s",
+                     p["full_name"], slug)
         out.append({**p,
                     "name": (p.get("ko_full_name") or p.get("ko_name")
                              or p["full_name"]),
