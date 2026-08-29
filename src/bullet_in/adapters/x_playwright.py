@@ -93,6 +93,91 @@ def _x_cookies(cookies_path: str) -> list[dict]:
     return out
 
 
+# 타임라인은 긴 트윗을 접어서 보여 주고, 접힌 요소의 innerText 는 보이는 부분만 준다
+# — 그래서 저장된 원문이 문장 중간에서 끊긴다 (2026-08-30 실측: 본문 없는 트윗 252건 중
+# 따옴표가 안 닫힌 행 30건 · 그 30건의 최소 길이는 266자).
+# 잘린 재료는 환각을 부른다 — 한 건은 원문이 "it's NOT developing" 인데 번역에는
+# 「이미 진전된 상황에 놓여 있다」 가 붙어 뜻이 반대로 나갔다 (status 페이지 535자 · 저장 276자).
+# 임계는 관측된 최소 잘림 길이 아래로 여유를 둔다. 「더 보기」 표지에 기대지 않는다
+# — 표지가 있는지 확인이 안 됐고, 길이로 걸러 status 페이지와 대 보면 스스로 검증된다.
+EXPAND_LEN_HINT = 260
+
+
+def needs_expansion(text: str | None) -> bool:
+    """이 트윗을 status 페이지에서 다시 읽어야 하는가 — 길이로만 판정한다.
+
+    임계 이하로 잘리는 일은 관측되지 않았고, 임계를 넘겨도 안 잘렸으면 status 가
+    같은 길이를 주므로 손해가 없다 (판정이 틀려도 나빠지지 않는 방향)."""
+    return len(text or "") >= EXPAND_LEN_HINT
+
+
+def looks_truncated(text: str | None) -> bool:
+    """여는 큰따옴표가 안 닫혔는가 — 「끊겨 보인다」 의 판정.
+
+    이 판정으로 잘림을 **미리** 거르지는 않는다 (잘려도 따옴표가 맞을 수 있어
+    하한선이다). 펼치기가 제 일을 했는지 **뒤에서** 재는 데만 쓴다."""
+    t = text or ""
+    return t.count("“") > t.count("”")
+
+
+_FULL_TEXT_JS = """
+a => {
+  const t = a.querySelector('[data-testid="tweetText"]');
+  return t ? t.innerText : '';
+}
+"""
+
+
+async def expand_truncated(ctx, raw_tweets: list[dict], handle: str, log,
+                           cap: int = 10) -> int:
+    """길이가 임계를 넘는 트윗을 status 페이지에서 다시 읽어 전문으로 교체한다.
+
+    반환은 실제로 늘어난 건수. 기자 타임라인 수집과 같은 모양이다 — 페이지를 따로
+    열고, 상한을 두고, 하나가 실패해도 그 트윗만 타임라인 텍스트로 남는다.
+
+    **펼친 뒤에도 끊겨 보이는 건수를 경고로 남긴다** — 이 경로가 조용히 깨지면
+    잘린 원문이 다시 흘러 들어가는데 그것을 알 방법이 이 줄뿐이다.
+    「임계를 넘겼는데 안 늘어난 건수」 로 세면 안 된다 — 임계 이상의 대부분은 원래
+    안 잘린 트윗이라 회차마다 떠서 아무도 안 보게 된다 (라이브 검증 2026-08-30:
+    임계 이상 2건 중 1건이 정상 트윗이었다)."""
+    targets = [t for t in raw_tweets if needs_expansion(t.get("text"))]
+    if not targets:
+        return 0
+    if len(targets) > cap:
+        log.info("트윗 펼치기 상한 초과 %d → %d", len(targets), cap)
+        targets = targets[:cap]
+    grown = 0
+    for t in targets:
+        sid = t.get("status_id")
+        if not sid:
+            continue
+        page = None
+        try:
+            page = await ctx.new_page()
+            await page.goto(f"https://x.com/{handle}/status/{sid}",
+                            wait_until="domcontentloaded")
+            await page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
+            full = await page.eval_on_selector(
+                'article[data-testid="tweet"]', _FULL_TEXT_JS)
+        except Exception as e:  # 소스 격리 — 한 트윗 실패는 그 트윗만 타임라인 값 유지
+            log.warning("트윗 펼치기 실패 status_id=%s err=%s", sid, e)
+            continue
+        finally:
+            if page is not None:
+                await page.close()
+        if full and len(full) > len(t.get("text") or ""):
+            log.info("트윗 펼침 status_id=%s %d자 → %d자",
+                     sid, len(t.get("text") or ""), len(full))
+            t["text"] = full
+            grown += 1
+    still_cut = [t for t in targets if looks_truncated(t.get("text"))]
+    if still_cut:
+        log.warning("트윗 펼치기 이후에도 끊겨 보임 %d건 status_id=%s — 펼치기가 "
+                    "깨졌는지 본다", len(still_cut),
+                    ",".join(t.get("status_id", "?") for t in still_cut))
+    return grown
+
+
 async def _scroll_collect(page, js, max_items):
     """스크롤하며 status_id로 누적 (SP1.5 로직 일반화 · afcstuff · 기자 공용)."""
     acc: dict[str, dict] = {}
@@ -144,6 +229,9 @@ class XPlaywrightAdapter:
             await page.goto(f"https://x.com/{self.handle}", wait_until="domcontentloaded")
             await page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
             raw_tweets = await _scroll_collect(page, _TWEET_JS, self.max_tweets)
+            # 접힌 트윗을 전문으로 바꾼 뒤에 파싱한다 — 파싱이 텍스트에서 인용 핸들과
+            # 태그를 뽑으므로 잘린 채로 파싱하면 뒷부분의 인용이 통째로 사라진다.
+            await expand_truncated(ctx, raw_tweets, self.handle, log)
             items = self._parse_tweets(raw_tweets, now)
             timelines = {}
             if bt:
