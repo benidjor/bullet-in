@@ -1719,6 +1719,9 @@ def test_tweet_prompt_bans_added_context_and_asks_no_summary():
     assert "summary_ko" not in TWEET_PROMPT and "summary3_ko" not in TWEET_PROMPT
     assert "덧붙이지" in TWEET_PROMPT and "분량을 채우려" in TWEET_PROMPT
     assert "players" in TWEET_PROMPT      # 선수 추출은 트윗에서도 계속 받는다
+    # 수집이 타임라인의 접힌 트윗을 잘라 온다 (2026-08-30 실측 252건 중 따옴표가
+    # 안 닫힌 행 30건) — 잘린 자리를 모델이 완성하면 없던 문장이 생긴다.
+    assert "끊겨 있으면" in TWEET_PROMPT and "지어내" in TWEET_PROMPT
 
 
 def test_partition_bodyless_tweets_keeps_tweets_that_have_a_body():
