@@ -727,6 +727,28 @@ NAME_RETRY = (
     "\n\n[인명 주입] 직전 시도는 원문에 없는 인물을 넣었다 — {names}.\n"
     "원문에 나오지 않는 사람 이름은 쓰지 않는다.")
 
+def stored_attempt(row: dict, source: str, grounding: str, threshold: float,
+                   name_map: dict[str, str],
+                   club_map: dict[str, list[str]]) -> dict | None:
+    """앞 회차가 저장해 둔 본문을 재작성 후보 하나로 만든다 (본문이 없으면 None).
+
+    select_best 는 한 회차 안의 시도만 본다. 재큐는 회차를 넘기므로 옛 값을 후보로
+    같이 넣지 않으면 새 회차의 최선이 그보다 나빠도 덮어쓴다 — 2026-08-30 실측에서
+    30건 중 6건이 더 나빠졌고 그중 넷은 없던 누락이 새로 생겼다."""
+    body = row.get("body_ko")
+    if not body:
+        return None
+    parsed = {"title_ko": None, "summary_ko": row.get("summary_ko"),
+              "summary3_ko": row.get("summary3_ko"), "body_ko": body,
+              "players": []}
+    v = gate_verdict(source, body, threshold, grounding=grounding)
+    return {"parsed": parsed, "missing": v["missing"], "extra": v["extra"],
+            "quotes": v["quotes"],
+            "names": detect_name_injection(parsed, grounding, name_map),
+            "clubs": detect_club_injection(parsed, grounding, club_map),
+            "retention": v["retention"]}
+
+
 def rewrite_rows_guarded(rows: list[dict], client, model: str,
                          threshold: float = RETENTION_THRESHOLD,
                          max_attempts: int = 3,
@@ -799,6 +821,19 @@ def rewrite_rows_guarded(rows: list[dict], client, model: str,
         if not attempts:
             continue
         best = select_best(attempts, threshold)
+        # 앞 회차 본문을 후보로 함께 재 본다 — 재큐가 나빠지지 않게 하는 자리다.
+        # 동률이면 옛 값이 남는다 (select_best 의 min 이 앞을 고른다).
+        # 이긴 쪽의 본문 · 축만 가져오고 제목 · 요약 · players 는 이번 회차 것을 쓴다
+        # — 제목은 저장된 값이 NULL 이라 (재큐 행) 가져올 것이 없고, 최종 인명 · 구단
+        # 판정은 finalize_translation 이 네 필드 전체에 다시 건다.
+        prev = stored_attempt(r, source, grounding, threshold, name_map, club_map)
+        if prev is not None and select_best([prev, best], threshold) is prev:
+            log.info("앞 회차 본문 유지 content_hash=%s — 이번 회차가 더 나빴다", h)
+            best = {**best, "missing": prev["missing"], "extra": prev["extra"],
+                    "quotes": prev["quotes"], "names": prev["names"],
+                    "clubs": prev["clubs"], "retention": prev["retention"],
+                    "parsed": {**best["parsed"],
+                               "body_ko": prev["parsed"]["body_ko"]}}
         results[h] = best["parsed"]
         # residual 은 「잔존이 남은 채 채택했다」 하나의 정의다 — 경고 로그와 다음 회차
         # 재큐 판정 (rewrite_requeue) 이 같은 값을 본다.

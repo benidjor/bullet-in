@@ -1802,6 +1802,37 @@ def test_rewrite_requeue_fires_once_and_not_twice():
     assert rewrite_requeue(reports, by_hash) == {"first"}
 
 
+def test_rewrite_keeps_the_previous_body_when_this_cycle_is_worse():
+    # 재큐는 회차를 넘긴다 — 옛 값을 후보로 안 넣으면 새 최선이 더 나빠도 덮어쓴다.
+    # 2026-08-30 실측: 재시도한 30건 중 6건이 더 나빠졌다.
+    from bullet_in.enrich import rewrite_rows_guarded
+    payload = {"title_ko": "새 제목", "summary_ko": "요약", "summary3_ko": ["a"],
+               "body_ko": "아스날이 선수를 영입했다."}          # 5000만이 빠졌다
+    rows = [{"content_hash": "h", "title_original": "제목",
+             "body_source": "아스날이 5000만 파운드에 선수를 영입했다.",
+             "body_ko": "아스날이 5000만 파운드에 영입을 마쳤다."}]   # 앞 회차 산출물
+    results, reports = rewrite_rows_guarded(rows, FullClient(payload), "m")
+    assert results["h"]["body_ko"] == "아스날이 5000만 파운드에 영입을 마쳤다."
+    assert results["h"]["title_ko"] == "새 제목"   # 제목은 이번 회차 것
+    assert not reports["h"]["missing"]
+
+
+def test_rewrite_takes_this_cycle_when_it_is_better():
+    from bullet_in.enrich import rewrite_rows_guarded
+    payload = {"title_ko": "새 제목", "summary_ko": "요약", "summary3_ko": ["a"],
+               "body_ko": "아스날이 5000만 파운드를 들여 영입을 마쳤다."}
+    rows = [{"content_hash": "h", "title_original": "제목",
+             "body_source": "아스날이 5000만 파운드에 선수를 영입했다.",
+             "body_ko": "아스날이 영입을 마쳤다."}]              # 앞 회차가 수치를 흘렸다
+    results, _ = rewrite_rows_guarded(rows, FullClient(payload), "m")
+    assert "5000만" in results["h"]["body_ko"]
+
+
+def test_stored_attempt_is_none_without_a_previous_body():
+    from bullet_in.enrich import stored_attempt
+    assert stored_attempt({"body_ko": None}, "원문", "원문", 0.6, {}, {}) is None
+
+
 def test_rewrite_report_marks_residual_when_a_number_is_missing():
     # 재큐 판정과 경고 로그가 같은 값을 보게 하는 필드다.
     from bullet_in.enrich import rewrite_rows_guarded
