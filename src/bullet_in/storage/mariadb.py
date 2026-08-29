@@ -85,10 +85,15 @@ class MartStore:
                 "FROM articles")).all()
         return {u: (h, rev, sid, int(lv)) for u, h, rev, sid, lv in rows}
     def rows_missing_translation(self) -> list[dict]:
+        """title_ko 가 비어 다음 회차가 다시 만들 행.
+
+        summary3_ko · body_ko 도 함께 꺼낸다 — 직전 회차가 남긴 산출물이 재시도 사유의
+        재료이고 (enrich.retry_note), body_ko 는 「한 번 돌았는가」 표시자다
+        (enrich.already_generated)."""
         with self.engine.connect() as c:
             rows = c.execute(text(
                 "SELECT content_hash,url,source_id,accept_path,title_original,body_excerpt,"
-                "body_source,body_level,outlet,summary_ko "
+                "body_source,body_level,outlet,summary_ko,summary3_ko,body_ko "
                 "FROM articles WHERE title_ko IS NULL")).mappings().all()
         return [dict(r) for r in rows]
     def rows_rewritten(self) -> list[dict]:
@@ -97,7 +102,7 @@ class MartStore:
         with self.engine.connect() as c:
             rows = c.execute(text(
                 "SELECT content_hash,url,source_id,accept_path,title_original,body_excerpt,"
-                "body_source,body_level,outlet,summary_ko "
+                "body_source,body_level,outlet,summary_ko,summary3_ko,body_ko "
                 "FROM articles WHERE body_level=1 AND title_ko IS NOT NULL "
                 "ORDER BY content_hash")).mappings().all()
         return [dict(r) for r in rows]

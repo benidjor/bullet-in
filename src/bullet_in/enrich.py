@@ -154,6 +154,33 @@ PARAPHRASE_PROMPT = (
     '"body_ko":"...","players":[{{"full_name":"...","ko":"...","stage":"...","role":"..."}}]}}'
     "\n\nTitle: {title}\nBody: {body}")
 
+# 트윗 전용 — 본문이 따로 없는 행에는 요약을 시키지 않는다.
+# 한 줄짜리 트윗에 세 문장 요약을 요구하면 채울 재료가 없어 모델이 배경지식을 끌어온다
+# (2026-08-29 실측 · 아홉 단어 트윗에서 원문에 없는 「맨체스터 시티」 · 「현지 소식통에
+# 따르면」 · 「구단의 공격진 보강 계획」 이 나왔고 구단은 사실도 틀렸다).
+# JSON 순서상 요약이 body_ko · players 앞이라 지어낸 문장이 뒤 필드의 문맥으로 들어간다
+# — 생성한 뒤 버리는 방식으로는 그 오염이 안 없어지고 출력 토큰만 쓴다.
+TWEET_PROMPT = (
+    "다음은 아스날 FC 관련 트윗 전문이다. 한국어로 옮긴다. 규칙:\n"
+    "- title_ko: 트윗 내용을 한국 스포츠 기사 제목체로 간결하게 (명사형 위주).\n"
+    "- body_ko: 트윗 전문을 자연스러운 한국어로 옮긴다.\n"
+    "- 트윗에 없는 배경 · 맥락 · 구단명 · 사람 이름 · 숫자 · 역할 명칭을 덧붙이지 "
+    "않는다. 트윗이 짧으면 옮긴 글도 짧다 — 분량을 채우려 하지 않는다.\n"
+    "- body_ko 지문은 신문 평어체(종결어미 '~다'): '관심을 갖고 있습니다' ❌ → "
+    "'관심을 갖고 있다' ⭕. 인용문(따옴표 안 발화)은 큰따옴표를 포함해 원문 "
+    "그대로 옮긴다.\n"
+    "- 고유명사는 통용 한글 표기(Arsenal=아스날).\n"
+    "- 원문의 back-up · backup 은 「백업」 으로 옮긴다 (「대체자」 는 떠난 선수의 "
+    "자리를 메우는 replacement 에만).\n"
+    "- players: 이 트윗에서 아스날의 이적 · 거취 · 계약과 관련해 다뤄진 선수 · 감독 "
+    "목록. 각 항목은 "
+    '{{"full_name":"영문 풀네임","ko":"이 트윗에서 쓴 한글 표기","stage":"단계",'
+    '"role":"subject 또는 mention"}}.\n'
+    + PLAYERS_CLAUSE + ROSTER_CLAUSE +
+    'ONLY JSON: {{"title_ko":"...","body_ko":"...",'
+    '"players":[{{"full_name":"...","ko":"...","stage":"...","role":"..."}}]}}'
+    "\n\nTweet: {title}")
+
 # 재추출 · 백필 경로 전용 — 번역 없이 players 필드만 뽑는다.
 EXTRACT_PLAYERS_PROMPT = (
     "다음 아스날 FC 관련 기사에서 아스날의 이적 · 거취 · 계약과 관련해 "
@@ -417,6 +444,15 @@ def paragraphize(text: str | None, max_len: int = 400) -> str | None:
 # x_ornstein 도 같은 트윗 구조 (제목 = 본문 전문) 라 동일 예외 대상.
 BODY_AS_TITLE_SOURCES = {"x_afcstuff", "x_ornstein"}
 
+def already_generated(row: dict) -> bool:
+    """이 행이 앞 회차에 한 번 생성된 적이 있는가 — 재시도 · 재큐 판정의 공통 표시자.
+
+    게이트가 title_ko 만 NULL 로 두므로 나머지 필드의 존재가 곧 「한 번 돌았다」 다.
+    요약만 보면 트윗 경로 (요약을 안 만든다) 가 영원히 첫 회차로 읽혀 회차마다 같은
+    행을 다시 부른다 — 무한 반복은 finalize_translation 주석의 전례와 같은 고장이다."""
+    return bool(row.get("summary_ko") or row.get("body_ko"))
+
+
 def finalize_translation(v: dict, row: dict, glossary: dict[str, str],
                          name_map: dict[str, str],
                          club_map: dict[str, list[str]]
@@ -448,7 +484,7 @@ def finalize_translation(v: dict, row: dict, glossary: dict[str, str],
     club_suspects = detect_club_injection(v, src_text, club_map)
     title_ko = v["title_ko"]
     flagged: list[str] = []
-    retry = bool(row.get("summary_ko"))
+    retry = already_generated(row)
     if suspects and retry:
         # 종착 상태 (설계 5.2): 재시도 1회로 끝내고 번역 제목을 채택 + 경고.
         # NULL 재큐는 게이트가 충족 불가능한 요구를 하면 회차마다 무한 반복됐다
@@ -475,7 +511,7 @@ def retranslation_summary(finals: dict[str, tuple], by_hash: dict[str, dict]
                           ) -> tuple[int, int, int]:
     """finalize_translation 결과로 재번역 큐 추이를 집계 → (신규, 채택, 해소).
 
-    신규 = 신규 행 (summary_ko 없음) 이 NULL 로 큐 진입,
+    신규 = 앞 회차 생성 이력이 없는 행 (already_generated 거짓) 이 NULL 로 큐 진입,
     채택 = 재시도 행이 의심을 남긴 채 제목을 확정 (운영자 수동 확인 대상),
     해소 = 재시도 행이 의심 없이 제목 확보.
     정상 신규 성공 (NULL 아님 · 재시도 아님) 은 집계 밖.
@@ -485,7 +521,7 @@ def retranslation_summary(finals: dict[str, tuple], by_hash: dict[str, dict]
     new_q = adopted = resolved = 0
     for h, final in finals.items():
         title_ko, flagged = final[0], final[4]
-        retry = bool(by_hash.get(h, {}).get("summary_ko"))
+        retry = already_generated(by_hash.get(h, {}))
         if title_ko is None and not retry:
             new_q += 1
         elif retry and flagged:
@@ -495,9 +531,14 @@ def retranslation_summary(finals: dict[str, tuple], by_hash: dict[str, dict]
     return new_q, adopted, resolved
 
 FULL_KEYS = ("title_ko", "summary_ko", "summary3_ko", "body_ko")
+# 트윗 경로는 요약 두 필드를 아예 안 받는다 (TWEET_PROMPT 주석) — 없는 것은 None 으로
+# 채워 저장 인자 모양을 네 필드로 맞춘다.
+TWEET_KEYS = ("title_ko", "body_ko")
 
-def _parse_full(text: str) -> tuple[dict | None, str, list[str]]:
+def _parse_full(text: str, keys: tuple[str, ...] = FULL_KEYS
+                ) -> tuple[dict | None, str, list[str]]:
     """(결과, 실패 유형, 빠진 키). 성공이면 유형은 빈 문자열.
+    keys 는 응답에 반드시 있어야 하는 필드다 (경로마다 다르다).
 
     유형 판정을 _extract_full 과 따로 두면 두 분기가 어긋난다 — 실패 사유를 알려면
     같은 분기를 한 번만 타야 한다 (docs/troubleshooting/2026-08-28-two-counts-that-
@@ -512,21 +553,24 @@ def _parse_full(text: str) -> tuple[dict | None, str, list[str]]:
         return None, "JSON 문법", []
     if not isinstance(d, dict):
         return None, "JSON 없음", []
-    missing = [k for k in FULL_KEYS if k not in d]
+    missing = [k for k in keys if k not in d]
     if missing:
         return None, "키 누락", missing
     try:
-        s3 = d["summary3_ko"]
-        s3 = "\n".join(s3) if isinstance(s3, list) else str(s3)
+        s3 = d.get("summary3_ko")
+        if isinstance(s3, list):
+            s3 = "\n".join(s3)
+        elif s3 is not None:
+            s3 = str(s3)
         pairs = d.get("players")
-        return ({"title_ko": d["title_ko"], "summary_ko": d["summary_ko"],
+        return ({"title_ko": d["title_ko"], "summary_ko": d.get("summary_ko"),
                  "summary3_ko": s3, "body_ko": d["body_ko"],
                  "players": pairs if isinstance(pairs, list) else []}, "", [])
     except TypeError:
         return None, "값 형식", []
 
-def _extract_full(text: str) -> dict | None:
-    return _parse_full(text)[0]
+def _extract_full(text: str, keys: tuple[str, ...] = FULL_KEYS) -> dict | None:
+    return _parse_full(text, keys)[0]
 
 POST_BODY_LEVEL = 1     # 게시글 본문 — 커뮤니티가 옮긴 것 (수집 라인 트랙 계약)
 
@@ -600,30 +644,40 @@ _PARSE_RETRY = {"응답 잘림": TRUNCATED_RETRY, "JSON 없음": NO_JSON_RETRY,
                 "JSON 문법": BAD_JSON_RETRY, "값 형식": BAD_VALUE_RETRY}
 
 
-def parse_failure_note(text: str) -> tuple[str, str]:
+def parse_failure_note(text: str, keys: tuple[str, ...] = FULL_KEYS) -> tuple[str, str]:
     """(재시도 지시, 실패 유형). 같은 프롬프트를 다시 부르면 같은 실패가 나므로,
     무엇이 어긋났는지를 붙여야 재시도가 값을 한다 (재작성 게이트와 같은 방식)."""
-    _, label, missing = _parse_full(text)
+    _, label, missing = _parse_full(text, keys)
     if label == "키 누락":
         return MISSING_KEY_RETRY.format(keys=", ".join(missing)), label
     return _PARSE_RETRY[label], label
 
 
+# 경로별 (프롬프트, 필수 키) — mode 로 고른다.
+_MODES = {"translate": (TRANSLATE_PROMPT, FULL_KEYS),
+          "paraphrase": (PARAPHRASE_PROMPT, FULL_KEYS),
+          "tweet": (TWEET_PROMPT, TWEET_KEYS)}
+
+
 def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate",
-                roster: str = "(없음)", max_attempts: int = 3) -> dict[str, dict]:
+                roster: str = "(없음)", max_attempts: int = 3,
+                notes: dict[str, str] | None = None) -> dict[str, dict]:
     """번역 · 요약 · 추출 쌍 생성. roster 는 확정 링크 명단 문자열이며 아스날
     미언급 기사의 판단 근거로 프롬프트에 실린다 (스펙 §6.5).
+    notes 는 content_hash 별 재시도 사유로, 직전 회차가 어긋난 행에만 붙는다
+    (retry_note 참조).
 
     파싱 실패는 회차 안에서 다시 부른다 (안건 ψ) — 넘기면 그 행이 다음 회차까지
     「번역 대기」 로 남는다. 429 는 그대로 회차 즉시 중단이다 (분당 속도 한도라
     재시도가 대기를 부르고 요금이 된다 · CLAUDE.md)."""
-    prompt = PARAPHRASE_PROMPT if mode == "paraphrase" else TRANSLATE_PROMPT
+    prompt, keys = _MODES.get(mode, _MODES["translate"])
+    notes = notes or {}
     result: dict[str, dict] = {}
     for r in rows:
         h = r["content_hash"]
         base = prompt.format(title=r["title_original"],
                              body=r.get("body_source") or r.get("body_excerpt") or "",
-                             roster=roster)
+                             roster=roster) + notes.get(h, "")
         note, rate_limited = "", False
         for attempt in range(1, max_attempts + 1):
             try:
@@ -638,14 +692,14 @@ def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate",
                 else:
                     log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
                 break
-            parsed = _extract_full(msg.text)
+            parsed = _extract_full(msg.text, keys)
             if parsed is not None:
                 if attempt > 1:
                     log.info("Gemini 응답 파싱 재시도 성공 content_hash=%s 시도=%d",
                              h, attempt)
                 result[h] = parsed
                 break
-            note, label = parse_failure_note(msg.text)
+            note, label = parse_failure_note(msg.text, keys)
             if attempt == max_attempts:
                 log.warning("Gemini 응답 파싱 실패, 스킵 content_hash=%s 사유=%s 시도=%d",
                             h, label, attempt)
@@ -746,17 +800,34 @@ def rewrite_rows_guarded(rows: list[dict], client, model: str,
             continue
         best = select_best(attempts, threshold)
         results[h] = best["parsed"]
+        # residual 은 「잔존이 남은 채 채택했다」 하나의 정의다 — 경고 로그와 다음 회차
+        # 재큐 판정 (rewrite_requeue) 이 같은 값을 본다.
+        residual = bool(best["retention"] > threshold or best["missing"]
+                        or best["extra"] or best["quotes"] or best["names"]
+                        or best["clubs"])
         reports[h] = {"retention": best["retention"], "missing": best["missing"],
                       "extra": best["extra"], "quotes": best["quotes"],
                       "names": best["names"], "clubs": best["clubs"],
-                      "attempts": len(attempts)}
-        if (best["retention"] > threshold or best["missing"] or best["extra"]
-                or best["quotes"] or best["names"] or best["clubs"]):
+                      "attempts": len(attempts), "residual": residual}
+        if residual:
             log.warning("재작성 게이트 잔존 content_hash=%s 잔존율=%.3f 누락=%s "
                         "신규수치=%s 인용훼손=%s 인명=%s 구단=%s 시도=%d",
                         h, best["retention"], best["missing"], best["extra"],
                         best["quotes"], best["names"], best["clubs"], len(attempts))
     return results, reports
+
+
+def rewrite_requeue(reports: dict[str, dict], by_hash: dict[str, dict]) -> set[str]:
+    """다음 회차에 한 번 더 만들 재작성 행 (content_hash 집합).
+
+    번역 경로는 게이트에 걸리면 title_ko 를 NULL 로 두어 다음 회차가 통째로 다시
+    만들고 실제로 해소한 기록이 있다 (2026-08-29 06:02 진입 → 09:01 해소).
+    재작성 경로에는 그 장치가 없어 회차 안 3회로 끝나고, 잔존이 남은 채 채택한 뒤
+    다시는 손대지 않았다 (같은 날 실측 162건 중 수치 누락 30건 · 18.5%).
+    재큐는 1회로 끊는다 — 무제한 재큐는 회차마다 같은 행을 다시 부른 전례가 있다
+    (finalize_translation 주석 · 2026-07-30 실측 하루 8회)."""
+    return {h for h, rep in reports.items()
+            if rep.get("residual") and not already_generated(by_hash.get(h, {}))}
 
 TITLE_ONLY_PROMPT = (
     "다음 축구 뉴스 제목을 한국어로 옮긴다. 규칙:\n"
@@ -785,6 +856,58 @@ def partition_generatable(rows: list[dict]) -> tuple[list[dict], list[dict]]:
         else:
             title_only.append(r)
     return gen, title_only
+
+
+def partition_bodyless_tweets(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(트윗 전문 행, 나머지) — 트윗이 곧 전문이라 요약할 재료가 따로 없는 행을 가른다.
+
+    partition_generatable 은 이 행들을 「재료 있음」 으로 통과시킨다 (title_original 에
+    트윗 전문이 있다). 재료가 있는 것은 맞지만 요약을 따로 만들 재료는 아니라서,
+    번역 프롬프트를 그대로 주면 모델이 요약 두 필드를 배경지식으로 채운다.
+    본문이 붙어 있는 트윗 행 (인용 트윗 등) 은 재료가 있으므로 여기서 빠진다."""
+    tweets, rest = [], []
+    for r in rows:
+        bodyless = not ((r.get("body_source") or "").strip()
+                        or (r.get("body_excerpt") or "").strip())
+        (tweets if bodyless and r.get("source_id") in BODY_AS_TITLE_SOURCES
+         else rest).append(r)
+    return tweets, rest
+
+
+def retry_note(row: dict, name_map: dict[str, str],
+               club_map: dict[str, list[str]]) -> str:
+    """직전 회차가 남긴 산출물에서 재시도 사유를 되살린다 (없으면 빈 문자열).
+
+    번역 경로는 게이트에 걸리면 title_ko 만 NULL 로 두고 나머지 세 필드는 남긴다.
+    그 남은 값에 같은 게이트를 다시 대면 무엇이 어긋났는지가 그대로 나오므로 사유를
+    저장할 자리를 새로 두지 않아도 된다. 사유 없이 같은 프롬프트를 다시 부르면 같은
+    환각이 다시 나온다 — 2026-08-29 에 한 행을 세 회차에 걸쳐 세 번 생성해 세 번 다
+    원문에 없는 같은 구단이 나왔다."""
+    stored = {"title_ko": None, "summary_ko": row.get("summary_ko"),
+              "summary3_ko": row.get("summary3_ko"), "body_ko": row.get("body_ko")}
+    if not any(stored.values()):
+        return ""
+    src = " ".join(filter(None, (row.get("title_original"), row.get("body_source"),
+                                 row.get("body_excerpt"))))
+    note = ""
+    clubs = detect_club_injection(stored, src, club_map)
+    if clubs:
+        note += CLUB_RETRY.format(clubs=", ".join(clubs))
+    names = detect_name_injection(stored, src, name_map)
+    if names:
+        note += NAME_RETRY.format(names=", ".join(names))
+    return note
+
+
+def retry_notes(rows: list[dict], name_map: dict[str, str],
+                club_map: dict[str, list[str]]) -> dict[str, str]:
+    """content_hash -> 재시도 사유. 사유가 없는 행은 담지 않는다."""
+    out = {}
+    for r in rows:
+        note = retry_note(r, name_map, club_map)
+        if note:
+            out[r["content_hash"]] = note
+    return out
 
 
 def title_only_rows(rows: list[dict], client, model: str) -> dict[str, dict]:

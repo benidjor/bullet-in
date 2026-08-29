@@ -291,7 +291,9 @@ async def main(concurrency: int):
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     from bullet_in.enrich import (partition_by_body_level, partition_generatable,
-                                  rewrite_rows_guarded, title_only_rows)
+                                  partition_bodyless_tweets, retry_notes,
+                                  rewrite_requeue, rewrite_rows_guarded,
+                                  title_only_rows)
     glossary = (yaml.safe_load(Path("config/glossary.yaml").read_text())
                 or {}).get("replacements", {})
     name_map = pstore.gate_name_map()
@@ -306,12 +308,26 @@ async def main(concurrency: int):
         logging.getLogger(__name__).warning(
             "재료 없음 — 제목만 생성 %d건 (본문 · 요약 미생성)", len(title_only))
     rewrite_rows, translate_rows = partition_by_body_level(generatable)
+    # 본문 없는 트윗은 요약을 안 만든다 — 재료가 트윗 한 줄뿐이라 요약 두 필드를
+    # 배경지식으로 채운다 (enrich.TWEET_PROMPT 주석).
+    tweet_rows, translate_rows = partition_bodyless_tweets(translate_rows)
+    if tweet_rows:
+        logging.getLogger(__name__).info(
+            "트윗 전문 — 제목 · 본문만 생성 %d건 (요약 미생성)", len(tweet_rows))
     # 확정 링크 명단 — 아스날 미언급 기사의 판단 근거 (스펙 §6.5). 재추출 경로가 쓰던
     # 재료를 수집 시점 프롬프트에도 준다. 회차마다 한 번 만든다.
     roster_material = pstore.confirmed_link_roster()
+    # 재시도 사유 — 직전 회차가 남긴 산출물에서 되살린다. 사유를 안 붙이면 같은
+    # 프롬프트가 같은 환각을 다시 낸다 (enrich.retry_note).
+    notes = retry_notes(missing, name_map, club_map)
+    if notes:
+        logging.getLogger(__name__).info("재시도 사유를 실은 행 %d건", len(notes))
     results: dict[str, dict] = {}
     results.update(enrich_rows(translate_rows, client, GEMINI_MODEL,
-                               mode="translate", roster=roster_material))
+                               mode="translate", roster=roster_material,
+                               notes=notes))
+    results.update(enrich_rows(tweet_rows, client, GEMINI_MODEL,
+                               mode="tweet", roster=roster_material, notes=notes))
     rewritten, gate_reports = rewrite_rows_guarded(
         rewrite_rows, client, GEMINI_MODEL, name_map=name_map, club_map=club_map,
         roster=roster_material)
@@ -321,6 +337,13 @@ async def main(concurrency: int):
     by_hash = {r["content_hash"]: r for r in missing}
     finals = {h: finalize_translation(v, by_hash.get(h, {}), glossary, name_map, club_map)
               for h, v in results.items()}
+    # 재작성 게이트 잔존은 다음 회차에 한 번 더 만든다 — title_ko 를 NULL 로 두는 것이
+    # 번역 경로가 쓰는 재큐 장치다 (enrich.rewrite_requeue). 반영은 저장 직전에 한다
+    # — 그 사이의 선수 추출 · 관측이 제목을 재료로 쓴다.
+    requeue = rewrite_requeue(gate_reports, by_hash)
+    if requeue:
+        logging.getLogger(__name__).warning(
+            "재작성 재큐 %d건 — 잔존이 남아 다음 회차에 한 번 더 만든다", len(requeue))
 
     # 추출 쌍 반영 (스펙 §4.1 · §4.2): 저장은 번역 채택 여부와 무관 — 원문 근거 추출이고
     # 재시도 회차의 재추출은 upsert 멱등이다.
@@ -382,7 +405,8 @@ async def main(concurrency: int):
             exc_info=True)
 
     for h, (title_ko, s_ko, s3_ko, body_ko, _) in finals.items():
-        mart.set_translation(h, title_ko, s_ko, s3_ko, body_ko)
+        mart.set_translation(h, None if h in requeue else title_ko,
+                             s_ko, s3_ko, body_ko)
     for h, rep in gate_reports.items():
         mart.set_rewrite_retention(h, rep["retention"])
     if finals:  # 관측 ②: 재번역 큐 추이 한 줄 (신규 진입 · 채택 · 해소)
