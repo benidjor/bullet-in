@@ -57,7 +57,7 @@ def test_payload_ignores_source_already_at_zero():
 from bullet_in.run import serving_rows, roster_surnames
 
 TERMS = ["아스날", "아스널", "arsenal"]
-NAMES = {"얀 디오망데", "우스망 디오망데", "케파", "고든"}
+NAMES = {"얀 디오망데", "우스망 디오망데", "케파", "고든", "제주스"}
 
 
 def _row(sid, title="", body="", ko="", h="h1"):
@@ -268,3 +268,45 @@ def test_linked_hashes_sql_arsenal_link_counts_english_title():
                        "('a','첼시, 영입 합의','Arsenal make approach for the defender')"))
         got = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
     assert got == {"a"}
+
+
+def test_serving_rows_drops_namesake_of_a_roster_player():
+    """성만 겹치는 남의 선수 기사는 화면에서 뺀다 (2026-08-31).
+
+    명단 표기가 대부분 성이라, fmkorea 전재 글의 제목에 같은 성을 쓰는 다른 사람이
+    나오면 관련성 판정이 아스날 기사로 오인했다 (실측 3건 — 전부 남의 이적 기사).
+    사건 묶음이 쓰는 것과 같은 마스킹 (`_NOT_OUR_PLAYERS`) 을 여기에도 태운다.
+    """
+    keep, hidden = _hide([_row("fmkorea", "Venezia agree deal with Juan Jesus", "본문",
+                               ko="베네치아, 주앙 제주스와 구두 합의")],)
+    assert keep == [] and hidden == 1
+
+
+def test_serving_rows_keeps_our_player_written_with_the_surname_only():
+    """가리는 것은 남의 이름뿐 — 우리 선수를 성으로만 쓴 제목은 그대로 남는다.
+
+    동명이인 목록에 없는 성은 본문 뒷받침을 요구하지 않는다 (아래 제주스 테스트와 짝).
+    """
+    keep, hidden = _hide([_row("fmkorea", "PSG close on Diomande", "본문",
+                               ko="PSG, 디오망데 영입 근접")])
+    assert len(keep) == 1 and hidden == 0
+
+
+def test_serving_rows_drops_ambiguous_surname_without_the_full_name_in_body():
+    """동명이인이 잦은 성은 본문이 풀네임으로 뒷받침할 때만 남긴다 (2026-08-31).
+
+    「포르투갈 대표팀 지휘봉 잡은 제주스」 는 조르제 제주스 감독 기사인데, 명단 표기가
+    성이라 관련성 판정을 통과해 화면에 서 있었다. 이름 마스킹으로는 못 잡는다 — 제목에
+    성만 있어 지울 이름이 없기 때문이다.
+    """
+    keep, hidden = _hide([_row("fmkorea", "Jorge Jesus takes Portugal job",
+                               "제주스 감독은 4-3-3 을 쓴다",
+                               ko="포르투갈 대표팀 지휘봉 잡은 제주스, 전술 변화 예고")])
+    assert keep == [] and hidden == 1
+
+
+def test_serving_rows_keeps_ambiguous_surname_backed_by_the_body():
+    keep, hidden = _hide([_row("fmkorea", "Napoli eye Jesus",
+                               "가브리엘 제주스는 아스날을 떠날 수 있다",
+                               ko="나폴리, 제주스 영입 관심 표명")])
+    assert len(keep) == 1 and hidden == 0

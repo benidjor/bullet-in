@@ -22,7 +22,8 @@ from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows
 from bullet_in.tone import select_tone_backfill
 from bullet_in import transfer_stage
 from bullet_in import roster
-from bullet_in.serve.render import write_site, write_ops, unmatched_articles
+from bullet_in.serve.render import (write_site, write_ops, unmatched_articles,
+                                    mask_other_people, mask_ambiguous)
 from bullet_in.quality import (success_rate, volume_anomalies, evaluate_freshness,
                                evaluate_coverage, candidate_cliffs, filter_miss_suspects,
                                roster_axis_staleness, freshness_alert_split,
@@ -138,9 +139,21 @@ def roster_surnames(player_names) -> set[str]:
 
 
 def _serving_kept(row: dict, terms, names, surnames, linked) -> bool:
-    """fmkorea 글을 화면에 남길지 — 네 신호 중 하나라도 걸리면 남긴다."""
-    title_o = row.get("title_original") or ""
-    title_k = row.get("title_ko") or ""
+    """fmkorea 글을 화면에 남길지 — 네 신호 중 하나라도 걸리면 남긴다.
+
+    제목에서 남의 이름을 먼저 지운다 (2026-08-31). 명단 표기가 대부분 성이라, 같은
+    성을 쓰는 다른 사람이 제목에 나오면 이 판정이 아스날 기사로 오인한다 — 「베네치아,
+    주앙 제주스와 구두 합의」 가 「제주스」 로 통과해 화면에 서 있었다 (운영 실측 3건 ·
+    전부 남의 이적 기사). 사건 묶음이 쓰는 것과 같은 목록 (`_NOT_OUR_PLAYERS`) 이다.
+    """
+    # 동명이인이 잦은 성은 본문이 풀네임으로 뒷받침할 때만 인정한다 (2026-08-31).
+    # 「포르투갈 대표팀 지휘봉 잡은 제주스」 (조르제 제주스 감독) 는 제목에 성만 있어
+    # 위 이름 마스킹으로는 못 잡는다. 본문은 **떨어뜨리는 쪽으로만** 본다 — 2026-08-28
+    # 에 뺀 것은 「본문에 구단 키워드가 있으면 남긴다」 는 통과시키는 쪽이었고, 그쪽이
+    # 배경 설명 한 줄로 타 구단 기사를 끌고 왔다. 여기서는 본문이 기사를 들여보내지 못한다.
+    body = f"{row.get('body_ko') or ''} {row.get('body_source') or ''}"
+    title_o = mask_ambiguous(mask_other_people(row.get("title_original") or ""), body)
+    title_k = mask_ambiguous(mask_other_people(row.get("title_ko") or ""), body)
     # ① 수집 때와 같은 판정이되 본문은 안 본다 (구단 키워드 · 풀네임 둘 다 제목만).
     # 본문은 배경 설명에 남의 구단을 흔히 적는다 — 「마르티네스는 2020년 9월 아스널을
     # 떠나 빌라에 합류한 뒤」 한 줄로 첼시 이적 기사가 화면에 남았다 (2026-08-28 실측
