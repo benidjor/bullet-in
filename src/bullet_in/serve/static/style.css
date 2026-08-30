@@ -481,4 +481,14 @@ h1.title{font-family:var(--serif);font-weight:800;font-size:36px;line-height:1.2
      로고와 단추 사이가 모자라 줄이 접힌다. title 에 전체 문구가 그대로 있다. */
   .mktclock{padding:0 4px}
   .mktclock .mkt-label{display:none}
+  /* 선수 페이지 사다리 — 한 줄에 날짜 · 단계 · 제목 · 매체 · 건수를 늘어놓는데, 좁은
+     화면에서는 제목만 flex 로 줄어들어 자리를 잃는다 (2026-08-31 실측 386px 뷰포트에서
+     제목 폭 19~45px · 높이 최대 538px 로 한 글자씩 세로로 흘렀다).
+     제목을 아랫줄 전폭으로 내리고 나머지는 윗줄에 둔다. */
+  .tlnode{row-gap:4px}
+  .tltitle{flex:1 0 100%;order:1}
+  /* 선수 페이지 기사 카드의 썸네일이 168px 로 고정돼 있어 386px 화면에서 제목 자리가
+     133px 만 남았다 (제목이 세 낱말에서 잘렸다). 목록 기본값 132px 로 되돌려 홈 카드와
+     같은 폭을 준다 — 그러면 제목 자리가 169px 로 는다. */
+  .daylist.plist .item.hasthumb{grid-template-columns:132px minmax(0,1fr)}
 }

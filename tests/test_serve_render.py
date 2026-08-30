@@ -1185,3 +1185,18 @@ def test_gossip_head_carries_an_anchor_and_both_counts():
     assert 'id="gossip"' in html
     assert "최근 3일 2건 · 전체 2건" in html
     assert 'class="gossipjump"' in html and "가십 2건" in html
+
+
+def test_mobile_query_gives_the_ladder_title_its_own_line():
+    """선수 페이지 사다리가 좁은 화면에서 제목 자리를 잃던 자리 (2026-08-31).
+
+    한 줄에 날짜 · 단계 · 제목 · 매체 · 건수를 늘어놓는데 제목만 flex 로 줄어들어,
+    386px 뷰포트에서 폭 19px · 높이 538px 로 한 글자씩 세로로 흘렀다.
+    한계: pytest 는 브라우저를 안 띄우므로 규칙이 있는지만 본다 — 실제 배치는
+    실브라우저로 확인했다 (제목 폭 339px · 높이 45px).
+    """
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
+    mobile = css[css.index("@media (max-width:640px)"):]
+    assert re.search(r"\.tltitle\{[^}]*flex:1 0 100%", mobile)
+    # 썸네일 168px 고정이 제목 자리를 133px 로 밀어 제목이 잘렸다 — 목록 기본값으로 되돌린다
+    assert re.search(r"\.daylist\.plist \.item\.hasthumb\{[^}]*132px", mobile)
