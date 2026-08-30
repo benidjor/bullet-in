@@ -52,6 +52,12 @@ fmkorea 도 세어야 한다 (2026-07-30 개정).
 마지막 분류 블록도 run.py 의 현행 분류 패스와 동일한 형태를 유지한다 (규칙 경로 2형태 · 방향 축 스펙 §4).
 **`rule_stage` 에 채택 경로를 함께 넘긴다** (2026-08-12 개정) — 빠뜨리면 공홈에서 제목으로 주워 온 기사까지 `official` 로 굳어, 구단이 이적 뉴스라고 표시하지 않은 기사에 오피셜 배지가 붙는다.
 
+**`promote_official` 을 빠뜨리지 않는다** (2026-08-31 정정).
+이 스니펫의 분류 블록에 그 호출이 빠져 있었고 `run.py` 에는 있었다.
+빠지면 채택 경로가 `title` 인 공홈 기사가 모델이 낸 `done` 에 머물러 오피셜 배지가 안 붙는다
+— 2026-08-31 에 손으로 넣은 공식 발표 두 건이 그 자리였다.
+`classify_stage_rows` 의 결과를 저장할 때 그 행의 `source_id` 와 `accept_path` 가 함께 필요하므로 `llm_by_hash` 로 되찾는다.
+
 **생성 함수에 넘기는 재료도 run.py 와 같아야 한다 (2026-08-13 개정).**
 확정 링크 명단 (`confirmed_link_roster`) 은 아스날이 이름으로 안 나오는 기사를 판단하는 근거이고, 이름 사전 (`gate_name_map`) 과 구단 사전은 재작성 게이트가 지어낸 인명 · 구단을 잡는 축이다.
 빠뜨리면 같은 기사가 회차 경로와 이 패스에서 다르게 판정된다
@@ -121,8 +127,12 @@ for r in mart.rows_missing_stage():
     if stage_fixed:
         stage_ruled[r["content_hash"]] = stage_fixed
     llm_rows.append(r)
+llm_by_hash = {r["content_hash"]: r for r in llm_rows}
 for h, (stage, direction) in classify_stage_rows(llm_rows, client, GEMINI_MODEL).items():
-    mart.set_stage(h, stage_ruled.get(h, stage), direction)
+    row = llm_by_hash.get(h, {})
+    mart.set_stage(h, transfer_stage.promote_official(
+        stage_ruled.get(h, stage), row.get("source_id"),
+        row.get("accept_path")), direction)
 print("미분류 잔존:", len(mart.rows_missing_stage()))
 EOF
 ```
