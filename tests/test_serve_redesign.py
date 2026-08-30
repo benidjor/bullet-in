@@ -300,11 +300,6 @@ def test_is_other_club_report_arsenal_inbound_excluded():
     assert R._is_other_club_report(other, "로저스", CLUBS) == "첼시"
 
 
-def test_is_gossip_cluster_only_when_all_lowest():
-    assert R.is_gossip_cluster({"articles": [_row(tier=4.0), _row(tier=4.0)]}) is True
-    assert R.is_gossip_cluster({"articles": [_row(tier=4.0), _row(tier=1.5)]}) is False
-
-
 def test_top_stories_dedup_by_event():
     now = datetime(2026, 7, 20, 12, 0)
     rows = [_row(content_hash=f"t{i}", tier=1.0, title_ko="아스날, 트로사르 방출",
@@ -512,3 +507,58 @@ def test_related_reports_counts_other_clubs():
     cluster = {"key": "로저스", "articles": [rep, a, b]}
     rel = R.related_reports(cluster, rep, None, CLUBS)
     assert rel["other_clubs"] == Counter({"첼시": 2})
+
+
+# ── 최하는 전부 가십 절로 · 카드가 없는 날짜는 가십에서 꺼낸다 ──────────
+
+def test_is_lowest_reads_the_tier_not_the_cluster():
+    # 가십 배정 기준이 「묶음 전원이 최하」 에서 「이 기사가 최하」 로 바뀐다
+    assert R.is_lowest(_row(tier=4.0)) is True
+    assert R.is_lowest(_row(tier=3.0)) is False
+    assert R.is_lowest(_row(tier=None)) is False
+
+
+def test_gossip_days_window_is_three():
+    # 7일 창은 보이는 카드가 37장이라 너무 많았다 (2026-08-30 실측 · 3일이면 22장)
+    assert R.GOSSIP_DAYS == 3
+
+
+def test_pick_empty_day_gossip_lifts_when_the_day_has_no_card():
+    # 그날 카드가 한 장도 안 서면 가십에서 꺼내 날짜 그룹에 세운다
+    low = [_p("a", 21, tier=4.0), _p("b", 20, tier=4.0)]
+    picks = R.pick_empty_day_gossip(low, carded=set(), window=R.recent_days(low),
+                                    players=PLAYERS)
+    assert [a["content_hash"] for a in picks] == ["a", "b"]
+
+
+def test_pick_empty_day_gossip_skips_a_day_that_already_has_a_card():
+    low = [_p("a", 21, tier=4.0), _p("b", 20, tier=4.0)]
+    picks = R.pick_empty_day_gossip(low, carded={date(2026, 7, 21)},
+                                    window=R.recent_days(low), players=PLAYERS)
+    assert [a["content_hash"] for a in picks] == ["b"]
+
+
+def test_pick_empty_day_gossip_skips_days_outside_the_window():
+    low = [_p("old", 1, tier=4.0)]
+    window = R.recent_days([_p("x", 21), _p("y", 20), _p("z", 19)])
+    assert R.pick_empty_day_gossip(low, carded=set(), window=window,
+                                   players=PLAYERS) == []
+
+
+def test_pick_empty_day_gossip_leaves_hidden_stage_behind():
+    # 기타 단계는 카드가 화면에서 숨으므로 꺼내면 아무 데서도 안 보인다 (_promotable 과 같은 가드)
+    low = [_p("other", 21, tier=4.0), _p("ok", 21, tier=4.0)]
+    low[0]["transfer_stage"] = "other"
+    picks = R.pick_empty_day_gossip(low, carded=set(), window=R.recent_days(low),
+                                    players=PLAYERS)
+    assert [a["content_hash"] for a in picks] == ["ok"]
+
+
+def test_pick_empty_day_gossip_caps_per_player_and_day():
+    # 한 선수가 그날 카드를 다 가져가지 않게 — promote_recent 과 같은 계약
+    low = [_p(f"t{i}", 21, tier=4.0, hour=i) for i in range(4)]
+    for a in low:
+        a["title_ko"] = "아스날, 트로사르 이적설"
+    picks = R.pick_empty_day_gossip(low, carded=set(), window=R.recent_days(low),
+                                    players=PLAYERS, cap=2)
+    assert len(picks) == 2

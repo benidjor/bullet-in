@@ -325,6 +325,23 @@ def show_summary(tier: float | None) -> bool:
     return tier is not None and float(tier) < 3.0
 
 
+# ── 최하 등급 (2026-08-30 사용자 확정) ─────────────────────────────────
+# 가십 절의 배정 기준을 「묶음 전원이 최하」 에서 「이 기사가 최하」 로 바꿨다.
+# 앞 규칙은 상위 매체가 섞인 이야기 안의 최하를 접힌 채로 남겼는데, 배포본 실측에서
+# 그 자리가 368건이었고 화면에서는 관련 보도 토글을 눌러야만 나왔다.
+LOWEST_TIER = 4.0
+
+# 가십 절이 처음에 펴 보이는 날짜 수 — 나머지는 「더보기」 뒤로 접는다.
+# 7일이면 보이는 카드가 37장이라 절 하나가 화면 둘을 먹는다 (실측 · 3일이면 22장).
+GOSSIP_DAYS = 3
+
+
+def is_lowest(row: dict) -> bool:
+    """가십 절로 보낼 기사인가 — 등급 미상은 최하로 보지 않는다."""
+    tier = row.get("tier")
+    return tier is not None and float(tier) >= LOWEST_TIER
+
+
 # ── 톱스토리 선정 (spec2 §5) — 히어로 1 + 주요 소식 4.
 # 순서: 상위 3등급만 → 아스날 주체 → 공신력 → 영입 단계 → 최신 → 이미지 유무.
 # arsenal.com 배제 규칙은 넣지 않는다 (앞 스펙 §16.1 재측정으로 무효 · spec2 §5.1).
@@ -1155,31 +1172,13 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
     top_hashes = {a["content_hash"] for a in ([top["lead"]] if top["lead"] else []) + top["mains"]}
     rest = [a for a in ordered if a["content_hash"] not in top_hashes]
 
-    clusters = cluster_events(rest, players)
-    # 가십 — 대표만 보이되, 비대표도 숨김 카드 (_dup) 로 내보내 필터가 기사 단위로 닿게 한다
-    gossip, gossip_reps = [], 0
-    for c in clusters:
-        if not is_gossip_cluster(c):
-            continue
-        rep = pick_representative(c["articles"])
-        gossip_reps += 1
-        for a in c["articles"]:
-            if a is not rep:
-                a["_dup"] = True
-            gossip.append(a)
-    gossip.sort(key=_sort_ts, reverse=True)   # 가십을 발행 · 수집 시각 내림차순으로 (2-2)
-    for g in gossip:
-        g["_gwhen"] = gossip_when(g, now)   # 가십 카드는 날짜 · time 정밀도면 시각까지 (6-3)
-    if gossip:
-        newest_day = to_kst(_sort_ts(gossip[0])[0]).date()
-        cut = newest_day - timedelta(days=6)   # 최신 날짜 포함 7개 캘린더 날짜
-        for g in gossip:
-            g["_gwk"] = to_kst(_sort_ts(g)[0]).date() < cut
-    gossip_hidden = sum(1 for g in gossip if g.get("_gwk") and not g.get("_dup"))
+    # 2026-08-30 사용자 확정 — 최하는 사건 묶음과 상관없이 전부 가십 절로.
+    # 앞 규칙 (묶음 전원이 최하일 때만) 은 상위 매체가 섞인 이야기 안의 최하를 접힌
+    # 채로 남겨, 배포본 실측 442건 중 368건이 관련 보도 토글 뒤에만 있었다.
+    gossip = [a for a in rest if is_lowest(a)]
+    clusters = cluster_events([a for a in rest if not is_lowest(a)], players)
     blocks = []
     for c in clusters:
-        if is_gossip_cluster(c):
-            continue
         rep = pick_representative(c["articles"])
         ending = ending_card(c, clubs)
         # 대표가 이미 다른 구단 결말 기사면 결말 카드를 따로 세우지 않는다 (중복 방지)
@@ -1196,6 +1195,45 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
     for b in lifted:
         b["story"] = (stories or {}).get(b.get("key"))
     blocks.extend(lifted)
+    # 2026-08-30 사용자 확정 — 카드가 한 장도 안 선 최근 날짜는 가십에서 꺼내 세운다.
+    # 그날 들어온 것이 전부 최하이면 날짜 그룹이 아예 안 생겨 홈이 멈춘 것처럼 보인다.
+    # 꺼낸 블록에 다는 lowsolo 는 「한 장이어도 한 열로 펴지 말라」 는 표식이다 (app.js
+    # 의 soloWidth) — 한 열로 펴면 최하 한 건이 그날의 헤드라인처럼 보인다.
+    band = ([top["lead"]] if top["lead"] else []) + top["mains"]
+    carded = {to_kst(_group_ts(a)).date()
+              for a in [b["rep"] for b in blocks if b.get("rep")] + band
+              if _group_ts(a) is not None}
+    picked = pick_empty_day_gossip(gossip, carded, recent_days(ordered), players)
+    if picked:
+        taken = {a["content_hash"] for a in picked}
+        gossip = [g for g in gossip if g["content_hash"] not in taken]
+        blocks.extend(
+            {"rep": a, "ending": None, "branches": [], "rel_count": 0, "count": 1,
+             "_articles": [a], "promoted": True, "lowsolo": True,
+             "key": protagonist(a.get("title_ko") or a.get("title_original") or "",
+                                players)}
+            for a in picked)
+
+    gossip.sort(key=_sort_ts, reverse=True)   # 가십을 발행 · 수집 시각 내림차순으로 (2-2)
+    for g in gossip:
+        g["_gwhen"] = gossip_when(g, now)   # 가십 카드는 날짜 · time 정밀도면 시각까지 (6-3)
+    if gossip:
+        newest_day = to_kst(_sort_ts(gossip[0])[0]).date()
+        cut = newest_day - timedelta(days=GOSSIP_DAYS - 1)
+        for g in gossip:
+            g["_gwk"] = to_kst(_sort_ts(g)[0]).date() < cut
+    gossip_hidden = sum(1 for g in gossip if g.get("_gwk"))
+
+    # 머리글 건수 — 「그 절에 실제로 놓인 오늘치」 로 센다 (c안 · 2026-08-30 사용자 확정).
+    # 등급으로 세면 꺼내기로 최신 뉴스에 올라간 기사가 「뉴스 0건」 으로 적혀 화면과 어긋난다.
+    today = to_kst(now).date()
+    def _is_today(a):
+        ts = _group_ts(a)
+        return ts is not None and to_kst(ts).date() == today
+    news_today = len({a["content_hash"] for a in
+                      [b["rep"] for b in blocks if b.get("rep")] + band if _is_today(a)})
+    gossip_today = sum(1 for g in gossip if _is_today(g))
+
     # 대표 카드에도 같은 줄을 단다 (2026-08-28 사용자 확정) — 그전에는 꺼낸 카드에만
     # 붙어 두 종류의 카드가 다르게 보였다. 관련 보도는 그대로 둔다: 두 줄은 서로
     # 대체재가 아니라 다른 축이다 (관련 보도 = 이 사건의 다른 보도 · 선수 페이지 =
@@ -1217,7 +1255,9 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
                           outlet_dir=outlet_dir)
     return _env().get_template("index.html.j2").render(
         lead=top["lead"], mains=top["mains"], day_blocks=day_blocks,
-        gossip=gossip, gossip_n=gossip_reps, gossip_hidden=gossip_hidden,
+        gossip=gossip, gossip_hidden=gossip_hidden, gossip_days=GOSSIP_DAYS,
+        gossip_shown=len(gossip) - gossip_hidden, gossip_total=len(gossip),
+        news_today=news_today, gossip_today=gossip_today,
         facets=facets, active="home", root="",
         meta=page_meta("Bullet-in · 아스날 이적 뉴스", _SITE_DESC,
                        image=(top["lead"] or {}).get("image_url")))
@@ -1951,16 +1991,54 @@ def _promotable(row: dict) -> bool:
     하나는 단계가 비었거나 「기타」 인 기사다. 첫 화면에서 카드가 감춰지므로
     (app.js 의 isOther) 꺼내면 관련 보도에서도 빠져 아무 데서도 안 보이게 된다.
 
-    다른 하나는 공신력 최하다. 원래 최신 소식에는 최하 카드가 설 수 없었다 —
-    대표 선정이 최하가 아닌 기사를 먼저 고르고 (pick_representative 의 not_lowest),
-    전부 최하인 묶음은 통째로 가십 절로 간다 (is_gossip_cluster). 꺼내기가 그
-    불변 조건을 깨지 않도록 최하는 접힌 채로 둔다 — 상위 묶음 안의 최하를 그대로
-    두는 것은 사건 맥락을 지키려는 설계다 (사건 묶음 스펙 §7)."""
+    다른 하나는 공신력 최하다. 2026-08-30 개정 뒤로 최하는 사건 묶음에 아예 안
+    들어가므로 (render_index 가 가십으로 먼저 가른다) 이 가드는 실제로 걸릴 일이
+    없지만, 「접힘에서 최하를 꺼내지 않는다」 는 계약을 이 자리에 남겨 둔다.
+    최하를 날짜 그룹에 세우는 경로는 pick_empty_day_gossip 하나뿐이다."""
+    return _stage_visible(row) and not is_lowest(row)
+
+
+def _stage_visible(row: dict) -> bool:
+    """카드가 화면에 남는 단계인가 — 기타 · 미상은 app.js 의 isOther 가 숨긴다."""
     stage = row.get("transfer_stage")
-    if not stage or stage == "other":
-        return False
-    tier = row.get("tier")
-    return tier is None or float(tier) < 4.0
+    return bool(stage) and stage != "other"
+
+
+def pick_empty_day_gossip(lowest: list[dict], carded: set, window: set,
+                          players: list[str],
+                          cap: int = PROMOTE_PER_PLAYER_DAY) -> list[dict]:
+    """카드가 한 장도 안 선 최근 날짜에 세울 가십 기사 (2026-08-30).
+
+    가십 절은 본문 90% 지점이라, 그날 들어온 것이 전부 최하면 홈 첫 화면이 어제에
+    멈춘 것처럼 보인다 (배포본 실측 — 90개 날짜 중 43개가 카드 0장).
+    그 날짜에만 가십에서 꺼내 날짜 그룹을 세운다.
+
+    **꺼낸 기사는 호출부가 가십 목록에서 빼 준다.** 양쪽에 두면 필터를 걸었을 때
+    같은 기사가 두 번 보인다 — `dupcard` 는 필터가 걸리면 오히려 드러나는 장치라
+    (app.js 의 `active && m`) 최신 뉴스 쪽 카드와 겹친다.
+    """
+    by_day: dict = {}
+    for a in lowest:
+        ts = _group_ts(a)
+        if ts is None or not _stage_visible(a):
+            continue
+        day = to_kst(ts).date()
+        if day in carded or day not in window:
+            continue
+        by_day.setdefault(day, []).append(a)
+    picks = []
+    for _, arts in sorted(by_day.items(), reverse=True):
+        arts.sort(key=_sort_ts, reverse=True)
+        per: Counter = Counter()
+        for a in arts:
+            # 주인공 미상은 서로 다른 이야기라 한 묶음으로 세지 않는다
+            key = protagonist(a.get("title_ko") or a.get("title_original") or "",
+                              players) or a["content_hash"]
+            if per[key] >= cap:
+                continue
+            per[key] += 1
+            picks.append(a)
+    return picks
 
 
 def recent_days(articles: list[dict], n: int = PROMOTE_DAYS) -> set:
@@ -2025,13 +2103,6 @@ def promote_recent(blocks: list[dict], window: set,
                          "key": b.get("key")}
                         for a in picks)
     return promoted
-
-
-def is_gossip_cluster(cluster: dict) -> bool:
-    """가십 묶음 (spec2 §7.1) — 묶음의 모든 기사가 최하 등급일 때만."""
-    arts = cluster["articles"]
-    return bool(arts) and all(
-        a.get("tier") is not None and float(a["tier"]) >= 4.0 for a in arts)
 
 
 def render_about() -> str:

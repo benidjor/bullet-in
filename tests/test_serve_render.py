@@ -785,7 +785,9 @@ def test_index_relitem_carries_filter_data_attrs():
     rep = _row(content_hash="r1", source_id="skysports", tier=2,
                title_ko="아스날, 에제 영입 합의", transfer_stage="agreed",
                published_at=datetime(2026, 6, 20, 10, 0, 0))
-    rel = _row(content_hash="r2", source_id="goal", tier=4, summary_ko="한 줄",
+    # 최하는 이제 사건 묶음에 안 남고 가십 절로 간다 (2026-08-30) — 접힘을
+    # 재려면 최하가 아닌 등급이어야 한다
+    rel = _row(content_hash="r2", source_id="goal", tier=3, summary_ko="한 줄",
                title_ko="아스날, 에제 이적 임박", transfer_stage="rumour",
                published_at=datetime(2026, 6, 20, 9, 0, 0))
     fill = [_row(content_hash=f"f{d}", source_id="skysports", tier=2,
@@ -796,7 +798,7 @@ def test_index_relitem_carries_filter_data_attrs():
     seg = html[max(0, i - 200):i + 700]
     assert 'class="relitem"' in seg
     assert 'data-outlet="Goal.com"' in seg
-    assert 'data-tier="4"' in seg
+    assert 'data-tier="3"' in seg
     assert 'data-stage="rumour"' in seg
     assert 'data-text=' in seg
 
@@ -825,29 +827,38 @@ def test_index_day_header_counts_exclude_band_dup():
     assert "묶음 1개 · 보도 1건" in html
 
 
-def test_index_gossip_nonrep_reappears_as_hidden_dupcard():
-    # 가십 묶음의 비대표 기사도 숨김 카드로 렌더돼야 필터가 기사 단위로 닿는다
+def test_index_gossip_cards_are_all_plain_not_hidden_duplicates():
+    # 2026-08-30 개정 뒤로 가십 절에는 대표 · 비대표가 없다 — 최하가 낱개 카드로
+    # 늘어서므로 숨김 (dupcard) 으로 낼 이유가 사라졌다. 같은 기사를 카드와 숨김
+    # 카드로 함께 두면 필터를 걸었을 때 두 번 보인다 (app.js 의 `active && m`).
+    card = _row(content_hash="c1", source_id="skysports", tier=2,
+                transfer_stage="agreed", title_ko="아스날, 사카 재계약 합의",
+                published_at=datetime(2026, 6, 29, 12, 0))   # 그날 카드 → 꺼내기 안 걸림
     g1 = _row(content_hash="g1", source_id="goal", tier=4, transfer_stage="rumour",
               title_ko="아스날, 에제 영입설", published_at=datetime(2026, 6, 29, 11, 0))
     g2 = _row(content_hash="g2", source_id="goal", tier=4, transfer_stage="rumour",
               title_ko="아스날, 에제 이적 임박설", published_at=datetime(2026, 6, 29, 9, 0))
-    html = render_index([g1, g2], FILTER_SOURCES, NOW)
-    assert 'href="article/g2.html"' in html                # 비대표도 DOM 에 존재
-    i = html.index('href="article/g2.html"')
-    seg = html[max(0, i - 300):i + 300]
-    assert "dupcard" in seg
-    assert "display:none" in seg
+    html = render_index([card, g1, g2], FILTER_SOURCES, NOW)
+    for h in ("g1", "g2"):
+        i = html.index(f'href="article/{h}.html"')
+        seg = html[max(0, i - 300):i + 300]
+        assert "dupcard" not in seg
+        assert "display:none" not in seg
 
 
 def test_gossip_older_than_week_marked_gwk():
-    # 가십 초기 노출 = 최신 가십 기준 최근 7일 (spec §4 — 24건 개수 컷 대체)
+    # 가십 초기 노출 = 최신 가십 기준 최근 3일 (2026-08-30 — 7일이면 37장이라 넓다)
+    card = _row(content_hash="c1", source_id="skysports", tier=2,
+                transfer_stage="agreed", title_ko="아스날, 사카 재계약 합의",
+                published_at=datetime(2026, 6, 29, 12, 0))   # 그날 카드 → 꺼내기 안 걸림
     recent = _row(content_hash="g1", source_id="bbc_gossip", tier=4,
                   title_ko="아스날, 촐리스 루머",
                   published_at=datetime(2026, 6, 29, 10, 0))
     old = _row(content_hash="g2", source_id="bbc_gossip", tier=4,
                title_ko="아스날, 진첸코 루머",
                published_at=datetime(2026, 6, 20, 10, 0))
-    html = render_index([recent, old], {**SOURCES, "bbc_gossip":
+    html = render_index([card, recent, old], {**SOURCES, "skysports":
+        {"display_name": "Sky Sports", "serving": "full"}, "bbc_gossip":
         {"display_name": "BBC Football Gossip", "serving": "full"}}, NOW)
     i_old = html.index('href="article/g2.html"')
     seg_old = html[max(0, i_old - 400):i_old]
@@ -1045,7 +1056,8 @@ def test_ending_card_is_not_drawn_on_the_home_page():
     block = {"rep": rep, "ending": {"article": end, "club": "첼시"},
              "branches": [], "rel_count": 0, "count": 2}
     html = _env().get_template("index.html.j2").render(
-        lead=None, mains=[], gossip=[], gossip_n=0, gossip_hidden=0,
+        lead=None, mains=[], gossip=[], gossip_hidden=0, gossip_days=3,
+        gossip_shown=0, gossip_total=0, news_today=0, gossip_today=0,
         day_blocks=[{"date": "2026-06-29", "label": "오늘", "n": 1, "reports": 2,
                      "all_dup": False, "blocks": [block]}],
         facets={"team": {}, "tiers": [], "total": 0, "stage": {}, "stage_groups": [],
@@ -1106,3 +1118,70 @@ def test_privacy_notice_appears_with_analytics(monkeypatch):
     assert 'href="about.html#stats"' in render_index([_row()], SOURCES, NOW)
     a = _dec(_row(content_hash="hnote", body_ko="본문"), SOURCES, NOW)
     assert 'href="../about.html#stats"' in _ra(a, [], "hnote", SOURCES, NOW)
+
+
+# ── 최하는 전부 가십 절로 · 카드가 없는 날짜는 가십에서 꺼낸다 ──────────
+# 2026-08-30 사용자 확정. 배포본 실측 = 관련 보도 698 → 330 · 가십 74 → 440장.
+
+def _gossip(html: str) -> str:
+    """가십 절 구간만 잘라 낸다 — 「어디에 놓였나」 를 마크업 위치로 판정한다."""
+    i, j = html.find('class="gossiplist'), html.find('gossipnote')
+    return html[i:j] if i >= 0 and j > i else ""
+
+
+def _low(**kw):
+    base = dict(tier=4.0, transfer_stage="rumour", transfer_direction="in")
+    base.update(kw)
+    return _row(**base)
+
+
+def test_lowest_goes_to_gossip_even_when_the_story_has_a_higher_source():
+    # 같은 선수 묶음에 공신력 최상이 있어도 최하는 접히지 않고 가십 절로 간다
+    high = _row(content_hash="hi", tier=2.0, transfer_stage="agreed",
+                transfer_direction="in", title_ko="아스날, 사카 재계약 합의")
+    low = _low(content_hash="lo", title_ko="아스날, 사카 이적설 부인")
+    html = render_index([high, low], SOURCES, NOW)
+    assert "lo" in _gossip(html)                       # 가십 절에 있다
+    assert 'class="relitem" href="article/lo' not in html   # 접힘에 안 남는다
+    assert "hi" not in _gossip(html)                   # 상위는 그대로 카드
+
+
+def test_day_with_only_lowest_articles_still_gets_a_date_group():
+    # 그날 카드가 0장이면 가십에서 꺼내 날짜 그룹을 세운다
+    low = _low(content_hash="lo", title_ko="아스날, 사카 이적설 부인")
+    html = render_index([low], SOURCES, NOW)
+    assert "오늘" in html
+    assert 'href="article/lo.html"' in html
+    assert "lo" not in _gossip(html)                   # 꺼낸 것은 가십 목록에서 뺀다
+    assert "lowsolo" in html                           # 한 장이어도 반 폭 유지
+
+
+def test_lowest_stays_in_gossip_when_the_day_already_has_a_card():
+    # 그날 카드가 서 있으면 꺼내기가 안 걸린다 — 최하는 가십 절에만
+    high = _row(content_hash="hi", tier=2.0, transfer_stage="agreed",
+                transfer_direction="in", title_ko="아스날, 사카 재계약 합의")
+    low = _low(content_hash="lo", title_ko="아스날, 라이스 이적설 부인")
+    html = render_index([high, low], SOURCES, NOW)
+    assert "lo" in _gossip(html)
+    assert 'href="article/lo.html"' not in html.replace(_gossip(html), "")
+
+
+def test_section_is_named_news_and_counts_are_split():
+    # 「최신 소식」 → 「최신 뉴스」 · 오늘 건수를 뉴스 · 가십으로 갈라 적는다
+    low = _low(content_hash="lo", title_ko="아스날, 사카 이적설 부인")
+    html = render_index([low], SOURCES, NOW)
+    assert "<h2>최신 뉴스</h2>" in html
+    assert "오늘 뉴스 1건" in html
+    # 오늘치가 전부 최신 뉴스로 올라가 가십 절에 0건이면 링크를 걸지 않는다 (c안)
+    assert "gossipjump" not in html
+
+
+def test_gossip_head_carries_an_anchor_and_both_counts():
+    low = [_low(content_hash="lo1", title_ko="아스날, 사카 이적설 부인"),
+           _low(content_hash="lo2", title_ko="아스날, 라이스 이적설 부인")]
+    high = _row(content_hash="hi", tier=2.0, transfer_stage="agreed",
+                transfer_direction="in", title_ko="아스날, 외데고르 재계약 합의")
+    html = render_index(low + [high], SOURCES, NOW)
+    assert 'id="gossip"' in html
+    assert "최근 3일 2건 · 전체 2건" in html
+    assert 'class="gossipjump"' in html and "가십 2건" in html
