@@ -69,6 +69,41 @@ docker exec -i bullet-in-mariadb-1 mariadb -uroot -pbulletin bulletin -e "SELECT
 여러 줄 Python 스크립트를 셸에 붙여넣으면 마지막 `EOF` 앞에 공백이 섞이는 순간 종료 표시로 인식되지 않아, 셸이 입력을 계속 기다린 채 멈춘다 (2026-07-31 실제로 겪음).
 여러 줄 스크립트를 꼭 써야 하면 `cat > /tmp/q.py` 로 파일을 먼저 만든 뒤 `uv run python /tmp/q.py` 로 실행한다.
 
+#### 2.3.1. 볼 순서를 좁히는 형태 (2026-08-31)
+
+위 조회는 후보를 전부 내놓아서 어디부터 볼지가 안 보인다.
+두 축을 더하면 실제로 확정해야 할 후보가 위로 올라온다.
+
+- **주역 귀속만 센다** (`ap.role <> 'mention'`) — 스치는 언급으로 붙은 귀속은 확정 근거가 아니다.
+- **제목에 아스날이 든 기사 수를 따로 센다** — 그 수로 정렬한다.
+
+```bash
+docker exec -i bullet-in-mariadb-1 mariadb -uroot -pbulletin bulletin -e "SELECT p.id, COALESCE(p.ko_name,p.ko_candidate) AS 표기, p.full_name AS 영문명, COUNT(*) AS 기사수, SUM(CASE WHEN a.title_ko LIKE '%아스날%' OR a.title_ko LIKE '%아스널%' THEN 1 ELSE 0 END) AS 아스날, MAX(a.published_at) AS 최근 FROM players p JOIN article_players ap ON ap.player_id=p.id AND ap.role<>'mention' JOIN articles a ON a.content_hash=ap.content_hash WHERE p.status='candidate' GROUP BY p.id, 표기, p.full_name HAVING 아스날 > 0 ORDER BY 아스날 DESC, 최근 DESC;"
+```
+
+2026-08-31 실측으로 주역 귀속이 있는 후보 43명 중 28명이 남았다.
+
+**남은 28명도 그대로 확정하면 안 된다.**
+후보 목록은 영입 대상 명단이 아니라 추출이 만든 원자재라, 이 조회를 통과한 뒤에도 이런 것이 섞여 있었다.
+
+| 갈래 | 그때 걸린 이름 |
+| --- | --- |
+| 감독 | 디에고 시메오네 · 엔초 마레스카 · 마이클 캐릭 |
+| 구단 임원 | 조쉬 크랑키 · 리처드 갈릭 · 세바스티안 크루그 |
+| 은퇴 선수 · 해설자 | 티에리 앙리 · 파트리스 에브라 · 윌리엄 갈라스 · 제레미 알리아디에르 |
+| 남의 팀 선수 | 로드리 · 브루노 페르난데스 · 해리 케인 · 코디 각포 |
+
+이 갈래는 자동으로 못 가른다 — 위에서부터 기사 제목을 읽고 사람이 판단한다.
+제목만으로 애매하면 그 선수의 귀속 기사 제목을 함께 뽑아 본다.
+
+```bash
+docker exec -i bullet-in-mariadb-1 mariadb -uroot -pbulletin bulletin -e "SELECT a.published_at AS 발행, a.transfer_stage AS 단계, a.title_ko AS 제목 FROM article_players ap JOIN articles a ON a.content_hash=ap.content_hash WHERE ap.player_id=<id> AND ap.role<>'mention' ORDER BY a.published_at DESC;"
+```
+
+실제로 이 두 단계로 2026-08-31 에 넷을 확정했다
+— 이고르 파이샹 · 말릭 포파나 (영입 링크) · 제임스 스캔론 · 하비브 오군네예 (영입 완료).
+그리고 같은 조회에서 「하비브 오군네예 (Habib Ogunneye)」 와 「하비브 오군예이 (Habeeb Ogunneye)」 가 같은 사람의 두 행인 것이 드러나 §5 의 병합 절차로 합쳤다.
+
 ## 3. 확정
 
 ### 3.1. 백필 선행 의존 — 먼저 확인할 것
