@@ -948,6 +948,19 @@ def test_glossary_is_idempotent_over_all_keys_and_values():
     twice = apply_glossary(once, g)
     assert twice["body_ko"] == once["body_ko"]
 
+
+def test_glossary_normalizes_scanlon_to_the_roster_spelling():
+    # 명단 확정 표기는 「제임스 스캔론」 인데 번역이 전건 「스캔런」 으로 나왔다
+    # (2026-08-31 실측 4행 · 7자리 · 원문 철자 James Scanlon 확인).
+    # 명단 값과 화면 표기가 갈리면 인명 게이트가 「인명 누락」 으로 오탐한다.
+    import yaml
+    from pathlib import Path
+    from bullet_in.enrich import apply_glossary
+    g = (yaml.safe_load(Path("config/glossary.yaml").read_text()) or {})["replacements"]
+    out = apply_glossary({"title_ko": "아스날, 지브롤터 국가대표 윙어 제임스 스캔런 영입"}, g)
+    assert out["title_ko"] == "아스날, 지브롤터 국가대표 윙어 제임스 스캔론 영입"
+
+
 def _tweet_row(**kw):
     # 트윗은 별도 제목이 없어 title_original 에 본문 전문이 들어간다 (실사례 e1348256 축약).
     row = {"content_hash": "t1", "source_id": "x_afcstuff",
