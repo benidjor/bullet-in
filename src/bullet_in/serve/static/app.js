@@ -568,6 +568,12 @@ function applyFilters() {
 function soloWidth(list) {
   const vis = [...list.children].filter(el => el.style.display !== 'none'
     && !el.hidden && getComputedStyle(el).display !== 'none');
+  // 가십에서 꺼낸 최하 카드는 한 장이어도 반 폭으로 둔다 — 한 열로 펴면
+  // 공신력 최하 한 건이 첫 화면에서 그날의 헤드라인처럼 보인다 (2026-08-30).
+  if (vis.length === 1 && vis[0].classList.contains('lowsolo')) {
+    list.classList.remove('solo');
+    return;
+  }
   list.classList.toggle('solo', vis.length === 1);
 }
 
