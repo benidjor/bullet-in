@@ -1200,3 +1200,15 @@ def test_mobile_query_gives_the_ladder_title_its_own_line():
     assert re.search(r"\.tltitle\{[^}]*flex:1 0 100%", mobile)
     # 썸네일 168px 고정이 제목 자리를 133px 로 밀어 제목이 잘렸다 — 목록 기본값으로 되돌린다
     assert re.search(r"\.daylist\.plist \.item\.hasthumb\{[^}]*132px", mobile)
+
+
+def test_lowest_tier_title_gets_two_lines_on_mobile():
+    """공신력 최하 제목의 한 줄 클램프가 좁은 화면에서 열 자 남짓만 남기던 자리.
+
+    한 줄 클램프 자체는 「최하는 덜 두드러지게」 라는 설계라 데스크톱에서는 그대로 두고
+    (그쪽은 한 줄에 제목이 거의 다 들어간다), 모바일에서만 두 줄로 푼다.
+    """
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
+    base, mobile = css.split("@media (max-width:640px)")
+    assert re.search(r"\.item\.g4 \.htitle\{[^}]*-webkit-line-clamp:1", base)
+    assert re.search(r"\.item\.g4 \.htitle\{[^}]*-webkit-line-clamp:2", mobile)

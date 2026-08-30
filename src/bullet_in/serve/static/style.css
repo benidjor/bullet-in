@@ -491,4 +491,9 @@ h1.title{font-family:var(--serif);font-weight:800;font-size:36px;line-height:1.2
      133px 만 남았다 (제목이 세 낱말에서 잘렸다). 목록 기본값 132px 로 되돌려 홈 카드와
      같은 폭을 준다 — 그러면 제목 자리가 169px 로 는다. */
   .daylist.plist .item.hasthumb{grid-template-columns:132px minmax(0,1fr)}
+  /* 공신력 최하 제목은 한 줄로 자른다 (덜 두드러지게 하려는 설계). 데스크톱에서는 그
+     한 줄에 제목이 거의 다 들어가지만, 좁은 화면에서는 열 자 남짓만 남아 무슨 소식인지
+     알 수 없다 (실측 386px — 썸네일이 붙은 카드에서 제목 자리가 169px). 모바일에서만
+     두 줄로 푼다 — 등급을 눈에 덜 띄게 두는 뜻은 살리면서 제목 구실은 하게. */
+  .item.g4 .htitle{-webkit-line-clamp:2}
 }
