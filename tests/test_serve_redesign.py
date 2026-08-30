@@ -476,6 +476,15 @@ def test_protagonist_falls_through_to_real_subject():
         NAMESAKE_PLAYERS) == "래시포드"
 
 
+def test_joao_jesus_does_not_join_the_gabriel_jesus_story():
+    # 성만 겹치는 남의 선수가 우리 묶음으로 들어가던 자리 (2026-08-31 · 배포본 실측)
+    assert R.protagonist("베네치아, 주앙 제주스와 구두 합의… 내일 계약 체결 예정",
+                         ["제주스", "래시포드"]) is None
+    # 「제주스」 만 쓴 우리 기사는 그대로 잡혀야 한다 — 미탐을 만들면 안 된다
+    assert R.protagonist("나폴리, 제주스 영입 관심 표명",
+                         ["제주스", "래시포드"]) == "제주스"
+
+
 def test_mask_keeps_title_length():
     # 길이를 그대로 둬야 전환어 위치 비교가 안 흔들린다
     t = "아스날 레전드 리 딕슨, 스왑딜 제안"
