@@ -571,3 +571,17 @@ def test_pick_empty_day_gossip_caps_per_player_and_day():
     picks = R.pick_empty_day_gossip(low, carded=set(), window=R.recent_days(low),
                                     players=PLAYERS, cap=2)
     assert len(picks) == 2
+
+
+def test_mask_ambiguous_needs_the_full_name_in_the_body():
+    # 동명이인이 잦은 성은 본문이 풀네임으로 뒷받침할 때만 이름으로 인정한다
+    t = "포르투갈 대표팀 지휘봉 잡은 제주스, 전술 변화 예고"
+    assert "제주스" not in R.mask_ambiguous(t, "제주스 감독은 4-3-3 을 쓴다")
+    assert "제주스" in R.mask_ambiguous(t, "가브리엘 제주스는 아스날을 떠난다")
+    # 길이는 그대로 둔다 (mask_other_people 과 같은 계약)
+    assert len(R.mask_ambiguous(t, "본문")) == len(t)
+
+
+def test_mask_ambiguous_leaves_unlisted_names_alone():
+    t = "나폴리, 래시포드 영입 관심"
+    assert R.mask_ambiguous(t, "본문에 풀네임 없음") == t

@@ -1347,6 +1347,34 @@ def mask_other_people(title: str) -> str:
     return title
 
 
+# 동명이인이 잦아 성만으로는 우리 선수라고 볼 수 없는 이름 (2026-08-31).
+#
+# 「제주스」 하나로 세 사람이 걸렸다 — 가브리엘 제주스 (우리 선수) · 주앙 제주스
+# (베네치아로 간 FA 수비수) · 조르제 제주스 (포르투갈 대표팀 감독).
+# 앞의 둘은 제목에 이름이 함께 나와 _NOT_OUR_PLAYERS 로 가릴 수 있지만, 감독 건은
+# 제목에 성만 있어 지울 이름이 없다.
+#
+# 명단 표기를 「가브리엘 제주스」 로 바꾸는 쪽은 안 듣는다 — roster_surnames 가 마지막
+# 어절을 성으로 자동 파생해 「제주스」 가 되살아나고, 표기를 바꾸면 추출 프롬프트 ·
+# 사건 묶음 · 선수 페이지까지 함께 흔들린다.
+_AMBIGUOUS_NAMES = {"제주스": "가브리엘 제주스"}
+
+
+def mask_ambiguous(title: str, body: str) -> str:
+    """본문이 풀네임으로 뒷받침할 때만 그 성을 이름으로 인정한다 (길이 보존).
+
+    운영 실측에서 본문 표기가 우리 기사와 남의 기사를 정확히 갈랐다 — 제목이 성만
+    쓴 7건 중 우리 기사 4건은 본문에 풀네임이 있었고, 남의 기사 2건은 성만 있었다.
+
+    **본문이 없는 행에는 쓰면 안 된다** — 「본문 없음」 이 「풀네임 없음」 이 되어
+    전부 버린다. 지금 부르는 곳 (fmkorea 전재 글) 은 본문이 항상 있다.
+    """
+    for surname, full in _AMBIGUOUS_NAMES.items():
+        if surname in title and full not in (body or ""):
+            title = title.replace(surname, " " * len(surname))
+    return title
+
+
 def load_player_names(engine=None) -> list[str]:
     """서빙 사건 사전 — players 확정 ko_name (DB 단일 원천 · 스펙 §5 · §8).
     긴 이름을 앞에 둬 부분 매치를 막는다 (기존 규칙 유지).
