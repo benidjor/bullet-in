@@ -20,11 +20,31 @@ models:
         tests: [unique, not_null]
       - name: title_original
         tests: [not_null]
+      - name: source_id
+        tests: [not_null]
       - name: tier
         tests:
           - accepted_values:
               arguments:
                 values: [0, 1, 1.5, 2, 3, 4]
+  - name: stg_players
+    columns:
+      - name: id
+        tests: [unique, not_null]
+  - name: stg_article_players
+    columns:
+      - name: player_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_players')
+                field: id
+      - name: role
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['subject', 'mention']
   - name: tier_distribution
     columns:
       - name: tier
