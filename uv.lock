@@ -79,6 +79,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
+    { name = "dbt-duckdb" },
     { name = "feedparser" },
     { name = "google-genai" },
     { name = "httpx", extra = ["socks"] },
@@ -97,7 +98,6 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "dbt-duckdb" },
     { name = "mongomock" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -107,7 +107,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12" },
-    { name = "dbt-duckdb", marker = "extra == 'dev'", specifier = ">=1.8" },
+    { name = "dbt-duckdb", specifier = ">=1.8" },
     { name = "feedparser", specifier = ">=6.0" },
     { name = "google-genai", specifier = ">=1.0" },
     { name = "httpx", extras = ["socks"], specifier = ">=0.27" },
