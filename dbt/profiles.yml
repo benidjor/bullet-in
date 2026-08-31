@@ -11,6 +11,9 @@ bullet_in:
         # pushdown 최적화만 끄는 우회 — 데이터 소량이라 성능 영향 없음.
         disabled_optimizers: "extension"
       attach:
-        - path: "host=localhost user=root password=bulletin port=3306 database=bulletin"
+        # 접속 정보의 단일 출처는 .env 의 MARIADB_URL 이다 — run.py 가 풀어서
+        # 자식 프로세스 환경에 넣는다 (bullet_in.dbt_gate.dbt_env).
+        # 기본값은 로컬 docker-compose 값이라 사람이 직접 부를 때도 그대로 돈다.
+        - path: "host={{ env_var('DBT_MARIA_HOST', 'localhost') }} user={{ env_var('DBT_MARIA_USER', 'root') }} password={{ env_var('DBT_MARIA_PASSWORD', 'bulletin') }} port={{ env_var('DBT_MARIA_PORT', '3306') }} database={{ env_var('DBT_MARIA_DB', 'bulletin') }}"
           type: mysql
           alias: maria
