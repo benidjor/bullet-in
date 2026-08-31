@@ -254,3 +254,81 @@ def test_rows_for_hashes_and_clear_translation(engine):
     assert rows[0]["title_ko"] == "제목"
     assert store.clear_translation(["h1"]) == 1
     assert {r["content_hash"] for r in store.rows_missing_translation()} >= {"h1", "h2"}
+
+
+def _attach_player(engine, content_hash, player_id=1, role="subject"):
+    """기사에 선수 귀속을 붙인다 — 고아 판정의 재료."""
+    from sqlalchemy import text
+    with engine.begin() as c:
+        c.execute(text(
+            "INSERT IGNORE INTO players (id, full_name, surname, category, status,"
+            " transfer_status, origin, added_at, ko_name)"
+            " VALUES (:pid, :fn, 'Tester', 'squad', 'active', 'none', 'manual', NOW(), '검사용')"),
+            {"pid": player_id, "fn": f"Test Player {player_id}"})
+        c.execute(text(
+            "INSERT INTO article_players (content_hash, player_id, role, extracted_at)"
+            " VALUES (:h, :pid, :role, NOW())"),
+            {"h": content_hash, "pid": player_id, "role": role})
+
+
+def _orphan_count(engine):
+    from sqlalchemy import text
+    with engine.connect() as c:
+        return c.execute(text(
+            "SELECT COUNT(*) FROM article_players ap"
+            " LEFT JOIN articles a ON a.content_hash = ap.content_hash"
+            " WHERE a.content_hash IS NULL")).scalar()
+
+
+def test_upsert_moves_attributions_when_hash_is_rewritten(engine):
+    """같은 주소인데 원문 제목이 바뀌면 upsert 가 해시를 갈아 치운다.
+
+    그때 선수 귀속을 함께 옮기지 않으면 그 자리에서 고아가 된다 (2026-08-31 운영 실측
+    — 고아를 0으로 만든 다음 회차에 2쌍이 생겼다). 트윗 본문이 회차마다 다르게 읽히는
+    것이 주 방아쇠다.
+    """
+    from sqlalchemy import text
+    store = MartStore(engine)
+    store.upsert([_art(h="old_hash", url="https://x.test/tweet", title="짧게 잘린 원문")])
+    _attach_player(engine, "old_hash")
+
+    store.upsert([_art(h="new_hash", url="https://x.test/tweet", title="전문으로 다시 읽힌 원문")])
+
+    assert _orphan_count(engine) == 0
+    with engine.connect() as c:
+        moved = c.execute(text(
+            "SELECT content_hash FROM article_players WHERE player_id = 1")).scalars().all()
+    assert moved == ["new_hash"]
+    assert store.count() == 1
+
+
+def test_upsert_leaves_attributions_alone_when_hash_is_unchanged(engine):
+    from sqlalchemy import text
+    store = MartStore(engine)
+    store.upsert([_art(h="same_hash", url="https://x.test/stable", title="그대로")])
+    _attach_player(engine, "same_hash", player_id=2)
+
+    store.upsert([_art(h="same_hash", url="https://x.test/stable", title="그대로")])
+
+    with engine.connect() as c:
+        rows = c.execute(text(
+            "SELECT content_hash FROM article_players WHERE player_id = 2")).scalars().all()
+    assert rows == ["same_hash"]
+    assert _orphan_count(engine) == 0
+
+
+def test_upsert_hash_move_keeps_one_row_when_player_already_on_new_hash(engine):
+    """같은 선수가 옛 해시와 새 해시 양쪽에 있으면 남는 쪽만 남는다 (PK 충돌)."""
+    from sqlalchemy import text
+    store = MartStore(engine)
+    store.upsert([_art(h="dup_old", url="https://x.test/dup", title="이전")])
+    _attach_player(engine, "dup_old", player_id=3)
+    _attach_player(engine, "dup_new", player_id=3, role="mention")
+
+    store.upsert([_art(h="dup_new", url="https://x.test/dup", title="이후")])
+
+    with engine.connect() as c:
+        rows = c.execute(text(
+            "SELECT content_hash FROM article_players WHERE player_id = 3")).scalars().all()
+    assert rows == ["dup_new"]
+    assert _orphan_count(engine) == 0

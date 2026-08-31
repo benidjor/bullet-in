@@ -32,6 +32,7 @@ from collections import defaultdict
 from sqlalchemy import create_engine, text
 
 from bullet_in.canonical import canonical_url, content_hash
+from bullet_in.storage.mariadb import move_hash_refs
 
 log = logging.getLogger(__name__)
 
@@ -75,12 +76,12 @@ def plan(rows: list[dict]) -> tuple[list[tuple[str, list[str]]], list[tuple[str,
 
 
 def _move_refs(c, old: str, new: str) -> None:
-    """해시를 가리키는 두 자리를 옮긴다 — 같은 선수가 양쪽에 있으면 남는 쪽을 남긴다."""
-    c.execute(text("UPDATE IGNORE article_players SET content_hash=:new"
-                   " WHERE content_hash=:old"), {"new": new, "old": old})
-    c.execute(text("DELETE FROM article_players WHERE content_hash=:old"), {"old": old})
-    c.execute(text("UPDATE players SET first_seen=:new WHERE first_seen=:old"),
-              {"new": new, "old": old})
+    """해시를 가리키는 두 자리를 옮긴다 — 규칙은 회차 적재와 한 곳에서 공유한다.
+
+    회차의 `MartStore.upsert` 도 해시가 갈릴 때 같은 일을 해야 하므로 (2026-08-31),
+    본체를 `bullet_in.storage.mariadb.move_hash_refs` 에 두고 여기서는 부르기만 한다.
+    """
+    move_hash_refs(c, old, new)
 
 
 def migrate(engine, *, dry_run: bool = True, purge_orphans: bool = False) -> dict:
