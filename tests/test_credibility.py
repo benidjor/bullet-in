@@ -509,11 +509,11 @@ def test_spelling_only_journalists_carry_no_tier():
     """표기를 합치면서 공신력은 한 칸도 안 준다 (설계 §4.2).
 
     등급은 사용자가 따로 정할 때만 붙는다 — Nizaar Kinsella 는 2026-08-27 에 1.5 를 받아
-    이 목록에서 빠졌다."""
+    이 목록에서 빠졌고, José Félix Díaz 는 2026-08-31 에 AS 기본값과 같은 3 을 받아 빠졌다."""
     r = load_registry(REG)
     for key in ["simon jones", "사이먼 존스", "mario cortegana",
                 "james pearce", "sam wallace", "dominic king",
-                "크리스 워", "chris waugh", "호펠디", "josé félix díaz"]:
+                "크리스 워", "chris waugh"]:
         assert key not in r.journalists
     # 등급을 받은 둘은 이 목록에서 졸업했다 (2026-08-27)
     assert r.journalists["nizaar kinsella"] == 1.5
@@ -614,6 +614,30 @@ def test_two_letter_alias_needs_the_outlet_field_not_the_title_scan():
     assert tier("[MD] 제주스, 월요일 바르셀로나 도착", outlet="MD") == 2.0
     # 「아스날」 이 들어간 평범한 제목은 AS 로 안 걸린다
     assert tier("[공홈]아스날, 일란 멜리에 영입") == 4.0
+
+
+def test_as_journalist_entry_stays_ungraded():
+    """조직 계정 항목 「AS」 에는 등급을 매기지 않는다 (2026-08-31).
+
+    load_registry 가 등급 있는 항목의 정식명도 조회 키로 넣으므로, 이 항목에 tier 를
+    주면 기자 사전에 `as` 키가 생긴다. 기자 판정은 제목 + 본문을 훑고 길이 가드가 없으며
+    매체보다 먼저 이겨서, 실측으로 로컬 fmkorea 30건 중 15건이 새로 걸렸다."""
+    r = load_registry(REG)
+    assert "as" not in r.journalists
+    assert "@diarioas" not in r.journalists
+    # 소속 기자 쪽은 등급을 받았다 — AS 기본값과 같은 하
+    assert r.journalists["@edu17burgos"] == 3.0
+    assert r.journalists["호펠디"] == 3.0
+    # 표기 접기는 등급과 무관하게 그대로다
+    assert journalist_directory(REG)[norm_alias("@diarioas")]["name"] == "AS"
+
+
+def test_as_tweet_handles_resolve_through_the_journalist_path():
+    """X 갈래는 등급 있는 핸들만 본다 — 등급이 없으면 fallback_tier 4 로 떨어진다."""
+    sources = {"x_afcstuff": {"credibility": "x_mentions", "fallback_tier": 4}}
+    r = load_registry(REG)
+    it = _item("x_afcstuff", {"text": "[ @edu17burgos ] Arsenal push for Julián Álvarez"})
+    assert resolve_tier(it, sources, r) == 3.0
 
 
 def test_two_letter_ge_alias_is_gone():
