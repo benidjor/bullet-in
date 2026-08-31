@@ -41,13 +41,19 @@ models:
                 error_if: ">20"
           # accepted_values 는 NULL 행을 안 센다 — 결측 행은 검사 대상에서 그냥 빠진다.
           # 분류 패스가 값을 아예 안 쓰게 되는 회귀는 accepted_values 로는 영원히 안 보이므로
-          # 같은 임계로 not_null 을 따로 건다.
+          # 같은 컬럼에 not_null 을 따로 건다.
+          # 다만 임계는 20이 아니라 200이다 — transfer_stage · transfer_direction 은 Gemini
+          # 분류 패스가 채우는데 429를 받으면 그 회차를 통째로 건너뛰고 남은 행을 다음 회차로
+          # 누적한다 (CLAUDE.md에 적힌 의도된 동작). 즉 결측은 하루치 미분류 잔량일 수 있다.
+          # 운영 실측 (2026-08-31) = 최근 100 회차 중 회차당 신규 최대 17건 · 전체 기간
+          # 일별 신규 최대 90건 (2026-06-11). 200은 그 최대 하루치의 두 배가 넘으므로
+          # 분류 백로그로는 절대 못 만드는 값이고, 넘으면 패스가 값을 안 쓰게 됐다는 뜻이다.
           # 운영 실측 (2026-08-31 15시대 KST) = transfer_stage 결측 0건.
           - not_null:
               config:
                 severity: error
                 warn_if: ">0"
-                error_if: ">20"
+                error_if: ">200"
       - name: transfer_direction
         tests:
           - accepted_values:
@@ -59,13 +65,17 @@ models:
                 severity: error
                 warn_if: ">0"
                 error_if: ">20"
-          # accepted_values 는 NULL 행을 안 센다 — 이유와 임계 근거는 transfer_stage 와 같다.
+          # accepted_values 는 NULL 행을 안 센다 — 이유는 transfer_stage 와 같다.
+          # 임계 200의 근거도 같다 — transfer_stage 와 같은 Gemini 분류 패스가 채우는
+          # 컬럼이라 429로 인한 회차 건너뜀이 똑같이 결측을 남긴다. 관측된 가장 큰 하루치
+          # 신규가 90건이므로 200은 그 두 배가 넘고, 넘으면 분류 백로그가 아니라 패스가
+          # 값을 안 쓰게 된 회귀다.
           # 운영 실측 (2026-08-31 15시대 KST) = transfer_direction 결측 0건.
           - not_null:
               config:
                 severity: error
                 warn_if: ">0"
-                error_if: ">20"
+                error_if: ">200"
   - name: stg_players
     columns:
       - name: id
