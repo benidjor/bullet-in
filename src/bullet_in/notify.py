@@ -579,3 +579,29 @@ def build_missing_club_alert(cands: list[dict], *, run_id: str) -> dict:
                             "따릅니다."),
             "color": COLOR_ANOMALY, "fields": fields,
             "footer": "bullet-in", "channel": CHANNEL_REVIEW}
+
+
+def build_dbt_gate_alert(result, *, run_id: str) -> dict:
+    """dbt 품질 게이트가 배포를 세웠을 때의 알림 (설계 2026-08-31 §2.7).
+
+    `OnFailure` 알림은 유닛이 죽었다는 사실만 말한다 — 무엇이 깨졌는지는 여기서 말한다.
+    """
+    fields = []
+    if not result.ran:
+        fields.append({"name": "게이트 고장", "value": f"- {result.error}",
+                       "inline": False})
+    if result.blocked:
+        fields.append({"name": "차단",
+                       "value": "\n".join(f"- {t.name} — {t.failures}행"
+                                          for t in result.blocked),
+                       "inline": False})
+    if result.warned:
+        fields.append({"name": "경고 (차단 아님)",
+                       "value": "\n".join(f"- {t.name} — {t.failures}행"
+                                          for t in result.warned),
+                       "inline": False})
+    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    return {"title": "🚧 dbt 품질 게이트 — 배포를 세웠습니다",
+            "description": "회차는 끝났지만 배포가 나가지 않았다 · 화면은 직전 산출물 그대로다",
+            "color": COLOR_FAILURE, "fields": fields,
+            "channel": CHANNEL_INCIDENT}

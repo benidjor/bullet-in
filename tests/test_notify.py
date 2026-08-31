@@ -928,3 +928,17 @@ def test_send_alert_log_never_carries_the_webhook_url(monkeypatch, caplog):
         notify.send_alert("제목", "설명", color=0x1, channel=notify.CHANNEL_INCIDENT)
     assert "secret-abc" not in caplog.text
 
+
+def test_build_dbt_gate_alert_lists_broken_tests():
+    from bullet_in.dbt_gate import GateResult, TestOutcome
+    payload = notify.build_dbt_gate_alert(
+        GateResult(blocked=[TestOutcome("unique_stg_articles_url", 3)],
+                   warned=[TestOutcome("relationships_orphans", 259)]),
+        run_id="abcdef1234")
+    assert payload["channel"] == notify.CHANNEL_INCIDENT
+    assert payload["color"] == notify.COLOR_FAILURE
+    body = str(payload["fields"])
+    assert "unique_stg_articles_url" in body
+    assert "3" in body
+    assert "relationships_orphans" in body
+

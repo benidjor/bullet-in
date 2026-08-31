@@ -1,7 +1,9 @@
 import json
 from pathlib import Path
 
-from bullet_in.dbt_gate import dbt_env, parse_results
+import pytest
+
+from bullet_in.dbt_gate import GateResult, TestOutcome, dbt_env, enforce_gate, parse_results
 
 
 def _write(tmp_path: Path, results: list[dict]) -> Path:
@@ -79,3 +81,34 @@ def test_dbt_env_unquotes_percent_encoded_password():
     # 운영 비밀번호에 @ 나 / 가 들어가면 URL 에 퍼센트 인코딩으로 실린다.
     env = dbt_env("mysql+pymysql://root:p%40ss%2Fword@localhost:3306/bulletin")
     assert env["DBT_MARIA_PASSWORD"] == "p@ss/word"
+
+
+def test_enforce_gate_passes_when_nothing_broke(caplog):
+    enforce_gate(GateResult(), run_id="r1")   # 예외가 안 나야 한다
+
+
+def test_enforce_gate_logs_warnings_without_blocking(caplog):
+    import logging
+    result = GateResult(warned=[TestOutcome("relationships_orphans", 259)])
+    with caplog.at_level(logging.WARNING):
+        enforce_gate(result, run_id="r1")
+    assert "relationships_orphans" in caplog.text
+    assert "259" in caplog.text
+
+
+def test_enforce_gate_raises_and_alerts_when_blocked(monkeypatch):
+    sent = {}
+    monkeypatch.setattr("bullet_in.notify.send_alert",
+                        lambda **kw: sent.update(kw))
+    result = GateResult(blocked=[TestOutcome("unique_stg_articles_url", 3)])
+    with pytest.raises(SystemExit) as e:
+        enforce_gate(result, run_id="r1")
+    assert e.value.code == 1
+    assert "unique_stg_articles_url" in str(sent)
+
+
+def test_enforce_gate_blocks_when_dbt_could_not_run(monkeypatch):
+    monkeypatch.setattr("bullet_in.notify.send_alert", lambda **kw: None)
+    result = GateResult(ran=False, error="dbt 실행 파일이 없다")
+    with pytest.raises(SystemExit):
+        enforce_gate(result, run_id="r1")

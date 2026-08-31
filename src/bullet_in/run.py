@@ -29,6 +29,7 @@ from bullet_in.quality import (success_rate, volume_anomalies, evaluate_freshnes
                                roster_axis_staleness, freshness_alert_split,
                                missing_club_candidates, club_head)
 from bullet_in import notify
+from bullet_in import dbt_gate
 
 GEMINI_MODEL = "gemini-3.1-flash-lite"
 
@@ -558,6 +559,12 @@ async def main(concurrency: int):
     except Exception:
         logging.getLogger(__name__).warning(
             "ops 뷰 생성 실패 — 파이프라인은 계속 진행", exc_info=True)
+
+    # dbt 품질 게이트 (설계 2026-08-31): 마트가 이번 회차 행을 담은 뒤에 돌린다.
+    # 차단 사유가 있으면 여기서 회차가 실패로 끝나고, systemd 가 ExecStartPost
+    # (배포) 를 안 돌린다 — site/ 는 만들어져 있지만 올라가지 않는다.
+    dbt_gate.enforce_gate(
+        dbt_gate.run_gate(Path("dbt"), os.environ["MARIADB_URL"]), run_id=run_id)
 
     print(summary)
 

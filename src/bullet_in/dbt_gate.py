@@ -5,9 +5,16 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+
+from bullet_in import notify
+
+log = logging.getLogger(__name__)
 
 # dbt 가 내는 테스트 상태 — fail 은 error_if 를 넘긴 것 · warn 은 warn_if 만 넘긴 것.
 _BLOCKING = {"fail", "error"}
@@ -68,3 +75,41 @@ def dbt_env(mariadb_url: str) -> dict[str, str]:
         "DBT_MARIA_PASSWORD": unquote(p.password or ""),
         "DBT_MARIA_DB": (p.path or "").lstrip("/") or "bulletin",
     }
+
+
+def run_gate(project_dir: Path, mariadb_url: str) -> GateResult:
+    """`dbt build` 를 돌리고 결과 파일을 읽어 판정한다.
+
+    dbt 자체가 못 돌면 데이터 결함이 아니라 게이트 고장이다 — 그것도 차단으로 낸다.
+    조용히 통과시키면 게이트가 있다는 착각만 남는다.
+    """
+    env = {**os.environ, **dbt_env(mariadb_url), "DBT_PROFILES_DIR": "."}
+    try:
+        proc = subprocess.run(["dbt", "build"], cwd=project_dir, env=env,
+                              capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.SubprocessError) as e:
+        return GateResult(ran=False, error=f"dbt 를 못 돌렸다: {e}")
+    result = parse_results(Path(project_dir) / "target" / "run_results.json")
+    if not result.ran:
+        # 결과 파일이 없다는 것은 dbt 가 시작도 못 했다는 뜻이다.
+        tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
+        return GateResult(ran=False, error=f"{result.error} · dbt 출력: {' / '.join(tail)}")
+    return result
+
+
+def enforce_gate(result: GateResult, *, run_id: str) -> None:
+    """경고는 저널에 남기고, 차단 사유가 있으면 알린 뒤 회차를 실패로 끝낸다.
+
+    회차가 0 아닌 코드로 끝나면 systemd 가 ExecStartPost (배포) 를 안 돌린다.
+    """
+    if result.warned:
+        log.warning("dbt 게이트 경고 %d건 — %s", len(result.warned),
+                    " · ".join(f"{t.name} {t.failures}행" for t in result.warned))
+    if not result.blocked and result.ran:
+        log.info("dbt 게이트 통과 — 차단 0 · 경고 %d", len(result.warned))
+        return
+    notify.send_alert(**notify.build_dbt_gate_alert(result, run_id=run_id))
+    log.error("dbt 게이트가 배포를 세웠다 — %s",
+              result.error or " · ".join(f"{t.name} {t.failures}행"
+                                         for t in result.blocked))
+    raise SystemExit(1)
