@@ -1,0 +1,10 @@
+[Unit]
+Description=bullet-in 운영 DB 백업 1일 1회 (KST 10:30 · 회차 사이의 빈 시각)
+
+[Timer]
+OnCalendar=*-*-* 01:30:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
