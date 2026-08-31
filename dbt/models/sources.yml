@@ -107,11 +107,11 @@ models:
                 severity: error
                 warn_if: ">0"
                 error_if: ">100"
-  - name: tier_distribution
+  - name: gold_tier_distribution
     columns:
       - name: tier
         tests: [unique, not_null]
-  - name: slo_rollup
+  - name: gold_slo_rollup
     columns:
       - name: slo_id
         tests: [unique, not_null]

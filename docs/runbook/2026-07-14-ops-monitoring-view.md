@@ -92,13 +92,16 @@ spec §6.1 표를 그대로 옮긴다 (`docs/superpowers/specs/2026-07-14-ops-mo
 
 ```bash
 cd dbt && uv run dbt build --profiles-dir .
-duckdb dbt/bullet_in.duckdb "select * from slo_rollup"
+duckdb dbt/bullet_in.duckdb "select * from gold_slo_rollup"
 ```
 
-- `slo_rollup` 은 SLO-2 · SLO-5 · duration 3행 (long 포맷: `slo_id` · `metric` · `value`).
+- `gold_slo_rollup` 은 SLO-2 · SLO-5 · duration 3행 (long 포맷: `slo_id` · `metric` · `value`).
   **SLO-6 은 여기 없다** — dbt 는 run.py 메모리 값 (`anomaly_count`) 을 받을 수단이 없어, 뷰의 SLO 롤업 4행 중 SLO-6 한 행만 마트에서 제외된다 (spec §7.2 "SLO-6 비대칭").
-- `tier_distribution` 은 뷰의 ④ tier 분포와 동일한 `GROUP BY tier` 결과를 `tier` · `n_articles` · `pct` 로 담는다.
+- `gold_tier_distribution` 은 뷰의 ④ tier 분포와 동일한 `GROUP BY tier` 결과를 `tier` · `n_articles` · `pct` 로 담는다.
 - 두 마트 모두 `materialized='table'` 이라 dbt 세션 없이도 duckdb CLI 또는 `uv run python -c "import duckdb; duckdb.connect('dbt/bullet_in.duckdb', read_only=True)..."` 로 직접 열어 조회할 수 있다.
+- **옛 이름의 테이블이 남아 있으면 오류 없이 낡은 값이 나온다** — 2026-08-31 에 마트를 `gold_` 접두사로 개명했는데 dbt 는 개명 전 물리 테이블을 지우지 않는다.
+  그전에 만든 DuckDB 파일에는 `slo_rollup` · `tier_distribution` · `daily_source_quality` 가 마지막 빌드 시점의 값 그대로 남아 있다.
+  한 번 지운다 — `duckdb dbt/bullet_in.duckdb "drop table if exists slo_rollup; drop table if exists tier_distribution; drop view if exists daily_source_quality;"`.
 - 조회 중 `Failed to bind column reference` 류의 binder 오류를 만나면 dbt 버그가 아니라 알려진 duckdb + mysql_scanner 조합 함정이다 → `docs/troubleshooting/2026-07-14-duckdb-mysql-scanner-binder-error.md`.
 
 ## 참고
