@@ -1,0 +1,13 @@
+[Unit]
+Description=bullet-in 운영 DB 백업 (MariaDB · MongoDB -> GCS)
+Wants=docker.service
+After=docker.service network-online.target
+OnFailure=bullet-in-fail-notify@%n.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/bullet-in
+EnvironmentFile=/home/ubuntu/bullet-in/.env
+ExecStart=/home/ubuntu/.local/bin/uv run python -m bullet_in.backup run
+TimeoutStartSec=1800
