@@ -77,6 +77,26 @@ def dbt_env(mariadb_url: str) -> dict[str, str]:
     }
 
 
+def _diagnosis(proc, project_dir: Path) -> str:
+    """dbt 가 남긴 출력을 진단 한 줄로 압축한다.
+
+    stdout 과 stderr 을 **둘 다** 싣는다 — dbt 는 오류를 stdout 에 쓰는데, 종전 구현은
+    `stderr or stdout` 이라 stderr 에 무해한 경고 한 줄만 있어도 stdout 이 통째로 버려졌다.
+    2026-08-31 21:05 회차가 그렇게 끊겼고, 저널에 남은 것이 세마포어 누수 경고뿐이라
+    원인을 저널로 좇을 수 없었다.
+
+    종료 코드도 함께 남긴다 — 신호로 죽은 것 (음수) 과 dbt 자체 실패 (1 · 2) 는
+    다른 고장이고, 그 둘을 가르지 못하면 다음 사람이 같은 자리에서 다시 막힌다.
+    """
+    parts = [f"종료코드 {proc.returncode}"]
+    for label, stream in (("stdout", proc.stdout), ("stderr", proc.stderr)):
+        lines = (stream or "").strip().splitlines()[-6:]
+        if lines:
+            parts.append(f"{label}: {' / '.join(lines)}")
+    parts.append(f"전체 로그는 {project_dir}/logs/dbt.log")
+    return " · ".join(parts)
+
+
 def run_gate(project_dir: Path, mariadb_url: str) -> GateResult:
     """`dbt build` 를 돌리고 결과 파일을 읽어 판정한다.
 
@@ -100,16 +120,17 @@ def run_gate(project_dir: Path, mariadb_url: str) -> GateResult:
     except (OSError, subprocess.SubprocessError) as e:
         return GateResult(ran=False, error=f"dbt 를 못 돌렸다: {e}")
     result = parse_results(results_path)
-    tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
+    diag = _diagnosis(proc, Path(project_dir))
     if not result.ran:
-        # 결과 파일이 없다는 것은 dbt 가 시작도 못 했다는 뜻이다.
-        return GateResult(ran=False, error=f"{result.error} · dbt 출력: {' / '.join(tail)}")
+        # 결과 파일이 없다 = dbt 가 판정을 안 남겼다는 뜻이지 "시작도 못 했다" 는 뜻이 아니다.
+        # 2026-08-31 21:05 에는 노드 29개 중 22개를 통과시키고 중간에 끊겼다.
+        # 어느 쪽인지는 종료 코드와 dbt.log 로만 갈린다 — 그래서 둘 다 가리킨다.
+        return GateResult(ran=False, error=f"{result.error} · {diag}")
     if proc.returncode != 0 and not result.blocked:
         # 종료 코드는 실패인데 파싱된 결과에 차단 항목이 없다 — 그 결과 파일은
         # 이번 회차를 설명하지 못한다는 뜻이라 통과로 볼 수 없다.
         return GateResult(ran=False,
-                          error=f"dbt 가 {proc.returncode} 로 끝났는데 결과 파일엔 차단 항목이 없다 "
-                                f"· dbt 출력: {' / '.join(tail)}")
+                          error=f"결과 파일엔 차단 항목이 없는데 dbt 가 실패로 끝났다 · {diag}")
     return result
 
 

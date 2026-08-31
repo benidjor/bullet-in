@@ -942,3 +942,16 @@ def test_build_dbt_gate_alert_lists_broken_tests():
     assert "3" in body
     assert "relationships_orphans" in body
 
+
+
+def test_build_dbt_gate_alert_clips_a_long_failure_to_discord_field_limit():
+    # 게이트 진단이 stdout · stderr 을 함께 싣게 되면서 길어질 수 있는데, embed 필드 값의
+    # 상한이 1024자다. 넘기면 디스코드가 메시지를 통째로 거부해 장애 알림 자체가 안 온다.
+    # 전문은 저널 (enforce_gate 의 log.error) 이 갖고 있으므로 알림에서만 자른다.
+    from bullet_in.dbt_gate import GateResult
+    payload = notify.build_dbt_gate_alert(
+        GateResult(ran=False, error="종료코드 -11 · stdout: " + "x" * 5000),
+        run_id="abcdef1234")
+    value = next(f["value"] for f in payload["fields"] if f["name"] == "게이트 고장")
+    assert len(value) <= 1024
+    assert value.startswith("- 종료코드 -11")
