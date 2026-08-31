@@ -73,6 +73,12 @@ journalists:
   # (fmkorea 게시자가 한글 표기와 원문 표기를 나란히 적는다) — 별칭으로 접는다 (2026-08-28).
   - {name: Santi Aouna,               outlet: Foot Mercato,   tier: 2, aliases: ["@Santi_J_FM", "산티 아우나", "Santi Aouna"]}
   - {name: Sam Tabuteau,              outlet: Evening Standard, aliases: ["@tabuteauS"]}
+  # 스페인 매체 기자 — 사용자가 X 프로필로 신원과 등급을 확정했다 (2026-08-31).
+  # 매체 기본값과 등급이 달라 등재한다 (Mundo Deportivo 중 → 이 둘은 상 · AS 하 → Colino 는 중).
+  # 한글 별칭은 fmkorea 게시글 본문 바이라인에서 실제로 읽은 표기만 단다 (짐작 표기는 안 넣는다).
+  - {name: Fernando Polo,             outlet: Mundo Deportivo, tier: 1.5, aliases: ["@ffpolo", "페르난도 폴로", "Fernando Polo"]}
+  - {name: Roger Torelló,             outlet: Mundo Deportivo, tier: 1.5, aliases: ["@RogerTorello", "로저 토레요", "Roger Torelló", "Roger Torello"]}
+  - {name: Jesús Colino,              outlet: AS,              tier: 2,   aliases: ["Jesús Colino", "Jesus Colino"]}
   - {name: Tomas Taecke,                                      aliases: ["@tomaztaecke"]}
   - {name: David G. Medina,           outlet: Marca,          aliases: ["@medinamarca", "David Medina"]}
   - {name: Patrick Berger,                                    aliases: ["@berger_pj"]}
@@ -175,18 +181,27 @@ outlets:
   # 개인 사이트라 Sky Italia 와 브랜드가 다르다 — 저장값도 Di Marzio 로 정정해 뒀다.
   - {name: Di Marzio,       tier: 3,   aliases: ["Di Marzio"]}
   - {name: Marca,           tier: 3,   aliases: ["Marca", "마르카"]}
+  # 스페인 두 매체에 등급을 매긴다 (2026-08-31 사용자 결정) — AS 는 하 · Mundo Deportivo 는 중.
+  # AS 의 「아스」 별칭은 함께 뺀다.
+  # fmkorea 등급 판정이 제목 부분 문자열 매칭이라, 별칭을 남기면 「아스날」 · 「아스톤 빌라」 가
+  # 들어간 제목이 전부 AS 로 걸린다 (로컬 원자료 30건 중 6건이 최하 → 하 로 뒤집히는 것을 실측).
+  # 「세르」 · 「ge」 를 뺄 때와 같은 판단이다 — 저장값이 「아스」 인 행이 있으면 별칭이 아니라 그 행을 고친다.
+  # 「Diario AS」 는 이 매체의 다른 이름이다 (2026-08-31 사용자 확인).
+  # 긴 별칭이라 제목 스캔에 남아 「[Diario AS] …」 말머리도 잡는다.
+  - {name: AS,              tier: 3,   aliases: ["AS", "Diario AS"]}
+  # 「아스」 는 tier 없는 항목으로 갈라 둔다 — 표기 접기는 그대로 되고 등급 사전에는 안 들어간다.
+  - {name: AS,                         aliases: ["아스"]}
+  # 「문도 데포르티보」 는 fmkorea 게시글 본문에서 실제로 읽은 표기다 (10278862489).
+  - {name: Mundo Deportivo, tier: 2,   aliases: ["Mundo Deportivo", "MD", "문도 데포르티보"]}
   - {name: La Gazzetta dello Sport, tier: 3, aliases: ["La Gazzetta dello Sport", "Gazzetta", "가제타"]}
   - {name: Corriere dello Sport,    tier: 3, aliases: ["Corriere dello Sport", "CDS"]}
   - {name: Chronicle Live,  tier: 3,   aliases: ["Chronicle Live", "ChronicleLive", "크로니클"]}
 
   # 표기 전용 항목 — 등재 이력이 없는 매체라 등급을 안 매긴다 (기자와 같은 규칙 · 설계 §4.1).
-  # 등재하면 공신력이 붙어 제품 판단이 따라오는데, 여기서 필요한 것은 「아스」 를 AS 로 접는 것뿐이다.
-  - {name: AS,                         aliases: ["AS", "아스"]}
   # 아래는 팬 사이트 · 집계 사이트 · 지역 블로그라 지금 등급 (미등재 폴백 4) 이 맞는다.
   # 이름만 알아볼 수 있게 하는 것이 목적이고, 등급 사전에 안 들어가 짧은 별칭도 안전하다.
   - {name: BeSoccer,                   aliases: ["BeSoccer"]}
   - {name: SPORT,                      aliases: ["SPORT", "스포르트"]}
-  - {name: Mundo Deportivo,            aliases: ["Mundo Deportivo", "MD"]}
   - {name: Relevo,                     aliases: ["Relevo"]}
   - {name: COPE,                       aliases: ["COPE"]}
   - {name: Calciomercato,              aliases: ["Calciomercato", "CM", "칼쵸메르카토"]}

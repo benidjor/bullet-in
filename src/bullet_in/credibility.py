@@ -6,6 +6,13 @@ import yaml
 _HANDLE_RE = re.compile(r"@(\w+)")  # used by resolve_tier in Task 2
 _WS_RE = re.compile(r"\s+")
 
+# 제목 부분 문자열 스캔에 넣을 별칭의 최소 길이.
+# 두 글자 별칭은 엉뚱한 낱말 안에 그대로 들어 있다 — "as" 는 Lucas · Thomas 에,
+# "md" 는 영문 제목 조각에 걸린다. 그런데 이 별칭들이 실제로 필요한 자리는
+# 「[AS] …」 · 「[MD] …」 말머리이고, 그건 parse_bracket 이 outlet 칸에 담아 두므로
+# 아래 정확 일치 경로가 이미 잡는다. 스캔에서만 빼면 오탐이 사라지고 채택은 유지된다.
+_TITLE_SCAN_MIN_ALIAS = 3
+
 
 def norm_alias(s: str) -> str:
     """별칭 조회 키 — 소문자 + 공백 제거.
@@ -114,7 +121,8 @@ def resolve_tier(item, sources: dict, registry: "Registry | None",
         jt = [t for a, t in registry.journalists.items() if a in text]
         if jt:
             return min(jt)
-        ot = [t for a, t in registry.outlets.items() if a in title]
+        ot = [t for a, t in registry.outlets.items()
+              if len(a) >= _TITLE_SCAN_MIN_ALIAS and a in title]
         if ot:
             return min(ot)
         # 게시자가 적어 둔 매체 칸도 본다 (x_mentions 갈래의 아웃렛 폴백과 같은 규칙).
