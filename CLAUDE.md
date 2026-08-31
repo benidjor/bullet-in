@@ -1,8 +1,11 @@
 # CLAUDE.md — bullet-in
 
 아스날 FC 뉴스 수집 파이프라인. 다중 소스 (RSS/HTML/Playwright/X)를 asyncio 병렬 수집 →
-MongoDB (raw) → MariaDB (mart, content_hash · URL UNIQUE dedup) → Gemini 번역/요약 →
-dbt 품질 게이트 (DuckDB) → 정적 HTML 서빙. 스케줄은 Airflow.
+MongoDB (raw · bronze) → MariaDB (mart · silver, content_hash · URL UNIQUE dedup) → Gemini 번역/요약 →
+dbt 품질 게이트 (DuckDB · gold) → 정적 HTML 서빙.
+스케줄은 VM 의 systemd 타이머다 — 회차 `bullet-in.timer` 가 3시간 간격 하루 8회,
+워치리스트 `bullet-in-watchlist.timer` 가 하루 4회.
+`airflow/dags/bullet_in_daily.py` 는 확장용 보존 자산이고 운영에서 돌지 않는다.
 
 스택: Python 3.11, uv, pydantic v2, httpx+BeautifulSoup, Playwright, google-genai, SQLAlchemy.
 

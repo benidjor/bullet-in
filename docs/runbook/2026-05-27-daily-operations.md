@@ -14,7 +14,9 @@ docker compose ps           # 두 컨테이너 running 확인
 
 ## 3. 파이프라인 실행
 - 수동: `uv run python -m bullet_in.run --concurrency 8`
-- 스케줄: Airflow DAG `bullet_in_daily` (@daily) 트리거.
+- 스케줄: VM 의 systemd 타이머 `bullet-in.timer` 가 3시간 간격으로 하루 8회 실행한다.
+  회차 유닛은 `bullet-in.service` 이고 회차가 성공하면 `ExecStartPost` 가 배포까지 이어 간다.
+  `airflow/dags/bullet_in_daily.py` 는 확장용 보존 자산이라 운영에서 돌지 않는다.
 
 ## 4. 수집 현황 점검 (이상 점검)
 실행 요약 (stdout dict)에서 다음을 확인:
@@ -26,7 +28,7 @@ docker compose ps           # 두 컨테이너 running 확인
 ```bash
 cd dbt && uv run dbt build --profiles-dir .
 ```
-`unique`(중복 0) · `not_null`(필수 필드) · `accepted_values`(tier 0~4) 테스트가 모두 PASS여야 한다. 실패 = 데이터 이상 → 2026-05-27-incident-recovery.md.
+`unique` (중복 0) · `not_null` (필수 필드) · `accepted_values` (tier 0~4) 테스트가 모두 PASS여야 한다. 실패 = 데이터 이상 → 2026-05-27-incident-recovery.md.
 
 ## 6. 서빙 확인
 `site/index.html` 가 갱신되고 confidence 내림차순으로 기사가 나열되는지 확인.

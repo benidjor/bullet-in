@@ -2,3 +2,9 @@ name: bullet_in
 version: "1.0"
 profile: bullet_in
 model-paths: ["models"]
+
+# 메달리온 층 이름은 실물이 있는 자리에만 붙인다.
+#   bronze = MongoDB raw_items · silver = MariaDB 6표 — 둘 다 dbt 밖이라 여기서 못 붙인다.
+#   gold = models/gold/ 3모델 — dbt 가 만드는 것이라 이름을 여기서 준다.
+# models/staging/ 은 MariaDB 표를 그대로 읽어 오는 통과 뷰이지 silver 자체가 아니다.
+# 여기에 silver 를 붙이면 silver 라 불리는 것이 표와 뷰 둘로 갈려 더 헷갈린다.

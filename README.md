@@ -38,13 +38,13 @@
    ▼
 [Score]     공신력 Tier(0~4) → confidence (YAML 설정)
    ▼
-[Load raw]  MongoDB (불변 원문, schema-on-read)
+[Load raw]  MongoDB (불변 원문, schema-on-read) = Bronze
    ▼
-[Load mart] MariaDB (정형 mart, UNIQUE dedup, 서빙)
+[Load mart] MariaDB (정형 mart, UNIQUE dedup, 서빙) = Silver
    ▼
 [Enrich]    LLM 번역(한국어) + 요약 + 영입 단계 분류 (신규 항목만, 멱등)
    ▼
-[Quality]   dbt(DuckDB가 MariaDB attach) build + test = 품질 게이트
+[Quality]   dbt(DuckDB가 MariaDB attach) build + test = 품질 게이트 · 마트 = Gold
    ▼ (통과 시)
 [Serve]     신뢰도순 정적 HTML
 
@@ -116,11 +116,13 @@
 
 ## 6. 데이터 모델
 
-- **MongoDB `raw_items`** (Bronze): 원문 불변 보존.
-- **MariaDB `articles`** (Silver/Gold): 정규화 메타 + tier + confidence + 번역/요약. `content_hash` · `url` UNIQUE로 dedup.
-- **MariaDB `pipeline_runs`**: 런별 SLO 근거 (성공률 · 소요시간 · 신규/에러 건수).
-- **MariaDB `source_freshness`**: 소스별 신선도 워터마크 이력 (SLO-5, 회차 × 소스).
-- **dbt 마트**: `daily_source_quality` 등 분석/품질 롤업.
+메달리온 세 층이 서로 다른 저장소에 있다. 층 이름은 실물이 있는 자리에만 붙였다.
+
+- **Bronze — MongoDB `raw_items`**: 원문 불변 보존.
+- **Silver — MariaDB 6표**: `articles` (정규화 메타 + tier + confidence + 번역/요약, `content_hash` · `url` UNIQUE로 dedup) · `sources` · `players` · `article_players` · `pipeline_runs` (런별 SLO 근거 — 성공률 · 소요시간 · 신규/에러 건수) · `source_freshness` (소스별 신선도 워터마크 이력, SLO-5, 회차 × 소스).
+- **Gold — dbt `models/gold/` 3모델**: `gold_daily_source_quality` · `gold_slo_rollup` · `gold_tier_distribution`. 회차 끝 `dbt build` 가 갱신하고 같은 실행의 테스트 21종이 품질 게이트다.
+
+`models/staging/` 다섯은 MariaDB 표를 그대로 읽어 오는 통과 뷰라 층 이름을 안 붙였다 — 붙이면 silver 라 불리는 것이 표와 뷰 둘로 갈린다.
 
 ## 7. 실행 방법
 
@@ -150,7 +152,7 @@ open site/index.html
 
 ## 8. 한계 & 향후
 
-- 현재는 정적 서빙 (수집 현황은 ops 뷰로 제공). 향후: 방문 분석용 이벤트 로그, 사용자 구독.
+- 현재는 정적 서빙 (수집 현황은 ops 뷰로 제공). 방문 분석은 GA4 이벤트 4종으로 수집한다 ([이벤트 스키마](docs/superpowers/specs/2026-08-31-analytics-event-schema.md)). 향후: 사용자 구독.
 - 소스 확장 (The Athletic 등 하드 페이월, 추가 ITK)은 어댑터 추가로 대응.
 - 교차 corroboration 스코어링 (다수 소스 보도 시 신뢰도↑), 번역 정확도 스팟체크는 stretch.
 
