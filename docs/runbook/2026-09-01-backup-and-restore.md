@@ -140,6 +140,38 @@ GOOGLE_APPLICATION_CREDENTIALS=/home/ubuntu/.bullet-in-backup.json
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 'cd ~/bullet-in && git pull && ./infra/systemd/install-units.sh'
 ```
 
+### 4.5 설치 확인은 모듈이 아니라 유닛으로 한다
+
+모듈을 손으로 돌려 성공해도 유닛이 돈다는 증거가 못 된다.
+유닛은 `EnvironmentFile` 로 `.env` 를 읽고 `uv` 를 절대 경로로 부르며 `WorkingDirectory` 를 따로 갖는데, 손으로 돌릴 때는 그 셋이 다 셸에서 온다.
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  'sudo systemctl start bullet-in-backup.service
+   systemctl show bullet-in-backup.service -p Result -p ExecMainStatus
+   sudo journalctl -u bullet-in-backup.service -n 12 --no-pager -o cat'
+```
+
+`Result=success` 와 `ExecMainStatus=0` 을 둘 다 본다.
+타이머가 실제로 등록됐는지도 함께 본다.
+
+```bash
+systemctl is-enabled bullet-in-backup.timer   # enabled
+systemctl is-active bullet-in-backup.timer    # active
+systemctl list-timers 'bullet-in*' --no-pager
+```
+
+`OnFailure` 가 어디를 가리키는지는 systemd 가 푼 값으로 본다.
+
+```bash
+systemctl show bullet-in-backup.service -p OnFailure --value
+# bullet-in-fail-notify@bullet-in-backup.service.service
+```
+
+접미사가 두 번 붙은 것이 정상이다.
+`%n` 이 `.service` 를 포함한 전체 유닛 이름이라 그렇고, 그래야 알림 템플릿 안의 `%i` 가 실패한 유닛 이름이 된다.
+`bullet-in.service` 와 `bullet-in-watchlist.service` 도 같은 형태로 풀린다.
+
 ## 5. 백업을 손으로 한 번 돌리기
 
 정기 배포 직전 · 운영 데이터를 고치기 직전처럼 지금 당장 한 벌이 필요할 때 쓴다.
