@@ -536,11 +536,17 @@ def test_split_outlet_spellings_fold_to_one_name():
     assert d[norm_alias("스탠더드")] == "Evening Standard"
 
 
-def test_unregistered_outlet_keeps_no_tier():
-    """AS 는 등재 이력이 없어 표기 전용으로 넣었다 — 등급이 붙으면 안 된다."""
+def test_spanish_outlets_carry_user_set_tiers():
+    """AS 는 하 · Mundo Deportivo 는 중 (2026-08-31 사용자 결정).
+
+    「아스」 는 tier 없는 항목으로 갈라 뒀다 — 등급 사전에 들어가면 제목 부분 문자열
+    스캔에서 「아스날」 · 「아스톤 빌라」 가 전부 AS 로 걸린다."""
     r = load_registry(REG)
-    assert "as" not in r.outlets
+    assert r.outlets["as"] == 3.0
+    assert r.outlets["md"] == 2.0
+    assert r.outlets[norm_alias("Mundo Deportivo")] == 2.0
     assert "아스" not in r.outlets
+    assert outlet_directory(REG)[norm_alias("아스")] == "AS"
 
 
 def test_standalone_outlets_fold_to_formal_names():
@@ -570,10 +576,11 @@ def test_remaining_abbreviated_outlets_fold_to_formal_names():
 def test_display_only_standalone_outlets_stay_out_of_tier_lookup():
     """팬 · 집계 사이트는 표기만 정상화하고 등급은 폴백 4 를 유지한다.
 
-    등급 사전에 들어가면 짧은 별칭 (MD · BB · NA · CN · TIA) 이 제목 부분 문자열로
-    걸린다 — tier 4 는 min 때문에 무해하지만 애초에 그 경로를 안 타게 둔다."""
+    등급 사전에 들어가면 짧은 별칭 (BB · NA · CN · TIA) 이 제목 부분 문자열로
+    걸린다 — tier 4 는 min 때문에 무해하지만 애초에 그 경로를 안 타게 둔다.
+    「md」 는 이 목록에서 졸업했다 (2026-08-31 · Mundo Deportivo 등급 중)."""
     r = load_registry(REG)
-    for alias in ["besoccer", "스포르트", "md", "cm", "cn", "bb", "na", "tia",
+    for alias in ["besoccer", "스포르트", "cm", "cn", "bb", "na", "tia",
                   "sport24", "relevo", "cope", "bm", "mn", "mv", "메트로"]:
         assert alias not in r.outlets
 
@@ -585,6 +592,28 @@ def test_mismatched_stored_outlets_are_not_registered():
     d = outlet_directory(REG)
     for stored in ["A BOLA", "빌트"]:
         assert norm_alias(stored) not in d
+
+
+def test_two_letter_alias_needs_the_outlet_field_not_the_title_scan():
+    """두 글자 별칭은 제목 스캔에서 빠지고 말머리 (outlet 칸) 로만 채택된다.
+
+    "as" 를 스캔에 두면 Lucas · Thomas 가 들어간 제목이 AS 로 걸린다.
+    실제로 필요한 자리인 「[AS] …」 말머리는 parse_bracket 이 outlet 칸에 담아 두므로
+    정확 일치 경로가 그대로 잡는다 — 오탐만 사라지고 채택은 유지된다."""
+    sources = {"fmkorea": {"credibility": "fmkorea"}}
+    r = load_registry(REG)
+
+    def tier(title, outlet=None):
+        return resolve_tier(_item("fmkorea", {"title": title, "body": "",
+                                              "outlet": outlet}), sources, r)
+
+    # 제목에 우연히 들어간 두 글자 별칭은 등급을 못 바꾼다
+    assert tier("[풋볼런던 - Lucas Thomas] 아스날 훈련 리포트") == 4.0
+    # 말머리로 들어온 AS · MD 는 그대로 채택된다
+    assert tier("[AS] 아스날, 알바레스 자리 비운다", outlet="AS") == 3.0
+    assert tier("[MD] 제주스, 월요일 바르셀로나 도착", outlet="MD") == 2.0
+    # 「아스날」 이 들어간 평범한 제목은 AS 로 안 걸린다
+    assert tier("[공홈]아스날, 일란 멜리에 영입") == 4.0
 
 
 def test_two_letter_ge_alias_is_gone():
