@@ -276,7 +276,7 @@ Expected: `source:bullet_in.maria.articles` 를 비롯한 다섯 줄
 cd dbt && DBT_PROFILES_DIR=. uv run dbt build
 ```
 
-Expected: `ERROR=0` · 모델이 4개에서 6개로 늘어난다
+Expected: `ERROR=0` · staging 모델이 3개에서 5개로 늘어난다 (marts 3개를 합친 전체는 6개에서 8개)
 
 - [ ] **Step 6: 커밋**
 
