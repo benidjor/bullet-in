@@ -1,0 +1,151 @@
+# 런북 — dbt 품질 게이트가 배포를 세웠을 때
+
+회차 맨 끝에서 `dbt build` 가 돈다.
+지켜야 할 계약이 깨지면 회차가 0 아닌 코드로 끝난다.
+systemd 는 `ExecStart` 가 실패하면 `ExecStartPost` 를 안 돌리므로 그 회차의 배포가 나가지 않는다.
+화면은 직전 산출물 그대로 남는다.
+
+설계는 `docs/superpowers/specs/2026-08-31-dbt-quality-gate-design.md` 에 있다.
+
+## 1. 먼저 보는 것
+
+사고 채널에 「🚧 dbt 품질 게이트 — 배포를 세웠습니다」 가 온다.
+그 알림에 어떤 테스트가 몇 행에서 깨졌는지 적혀 있다.
+`OnFailure` 알림에는 유닛이 죽었다는 사실만 있으므로 원인은 앞의 알림에서 본다.
+
+저널에서 같은 내용을 다시 읽으려면 이렇게 한다.
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  'journalctl -u bullet-in.service -n 200 --no-pager | grep -i "게이트"'
+```
+
+나오는 줄은 셋 중 하나다.
+
+- `dbt 게이트 통과 — 차단 0 · 경고 N` — 배포가 나갔다
+- `dbt 게이트 경고 N건 — <테스트> <행수>` — 경고만 있고 배포는 나갔다
+- `dbt 게이트가 배포를 세웠다 — <사유>` — 배포가 안 나갔다
+
+## 2. 축을 가른다
+
+**계약 축이 깨졌으면 파이프라인이 고장 났다.**
+키 중복 · 필수값 결측 · 선수 참조 깨짐이 여기 든다.
+정상 운영에서는 나올 수 없는 값이다.
+데이터를 고치기 전에 무엇이 그런 행을 만들었는지 먼저 본다.
+
+**품질 축이 임계를 넘었으면 부채가 갑자기 커졌다.**
+고아 귀속 100건 초과 · 값 이탈 20건 초과 · 값 결측 200건 초과가 여기 든다.
+임계는 관측한 사건 크기에서 뽑았다.
+그래서 임계를 넘었다는 것은 평소와 다른 일이 일어났다는 뜻이다.
+
+**게이트 자체가 못 돌았을 수도 있다.**
+사유가 `dbt 를 못 돌렸다` 나 `run_results.json 을 못 읽었다` 로 시작하면 그렇다.
+데이터 결함이 아니라 설치 · 접속 문제다.
+
+## 3. 게이트가 못 돈 경우
+
+VM 에서 직접 불러 본다.
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  'cd ~/bullet-in && set -a && . ./.env && set +a &&
+   /home/ubuntu/.local/bin/uv run python -c "
+import os
+from pathlib import Path
+from bullet_in import dbt_gate
+r = dbt_gate.run_gate(Path(\"dbt\"), os.environ[\"MARIADB_URL\"])
+print(\"ran =\", r.ran, \"· error =\", r.error)
+print(\"blocked =\", [(t.name, t.failures) for t in r.blocked])
+print(\"warned  =\", [(t.name, t.failures) for t in r.warned])
+"'
+```
+
+- **`dbt` 실행 파일이 없다** — 배포할 때 `uv sync` 를 안 돌렸다.
+  `dbt-duckdb` 는 운영 의존성이라 `uv sync` 만으로 설치된다.
+- **접속 실패** — `profiles.yml` 은 `.env` 의 `MARIADB_URL` 에서 파생한 다섯 변수를 읽는다.
+  주소 · 포트 · 사용자 · 비밀번호 · 데이터베이스가 그 한 줄에서 나온다.
+- **결과 파일을 못 읽었다** — dbt 가 뭘 돌기도 전에 죽었다는 뜻이다.
+  `run_gate` 는 부르기 전에 직전 결과 파일을 지운다.
+  그러니 파일이 없다는 것은 이번 회차가 아무것도 안 남겼다는 뜻이다.
+
+## 4. 고아 귀속이 늘었을 때
+
+기사 신원 (`content_hash`) 이 갈릴 때 선수 귀속이 따라가지 못하면 고아가 된다.
+어쩌다 그렇게 되는지와 고치는 법은 `docs/troubleshooting/2026-08-31-the-upsert-rewrote-the-hash-and-cut-the-links.md` 에 있다.
+
+### 4.1. 지우기 전에 그 해시가 돌아올 수 있는지 본다
+
+트윗은 같은 글이 회차마다 다르게 읽혀 해시가 **두 값 사이를 왕복한다.**
+지금 고아인 귀속이 다음 회차에 되살아날 수 있다.
+지우면 그 선수 페이지에서 그 기사가 영영 빠진다.
+
+### 4.2. 회차 전후로 해시를 떠서 대조한다
+
+로그만 보면 「안 뜬 것」 이 「코드가 안 돎」 인지 「이번엔 대상이 없었음」 인지 안 갈린다.
+
+```bash
+# 회차 전
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  'cd ~/bullet-in && set -a && . ./.env && set +a &&
+   /home/ubuntu/.local/bin/uv run python ~/backups/hash_snapshot.py save'
+
+# 회차 후
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  'cd ~/bullet-in && set -a && . ./.env && set +a &&
+   /home/ubuntu/.local/bin/uv run python ~/backups/hash_snapshot.py diff'
+```
+
+나오는 것은 기사 수 · 고아 수 · 해시가 갈린 기사 목록이다.
+해시가 갈렸는데 고아가 안 늘었으면 참조 이동이 제 일을 했다.
+
+### 4.3. 그래도 지워야 한다면
+
+되살아날 여지가 없다고 판단했을 때만 지운다.
+
+```bash
+# 대상 수를 먼저 세어 사용자에게 보인다 (DB 를 안 만진다)
+uv run python -m bullet_in.migrate_url_identity --dry-run
+
+# 승인을 받은 뒤에만
+uv run python -m bullet_in.migrate_url_identity --apply --purge-orphans
+```
+
+- **`merge_groups` 와 `migrations` 가 0 인지 확인한다** — 0 이 아니면 이 실행이 고아 삭제 말고 다른 일도 한다.
+- **지우기 전에 백업을 뜬다** (`~/backups/backup_orphans.py`).
+- **삭제 도구가 아닌 별도 조회로 검산한다** — `article_players` 총수가 지운 수만큼만 줄었는지 본다.
+
+## 5. 배포를 다시 내보내는 법
+
+원인을 고친 뒤 회차를 한 번 돌리면 게이트가 다시 판정한다.
+통과하면 배포가 나간다.
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  'sudo systemctl start --no-block bullet-in.service'
+```
+
+**회차가 끝났는지는 `ActiveState` 로 잰다.**
+`systemctl is-active --quiet` 는 쓰면 안 된다 — `Type=oneshot` 유닛은 도는 동안 `activating` 이라 그 검사가 즉시 통과하고 직전 회차의 결과를 이번 회차 것으로 읽는다.
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  'until [ "$(systemctl show bullet-in.service -p ActiveState --value)" != "activating" ]; do sleep 20; done;
+   systemctl show bullet-in.service -p Result -p ExecMainStatus'
+```
+
+## 6. 임계를 올리고 싶을 때
+
+**숫자만 올리지 않는다.**
+설계 §2.3 의 표에 임계마다 그 값이 나온 관측이 적혀 있다.
+근거 없이 올리면 게이트가 서서히 무력해진다.
+그렇게 된 게이트는 있으나 마나다.
+
+올려야 한다면 새 관측을 먼저 만들고 그 값을 근거 칸에 함께 적는다.
+
+## 7. 이 게이트가 안 보는 것
+
+- **CI 의 dbt 는 빈 표를 본다** — 값 이탈과 고아 귀속은 운영 회차에서만 드러난다.
+- **차단이 실제로 배포를 막은 적은 운영에서 아직 없다** (2026-08-31 기준).
+  로컬에서 종료 코드 1 까지는 확인했다.
+  첫 진짜 차단이 났을 때 `ExecStartPost` 가 안 돌았는지 함께 확인한다.
+
