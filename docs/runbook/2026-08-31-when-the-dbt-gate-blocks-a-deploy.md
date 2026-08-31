@@ -108,12 +108,12 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
 # 회차 전
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
   'cd ~/bullet-in && set -a && . ./.env && set +a &&
-   /home/ubuntu/.local/bin/uv run python ~/backups/hash_snapshot.py save'
+   /home/ubuntu/.local/bin/uv run python -m bullet_in.hash_snapshot save'
 
 # 회차 후
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
   'cd ~/bullet-in && set -a && . ./.env && set +a &&
-   /home/ubuntu/.local/bin/uv run python ~/backups/hash_snapshot.py diff'
+   /home/ubuntu/.local/bin/uv run python -m bullet_in.hash_snapshot diff'
 ```
 
 나오는 것은 기사 수 · 고아 수 · 해시가 갈린 기사 목록이다.
@@ -132,7 +132,7 @@ uv run python -m bullet_in.migrate_url_identity --apply --purge-orphans
 ```
 
 - **`merge_groups` 와 `migrations` 가 0 인지 확인한다** — 0 이 아니면 이 실행이 고아 삭제 말고 다른 일도 한다.
-- **지우기 전에 백업을 뜬다** (`~/backups/backup_orphans.py`).
+- **지우기 전에 백업을 뜬다** (`uv run python -m bullet_in.backup_orphans`).
 - **삭제 도구가 아닌 별도 조회로 검산한다** — `article_players` 총수가 지운 수만큼만 줄었는지 본다.
 
 ## 5. 배포를 다시 내보내는 법
