@@ -158,6 +158,14 @@ def test_parse_bracket_outlet_and_journalist():
 def test_parse_bracket_normalizes_korean_outlet():
     assert parse_bracket("[디 애슬레틱 - 온스테인] 앤더슨 결장") == ("The Athletic", "온스테인", False)
 
+
+def test_parse_bracket_folds_as_korean_spelling_here_not_in_the_tier_registry():
+    """「아스」 접기는 말머리에서 한다 (2026-08-31).
+
+    등급 사전에 별칭으로 두면 제목 부분 문자열 매칭에 「아스날」 · 「아스톤 빌라」 가
+    전부 걸린다 (실측 30건 중 6건이 최하 → 하). 말머리는 정확 일치라 그 위험이 없다."""
+    assert parse_bracket("[아스] 훌리안알바레스, 물러설 곳이 없다") == ("AS", None, False)
+
 def test_parse_bracket_exclusive_flag():
     assert parse_bracket("[디 애슬레틱-독점] 디오망데 PSG 선택") == ("The Athletic", None, True)
 
