@@ -43,6 +43,7 @@ clubs:
   도르트문트: [Dortmund, Borussia Dortmund]
   레버쿠젠: [Leverkusen, Bayer Leverkusen]
   라이프치히: [Leipzig, RB Leipzig]
+  함부르크: [Hamburg, Hamburger SV, HSV]
   # BBC 하우스 스타일은 'Paris St-Germain' 축약 표기 — 누락 시 라운드업 오탐 (실측 21건)
   파리 생제르맹: [Paris Saint-Germain, Paris St-Germain, PSG]
   PSG: [Paris Saint-Germain, Paris St-Germain, PSG]
