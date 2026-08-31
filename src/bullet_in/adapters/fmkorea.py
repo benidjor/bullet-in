@@ -64,8 +64,20 @@ def is_arsenal_relevant(title: str, body: str, relevance_terms, player_names) ->
     return any(_squash(n) in t for n in player_names)
 
 
-def _round_robin(per_kw: list[list[tuple[str, str]]], limit: int) -> list[tuple[str, str]]:
-    """키워드별 결과 리스트를 라운드로빈으로 최대 limit개 뽑는다 (앞 키워드 독식 방지)."""
+def _round_robin(per_kw: list[list[tuple[str, str]]], limit: int,
+                 start: int = 0) -> list[tuple[str, str]]:
+    """키워드별 결과 리스트를 라운드로빈으로 최대 limit개 뽑는다 (앞 키워드 독식 방지).
+
+    `limit` 이 키워드 수보다 작으면 첫 바퀴에서 상한이 차서 **뒤쪽 키워드는 결과가
+    있어도 한 건도 못 담는다.** `start` 는 그 첫 바퀴를 어느 키워드부터 돌지 정해,
+    담기지 못하는 자리가 호출마다 옮겨 가게 한다 (2026-08-31).
+
+    이 회전이 없으면 담기지 못하는 자리가 명단 크기에 딸린 우연이 된다 — 워치리스트 명단이
+    배치 크기의 배수면 (30명 · 40명) 같은 선수가 매번 같은 위치에 서서 영원히
+    수집되지 않는다. 실측 37명에서는 위치가 흔들렸지만 그건 37 과 10 이 서로소여서다."""
+    if per_kw:
+        start %= len(per_kw)
+        per_kw = per_kw[start:] + per_kw[:start]
     out, i = [], 0
     while len(out) < limit and any(i < len(r) for r in per_kw):
         for r in per_kw:
@@ -339,7 +351,8 @@ class FmkoreaAdapter:
                  request_gap_sec: float = 0.0,
                  exclude_titles: set[str] | None = None,
                  relevance_terms: list[str] | None = None,
-                 player_names: set[str] | None = None):
+                 player_names: set[str] | None = None,
+                 round_robin_start: int = 0):
         self.source_id = source_id
         self.search_url = search_url            # {keyword} · {target} 자리표시 포함
         self.search_keywords = search_keywords
@@ -353,6 +366,7 @@ class FmkoreaAdapter:
         self.exclude_titles = exclude_titles or set()
         self.relevance_terms = relevance_terms or []
         self.player_names = player_names or set()
+        self.round_robin_start = round_robin_start   # 상한에 밀리는 자리를 옮긴다
         self.search_failures = 0      # 이번 fetch 에서 실패한 키워드 검색 수
         self.search_failure_codes: Counter = Counter()   # 실패 사유 (HTTP 상태 코드 · 연결 오류)
         self.relevance_dropped = 0    # 무관 글 필터 탈락 수
@@ -411,7 +425,7 @@ class FmkoreaAdapter:
                         continue
                     results.append((title, post_url))
             per_kw.append(results)
-        return _round_robin(per_kw, self.max_posts)
+        return _round_robin(per_kw, self.max_posts, self.round_robin_start)
 
     def _relevant(self, title: str, body: str) -> bool:
         return is_arsenal_relevant(title, body, self.relevance_terms, self.player_names)

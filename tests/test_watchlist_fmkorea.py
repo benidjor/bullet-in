@@ -3,7 +3,9 @@ from datetime import datetime, timezone
 from bullet_in import watchlist_fmkorea
 from bullet_in.models import RawItem
 from bullet_in.watchlist_fmkorea import (read_cursor, write_cursor, next_slice,
-                                         build_keywords, next_cursor)
+                                         build_keywords, next_cursor,
+                                         read_rotation, write_rotation)
+from bullet_in.adapters.fmkorea import _round_robin
 
 IDS = [10, 20, 30, 40, 50]
 
@@ -124,6 +126,50 @@ def test_read_cursor_missing_or_corrupt(tmp_path):
     p = tmp_path / "cursor"
     p.write_text("not-a-number")
     assert read_cursor(p) is None
+
+def test_round_robin_start_moves_which_keyword_starves():
+    """상한이 키워드 수보다 작으면 뒤쪽 결과가 버려진다 — 그 자리를 회전으로 옮긴다 (2026-08-31)."""
+    per_kw = [[(f"제목{k}", f"url{k}")] for k in range(4)]
+    assert _round_robin(per_kw, 2, start=0) == [("제목0", "url0"), ("제목1", "url1")]
+    assert _round_robin(per_kw, 2, start=2) == [("제목2", "url2"), ("제목3", "url3")]
+    # 회전은 키워드 수로 나눈 나머지 — 한 바퀴 돌면 처음으로 돌아온다
+    assert _round_robin(per_kw, 2, start=4) == _round_robin(per_kw, 2, start=0)
+
+
+def test_round_robin_start_does_not_change_result_when_cap_fits():
+    """상한이 키워드 수 이상이면 버려지는 자리가 없어 회전은 순서만 바꾼다."""
+    per_kw = [[(f"제목{k}", f"url{k}")] for k in range(3)]
+    assert sorted(_round_robin(per_kw, 3, start=0)) == sorted(_round_robin(per_kw, 3, start=2))
+
+
+def test_rotation_eventually_reaches_every_slot_even_when_roster_is_a_multiple():
+    """명단이 배치 크기의 배수면 슬라이스 내 위치가 고정된다 — 회전이 그것을 푼다.
+
+    회전이 없으면 상한 뒤쪽에 고정된 선수는 영원히 수집되지 않는다 (실측 근거는
+    명단 30 · 40명 시뮬레이션에서 위치가 한 종류로 굳는 것)."""
+    ids = list(range(1, 41))            # 40명 · 슬라이스 10 → 위치 고정
+    target = ids[8]                     # 슬라이스 9번째 — 상한 8 밖
+    cur, reached = None, False
+    for batch in range(8):
+        sl = next_slice(ids, cur)
+        if target in sl:
+            per_kw = [[(f"t{p}", f"u{p}")] for p in sl]
+            picked = _round_robin(per_kw, 8, start=batch)
+            if (f"t{target}", f"u{target}") in picked:
+                reached = True
+        cur = sl[-1]
+    assert reached, "회전이 있어도 고정 위치 선수가 한 번도 안 담겼다"
+
+
+def test_rotation_state_roundtrip(tmp_path):
+    """회전 값은 없거나 손상이면 0 — 커서와 같은 규칙."""
+    p = tmp_path / "rot"
+    assert read_rotation(p) == 0
+    write_rotation(p, 7)
+    assert read_rotation(p) == 7
+    p.write_text("깨짐")
+    assert read_rotation(p) == 0
+
 
 def test_build_keywords_title_target():
     assert build_keywords(["디오망데", "히메네스"]) == [

@@ -616,6 +616,33 @@ def test_two_letter_alias_needs_the_outlet_field_not_the_title_scan():
     assert tier("[공홈]아스날, 일란 멜리에 영입") == 4.0
 
 
+def test_fmkorea_uses_the_resolved_author_when_the_body_is_the_origin_article():
+    """원문 본문을 채택하면 게시글의 한글 바이라인이 body 에서 사라진다 (2026-08-31).
+
+    실물 — Mundo Deportivo 두 건이 저자를 Roger Torelló · Fernando Polo 로 맞게
+    저장하고도 등급은 매체 기본값 (중) 으로 떨어졌다. 본문이 스페인어로 바뀌어
+    제목 + 본문 훑기가 그 이름을 못 봤기 때문이다."""
+    sources = {"fmkorea": {"credibility": "fmkorea"}}
+    r = load_registry(REG)
+    payload = {"title": "[MD] 가브리엘 제주스, 월요일에 바르셀로나 도착",
+               "body": "Jefe de sección | Barça  Gabriel Jesus será el sexto fichaje",
+               "outlet": "MD"}
+    # 저자를 모르면 매체 기본값 (중)
+    assert resolve_tier(_item("fmkorea", payload), sources, r) == 2.0
+    # 저자가 확정돼 있으면 그 기자의 등급 (상)
+    assert resolve_tier(_item("fmkorea", payload), sources, r,
+                        journalist="Roger Torelló") == 1.5
+
+
+def test_fmkorea_author_lookup_is_exact_not_substring():
+    """확정 저자 조회는 정확 일치다 — 미등재 이름은 매체 등급을 안 흔든다."""
+    sources = {"fmkorea": {"credibility": "fmkorea"}}
+    r = load_registry(REG)
+    payload = {"title": "[MD] 제주스 이적", "body": "본문", "outlet": "MD"}
+    assert resolve_tier(_item("fmkorea", payload), sources, r,
+                        journalist="Roger") == 2.0
+
+
 def test_as_journalist_entry_stays_ungraded():
     """조직 계정 항목 「AS」 에는 등급을 매기지 않는다 (2026-08-31).
 

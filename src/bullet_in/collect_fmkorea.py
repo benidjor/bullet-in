@@ -55,7 +55,8 @@ def build_fmkorea_adapter(cfg: dict, proxy: str | None, *, pages: int = 1,
                           request_gap_sec: float = 0.0,
                           exclude_titles: set[str] | None = None,
                           max_posts: int | None = None,
-                          search_keywords: list[dict] | None = None) -> FmkoreaAdapter:
+                          search_keywords: list[dict] | None = None,
+                          round_robin_start: int = 0) -> FmkoreaAdapter:
     """config 에서 fmkorea 소스 블록을 읽어 어댑터를 만든다 (factory 와 동일 인자).
     선택 인자는 백필 회차 전용이고, 기본값이면 정기 회차와 같은 어댑터가 된다."""
     s = next(x for x in cfg["sources"] if x["source_id"] == "fmkorea")
@@ -67,7 +68,7 @@ def build_fmkorea_adapter(cfg: dict, proxy: str | None, *, pages: int = 1,
         body_selector=c.get("body_selector", ".xe_content"),
         max_posts=max_posts if max_posts is not None else c.get("max_posts", 15),
         proxy=proxy, pages=pages, request_gap_sec=request_gap_sec,
-        exclude_titles=exclude_titles)
+        exclude_titles=exclude_titles, round_robin_start=round_robin_start)
 
 
 def persist(raw: list[RawItem], mart: MartStore) -> tuple[int, int, int]:
