@@ -1,4 +1,16 @@
 version: 2
+sources:
+  # DuckDB mysql_scanner 가 붙인 MariaDB — 카탈로그는 profiles.yml 의 alias 이고
+  # 스키마는 MySQL 데이터베이스 이름이다 (로컬 bulletin · CI bulletin_test).
+  - name: maria
+    database: maria
+    schema: "{{ env_var('DBT_MARIA_DB', 'bulletin') }}"
+    tables:
+      - name: articles
+      - name: players
+      - name: article_players
+      - name: pipeline_runs
+      - name: source_freshness
 models:
   - name: stg_articles
     columns:
