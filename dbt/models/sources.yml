@@ -1,4 +1,16 @@
 version: 2
+sources:
+  # DuckDB mysql_scanner 가 붙인 MariaDB — 카탈로그는 profiles.yml 의 alias 이고
+  # 스키마는 MySQL 데이터베이스 이름이다 (로컬 bulletin · CI bulletin_test).
+  - name: maria
+    database: maria
+    schema: "{{ env_var('DBT_MARIA_DB', 'bulletin') }}"
+    tables:
+      - name: articles
+      - name: players
+      - name: article_players
+      - name: pipeline_runs
+      - name: source_freshness
 models:
   - name: stg_articles
     columns:
@@ -8,11 +20,93 @@ models:
         tests: [unique, not_null]
       - name: title_original
         tests: [not_null]
+      - name: source_id
+        tests: [not_null]
       - name: tier
         tests:
           - accepted_values:
               arguments:
                 values: [0, 1, 1.5, 2, 3, 4]
+      - name: transfer_stage
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['interest', 'negotiating', 'personal_terms', 'agreed',
+                         'medical', 'done', 'official', 'collapsed', 'rumour', 'other']
+              config:
+                # 2026-08-31 실측 = 결측 1건 · 분류 패스가 한 회차에 만지는 건수보다
+                # 큰 값을 차단 임계로 둔다.
+                severity: error
+                warn_if: ">0"
+                error_if: ">20"
+          # accepted_values 는 NULL 행을 안 센다 — 결측 행은 검사 대상에서 그냥 빠진다.
+          # 분류 패스가 값을 아예 안 쓰게 되는 회귀는 accepted_values 로는 영원히 안 보이므로
+          # 같은 컬럼에 not_null 을 따로 건다.
+          # 다만 임계는 20이 아니라 200이다 — transfer_stage · transfer_direction 은 Gemini
+          # 분류 패스가 채우는데 429를 받으면 그 회차를 통째로 건너뛰고 남은 행을 다음 회차로
+          # 누적한다 (CLAUDE.md에 적힌 의도된 동작). 즉 결측은 하루치 미분류 잔량일 수 있다.
+          # 운영 실측 (2026-08-31) = 최근 100 회차 중 회차당 신규 최대 17건 · 전체 기간
+          # 일별 신규 최대 90건 (2026-06-11). 200은 그 최대 하루치의 두 배가 넘으므로
+          # 분류 백로그로는 절대 못 만드는 값이고, 넘으면 패스가 값을 안 쓰게 됐다는 뜻이다.
+          # 운영 실측 (2026-08-31 15시대 KST) = transfer_stage 결측 0건.
+          - not_null:
+              config:
+                severity: error
+                warn_if: ">0"
+                error_if: ">200"
+      - name: transfer_direction
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['in', 'out', 'none']
+              config:
+                # 2026-08-31 실측 = 결측 1건 · transfer_stage 와 같은 분류 패스에서
+                # 나오는 값이라 같은 20을 차단 임계로 둔다.
+                severity: error
+                warn_if: ">0"
+                error_if: ">20"
+          # accepted_values 는 NULL 행을 안 센다 — 이유는 transfer_stage 와 같다.
+          # 임계 200의 근거도 같다 — transfer_stage 와 같은 Gemini 분류 패스가 채우는
+          # 컬럼이라 429로 인한 회차 건너뜀이 똑같이 결측을 남긴다. 관측된 가장 큰 하루치
+          # 신규가 90건이므로 200은 그 두 배가 넘고, 넘으면 분류 백로그가 아니라 패스가
+          # 값을 안 쓰게 된 회귀다.
+          # 운영 실측 (2026-08-31 15시대 KST) = transfer_direction 결측 0건.
+          - not_null:
+              config:
+                severity: error
+                warn_if: ">0"
+                error_if: ">200"
+  - name: stg_players
+    columns:
+      - name: id
+        tests: [unique, not_null]
+  - name: stg_article_players
+    columns:
+      - name: player_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_players')
+                field: id
+      - name: role
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['subject', 'mention']
+      - name: content_hash
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_articles')
+                field: content_hash
+              config:
+                # 기사 쪽이 사라진 귀속 — 해시가 갈릴 때 참조가 남는다.
+                # 차단 임계 100 의 근거는 알려진 가장 큰 단일 사건이 43건이었다는 것이다
+                # (2026-08-29 주소 정정) · 그 두 배가 넘으면 정상 운영에서 나올 수 없다.
+                severity: error
+                warn_if: ">0"
+                error_if: ">100"
   - name: tier_distribution
     columns:
       - name: tier
