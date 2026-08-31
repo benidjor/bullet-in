@@ -48,6 +48,16 @@ def test_parse_results_reports_missing_file(tmp_path):
     assert "run_results.json" in (r.error or "")
 
 
+def test_parse_results_reports_corrupted_file(tmp_path):
+    # dbt 가 쓰던 도중 죽으면 파일은 있는데 JSON 이 안 닫혀 있다.
+    p = tmp_path / "run_results.json"
+    p.write_text("{ this is not json")
+    r = parse_results(p)
+    assert r.ran is False
+    assert r.blocked == []
+    assert "run_results.json" in (r.error or "")
+
+
 def test_dbt_env_splits_url_into_five_variables():
     env = dbt_env("mysql+pymysql://root:secret@10.0.0.5:3307/bulletin")
     assert env == {

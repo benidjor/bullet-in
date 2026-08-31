@@ -41,7 +41,7 @@ def parse_results(path: Path) -> GateResult:
     """
     try:
         data = json.loads(Path(path).read_text())
-    except OSError as e:
+    except (OSError, json.JSONDecodeError) as e:
         return GateResult(ran=False, error=f"run_results.json 을 못 읽었다: {e}")
     blocked, warned = [], []
     for r in data.get("results", []):
