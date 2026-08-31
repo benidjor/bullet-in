@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from sqlalchemy import bindparam, text
@@ -9,6 +10,46 @@ from bullet_in.quality import SourceFreshness
 from bullet_in.fidelity import RETENTION_THRESHOLD
 
 _SCHEMA = Path(__file__).with_name("schema.sql")
+log = logging.getLogger(__name__)
+
+
+def move_hash_refs(c, old: str, new: str) -> None:
+    """해시를 가리키는 두 자리를 옮긴다 — 같은 선수가 양쪽에 있으면 남는 쪽을 남긴다.
+
+    주소 신원 이전 배치 (bullet_in.migrate_url_identity) 와 회차 적재가 같은 규칙을
+    써야 해서 여기 한 곳에 둔다. 두 벌로 갈라 두면 한쪽만 고쳐진다.
+    """
+    c.execute(text("UPDATE IGNORE article_players SET content_hash=:new"
+                   " WHERE content_hash=:old"), {"new": new, "old": old})
+    c.execute(text("DELETE FROM article_players WHERE content_hash=:old"), {"old": old})
+    c.execute(text("UPDATE players SET first_seen=:new WHERE first_seen=:old"),
+              {"new": new, "old": old})
+
+
+def _move_refs_for_rehashed(c, rows: list[dict]) -> None:
+    """같은 주소인데 해시가 달라진 행의 참조를 새 해시로 미리 옮긴다.
+
+    `articles` 는 url 도 UNIQUE 라, 원문 제목이 바뀐 재수집은 upsert 의
+    `content_hash=VALUES(content_hash)` 로 기존 행의 신원을 갈아 치운다.
+    기사 행은 살아남고 해시만 바뀌므로, 그 해시를 가리키던 `article_players` 는
+    그 자리에서 고아가 된다 (2026-08-31 실측 — 고아를 0으로 만든 다음 회차에 2쌍이
+    생겼고 둘 다 X 트윗이었다 · 트윗 본문이 회차마다 다르게 읽히면 원문 제목이 갈린다).
+
+    **순서를 바꾸면 안 된다** — 행을 먼저 갱신하면 옛 해시를 되찾을 방법이 없다.
+    """
+    by_url = {r["url"]: r["content_hash"] for r in rows}
+    if not by_url:
+        return
+    stored = c.execute(
+        text("SELECT url, content_hash FROM articles WHERE url IN :urls")
+        .bindparams(bindparam("urls", expanding=True)),
+        {"urls": list(by_url)}).all()
+    moved = [(old, by_url[url]) for url, old in stored if old != by_url[url]]
+    for old, new in moved:
+        move_hash_refs(c, old, new)
+    if moved:
+        log.info("해시가 갈린 기사 %d건 — 선수 귀속을 새 해시로 옮김", len(moved))
+
 
 def _article_row(a: Article) -> dict:
     """Article → upsert 파라미터 행. images · authors 는 JSON 직렬화, 빈 목록은 NULL."""
@@ -68,6 +109,7 @@ class MartStore:
              content_hash=VALUES(content_hash)""")
         rows = [_article_row(a) for a in articles]
         with self.engine.begin() as c:
+            _move_refs_for_rehashed(c, rows)   # 해시가 갈리기 **전에** 참조를 옮긴다
             c.execute(sql, rows)
         return len(rows)
     def count(self) -> int:
