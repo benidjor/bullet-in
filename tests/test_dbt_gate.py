@@ -87,13 +87,17 @@ def test_enforce_gate_passes_when_nothing_broke(caplog):
     enforce_gate(GateResult(), run_id="r1")   # 예외가 안 나야 한다
 
 
-def test_enforce_gate_logs_warnings_without_blocking(caplog):
+def test_enforce_gate_logs_warnings_without_blocking(caplog, monkeypatch):
     import logging
+    sent = {}
+    monkeypatch.setattr("bullet_in.notify.send_alert",
+                        lambda **kw: sent.update(kw))
     result = GateResult(warned=[TestOutcome("relationships_orphans", 259)])
     with caplog.at_level(logging.WARNING):
         enforce_gate(result, run_id="r1")
     assert "relationships_orphans" in caplog.text
     assert "259" in caplog.text
+    assert sent == {}   # 경고는 알림 피로 방지를 위해 발송하지 않는다
 
 
 def test_enforce_gate_raises_and_alerts_when_blocked(monkeypatch):
@@ -108,7 +112,11 @@ def test_enforce_gate_raises_and_alerts_when_blocked(monkeypatch):
 
 
 def test_enforce_gate_blocks_when_dbt_could_not_run(monkeypatch):
-    monkeypatch.setattr("bullet_in.notify.send_alert", lambda **kw: None)
+    sent = {}
+    monkeypatch.setattr("bullet_in.notify.send_alert",
+                        lambda **kw: sent.update(kw))
     result = GateResult(ran=False, error="dbt 실행 파일이 없다")
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as e:
         enforce_gate(result, run_id="r1")
+    assert e.value.code == 1
+    assert "dbt 실행 파일이 없다" in str(sent)
