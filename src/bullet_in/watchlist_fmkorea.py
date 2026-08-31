@@ -20,9 +20,17 @@ from bullet_in import notify
 log = logging.getLogger(__name__)
 
 CURSOR_PATH = Path.home() / ".bullet-in" / "watchlist_cursor"
+# 라운드로빈 시작 위치 — 배치마다 1씩 는다. 상한이 슬라이스 인원보다 작아 결과가 버려지는
+# 자리가 생기는데, 이 값이 없으면 그 자리가 명단 크기에 딸린 우연이 된다 (명단이 배치 크기의
+# 배수면 같은 선수가 매번 같은 위치에 서서 영원히 수집되지 않는다).
+ROTATION_PATH = Path.home() / ".bullet-in" / "watchlist_rotation"
 GAP_HOURS = 1.0      # 최근 접촉 60분 이내면 스킵 (스펙 §3.1)
 SLICE_SIZE = 10      # 배치당 검색 인원 (보수안)
-MAX_POSTS = 5        # 배치당 fetch 상한 (보수안)
+# 배치당 fetch 상한. 슬라이스 인원 (10) 보다 작아서 뒤쪽 키워드의 결과가 버려지는데,
+# 저널 실측으로 성공한 9배치 중 5배치가 이 상한을 다 썼다 (2026-08-31). 10 으로 맞추면 그 자리가
+# 아예 없어지지만 요청이 배치당 최대 다섯 건 (원문 포함 열 건) 늘어 차단 위험과 맞바꾼다
+# — 절반만 올리고 버려지는 자리는 회전으로 옮긴다 (_round_robin 의 start).
+MAX_POSTS = 8
 REQUEST_GAP_SEC = 2.0   # 검색 · 글 fetch 사이 간격 — 배치 밀도를 정기 회차 수준으로
 
 
@@ -37,6 +45,19 @@ def read_cursor(path: Path) -> int | None:
 def write_cursor(path: Path, player_id: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(str(player_id))
+
+
+def read_rotation(path: Path) -> int:
+    """라운드로빈 시작 위치 — 없거나 손상이면 0."""
+    try:
+        return int(path.read_text().strip())
+    except (OSError, ValueError):
+        return 0
+
+
+def write_rotation(path: Path, value: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(value))
 
 
 def next_slice(ids: list[int], cursor: int | None,
@@ -102,9 +123,11 @@ async def main(dry_run: bool = False, force: bool = False) -> None:
     slice_ids = next_slice(ids, read_cursor(CURSOR_PATH))
     kws = build_keywords([names[pid] for pid in slice_ids])
 
+    rotation = read_rotation(ROTATION_PATH)
     adapter = build_fmkorea_adapter(cfg, proxy, search_keywords=kws,
                                     max_posts=MAX_POSTS,
-                                    request_gap_sec=REQUEST_GAP_SEC)
+                                    request_gap_sec=REQUEST_GAP_SEC,
+                                    round_robin_start=rotation)
     # 무관 글 필터 주입 — 정기 회차 (run.py) 와 같은 인정 집합 (스펙 §3.2).
     # build_fmkorea_adapter 는 변경 범위가 인자 1개로 묶여 있어 (스펙 §3.4)
     # 생성 후 공개 속성에 대입한다.
@@ -115,9 +138,10 @@ async def main(dry_run: bool = False, force: bool = False) -> None:
     write_last_contact(STATE_PATH, now)   # 신규 0건 · 전량 탈락도 접촉은 기록 (스펙 §6)
 
     if dry_run:
-        log.info("[dry-run] 검색 %d명 · 필터 통과 %d · 탈락 %d · 검색 실패 %d — 적재 없음",
+        log.info("[dry-run] 검색 %d명 · 필터 통과 %d · 탈락 %d · 검색 실패 %d · 회전 %d "
+                 "— 적재 없음 (커서 · 회전 무전진)",
                  len(slice_ids), len(raw), adapter.relevance_dropped,
-                 adapter.search_failures)
+                 adapter.search_failures, rotation)
         for it in raw:
             log.info("[dry-run] 통과: %s", it.raw_payload.get("title"))
         return
@@ -128,6 +152,9 @@ async def main(dry_run: bool = False, force: bool = False) -> None:
     cur = next_cursor(slice_ids, adapter.search_failures)
     if cur is not None:
         write_cursor(CURSOR_PATH, cur)
+    # 커서와 달리 검색 실패와 무관하게 전진한다 — 버려지는 자리를 옮기는 것이 목적이라
+    # 실패한 배치에서 멈추면 다음 배치에서도 같은 자리가 버려진다.
+    write_rotation(ROTATION_PATH, rotation + 1)
 
     # 배치 전멸 알림 (차단 알림 스펙 §3.2): 검색 실패가 슬라이스 전원과 같을 때만.
     # 부분 실패는 알리지 않는다 — 실측 3회 모두 전원 실패였다.
@@ -141,9 +168,9 @@ async def main(dry_run: bool = False, force: bool = False) -> None:
             log.warning("배치 전멸 알림 발송 실패 — 배치는 계속 진행", exc_info=True)
 
     log.info("워치리스트 배치 완료 — 검색 %d명 · 적재 %d · 동일 내용 생략 %d · "
-             "기존 기사 유지 %d · 필터 탈락 %d · 검색 실패 %d · 커서 %s",
+             "기존 기사 유지 %d · 필터 탈락 %d · 검색 실패 %d · 커서 %s · 회전 %d",
              len(slice_ids), n, dup, blocked, adapter.relevance_dropped,
-             adapter.search_failures, cur if cur is not None else "유지")
+             adapter.search_failures, cur if cur is not None else "유지", rotation)
 
 
 if __name__ == "__main__":

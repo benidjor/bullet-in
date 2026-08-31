@@ -119,6 +119,13 @@ def resolve_tier(item, sources: dict, registry: "Registry | None",
         body = norm_alias(item.raw_payload.get("body") or "")
         text = title + " " + body
         jt = [t for a, t in registry.journalists.items() if a in text]
+        # 확정된 저자 이름도 사전에 대 본다 (2026-08-31). 원문 본문을 채택하면
+        # (body_level 2) 게시글의 한글 바이라인이 body 에서 사라져 위 훑기가 그
+        # 기자를 못 본다 — 실물로 Mundo Deportivo 두 건이 기자는 맞게 저장되고도
+        # 매체 등급으로 떨어졌다. 이 조회는 정확 일치라 부분 문자열 위험이 없다.
+        j_tier = registry.journalists.get(norm_alias(journalist)) if journalist else None
+        if j_tier is not None:
+            jt.append(j_tier)
         if jt:
             return min(jt)
         ot = [t for a, t in registry.outlets.items()
