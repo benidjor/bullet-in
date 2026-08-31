@@ -588,7 +588,9 @@ def build_dbt_gate_alert(result, *, run_id: str) -> dict:
     """
     fields = []
     if not result.ran:
-        fields.append({"name": "게이트 고장", "value": f"- {result.error}",
+        # 디스코드 embed 필드 값은 1024자가 상한이고, 넘기면 메시지가 통째로 거부돼
+        # 장애 알림 자체가 안 온다. 저널에는 enforce_gate 가 전문을 남기므로 여기서만 자른다.
+        fields.append({"name": "게이트 고장", "value": f"- {result.error}"[:1024],
                        "inline": False})
     if result.blocked:
         fields.append({"name": "차단",

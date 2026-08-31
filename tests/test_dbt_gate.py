@@ -162,3 +162,45 @@ def test_enforce_gate_blocks_when_dbt_could_not_run(monkeypatch):
         enforce_gate(result, run_id="r1")
     assert e.value.code == 1
     assert "dbt 실행 파일이 없다" in str(sent)
+
+
+def test_run_gate_keeps_stdout_when_stderr_only_has_a_warning(tmp_path, monkeypatch):
+    # 2026-08-31 21:05 실측 재현: dbt 가 노드 23/29 에서 죽어 run_results.json 을 못 남겼고,
+    # stderr 에는 무해한 종료 경고 한 줄만 있고 진짜 원인은 stdout 에 있었다.
+    # 종전 구현은 `stderr or stdout` 이라 그 경고 한 줄이 stdout 을 통째로 밀어냈고,
+    # 저널에 남은 것이 경고뿐이라 원인을 좇을 수 없었다.
+    def fake_run(*args, **kwargs):
+        return _FakeProc(
+            -11,
+            stdout="Running with dbt=1.11.11\nRuntime Error in model gold_slo_rollup\n"
+                   "  Connection to MariaDB was lost",
+            stderr="UserWarning: resource_tracker: There appear to be 2 leaked semaphore objects",
+        )
+
+    monkeypatch.setattr("bullet_in.dbt_gate.subprocess.run", fake_run)
+    r = run_gate(tmp_path, "mysql+pymysql://root@localhost:3306/bulletin")
+
+    assert r.ran is False
+    assert "Runtime Error in model gold_slo_rollup" in r.error   # stdout 이 살아남는다
+    assert "leaked semaphore" in r.error                          # stderr 도 함께 남는다
+    assert "-11" in r.error                                       # 종료 코드가 남는다
+    assert "logs/dbt.log" in r.error                              # 전체 로그의 자리를 알려준다
+
+
+def test_run_gate_reports_exit_code_when_results_lack_blocking_rows(tmp_path, monkeypatch):
+    # 결과 파일은 있는데 종료 코드가 실패인 경우도 같은 진단을 실어야 한다.
+    def fake_run(*args, **kwargs):
+        target = tmp_path / "target"
+        target.mkdir(exist_ok=True)
+        _write(target, [
+            {"unique_id": "test.bullet_in.unique_stg_articles_url.abc",
+             "status": "pass", "failures": 0, "message": ""},
+        ])
+        return _FakeProc(2, stdout="Database Error\n  could not attach maria", stderr="")
+
+    monkeypatch.setattr("bullet_in.dbt_gate.subprocess.run", fake_run)
+    r = run_gate(tmp_path, "mysql+pymysql://root@localhost:3306/bulletin")
+
+    assert r.ran is False
+    assert "could not attach maria" in r.error
+    assert "2" in r.error
