@@ -473,7 +473,11 @@ import os
 from sqlalchemy import create_engine, text
 e = create_engine(os.environ['MARIADB_URL'])
 with e.begin() as c:
-    c.execute(text(\"INSERT IGNORE INTO players (id, ko_name) VALUES (9999, '검사용')\"))
+    c.execute(text(\"INSERT IGNORE INTO players\"
+                   \" (id, full_name, surname, category, status, transfer_status,\"
+                   \"  origin, added_at, ko_name)\"
+                   \" VALUES (9999, '검사용 선수', '검사용', 'squad', 'active', 'none',\"
+                   \"         'manual', NOW(), '검사용')\"))
     c.execute(text(\"INSERT INTO article_players (content_hash, player_id, role, extracted_at)\"
                    \" VALUES (REPEAT('b',64), 9999, 'mention', NOW())\"))
 print('고아 귀속 1건 심음 — 선수는 있고 기사만 없다')
