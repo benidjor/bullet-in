@@ -405,11 +405,34 @@ git commit
 값이 틀어지면 화면이 나빠지지만 파이프라인이 죽은 것은 아니라서, 경고 구간과 차단 구간을 가른다.
 
 **Files:**
+- Modify: `dbt/models/staging/stg_articles.sql`
 - Modify: `dbt/models/sources.yml`
 
 **Interfaces:**
 - Consumes: Task 2 의 모델 `stg_article_players`
 - Produces: 품질 축 테스트 3종
+
+- [ ] **Step 0: 테스트할 컬럼을 staging 모델이 내놓게 한다**
+
+Task 2 가 옮겨 적은 `stg_articles` 의 SELECT 목록에 `transfer_stage` 와 `transfer_direction` 이 없다.
+두 컬럼은 MariaDB 원본 표에는 있지만 모델이 안 고르므로, 테스트를 걸면 데이터 문제가 아니라 컴파일 오류가 난다.
+
+`dbt/models/staging/stg_articles.sql` 을 이렇게 바꾼다.
+
+```sql
+select content_hash, url, source_id, tier, confidence_score,
+       title_original, title_ko, summary_ko, transfer_stage, transfer_direction,
+       published_at, fetched_at
+from {{ source('maria', 'articles') }}
+```
+
+확인:
+
+```bash
+cd dbt && DBT_PROFILES_DIR=. uv run dbt build
+```
+
+Expected: `ERROR=0` — 아직 품질 축 테스트를 안 붙였으므로 경고도 0이다
 
 - [ ] **Step 1: 테스트를 더한다**
 
