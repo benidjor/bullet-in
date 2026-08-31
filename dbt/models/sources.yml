@@ -27,6 +27,27 @@ models:
           - accepted_values:
               arguments:
                 values: [0, 1, 1.5, 2, 3, 4]
+      - name: transfer_stage
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['interest', 'negotiating', 'personal_terms', 'agreed',
+                         'medical', 'done', 'official', 'collapsed', 'rumour', 'other']
+              config:
+                # 2026-08-31 실측 = 결측 1건 · 분류 패스가 한 회차에 만지는 건수보다
+                # 큰 값을 차단 임계로 둔다.
+                severity: error
+                warn_if: ">0"
+                error_if: ">20"
+      - name: transfer_direction
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['in', 'out', 'none']
+              config:
+                severity: error
+                warn_if: ">0"
+                error_if: ">20"
   - name: stg_players
     columns:
       - name: id
@@ -45,6 +66,19 @@ models:
           - accepted_values:
               arguments:
                 values: ['subject', 'mention']
+      - name: content_hash
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_articles')
+                field: content_hash
+              config:
+                # 기사 쪽이 사라진 귀속 — 해시가 갈릴 때 참조가 남는다.
+                # 차단 임계 100 의 근거는 알려진 가장 큰 단일 사건이 43건이었다는 것이다
+                # (2026-08-29 주소 정정) · 그 두 배가 넘으면 정상 운영에서 나올 수 없다.
+                severity: error
+                warn_if: ">0"
+                error_if: ">100"
   - name: tier_distribution
     columns:
       - name: tier
