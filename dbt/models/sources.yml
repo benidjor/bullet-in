@@ -45,6 +45,8 @@ models:
               arguments:
                 values: ['in', 'out', 'none']
               config:
+                # 2026-08-31 실측 = 결측 1건 · transfer_stage 와 같은 분류 패스에서
+                # 나오는 값이라 같은 20을 차단 임계로 둔다.
                 severity: error
                 warn_if: ">0"
                 error_if: ">20"
