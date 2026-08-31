@@ -83,17 +83,33 @@ def run_gate(project_dir: Path, mariadb_url: str) -> GateResult:
     dbt 자체가 못 돌면 데이터 결함이 아니라 게이트 고장이다 — 그것도 차단으로 낸다.
     조용히 통과시키면 게이트가 있다는 착각만 남는다.
     """
+    results_path = Path(project_dir) / "target" / "run_results.json"
+    # 2026-08-31 실측: profile 파싱 오류 · MariaDB 접속 실패 · extension 로드 실패처럼
+    # dbt 가 무엇 하나 돌기도 전에 죽으면 run_results.json 을 새로 안 쓴다.
+    # 지우지 않고 두면 운영 VM 에서는 지난 회차의 "전부 통과" 파일이 그대로 남아 있어서,
+    # 두 번째 회차부터는 게이트가 매번 그 옛 파일을 읽고 통과로 보고한다 —
+    # 죽은 포트로 dbt 를 겨눴을 때 종료 코드 2 가 나면서도 남은 파일 때문에 통과가 났다.
+    try:
+        results_path.unlink(missing_ok=True)
+    except OSError as e:
+        return GateResult(ran=False, error=f"이전 결과 파일을 못 지웠다: {e}")
     env = {**os.environ, **dbt_env(mariadb_url), "DBT_PROFILES_DIR": "."}
     try:
         proc = subprocess.run(["dbt", "build"], cwd=project_dir, env=env,
                               capture_output=True, text=True, timeout=600)
     except (OSError, subprocess.SubprocessError) as e:
         return GateResult(ran=False, error=f"dbt 를 못 돌렸다: {e}")
-    result = parse_results(Path(project_dir) / "target" / "run_results.json")
+    result = parse_results(results_path)
+    tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
     if not result.ran:
         # 결과 파일이 없다는 것은 dbt 가 시작도 못 했다는 뜻이다.
-        tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
         return GateResult(ran=False, error=f"{result.error} · dbt 출력: {' / '.join(tail)}")
+    if proc.returncode != 0 and not result.blocked:
+        # 종료 코드는 실패인데 파싱된 결과에 차단 항목이 없다 — 그 결과 파일은
+        # 이번 회차를 설명하지 못한다는 뜻이라 통과로 볼 수 없다.
+        return GateResult(ran=False,
+                          error=f"dbt 가 {proc.returncode} 로 끝났는데 결과 파일엔 차단 항목이 없다 "
+                                f"· dbt 출력: {' / '.join(tail)}")
     return result
 
 

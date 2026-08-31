@@ -39,6 +39,15 @@ models:
                 severity: error
                 warn_if: ">0"
                 error_if: ">20"
+          # accepted_values 는 NULL 행을 안 센다 — 결측 행은 검사 대상에서 그냥 빠진다.
+          # 분류 패스가 값을 아예 안 쓰게 되는 회귀는 accepted_values 로는 영원히 안 보이므로
+          # 같은 임계로 not_null 을 따로 건다.
+          # 운영 실측 (2026-08-31 15시대 KST) = transfer_stage 결측 0건.
+          - not_null:
+              config:
+                severity: error
+                warn_if: ">0"
+                error_if: ">20"
       - name: transfer_direction
         tests:
           - accepted_values:
@@ -47,6 +56,13 @@ models:
               config:
                 # 2026-08-31 실측 = 결측 1건 · transfer_stage 와 같은 분류 패스에서
                 # 나오는 값이라 같은 20을 차단 임계로 둔다.
+                severity: error
+                warn_if: ">0"
+                error_if: ">20"
+          # accepted_values 는 NULL 행을 안 센다 — 이유와 임계 근거는 transfer_stage 와 같다.
+          # 운영 실측 (2026-08-31 15시대 KST) = transfer_direction 결측 0건.
+          - not_null:
+              config:
                 severity: error
                 warn_if: ">0"
                 error_if: ">20"

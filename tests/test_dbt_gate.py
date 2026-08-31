@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from bullet_in.dbt_gate import GateResult, TestOutcome, dbt_env, enforce_gate, parse_results
+from bullet_in.dbt_gate import GateResult, TestOutcome, dbt_env, enforce_gate, parse_results, run_gate
 
 
 def _write(tmp_path: Path, results: list[dict]) -> Path:
@@ -81,6 +81,48 @@ def test_dbt_env_unquotes_percent_encoded_password():
     # 운영 비밀번호에 @ 나 / 가 들어가면 URL 에 퍼센트 인코딩으로 실린다.
     env = dbt_env("mysql+pymysql://root:p%40ss%2Fword@localhost:3306/bulletin")
     assert env["DBT_MARIA_PASSWORD"] == "p@ss/word"
+
+
+class _FakeProc:
+    def __init__(self, returncode, stdout="", stderr=""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+def test_run_gate_does_not_report_pass_from_a_stale_results_file(tmp_path, monkeypatch):
+    # 2026-08-31 실측 재현: dbt 가 죽은 포트를 겨눠 종료 코드 2 로 죽었는데 (아무것도
+    # 새로 안 씀), target/ 에 지난 회차의 "전부 통과" 파일이 남아 있던 상황을 그대로 흉내낸다.
+    # 지우지 않으면 이 파일을 그대로 읽어 통과로 보고한다 — 이 테스트는 그 결함을 잡는다.
+    target = tmp_path / "target"
+    target.mkdir()
+    _write(target, [
+        {"unique_id": "test.bullet_in.unique_stg_articles_url.abc",
+         "status": "pass", "failures": 0, "message": ""},
+    ])
+
+    def fake_run(*args, **kwargs):
+        return _FakeProc(2)  # 아무것도 새로 안 쓴다
+
+    monkeypatch.setattr("bullet_in.dbt_gate.subprocess.run", fake_run)
+    r = run_gate(tmp_path, "mysql+pymysql://root@localhost:1/bulletin")
+    assert r.ran is False
+
+
+def test_run_gate_happy_path_still_passes(tmp_path, monkeypatch):
+    def fake_run(*args, **kwargs):
+        target = tmp_path / "target"
+        target.mkdir(exist_ok=True)
+        _write(target, [
+            {"unique_id": "test.bullet_in.unique_stg_articles_url.abc",
+             "status": "pass", "failures": 0, "message": ""},
+        ])
+        return _FakeProc(0)
+
+    monkeypatch.setattr("bullet_in.dbt_gate.subprocess.run", fake_run)
+    r = run_gate(tmp_path, "mysql+pymysql://root@localhost:3306/bulletin")
+    assert r.ran is True
+    assert r.blocked == []
 
 
 def test_enforce_gate_passes_when_nothing_broke(caplog):
