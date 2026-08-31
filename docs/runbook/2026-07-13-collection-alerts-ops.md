@@ -4,7 +4,7 @@
 
 파이프라인이 깨졌을 때 Discord 로 통지하는 SLO-6 알림 (PR #34) 의 설정 · 해석 · 튜닝 · 롤백을 정리.
 
-- 두 알림 경로 — 하드 실패 (파이프라인 예외 crash → Airflow `on_failure_callback`) · 소프트 드리프트 (실행은 성공했으나 한 소스가 조용히 0건 = 셀렉터 드리프트 → 소스별 수집량 이상탐지) .
+- 두 알림 경로 — 하드 실패 (회차 유닛이 0 이 아닌 코드로 끝나면 systemd `OnFailure` 가 `bullet-in-fail-notify@.service` 를 띄운다) · 소프트 드리프트 (실행은 성공했으나 한 소스가 조용히 0건 = 셀렉터 드리프트 → 소스별 수집량 이상탐지) .
 - 공유 배관 — `src/bullet_in/notify.py` 의 `send_alert` 가 Discord embed 를 발송.
 
 ## Discord webhook 설정
@@ -36,7 +36,7 @@
 - **systemd 유닛 실패 알림은 유닛 파일 안에서 직접 발송한다** — `infra/systemd/bullet-in-fail-notify@.service` 의 `ExecStart` 한 줄이다.
   파이썬 밖에서 알림을 보내는 유일한 자리라 채널 배정도 거기에 박혀 있다 ( `channel=CHANNEL_INCIDENT` ) .
   **이 줄을 고치면 VM 에서 `bash infra/systemd/install-units.sh` 를 다시 돌려야 반영된다** ( `git pull` 만으로는 `/etc/systemd/system/` 사본이 안 바뀐다 · `docs/runbook/2026-07-20-vm-cohost-bootstrap.md` §5 ) .
-- **Airflow 환경** — DAG 워커 프로세스에도 같은 변수가 보여야 한다 (컨테이너 env · Airflow Variable → env 매핑 등 배포 방식에 맞춤) .
+- **보존 자산인 Airflow DAG 를 되살릴 때** — DAG 워커 프로세스에도 같은 변수가 보여야 한다 (컨테이너 env · Airflow Variable → env 매핑 등 배포 방식에 맞춤) .
 - **미설정 동작** — 변수가 없으면 발송하지 않고 `WARNING` 으로 제목 · 설명을 로깅한다 (폴백) .
   dev · CI 는 이 폴백으로 도므로 webhook 없이도 테스트가 깨지지 않는다.
 - **저널에서는 주소가 가려진다** — httpx 요청 로그에 `api/webhooks/[REDACTED]` 로 남는다 (#220) .
@@ -60,9 +60,10 @@
 - **어댑터 힌트는 드롭이면서 후보가 0건일 때만 붙는다** — 후보가 있는데 적재만 줄었다면 발견은 도는 것이므로 셀렉터 드리프트 힌트에 근거가 없다.
   스파이크에는 원인 후보를 아예 안 붙인다.
   종전의 「중복 유입 · 파싱 회귀 의심」 은 관측이 아니라 추측이었다 — 같은 함정으로 SLO-5 를 두 번 고쳤다 ( #169 · #174 ) .
-- **❌ 파이프라인 실패 (빨강)** — 하드 실패.
-  `run_pipeline` 태스크가 예외로 중단.
-  fields 의 `로그` 링크 · `Try` · `Host` 로 Airflow 태스크를 특정하고, description 의 예외 요약 (최대 400자) 으로 원인을 좁힌다.
+- **❌ 유닛 실패 (빨강)** — 하드 실패.
+  회차 유닛이 0 이 아닌 코드로 끝나면 systemd 가 `bullet-in-fail-notify@.service` 를 띄운다.
+  이 알림이 담는 것은 죽은 유닛 이름 하나뿐이라, 원인은 VM 에서 `journalctl -u <유닛> -n 100` 으로 좁힌다.
+  보존 자산인 Airflow DAG 를 되살리면 `build_failure_alert` 가 `로그` 링크 · `Try` · `Host` 필드와 예외 요약 (최대 400자) 을 대신 싣는다.
 - **🚨 수집 0건 (빨강)** — 직전 회차까지 글을 가져오던 소스가 이번 회차에 한 건도 못 가져옴.
   회차 자체는 성공으로 끝나므로 실패 알림이 따로 오지 않는다.
   제목에 소스 이름이 오고, 어댑터가 실패 계수를 내놓으면 `— 검색 4건이 전부 실패했습니다` 가 붙는다.

@@ -4,11 +4,11 @@ dbt (DuckDB)가 MariaDB를 attach해 분석 마트를 만들고, 데이터 테�
 
 ## 동작 개요
 - DuckDB가 `mysql_scanner` 확장으로 MariaDB의 `bulletin` DB를 `maria`라는 별칭으로 attach.
-- `stg_articles`(스테이징) → `gold_daily_source_quality`(소스별 품질 집계) 모델 빌드.
+- `stg_articles` (스테이징) → `gold_daily_source_quality` (소스별 품질 집계) 모델 빌드.
 - 데이터 테스트가 곧 게이트:
-  - `unique`(content_hash, url) → **중복 적재 0** 검증
-  - `not_null`(content_hash, url, title_original) → **필수 필드 완전성**
-  - `accepted_values`(tier ∈ {0,1,1.5,2,3,4}) → **스키마 무결성**
+  - `unique` (content_hash, url) → **중복 적재 0** 검증
+  - `not_null` (content_hash, url, title_original) → **필수 필드 완전성**
+  - `accepted_values` (tier ∈ {0,1,1.5,2,3,4}) → **스키마 무결성**
 
 `dbt docs generate`로 본 `gold_daily_source_quality` 마트 (컬럼 · 타입 · 의존성):
 
@@ -55,5 +55,5 @@ cd dbt && uv run dbt build --profiles-dir .
 
 ## 비고
 - 산출물 `bullet_in.duckdb`, `dbt/target/`, `dbt/logs/`는 커밋하지 않는다 (.gitignore).
-- attach 접속 정보는 `dbt/profiles.yml`(localhost · root · `bulletin`).
+- attach 접속 정보는 `dbt/profiles.yml` (localhost · root · `bulletin`).
 - `accepted_values` 정의 형식은 dbt 1.11 기준 `arguments:` 중첩 → `docs/troubleshooting/2026-05-27-dbt-accepted-values-deprecation.md`.
