@@ -84,12 +84,18 @@
 - `stg_article_players.player_id` 가 `stg_players` 를 가리킴 — 신설
 - `stg_article_players.role` 값 2종 — 신설
 
-**품질 축은 경고로 두고 임계를 넘을 때만 세운다 (`severity: warn` · `error_if`).**
+**품질 축은 한 테스트 안에서 경고 구간과 차단 구간을 가른다 (`warn_if` · `error_if`).**
 값이 틀어지면 화면이 나빠지지만 파이프라인이 죽은 것은 아니다.
 
 - `stg_article_players.content_hash` 가 `stg_articles` 를 가리킴 — 신설
 - `stg_articles.transfer_stage` 값 10종 — 신설
 - `stg_articles.transfer_direction` 값 3종 — 신설
+
+**두 축 모두 `severity` 는 `error` 로 둔다.**
+`severity: warn` 을 쓰면 `error_if` 가 통째로 무시돼 위반이 아무리 늘어도 배포가 안 막힌다.
+2026-08-31 에 로컬에서 확인했다 — 고아를 1건 심고 임계를 0으로 낮췄는데도 판정이 경고에 머물렀고 종료 코드가 0이었다.
+구간을 가르는 것은 `severity` 가 아니라 `warn_if` 와 `error_if` 다.
+같은 실측에서 `severity: error` · `warn_if: ">0"` · `error_if: ">100"` 조합은 위반 1건에서 경고와 종료 코드 0을, 임계를 넘겼을 때 차단과 종료 코드 1을 냈다.
 
 ### 2.3. 임계는 실제 사건의 크기에서 가져온다
 
@@ -192,3 +198,18 @@ dbt 가 원천을 모르므로 계보가 dbt 밖에서 끊긴다.
   「돌았다」 만 확인하고 「막았다」 를 확인하지 않으면 §4 의 첫 항목을 건너뛴 것이다.
 - 임계는 부채의 현재 크기가 아니라 사건의 크기에서 와야 한다.
   부채를 먼저 지우기로 한 이유가 이것이다.
+- **설정 이름이 뜻대로 동작하는지는 대 봐야 안다.**
+  `severity: warn` 과 `error_if` 를 함께 쓰는 조합은 문법이 통과하고 테스트도 초록불이지만 차단이 한 번도 안 걸린다.
+  설계 단계에서 위반을 심어 보지 않았다면 게이트가 있다고 믿으면서 아무것도 안 막는 상태로 배포됐을 것이다.
+
+## 7. 로컬에서 확인한 사실
+
+착수 전에 로컬 DuckDB · MariaDB 로 문법과 동작을 대 봤다.
+
+- `dbt build` 는 모델 6개와 테스트 10개를 **0.7초**에 끝낸다.
+  회차 시간에 부담이 없다.
+- 테스트 인자는 dbt 1.11 문법인 `arguments:` 블록으로 넘긴다.
+  `relationships` 도 `arguments: to · field` 형태다.
+- **로컬 개발 DB 의 스키마가 운영보다 뒤처져 있을 수 있다.**
+  `article_players.role` 이 없어 신설 모델이 실패했고 `MartStore.ensure_schema()` 를 돌려서 맞췄다.
+  구현을 시작하기 전에 이것부터 한다.
