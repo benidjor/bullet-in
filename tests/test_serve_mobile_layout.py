@@ -55,3 +55,17 @@ def test_dday_counts_calendar_days_in_kst():
     assert re.search(r"narrow\s*&&\s*left\s*>=\s*86400000", js), (
         "마지막 하루를 시계로 넘기는 경계가 없음 — D-0 이 화면에 뜬다"
     )
+def test_list_cards_share_the_left_edge_with_the_band():
+    # 카드의 좌우 패딩은 상위 두 등급 배경 음영 안에서 글자를 띄우려고 둔 것인데,
+    # 배경이 없는 카드까지 12px 씩 밀려 히어로 · 절 머리와 세로선이 어긋났다
+    # (2026-09-02 사용자 지적 · 실측 393px 에서 밴드 16px 대 목록 28px).
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
+    assert re.search(r"\.daylist\s+\.item\{[^}]*padding-left\s*:\s*0", css), (
+        "좁은 화면에서 카드 좌우 패딩을 걷는 규칙이 없음 — 목록이 밴드보다 안쪽에 선다"
+    )
+    # 음영을 칠하는 쪽이 페이지마다 다르다 — 둘 다 넓혀야 글자만 제자리에 선다.
+    # 넓히는 값은 .shell 의 좌우 패딩 (16px) 보다 작아야 띠가 화면 끝에서 떨어진다.
+    for sel in (r"\.block\.g0", r"\.daylist\.flatlist\s+\.item\.g0"):
+        assert re.search(sel + r"[^{]*\{[^}]*margin-left\s*:\s*-8px", css), (
+            f"{sel} 의 배경을 8px 넓히는 규칙이 없음 — 음영이 글자에 붙는다"
+        )
