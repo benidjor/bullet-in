@@ -1,0 +1,13 @@
+[Unit]
+Description=bullet-in 운영 마트 변경 이력 적재 (MariaDB -> Iceberg on GCS)
+Wants=docker.service
+After=docker.service network-online.target
+OnFailure=bullet-in-fail-notify@%n.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/bullet-in
+EnvironmentFile=/home/ubuntu/bullet-in/.env
+ExecStart=/home/ubuntu/.local/bin/uv run python -m bullet_in.warehouse load
+TimeoutStartSec=1800
