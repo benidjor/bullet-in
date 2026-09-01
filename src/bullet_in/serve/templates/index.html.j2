@@ -45,15 +45,17 @@
 <div class="daydiv"{% if day.all_dup %} style="display:none"{% endif %}><span class="d">{{ day.label }}</span><span class="c">묶음 {{ day.n }}개 · 보도 {{ day.reports }}건</span></div>
 <div class="daylist">
   {% for b in day.blocks %}
-  {# 결말 카드 (b.ending) 는 홈에 안 그린다 (2026-08-23 공개 준비).
-     그것이 왜 붙어 있는지는 행선지 구단 배지가 설명하고 있었는데, 첫인상 정리로
-     그 배지를 떼자 같은 소식이 두 번 나온 것처럼 읽혔다 (실측 16블록).
-     b.ending 은 관련 보도 갈래 라벨 (branch_views) 이 계속 쓰므로 값은 그대로 둔다.
-     이 16건은 전체 기사 · 선수 페이지에는 남고 홈에서만 빠진다. #}
+  {# 결말 카드 (b.ending) 를 홈에 되살린다 (2026-09-01).
+     2026-08-23 에 뺀 이유는 카드가 아니라 설명이었다 — 첫인상 정리로 행선지 구단
+     배지를 떼자, 둘째 카드가 왜 붙어 있는지 알 수 없어 같은 소식이 두 번 나온
+     것처럼 읽혔다 (실측 16블록). 그래서 되살릴 때 배지를 함께 단다.
+     어떤 기사가 결말인지는 ending_card 가 정한다 — 단계가 대표 이상이거나 무산이고,
+     그 뒤에 진행 단계 보도가 없는 것만 여기까지 온다. #}
   {# 대표의 공신력 등급을 블록에도 싣는다 — 아래 두 버튼이 카드와 같은 배경을 쓰게
      (2026-08-28). 등급이 카드 안쪽에만 있으면 버튼만 흰 바탕으로 떠 보인다. #}
   <div class="block {{ b.rep._grade }}{{ ' lowsolo' if b.lowsolo }}"{% if b.band_dup %} style="display:none"{% endif %}>
     {{ card(b.rep, thumb=True, cls='dupcard' if b.band_dup else '', hidden=b.band_dup) }}
+    {% if b.ending %}{{ card(b.ending.article, dest=b.ending.club, thumb=True) }}{% endif %}
     {# 꺼내 온 카드는 관련 보도가 없어 어느 이야기인지 화면에 안 남는다 — 그 선수
        페이지로 가는 줄을 달아 맥락을 잇는다 (안건 π 후속). 페이지가 있는 선수만 건다.
        관련 보도 버튼과 한 줄에 나란히 놓는다 (2026-08-28 사용자 확정). #}

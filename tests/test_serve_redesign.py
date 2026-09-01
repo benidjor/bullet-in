@@ -275,6 +275,94 @@ def test_ending_card_ignores_arsenal_subject():
     assert R.ending_card(cluster, CLUBS) is None
 
 
+# ── 결말 카드 부활 (안건 2π · 2026-09-01 설계) ───────────────────────────
+# 채택 조건이 둘 붙는다 — 단계가 대표 이상일 것 (무산은 면제) · 결말 뒤에 진행
+# 단계 보도가 없을 것. 아래 다섯은 운영 14묶음을 사용자가 직접 가른 표에서
+# 유형 하나씩을 뽑은 것이다.
+
+def test_ending_card_takes_an_ending_past_the_representative_stage():
+    # 대표가 루머인 이야기에 협상 중 결말이 오면 그것이 이야기의 끝이다 (마르티넬리)
+    rep = _row(content_hash="r", transfer_stage="rumour", title_ko="아스날, 로저스 관심")
+    cluster = {"key": "로저스", "articles": [
+        _row(content_hash="e", transfer_stage="negotiating",
+             title_ko="첼시, 로저스 영입 협상 중"),
+        rep,
+    ]}
+    end = R.ending_card(cluster, CLUBS, rep)
+    assert end["article"]["content_hash"] == "e"
+    assert end["club"] == "첼시"
+
+
+def test_ending_card_blocks_an_ending_behind_the_representative_stage():
+    # 아스날이 이미 공식 발표한 이야기에 다른 구단 협상 중을 결말로 붙이던 자리 (넬슨)
+    rep = _row(content_hash="r", transfer_stage="official", title_ko="아스날, 로저스 영입 오피셜")
+    cluster = {"key": "로저스", "articles": [
+        _row(content_hash="e", transfer_stage="negotiating",
+             title_ko="첼시, 로저스 영입 협상 마무리 중"),
+        rep,
+    ]}
+    assert R.ending_card(cluster, CLUBS, rep) is None
+
+
+def test_ending_card_exempts_a_collapse_from_the_stage_comparison():
+    # 무산은 사다리의 낮은 칸이 아니라 사다리 밖의 끝이라 순위 비교에서 뺀다 (비니시우스)
+    rep = _row(content_hash="r", transfer_stage="agreed", title_ko="아스날, 로저스 이적 합의")
+    cluster = {"key": "로저스", "articles": [
+        _row(content_hash="e", transfer_stage="collapsed",
+             title_ko="첼시, 로저스 영입 무산"),
+        rep,
+    ]}
+    end = R.ending_card(cluster, CLUBS, rep)
+    assert end["article"]["content_hash"] == "e"
+
+
+def test_ending_card_catches_a_collapse_that_names_no_club():
+    # 무산 결말에 행선지가 없어도 잡는다 — 다른 구단 관점 조건만 두면 놓치던 건 (크루피)
+    rep = _row(content_hash="r", transfer_stage="interest", title_ko="아스날, 로저스 관심")
+    cluster = {"key": "로저스", "articles": [
+        _row(content_hash="e", transfer_stage="collapsed", title_ko="로저스 영입 철수"),
+        rep,
+    ]}
+    end = R.ending_card(cluster, CLUBS, rep)
+    assert end["article"]["content_hash"] == "e"
+    assert end["club"] is None
+
+
+def test_ending_card_keeps_a_collapse_that_later_reports_only_confirm():
+    # 무산 뒤에 오는 기사가 늘 「되살아남」 은 아니다 — 무산을 확인하는 후속도 단계가
+    # 관심으로 저장된다 (실측 「비니시우스 영입 불발된 아스날, 대체 자원 물색 나서」 ·
+    # 「크루피 영입 고려했으나 부상으로 보류」). 둘을 코드가 못 가르므로 뒤 기사를
+    # 이유로 결말을 내리지 않는다 (2026-09-01 사용자 확정 · 검산 14묶음 대조).
+    rep = _row(content_hash="r", transfer_stage="interest", title_ko="아스날, 로저스 관심",
+               published_at=datetime(2026, 8, 31), fetched_at=datetime(2026, 8, 31))
+    cluster = {"key": "로저스", "articles": [
+        rep,
+        _row(content_hash="e", transfer_stage="collapsed", title_ko="첼시, 로저스 영입 무산",
+             published_at=datetime(2026, 8, 29), fetched_at=datetime(2026, 8, 29)),
+    ]}
+    end = R.ending_card(cluster, CLUBS, rep)
+    assert end["article"]["content_hash"] == "e"
+
+
+def test_ending_card_takes_the_latest_collapse_when_an_earlier_one_was_revived():
+    # 결말이 제때 서고 저절로 바뀌는 근거는 순회 순서 하나다 — 묶음은 최신순이라
+    # 되살아났다 다시 무산된 이야기에서 마지막 무산이 먼저 잡힌다 (알바레스 실측 —
+    # 08-29 무산 → 08-31 협상 중 → 09-01 무산). 이 순서가 깨지면 옛 무산이 선다.
+    rep = _row(content_hash="r", transfer_stage="interest", title_ko="아스날, 로저스 관심",
+               published_at=datetime(2026, 9, 1, 15), fetched_at=datetime(2026, 9, 1, 15))
+    cluster = {"key": "로저스", "articles": [
+        _row(content_hash="late", transfer_stage="collapsed", title_ko="로저스 영입전 철수",
+             published_at=datetime(2026, 9, 1, 19), fetched_at=datetime(2026, 9, 1, 19)),
+        rep,
+        _row(content_hash="mid", transfer_stage="negotiating", title_ko="아스날, 로저스 영입 추진",
+             published_at=datetime(2026, 8, 31), fetched_at=datetime(2026, 8, 31)),
+        _row(content_hash="early", transfer_stage="collapsed", title_ko="로저스 아스날행 무산",
+             published_at=datetime(2026, 8, 29), fetched_at=datetime(2026, 8, 29)),
+    ]}
+    end = R.ending_card(cluster, CLUBS, rep)
+    assert end["article"]["content_hash"] == "late"
+
+
 def test_related_reports_branch_sorted_by_sort_ts_desc():
     # 발행 시각 있음 · day 정밀도 보간 · 시각 부재 폴백이 섞여도 갈래는 최신 먼저 (spec2 §6.3)
     rep = _row(content_hash="rep", title_ko="아스날, 로저스 영입 추진")
@@ -337,6 +425,31 @@ def test_promote_recent_lifts_folded_article_in_window():
     assert out[0]["rel_count"] == 0 and out[0]["branches"] == []
     assert block["rel_count"] == 0 and block["branches"] == []
     assert block["_articles"] == [rep]          # 날짜 머리글 건수가 두 번 세지 않게
+
+
+def test_promote_recent_drops_the_ending_card_it_lifted_out():
+    # 꺼낸 기사가 그 묶음의 결말이면 결말 카드를 내린다 — 안 내리면 같은 기사가 자기
+    # 날짜의 낱개 카드와 원래 묶음의 결말 카드로 두 번 선다 (배포 전 화면 실측 3건).
+    # 결말 카드를 안 그리던 동안에는 (2026-08-23 ~ 09-01) 드러날 수 없던 자리다.
+    rep, end = _p("rep", 15), _p("end", 21)
+    block = {"rep": rep, "count": 2, "_articles": [rep, end], "rel_count": 1,
+             "ending": {"article": end, "club": "첼시"},
+             "branches": [{"label": "", "articles": [end]}]}
+    out = R.promote_recent([block], R.recent_days([rep, end]))
+    assert [b["rep"]["content_hash"] for b in out] == ["end"]
+    assert block["ending"] is None
+
+
+def test_promote_recent_keeps_an_ending_it_did_not_lift():
+    # 결말이 꺼내지지 않았으면 그대로 둔다 — 검사가 헛돌지 않는지
+    rep, end, other = _p("rep", 10), _p("end", 11), _p("other", 21)
+    block = {"rep": rep, "count": 3, "_articles": [rep, end, other], "rel_count": 2,
+             "ending": {"article": end, "club": "첼시"},
+             "branches": [{"label": "", "articles": [end, other]}]}
+    window = R.recent_days([other, _p("x", 20), _p("y", 19), rep, end])
+    out = R.promote_recent([block], window)
+    assert [b["rep"]["content_hash"] for b in out] == ["other"]   # 결말은 안 꺼냈다
+    assert block["ending"]["article"]["content_hash"] == "end"
 
 
 def test_promote_recent_keeps_articles_outside_window_folded():

@@ -1041,21 +1041,13 @@ def test_article_with_an_image_uses_the_large_preview_card():
     assert '<meta name="twitter:card" content="summary_large_image">' in html
 
 
-def test_ending_card_is_not_drawn_on_the_home_page():
-    """결말 카드는 판정만 남기고 홈에는 안 그린다 (2026-08-23 공개 준비).
+def _home_html_with(block):
+    """블록 하나를 홈 템플릿에 그대로 넣고 렌더한다.
 
-    그 카드가 왜 붙어 있는지는 행선지 구단 배지가 설명하고 있었는데, 첫인상 정리로
-    배지를 떼자 같은 소식이 두 번 나온 것처럼 읽혔다 (배포 사본 실측 16블록).
-    판정 (ending_card) 은 관련 보도 갈래 라벨이 계속 쓰므로 그대로 두고 화면에서만 뺀다.
-
-    묶음을 만드는 경로는 DB (선수 사전) 를 타므로, 여기서는 결말이 든 블록을 손으로
-    만들어 템플릿에 그대로 넣는다 — 보려는 것이 「블록에 결말이 있을 때 그리는가」다."""
-    from bullet_in.serve.render import _env, _decorate
-    rep = _decorate(_row(content_hash="cr", title_ko="아스날, 로저스 관심"), SOURCES, NOW)
-    end = _decorate(_row(content_hash="ce", title_ko="첼시, 로저스 영입 합의"), SOURCES, NOW)
-    block = {"rep": rep, "ending": {"article": end, "club": "첼시"},
-             "branches": [], "rel_count": 0, "count": 2}
-    html = _env().get_template("index.html.j2").render(
+    묶음을 만드는 경로는 DB (선수 사전) 를 타므로 블록을 손으로 만든다 — 보려는 것이
+    「블록에 결말이 있을 때 그리는가」이지 「묶음이 결말을 찾는가」가 아니다."""
+    from bullet_in.serve.render import _env
+    return _env().get_template("index.html.j2").render(
         lead=None, mains=[], gossip=[], gossip_hidden=0, gossip_days=3,
         gossip_shown=0, gossip_total=0, news_today=0, gossip_today=0,
         day_blocks=[{"date": "2026-06-29", "label": "오늘", "n": 1, "reports": 2,
@@ -1064,9 +1056,33 @@ def test_ending_card_is_not_drawn_on_the_home_page():
                 "other": 0, "outlets": {"initial": [], "stages": []},
                 "journalists": {"initial": [], "stages": [], "total": 0}},
         active="home", root="", meta=None)
-    assert 'data-hash="cr"' in html          # 대표는 그린다 (검사가 헛돌지 않는지)
-    assert 'data-hash="ce"' not in html      # 결말은 안 그린다
-    assert "첼시, 로저스 영입 합의" not in html
+
+
+def test_ending_card_is_drawn_on_the_home_page_with_its_destination_badge():
+    """결말 카드를 홈에 되살린다 (안건 2π · 2026-09-01).
+
+    2026-08-23 에 뺀 이유는 카드 자체가 아니라 설명이 사라진 것이었다 — 행선지 구단
+    배지를 떼자 둘째 카드가 왜 붙어 있는지 알 수 없어 같은 소식이 두 번 나온 것처럼
+    읽혔다 (실측 16블록). 그래서 되살릴 때 배지를 함께 단다."""
+    from bullet_in.serve.render import _decorate
+    rep = _decorate(_row(content_hash="cr", title_ko="아스날, 로저스 관심"), SOURCES, NOW)
+    end = _decorate(_row(content_hash="ce", title_ko="첼시, 로저스 영입 합의"), SOURCES, NOW)
+    html = _home_html_with({"rep": rep, "ending": {"article": end, "club": "첼시"},
+                            "branches": [], "rel_count": 0, "count": 2})
+    assert 'data-hash="cr"' in html                 # 대표 (검사가 헛돌지 않는지)
+    assert 'data-hash="ce"' in html                 # 결말도 그린다
+    assert '<span class="dest">첼시</span>' in html   # 왜 붙어 있는지를 배지가 설명한다
+
+
+def test_ending_card_without_a_club_carries_no_destination_badge():
+    """행선지가 없는 무산 결말에는 배지를 안 단다 — 빈 배지가 서면 안 된다."""
+    from bullet_in.serve.render import _decorate
+    rep = _decorate(_row(content_hash="cr", title_ko="아스날, 로저스 관심"), SOURCES, NOW)
+    end = _decorate(_row(content_hash="ce", title_ko="로저스 영입 철수"), SOURCES, NOW)
+    html = _home_html_with({"rep": rep, "ending": {"article": end, "club": None},
+                            "branches": [], "rel_count": 0, "count": 2})
+    assert 'data-hash="ce"' in html
+    assert 'class="dest"' not in html
 
 
 def test_no_analytics_script_without_a_measurement_id():

@@ -356,8 +356,10 @@ def _is_aggregator_url(url: str) -> bool:
     u = (url or "").lower()
     return any(h in u for h in _AGGREGATOR_HOSTS)
 # done 은 종전 체계에서 agreed 로 저장되던 "타 매체 완료 보도" 의 거처라 상위 유지
-# (빠뜨리면 완료 당일 보도가 rank 0 으로 추락) · collapsed 는 결말 카드 문턱
-# (ending_card 의 >= 1) 을 넘도록 negotiating 급 (단계 재정의 2026-08-10 반영).
+# (빠뜨리면 완료 당일 보도가 rank 0 으로 추락) · collapsed 는 negotiating 급
+# (단계 재정의 2026-08-10 반영). collapsed 의 1 이 결말 카드 문턱 (ending_card 의
+# 하한 1) 을 넘으라고 준 값이었는데, 2026-09-01 부터 결말 카드가 무산을 순위 비교에서
+# 아예 면제하므로 이 값은 이제 1면 정렬에만 쓰인다.
 _LEAD_STAGE_RANK = {"official": 6, "done": 5, "agreed": 4, "medical": 3,
                     "personal_terms": 2, "negotiating": 1, "collapsed": 1}
 _TOP_HORIZON_DAYS = 10
@@ -1180,7 +1182,7 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
     blocks = []
     for c in clusters:
         rep = pick_representative(c["articles"])
-        ending = ending_card(c, clubs)
+        ending = ending_card(c, clubs, rep)
         # 대표가 이미 다른 구단 결말 기사면 결말 카드를 따로 세우지 않는다 (중복 방지)
         if ending and _is_other_club_report(rep, c["key"], clubs):
             ending = None
@@ -1935,12 +1937,34 @@ def _is_other_club_report(a: dict, key: str | None, club_map: dict) -> str | Non
     return club_in_title(fc, club_map)
 
 
-def ending_card(cluster: dict, club_map: dict) -> dict | None:
-    """결말 카드 (spec2 §6.2) — 다른 구단이 데려간 사건 · 단계 협상 중 이상."""
+def ending_card(cluster: dict, club_map: dict, rep: dict | None = None) -> dict | None:
+    """결말 카드 (spec2 §6.2) — 다른 구단이 데려간 사건 · 무산 (안건 2π).
+
+    후보는 「다른 구단 관점」 이거나 「무산」 이고, 채택 조건은 하나다 —
+    단계가 대표 이상일 것. 아스날이 이미 오피셜을 낸 이야기에 「다른 구단과 협상
+    마무리 중」 을 결말로 붙이던 자리다 (운영 14묶음 실측에서 2건).
+    무산은 이 비교에서 면제한다 — 무산은 사다리의 낮은 칸이 아니라 사다리 밖의 끝이라
+    (_ladder_rank 와 같은 판단) 순위로 재면 「이적 합의 → 무산」 이 걸린다.
+
+    **「결말 뒤에 진행 단계 보도가 있으면 세우지 않는다」 는 조건은 두지 않는다**
+    (2026-09-01 사용자 확정 · 설계 단계에서 넣기로 했다가 운영 데이터에 대 보고 뺐다).
+    무산 뒤에 오는 기사가 「이야기가 되살아났다」 와 「무산을 확인한다」 둘 다인데
+    양쪽이 모두 관심 단계로 저장돼 코드가 못 가른다 — 실측에서 이 조건을 걸면
+    비니시우스 (레알 재계약) · 크루피 (부상으로 일단락) · 로저스 (첼시행 확정) 셋의
+    결말이 함께 사라졌다. 대신 묶음이 최신순이라 되살아났다 다시 무산된 이야기에서는
+    마지막 무산이 먼저 잡히고, 새 보도가 들어오면 결말도 저절로 바뀐다.
+
+    결말이 아직 끝나지 않은 이야기에 설 위험은 남는다. 그것은 다음 회차의 보도가
+    고쳐 주지만, 반대로 조건을 걸어 놓쳐 버린 결말은 영영 화면에 안 나온다."""
+    floor = max(_LEAD_STAGE_RANK.get((rep or {}).get("transfer_stage") or "", 0), 1)
     for a in cluster["articles"]:
+        collapsed = (a.get("transfer_stage") or "") == "collapsed"
         club = _is_other_club_report(a, cluster["key"], club_map)
-        if club and _LEAD_STAGE_RANK.get(a.get("transfer_stage") or "", 0) >= 1:
-            return {"article": a, "club": club}
+        if not club and not collapsed:
+            continue
+        if not collapsed and _LEAD_STAGE_RANK.get(a.get("transfer_stage") or "", 0) < floor:
+            continue
+        return {"article": a, "club": club}
     return None
 
 
@@ -2165,6 +2189,11 @@ def promote_recent(blocks: list[dict], window: set,
         b["_articles"] = [a for a in b["_articles"]
                           if a["content_hash"] not in taken]
         b["count"] = len(b["_articles"])
+        # 꺼낸 것이 결말 기사면 결말 카드도 내린다 — 안 내리면 같은 기사가 자기 날짜의
+        # 낱개 카드와 원래 묶음의 결말 카드로 두 번 선다 (2026-09-01 화면 실측 3건).
+        # 결말 카드를 안 그리던 동안에는 (2026-08-23 ~ 09-01) 드러날 수 없던 자리다.
+        if b.get("ending") and b["ending"]["article"]["content_hash"] in taken:
+            b["ending"] = None
         promoted.extend({"rep": a, "ending": None, "branches": [], "rel_count": 0,
                          "count": 1, "_articles": [a], "promoted": True,
                          "key": b.get("key")}
