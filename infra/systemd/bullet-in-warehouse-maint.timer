@@ -1,5 +1,5 @@
 [Unit]
-Description=bullet-in 이력 유지보수 1일 1회 (KST 11:40 · 백업과 회차 사이)
+Description=bullet-in 변경 이력 유지보수 1일 1회 (KST 11:40 · 백업과 회차 사이)
 
 [Timer]
 OnCalendar=*-*-* 02:40:00 UTC

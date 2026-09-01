@@ -1,5 +1,5 @@
 [Unit]
-Description=bullet-in 이력 유지보수 (컴팩션 · 스냅샷 만료 · 파티션 솎기)
+Description=bullet-in 변경 이력 유지보수 (컴팩션 · 스냅샷 만료 · 파티션 솎기)
 After=network-online.target
 OnFailure=bullet-in-fail-notify@%n.service
 

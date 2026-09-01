@@ -1,4 +1,4 @@
-"""운영 마트의 이력을 GCS 위 Iceberg 테이블로 남긴다.
+"""운영 마트의 변경 이력을 GCS 위 Iceberg 테이블로 남긴다.
 
 설계 = docs/superpowers/specs/2026-09-02-history-lakehouse-design.md
 
@@ -129,7 +129,7 @@ SNAPSHOT_SOURCES = ("articles", "players", "article_players")
 def changes_sql(watermark: datetime | None) -> tuple[str, dict]:
     """워터마크 이후 바뀐 기사 행을 가져오는 조회.
 
-    경계를 초과로 둔다 — 같은 시각의 행을 다시 가져오면 이력에 같은 값이 두 번 쌓인다.
+    경계를 초과로 둔다 — 같은 시각의 행을 다시 가져오면 변경 이력에 같은 값이 두 번 쌓인다.
     `updated_at` 은 `ON UPDATE CURRENT_TIMESTAMP` 라 초 단위이고, 한 초 안에 여러 행이
     바뀌면 그중 일부를 놓칠 수 있다. 놓친 것은 하루 1회 전량 스냅샷이 받아 준다.
     """
@@ -204,7 +204,7 @@ def _require_env(name: str) -> str:
 
 
 def load_catalog():
-    """이력 카탈로그에 붙는다.
+    """변경 이력을 담는 카탈로그에 붙는다.
 
     `ICEBERG_CATALOG_URI` 가 있으면 그것으로 (운영 = Lakehouse REST), 없으면
     `ICEBERG_LOCAL_WAREHOUSE` 아래 SQLite 카탈로그로 붙는다 (개발 · 테스트).
@@ -350,7 +350,7 @@ def load_snapshot(engine, catalog, plan: LoadPlan, now: datetime) -> int:
     return len(rows)
 
 
-# 운영 기록 둘. 삽입만 일어나 원본이 이미 이력이라 하루 1회로 묶었다
+# 운영 기록 둘. 삽입만 일어나 원본에 이미 시점별 기록이 남으므로 하루 1회로 묶었다
 # (무료 구간 유지 조건 · 설계 §3.1). 계획 이름은 `ops_daily` 하나이고
 # 실제 테이블은 원본마다 하나씩 둘이다.
 OPS_SOURCES = (("pipeline_runs", "started_at"), ("source_freshness", "checked_at"))
@@ -514,7 +514,7 @@ if __name__ == "__main__":
     import argparse
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    ap = argparse.ArgumentParser(description="운영 마트 이력 적재")
+    ap = argparse.ArgumentParser(description="운영 마트 변경 이력 적재")
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("load", help="변경분 · 스냅샷 적재")
     sub.add_parser("maint", help="컴팩션 · 만료 · 파티션 솎기")

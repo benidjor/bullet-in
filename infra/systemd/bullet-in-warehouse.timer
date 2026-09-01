@@ -1,5 +1,5 @@
 [Unit]
-Description=bullet-in 이력 적재 3시간 간격 (회차보다 20분 뒤)
+Description=bullet-in 변경 이력 적재 3시간 간격 (회차보다 20분 뒤)
 
 [Timer]
 OnCalendar=*-*-* 00,03,06,09,12,15,18,21:20:00 UTC
