@@ -321,6 +321,70 @@ def test_스냅샷은_날이_바뀌면_쌓인다(local_catalog, fake_mart):
         "2026-09-02", "2026-09-03"}
 
 
+# --- 유지보수 (컴팩션 · 만료 · 솎기) ----------------------------------------
+
+def _many_commits(catalog, fake_mart, n: int):
+    """회차마다 조금씩 쓰는 실제 모양을 만든다 — 커밋 하나에 파일 하나."""
+    plan = warehouse.LoadPlan("articles_changes", "articles", "changes")
+    for i in range(n):
+        fake_mart["rows"] = [{"id": i, "url": f"u{i}",
+                              "updated_at": _t(2026, 9, 2) + timedelta(hours=i)}]
+        warehouse.load_changes(None, catalog, plan, _t(2026, 9, 2))
+    return catalog.load_table(f"{warehouse.NAMESPACE}.articles_changes")
+
+
+def test_컴팩션이_조각_파일을_하나로_합친다(local_catalog, fake_mart):
+    t = _many_commits(local_catalog, fake_mart, 5)
+    assert len(list(t.scan().plan_files())) == 5
+    result = warehouse.compact(t)
+    t.refresh()
+    assert result["compacted"] == 5
+    assert len(list(t.scan().plan_files())) == 1
+
+
+def test_컴팩션이_행을_잃지_않는다(local_catalog, fake_mart):
+    t = _many_commits(local_catalog, fake_mart, 5)
+    before = t.scan().to_arrow().num_rows
+    warehouse.compact(t)
+    t.refresh()
+    assert t.scan().to_arrow().num_rows == before
+
+
+def test_합칠_것이_없으면_커밋하지_않는다(local_catalog, fake_mart):
+    t = _many_commits(local_catalog, fake_mart, 1)
+    snapshots_before = len(t.metadata.snapshots)
+    assert warehouse.compact(t)["compacted"] == 0
+    t.refresh()
+    assert len(t.metadata.snapshots) == snapshots_before
+
+
+def test_만료가_스냅샷을_줄이고_행은_남긴다(local_catalog, fake_mart):
+    t = _many_commits(local_catalog, fake_mart, 5)
+    rows_before = t.scan().to_arrow().num_rows
+    assert len(t.metadata.snapshots) == 5
+    # 만료 기준을 넘기려고 한참 뒤 시점으로 부른다.
+    warehouse.expire(t, _t(2026, 10, 1))
+    t.refresh()
+    assert len(t.metadata.snapshots) == 1
+    assert t.scan().to_arrow().num_rows == rows_before
+
+
+def test_오래된_스냅샷_파티션을_솎는다(local_catalog, fake_mart):
+    plan = warehouse.LoadPlan("players_snapshot", "players", "snapshot")
+    fake_mart["rows"] = [{"id": 1, "url": "a", "updated_at": None}]
+    # 90일 넘은 화요일 하나와 월요일 하나, 그리고 최근 하루.
+    for day in (datetime(2026, 6, 2, tzinfo=timezone.utc),
+                datetime(2026, 6, 1, tzinfo=timezone.utc),
+                datetime(2026, 11, 30, tzinfo=timezone.utc)):
+        warehouse.load_snapshot(None, local_catalog, plan, day)
+    t = local_catalog.load_table(f"{warehouse.NAMESPACE}.players_snapshot")
+    dropped = warehouse.drop_old_snapshot_dates(t, date(2026, 12, 1))
+    t.refresh()
+    assert dropped == 1
+    left = set(t.scan().to_arrow().column("_loaded_date").to_pylist())
+    assert left == {"2026-06-01", "2026-11-30"}
+
+
 def test_하루1회_판정이_스냅샷_적재를_따라간다(local_catalog, fake_mart):
     # 스냅샷을 뜬 날에는 그날 다시 불러도 변경분만 대상이 된다.
     plan = warehouse.LoadPlan("articles_snapshot", "articles", "snapshot")

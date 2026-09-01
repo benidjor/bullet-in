@@ -377,6 +377,93 @@ def load_ops(engine, catalog, now: datetime) -> int:
     return total
 
 
+# --- 유지보수 (부수효과) ----------------------------------------------------
+
+def compact(table) -> dict:
+    """조각난 데이터 파일을 한 파일로 다시 쓴다.
+
+    PyIceberg 는 컴팩션을 제공하지 않는다 (문서 원문 「Compaction is planned」).
+    fast append 가 커밋마다 파일 하나를 만들어서, 회차마다 조금씩 쓰면 Parquet
+    압축이 안 들어 행당 부피가 6.15배가 된다 (실측 19,430 B 대 3,160 B).
+
+    방법은 단순하다 — 담긴 행을 전부 읽어서 그 자리를 덮어쓴다.
+    Iceberg 의 스냅샷 격리 덕에 그 사이 읽는 쪽은 옛 스냅샷을 계속 본다.
+    """
+    sizes = {f.file.file_path: f.file.file_size_in_bytes
+             for f in table.scan().plan_files()}
+    targets = files_to_compact(sizes)
+    if not targets:
+        return {"files_before": len(sizes), "compacted": 0}
+
+    before = sum(sizes[p] for p in targets)
+    rows = table.scan().to_arrow()
+    table.overwrite(rows)
+    table.refresh()
+    after = sum(f.file.file_size_in_bytes for f in table.scan().plan_files())
+    log.info("컴팩션 — 파일 %d개 %s바이트를 다시 씀 → %s바이트",
+             len(targets), f"{before:,}", f"{after:,}")
+    return {"files_before": len(sizes), "compacted": len(targets),
+            "bytes_before": before, "bytes_after": after}
+
+
+def expire(table, now: datetime) -> int:
+    """오래된 Iceberg 스냅샷을 만료한다.
+
+    부피가 아니라 `metadata.json` 1 MB 한도 때문에 한다.
+    스냅샷 하나가 약 1,015 바이트를 더하므로 그냥 두면 약 124일에 커밋이 실패한다.
+
+    호출 경로가 `table.maintenance` 아래다 — `table.expire_snapshots()` 는
+    PyIceberg 0.11.1 에 없다. 인자도 밀리초가 아니라 datetime 이다.
+    """
+    before = len(table.metadata.snapshots)
+    table.maintenance.expire_snapshots().older_than(expire_before(now)).commit()
+    table.refresh()
+    after = len(table.metadata.snapshots)
+    log.info("스냅샷 만료 — %d개에서 %d개로", before, after)
+    return before - after
+
+
+def drop_old_snapshot_dates(table, today: date) -> int:
+    """90일 넘은 전량 스냅샷 중 월요일이 아닌 날을 지운다."""
+    from pyiceberg.expressions import EqualTo
+    import pyarrow.compute as pc
+
+    scan = table.scan(selected_fields=(LOADED_DATE,)).to_arrow()
+    if scan.num_rows == 0:
+        return 0
+    have = sorted({date.fromisoformat(d)
+                   for d in pc.unique(scan.column(LOADED_DATE)).to_pylist()})
+    drop = snapshot_dates_to_drop(have, today)
+    for d in drop:
+        table.delete(EqualTo(LOADED_DATE, d.isoformat()))
+    if drop:
+        log.info("스냅샷 파티션 %d일치 삭제 (%s ~ %s)", len(drop), drop[0], drop[-1])
+    return len(drop)
+
+
+def _existing_tables(catalog) -> list[str]:
+    return [t[-1] for t in catalog.list_tables(NAMESPACE)]
+
+
+def run_maintenance(now: datetime | None = None) -> None:
+    """컴팩션 · 스냅샷 만료 · 오래된 파티션 솎기를 한 번에."""
+    from pyiceberg.exceptions import NoSuchTableError
+
+    now = now or datetime.now(timezone.utc)
+    catalog = load_catalog()
+    for name in _existing_tables(catalog):
+        try:
+            table = catalog.load_table(f"{NAMESPACE}.{name}")
+        except NoSuchTableError:
+            continue
+        if name.endswith("_snapshot"):
+            drop_old_snapshot_dates(table, now.date())
+        compact(table)
+        expire(table, now)
+        # 남은 스냅샷 수를 남긴다 — 1 MB 한도까지 얼마나 남았는지 보는 눈이다.
+        log.info("%s — 남은 스냅샷 %d개", name, len(table.metadata.snapshots))
+
+
 def run_load(now: datetime | None = None) -> None:
     """이번 회차의 적재를 끝낸다."""
     from sqlalchemy import create_engine
