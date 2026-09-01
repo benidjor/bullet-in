@@ -132,7 +132,11 @@ if (mktClock) {
     const ev = nextEvent(now);
     if (!ev) { mktClock.hidden = true; return; }
     const left = ev.at - now;
-    const text = `${ev.name} 이적시장 ${ev.what}까지`;
+    // 좁은 화면에서는 「마감」 · 「개장」 두 글자만 — 전체 문구를 그대로 두면 상단 바가
+    // 모자라 줄이 접힌다 (실측 355px 뷰포트에서 「겨울 개장 121일 20시간」 이 넘쳤다).
+    // 전체 문구는 title 에 그대로 남는다.
+    const narrow = window.matchMedia('(max-width:640px)').matches;
+    const text = narrow ? ev.what : `${ev.name} 이적시장 ${ev.what}까지`;
     const value = remain(left);
     if (text + value !== last) {
       labelEl.textContent = text;
