@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -442,7 +443,18 @@ def drop_old_snapshot_dates(table, today: date) -> int:
 
 
 def _existing_tables(catalog) -> list[str]:
-    return [t[-1] for t in catalog.list_tables(NAMESPACE)]
+    """네임스페이스 안의 테이블 이름. 아직 아무것도 없으면 빈 목록이다.
+
+    네임스페이스가 없는 것은 고장이 아니라 「아직 한 번도 안 실었다」 는 뜻이다.
+    그대로 예외를 올리면 유지보수 타이머가 적재보다 먼저 도는 첫날에 유닛이 실패하고
+    `OnFailure` 가 헛알림을 보낸다.
+    """
+    from pyiceberg.exceptions import NoSuchNamespaceError
+
+    try:
+        return [t[-1] for t in catalog.list_tables(NAMESPACE)]
+    except NoSuchNamespaceError:
+        return []
 
 
 def run_maintenance(now: datetime | None = None) -> None:
@@ -480,3 +492,39 @@ def run_load(now: datetime | None = None) -> None:
             load_snapshot(engine, catalog, plan, now)
         else:
             load_ops(engine, catalog, now)
+
+
+def run_show() -> None:
+    """쌓인 테이블의 행 수 · 파일 수 · 남은 스냅샷 수를 보여 준다.
+
+    파일 수와 스냅샷 수가 함께 보이는 것이 요점이다 — 앞은 컴팩션이,
+    뒤는 만료가 도는지를 말해 준다.
+    """
+    catalog = load_catalog()
+    for name in sorted(_existing_tables(catalog)):
+        t = catalog.load_table(f"{NAMESPACE}.{name}")
+        files = list(t.scan().plan_files())
+        size = sum(f.file.file_size_in_bytes for f in files)
+        print(f"{name:28} {t.scan().to_arrow().num_rows:>8,}행  "
+              f"파일 {len(files):>3}개  {size:>12,}B  "
+              f"스냅샷 {len(t.metadata.snapshots):>3}개")
+
+
+if __name__ == "__main__":
+    import argparse
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    ap = argparse.ArgumentParser(description="운영 마트 이력 적재")
+    sub = ap.add_subparsers(dest="command", required=True)
+    sub.add_parser("load", help="변경분 · 스냅샷 적재")
+    sub.add_parser("maint", help="컴팩션 · 만료 · 파티션 솎기")
+    sub.add_parser("show", help="쌓인 것 보기")
+
+    args = ap.parse_args()
+    if args.command == "load":
+        run_load()
+    elif args.command == "maint":
+        run_maintenance()
+    else:
+        run_show()
+    sys.exit(0)

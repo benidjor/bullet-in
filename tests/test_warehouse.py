@@ -321,6 +321,21 @@ def test_스냅샷은_날이_바뀌면_쌓인다(local_catalog, fake_mart):
         "2026-09-02", "2026-09-03"}
 
 
+def test_네임스페이스가_없어도_목록은_빈_채로_돌아온다(tmp_path, monkeypatch):
+    # 아직 한 번도 안 실은 상태는 고장이 아니다. 예외를 올리면 유지보수 타이머가
+    # 적재보다 먼저 도는 첫날에 유닛이 실패하고 OnFailure 가 헛알림을 보낸다.
+    monkeypatch.delenv("ICEBERG_CATALOG_URI", raising=False)
+    monkeypatch.setenv("ICEBERG_LOCAL_WAREHOUSE", str(tmp_path / "wh"))
+    catalog = warehouse.load_catalog()
+    assert warehouse._existing_tables(catalog) == []
+
+
+def test_실은_것이_없으면_유지보수가_조용히_끝난다(tmp_path, monkeypatch):
+    monkeypatch.delenv("ICEBERG_CATALOG_URI", raising=False)
+    monkeypatch.setenv("ICEBERG_LOCAL_WAREHOUSE", str(tmp_path / "wh"))
+    warehouse.run_maintenance(_t(2026, 9, 2))
+
+
 # --- 유지보수 (컴팩션 · 만료 · 솎기) ----------------------------------------
 
 def _many_commits(catalog, fake_mart, n: int):

@@ -5,8 +5,12 @@ cd "$(dirname "$0")"
 sudo cp bullet-in.service bullet-in.timer \
         bullet-in-watchlist.service bullet-in-watchlist.timer \
         bullet-in-backup.service bullet-in-backup.timer \
+        bullet-in-warehouse.service bullet-in-warehouse.timer \
+        bullet-in-warehouse-maint.service bullet-in-warehouse-maint.timer \
         bullet-in-fail-notify@.service /etc/systemd/system/
 sudo rm -f /etc/systemd/system/bullet-in-fail-notify.service   # 구본 (유닛명 하드코딩) 제거
 sudo systemctl daemon-reload
-sudo systemctl enable --now bullet-in.timer bullet-in-watchlist.timer bullet-in-backup.timer
+sudo systemctl enable --now bullet-in.timer bullet-in-watchlist.timer \
+        bullet-in-backup.timer bullet-in-warehouse.timer \
+        bullet-in-warehouse-maint.timer
 systemctl list-timers 'bullet-in*' --no-pager
