@@ -1212,3 +1212,33 @@ def test_lowest_tier_title_gets_two_lines_on_mobile():
     base, mobile = css.split("@media (max-width:640px)")
     assert re.search(r"\.item\.g4 \.htitle\{[^}]*-webkit-line-clamp:1", base)
     assert re.search(r"\.item\.g4 \.htitle\{[^}]*-webkit-line-clamp:2", mobile)
+
+
+# ── 홈 시간순 목록 (2026-09-02 · 안건 2ρ) ──────────────────────────────
+# 선수 이름은 conftest 가 스텁하는 roster_seed.ROSTER 에 있는 것을 쓴다 —
+# 명단에 없는 이름은 주인공으로 안 잡혀 묶임 자체가 일어나지 않는다.
+
+def _same_news_rows():
+    """같은 날 · 같은 선수 · 같은 단계 보도 둘 — 1면 지평 (10일) 밖에 둔다.
+
+    1면에 뽑히면 목록에서 빠져 묶음이 한 건이 되고, 그러면 접힘도 줄도 안 생겨
+    검사가 헛돈다."""
+    return [
+        _row(content_hash="top", tier=1.0, transfer_stage="interest", body_level=1,
+             title_ko="아스날, 에제 영입 제안받아", body_ko="아스날 본문",
+             published_at=datetime(2026, 6, 17, 1, 38),
+             fetched_at=datetime(2026, 6, 17, 1, 38)),
+        _row(content_hash="mid", tier=2.0, transfer_stage="interest", body_level=1,
+             title_ko="아스날, 에제 영입 검토", body_ko="아스날 본문",
+             published_at=datetime(2026, 6, 17, 7, 0),
+             fetched_at=datetime(2026, 6, 17, 7, 0)),
+    ]
+
+
+def test_home_no_longer_folds_reports_behind_a_button():
+    """같은 소식을 버튼 뒤에 접지 않는다 (2026-09-02).
+
+    블록이 rel_count 를 안 만들면 템플릿의 관련 보도 버튼이 그려지지 않는다."""
+    html = render_index(_same_news_rows(), SOURCES, NOW)
+    assert "reltoggle" not in html              # 접는 버튼이 없다
+    assert 'data-hash="top"' in html            # 공신력 최상이 대표로 선다

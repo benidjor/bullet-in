@@ -1180,21 +1180,13 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
     blocks = []
     for c in clusters:
         rep = pick_representative(c["articles"])
-        ending = ending_card(c, clubs)
-        # 대표가 이미 다른 구단 결말 기사면 결말 카드를 따로 세우지 않는다 (중복 방지)
-        if ending and _is_other_club_report(rep, c["key"], clubs):
-            ending = None
-        branches = branch_views(related_reports(c, rep, ending, clubs), ending)
-        blocks.append({"rep": rep, "ending": ending, "branches": branches, "key": c["key"],
-                       "rel_count": sum(len(br["articles"]) for br in branches),
+        # 대표를 뺀 나머지가 카드 안의 줄이 된다 (2026-09-02). 접지 않으므로 버튼이
+        # 없고, 그날 들어온 기사는 카드나 줄 어느 한쪽에 반드시 한 번 나온다.
+        same = [a for a in c["articles"] if a["content_hash"] != rep["content_hash"]]
+        same.sort(key=_sort_ts, reverse=True)
+        blocks.append({"rep": rep, "same": same, "key": c["key"],
+                       "stage_group": c.get("stage_group"),
                        "count": len(c["articles"]), "_articles": list(c["articles"])})
-    # 최근 며칠치 기사는 옛 카드 뒤에 접지 않고 자기 날짜에 세운다 (안건 π).
-    lifted = promote_recent(blocks, recent_days(ordered))
-    # 꺼낸 카드는 관련 보도가 없어 어느 이야기인지 화면에 안 남는다 — 그 선수 페이지로
-    # 가는 줄을 달아 맥락을 잇는다 (안건 π 후속 · 2026-08-27 사용자 확정 C안).
-    for b in lifted:
-        b["story"] = (stories or {}).get(b.get("key"))
-    blocks.extend(lifted)
     # 2026-08-30 사용자 확정 — 카드가 한 장도 안 선 최근 날짜는 가십에서 꺼내 세운다.
     # 그날 들어온 것이 전부 최하이면 날짜 그룹이 아예 안 생겨 홈이 멈춘 것처럼 보인다.
     # 꺼낸 블록에 다는 lowsolo 는 「한 장이어도 한 열로 펴지 말라」 는 표식이다 (app.js
@@ -1208,8 +1200,8 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
         taken = {a["content_hash"] for a in picked}
         gossip = [g for g in gossip if g["content_hash"] not in taken]
         blocks.extend(
-            {"rep": a, "ending": None, "branches": [], "rel_count": 0, "count": 1,
-             "_articles": [a], "promoted": True, "lowsolo": True,
+            {"rep": a, "same": [], "count": 1, "_articles": [a],
+             "promoted": True, "lowsolo": True, "stage_group": None,
              "key": protagonist(a.get("title_ko") or a.get("title_original") or "",
                                 players)}
             for a in picked)
@@ -1234,21 +1226,16 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
                       [b["rep"] for b in blocks if b.get("rep")] + band if _is_today(a)})
     gossip_today = sum(1 for g in gossip if _is_today(g))
 
-    # 대표 카드에도 같은 줄을 단다 (2026-08-28 사용자 확정) — 그전에는 꺼낸 카드에만
-    # 붙어 두 종류의 카드가 다르게 보였다. 관련 보도는 그대로 둔다: 두 줄은 서로
-    # 대체재가 아니라 다른 축이다 (관련 보도 = 이 사건의 다른 보도 · 선수 페이지 =
-    # 그 선수의 모든 소식). 실측에서 관련 보도 681건 중 79건은 선수 페이지로는 닿을
-    # 수 없었다 (선수 페이지가 없는 사람 60건 + 축이 갈려 빠지는 19건).
+    # 카드마다 그 선수 페이지로 가는 줄을 단다 (2026-08-28 사용자 확정) — 카드 안의
+    # 줄은 이 사건의 다른 보도이고 선수 페이지는 그 선수의 모든 소식이라 축이 다르다.
     for b in blocks:
-        b.setdefault("story", None)
-        if b["story"] is None and not b.get("band_dup"):
-            b["story"] = (stories or {}).get(b.get("key"))
+        b["story"] = None if b.get("band_dup") else (stories or {}).get(b.get("key"))
     # 밴드 (히어로 · 주요 소식) 기사도 목록에 숨김 카드로 내보낸다 — 필터가 기사 단위로
     # 전 기사에 닿도록 (spec2 §6.3). 평소엔 숨김, app.js 가 필터 활성 시에만 노출.
     for a in ordered:
         if a["content_hash"] in top_hashes:
-            blocks.append({"rep": a, "ending": None, "branches": [], "rel_count": 0,
-                           "count": 1, "_articles": [a], "band_dup": True})
+            blocks.append({"rep": a, "same": [], "count": 1, "_articles": [a],
+                           "band_dup": True, "key": None, "stage_group": None})
     day_blocks = group_blocks_by_day(blocks, now)
 
     facets = facet_counts(articles, sources, directory=directory, registry=registry,
