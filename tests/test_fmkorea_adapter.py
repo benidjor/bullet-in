@@ -180,7 +180,7 @@ def test_parse_bracket_outlet_only():
 
 def test_parse_bracket_official_prefix_not_mapped():
     # 공홈 말머리 매핑 제거 (2026-07-19) — 아스날 공홈은 직수집(arsenal_api)이 커버,
-    # 타 구단 공홈 오귀속(tier 0) 차단. drop 은 _process 몫 (아래 어댑터 테스트).
+    # 타 구단 공홈 오귀속(tier 0) 차단. drop 은 _discover 몫 (아래 어댑터 테스트).
     assert parse_bracket("[공홈] 요케레스 영입 완료") == ("공홈", None, False)
 
 def test_parse_bracket_no_bracket():
@@ -1361,3 +1361,64 @@ def test_a_blocked_origin_keeps_the_address_we_parsed():
                        base_url="https://www.fmkorea.com")
     [item] = asyncio.run(a.fetch())
     assert item.url == "https://ex.test/a"
+
+
+# --- [공홈] 이 후보 상한을 먹던 자리 (안건 2ι · 2026-09-01 실측) ---------------
+# [공홈] 글은 직수집 경로가 커버해 저장되지 않으므로 검색 결과에 영원히 남는다.
+# 그것을 본문까지 받고 나서 버리면 상한 한 자리와 요청 한 번을 매 회차 잃는다.
+
+@respx.mock
+def test_official_prefix_does_not_take_a_max_posts_slot():
+    html = ('<a class="hx" href="/index.php?document_srl=1">[공홈] 아스날 라인업</a>'
+            '<a class="hx" href="/index.php?document_srl=2">[BBC] 아스날 2</a>')
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(
+        return_value=httpx.Response(200, text=html))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com", max_posts=1)
+    found = asyncio.run(a.discover())
+    assert [t for t, _ in found] == ["[BBC] 아스날 2"]
+
+
+@respx.mock
+def test_official_prefix_body_is_never_fetched():
+    html = '<a class="hx" href="/index.php?document_srl=1">[공홈] 아스날 라인업</a>'
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(
+        return_value=httpx.Response(200, text=html))
+    body = respx.get("https://www.fmkorea.com/1").mock(
+        return_value=httpx.Response(200, text=FREE_BODY))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    assert asyncio.run(a.fetch()) == []
+    assert body.call_count == 0
+
+
+@respx.mock
+def test_other_outlets_are_still_kept():
+    # 회귀 가드 — 거르는 것은 [공홈] 하나다
+    html = '<a class="hx" href="/index.php?document_srl=1">[스카이스포츠] 아스날 1</a>'
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(
+        return_value=httpx.Response(200, text=html))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com")
+    assert len(asyncio.run(a.discover())) == 1
+
+
+# --- 하이라이트가 먹은 공백 (안건 2ι · 2026-09-01 실측) ----------------------
+# 검색 결과는 검색어를 <b> 로 감싸고 get_text(strip=True) 가 그 경계의 공백을 없앤다.
+# 그래서 같은 글이 검색어에 따라 다른 표기로 오고, 정확 일치 배제가 빗나간다
+# (배제 대상 5건이 신규 후보로 새어 나왔다).
+
+@respx.mock
+def test_known_titles_are_excluded_despite_highlight_whitespace():
+    html = ('<a class="hx" href="/index.php?document_srl=1">'
+            '[BBC]아스날과 알 힐랄, 마르티넬리 합의 임박</a>')
+    respx.get("https://fm.test/s?t=title&kw=kw1").mock(
+        return_value=httpx.Response(200, text=html))
+    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                       search_keywords=[{"keyword": "kw1", "target": "title"}],
+                       base_url="https://www.fmkorea.com",
+                       exclude_titles={"[BBC] 아스날과 알 힐랄,마르티넬리합의 임박"})
+    assert asyncio.run(a.discover()) == []

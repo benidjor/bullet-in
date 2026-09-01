@@ -4,7 +4,10 @@ from bullet_in import collect_fmkorea
 from bullet_in.canonical import content_hash
 from bullet_in.collect_fmkorea import (should_supplement, read_last_contact,
                                        write_last_contact, tunnel_alive,
-                                       build_fmkorea_adapter, persist)
+                                       build_fmkorea_adapter, persist,
+                                       pages_for_gap, catchup_options,
+                                       CATCHUP_GAP_HOURS, MAX_CATCHUP_PAGES,
+                                       CATCHUP_REQUEST_GAP_SEC, CATCHUP_MAX_POSTS)
 from bullet_in.models import RawItem
 
 _NOW = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
@@ -153,3 +156,47 @@ def test_build_fmkorea_adapter_search_keywords_override():
 def test_build_fmkorea_adapter_search_keywords_default_is_config():
     a = build_fmkorea_adapter(_CFG, None)
     assert a.search_keywords == [{"keyword": "아스날", "target": "title"}]
+
+
+# --- 공백에 비례한 따라잡기 (안건 2ι · 2026-09-01) ---------------------------
+# 릴레이가 맥 전원에 매여 있어 접촉이 끊긴다. 다시 붙을 때 1페이지만 읽으면
+# 그 사이 밀려난 글이 2페이지로 넘어가 영영 안 들어온다. 글번호가 시간순이고
+# content_hash · URL UNIQUE 라 재수집은 중복을 안 만든다.
+
+def test_pages_for_gap_stays_at_one_for_a_normal_cycle():
+    assert pages_for_gap(3.0) == 1
+
+
+def test_pages_for_gap_stays_at_one_at_the_threshold():
+    assert pages_for_gap(CATCHUP_GAP_HOURS) == 1
+
+
+def test_pages_for_gap_widens_past_the_threshold():
+    assert pages_for_gap(CATCHUP_GAP_HOURS + 1) == 2
+
+
+def test_pages_for_gap_has_a_ceiling():
+    assert pages_for_gap(240.0) == MAX_CATCHUP_PAGES
+
+
+def test_pages_for_gap_handles_no_previous_contact():
+    # 스탬프도 워터마크도 없으면 공백을 모른다 — 가장 넓게 읽는다
+    assert pages_for_gap(float("inf")) == MAX_CATCHUP_PAGES
+
+
+def test_catchup_options_are_empty_for_a_normal_cycle():
+    # 정상 주기의 어댑터는 정기 회차와 한 인자도 다르지 않아야 한다
+    assert catchup_options(3.0) == {}
+
+
+def test_catchup_options_widen_after_an_outage():
+    o = catchup_options(30.0)
+    assert o["pages"] == MAX_CATCHUP_PAGES
+    assert o["request_gap_sec"] == CATCHUP_REQUEST_GAP_SEC
+    assert o["max_posts"] == CATCHUP_MAX_POSTS
+
+
+def test_catchup_adapter_reads_more_pages():
+    a = build_fmkorea_adapter(_CFG, None, **catchup_options(30.0))
+    assert a.pages == MAX_CATCHUP_PAGES
+    assert a.max_posts == CATCHUP_MAX_POSTS

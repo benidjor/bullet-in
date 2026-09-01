@@ -364,6 +364,7 @@ class FmkoreaAdapter:
         self.pages = pages
         self.request_gap_sec = request_gap_sec
         self.exclude_titles = exclude_titles or set()
+        self._exclude_squashed = {_squash(t) for t in self.exclude_titles}
         self.relevance_terms = relevance_terms or []
         self.player_names = player_names or set()
         self.round_robin_start = round_robin_start   # 상한에 밀리는 자리를 옮긴다
@@ -416,8 +417,19 @@ class FmkoreaAdapter:
                     if not title or not post_url or post_url in seen:
                         continue
                     seen.add(post_url)
-                    if title in self.exclude_titles:
+                    # 검색 결과는 검색어를 강조 태그로 감싸고, 텍스트만 뽑으면 그 경계의
+                    # 공백이 사라진다 — 같은 글이 검색어에 따라 다른 표기로 온다.
+                    # 정확 일치로 비교하면 이미 적재된 글이 신규로 새어 나온다 (실측 5건).
+                    if _squash(title) in self._exclude_squashed:
                         continue            # 이미 적재된 글 — 본문 접촉 없이 건너뛴다
+                    # [공홈] 은 직수집 경로가 커버해 저장되지 않으므로 검색 결과에 영원히
+                    # 남는다. 본문까지 받고 나서 버리면 상한 한 자리와 요청 한 번을 매
+                    # 회차 잃는다 — 제목만으로 판정되니 여기서 뺀다 (안건 2ι).
+                    outlet, _, _ = parse_bracket(title)
+                    if outlet and _OFFICIAL_PREFIX in outlet:
+                        log.info("fmkorea [공홈] 말머리 drop — 직수집 경로가 커버 url=%s",
+                                 post_url)
+                        continue
                     must = kw.get("title_must_contain")
                     # title_content 검색은 본문만 스친 글도 잡는다 — 제목 필수어로 좁힌다.
                     # 공백을 무시해 비교한다 (게시자가 '아르테타의' 처럼 붙여 쓴다).
@@ -448,9 +460,6 @@ class FmkoreaAdapter:
                 continue  # 글 fetch 실패 — 스킵, 배치 지속
             html = rb.text
             outlet, journalist, _excl = parse_bracket(title)
-            if outlet and _OFFICIAL_PREFIX in outlet:
-                log.info("fmkorea [공홈] 말머리 drop — 직수집 경로가 커버 url=%s", url)
-                continue
             orig = _extract_original_url(html, self.body_selector)
             if orig is None or outlet is None:
                 log.warning("fmkorea 원문/말머리 해소 실패 — 스킵 url=%s", url)
