@@ -116,3 +116,36 @@ def to_arrow(rows: list[dict], schema: pa.Schema,
         else:
             cols[f.name] = pa.array([r.get(f.name) for r in rows], type=f.type)
     return pa.table(cols, schema=schema)
+
+
+# 스냅샷을 뜰 수 있는 표. 이름을 SQL 에 문자열로 박는 자리라 목록으로 가둔다.
+SNAPSHOT_SOURCES = ("articles", "players", "article_players")
+
+
+def changes_sql(watermark: datetime | None) -> tuple[str, dict]:
+    """워터마크 이후 바뀐 기사 행을 가져오는 조회.
+
+    경계를 초과로 둔다 — 같은 시각의 행을 다시 가져오면 이력에 같은 값이 두 번 쌓인다.
+    `updated_at` 은 `ON UPDATE CURRENT_TIMESTAMP` 라 초 단위이고, 한 초 안에 여러 행이
+    바뀌면 그중 일부를 놓칠 수 있다. 놓친 것은 하루 1회 전량 스냅샷이 받아 준다.
+    """
+    if watermark is None:
+        return "SELECT * FROM articles", {}
+    return "SELECT * FROM articles WHERE updated_at > :wm", {"wm": watermark}
+
+
+def snapshot_sql(table: str) -> str:
+    """전량 스냅샷 조회."""
+    if table not in SNAPSHOT_SOURCES:
+        raise ValueError(f"스냅샷 대상이 아니다 — {table}")
+    return f"SELECT * FROM {table}"
+
+
+def next_watermark(rows: list[dict],
+                   previous: datetime | None) -> datetime | None:
+    """이번에 가져온 행에서 다음 워터마크를 고른다.
+
+    행이 없으면 그대로 둔다 — 앞으로 당기면 그 사이에 바뀐 행을 영영 못 본다.
+    """
+    seen = [r["updated_at"] for r in rows if r.get("updated_at")]
+    return max(seen) if seen else previous

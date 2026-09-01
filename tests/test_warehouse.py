@@ -100,6 +100,52 @@ def test_적재일_컬럼은_날짜_문자열이다():
     assert t.column("_loaded_date").to_pylist() == ["2026-09-02"]
 
 
+def test_변경분_조회에_워터마크가_없으면_전량을_가져온다():
+    sql, params = warehouse.changes_sql(None)
+    assert "WHERE" not in sql.upper()
+    assert params == {}
+
+
+def test_워터마크가_있으면_그보다_큰_것만():
+    wm = _t(2026, 9, 2, 3)
+    sql, params = warehouse.changes_sql(wm)
+    assert "updated_at > :wm" in sql
+    assert params == {"wm": wm}
+
+
+def test_경계는_초과라서_같은_시각_행을_다시_안_가져온다():
+    # 겹치면 같은 행이 두 번 쌓인다. 잃는 쪽보다 겹치는 쪽이 흔한 실수라 초과로 둔다.
+    sql, _ = warehouse.changes_sql(_t(2026, 9, 2, 3))
+    assert ">=" not in sql
+
+
+def test_다음_워터마크는_가져온_행의_최댓값():
+    rows = [{"updated_at": _t(2026, 9, 2, 1)},
+            {"updated_at": _t(2026, 9, 2, 5)},
+            {"updated_at": _t(2026, 9, 2, 3)}]
+    assert warehouse.next_watermark(rows, previous=None) == _t(2026, 9, 2, 5)
+
+
+def test_가져온_행이_없으면_워터마크가_그대로다():
+    prev = _t(2026, 9, 2, 3)
+    assert warehouse.next_watermark([], previous=prev) == prev
+
+
+def test_updated_at_이_빈_행은_워터마크_계산에서_빠진다():
+    rows = [{"updated_at": None}, {"updated_at": _t(2026, 9, 2, 5)}]
+    assert warehouse.next_watermark(rows, previous=None) == _t(2026, 9, 2, 5)
+
+
+def test_스냅샷은_표_이름을_그대로_박는다():
+    assert warehouse.snapshot_sql("players") == "SELECT * FROM players"
+
+
+def test_스냅샷_표_이름은_아는_것만_받는다():
+    # 이름을 문자열로 이어 붙이는 자리라 바깥 값이 들어오면 안 된다.
+    with pytest.raises(ValueError):
+        warehouse.snapshot_sql("articles; DROP TABLE players")
+
+
 def test_시간대_없는_DATETIME_은_UTC_로_읽는다():
     # MariaDB 의 DATETIME 은 시간대 없이 온다. 이 저장소는 UTC 를 저장하므로
     # 그대로 UTC 로 읽는 것이 맞다. 조용히 9시간 어긋날 수 있는 자리라 고정해 둔다.
