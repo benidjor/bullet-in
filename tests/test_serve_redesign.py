@@ -348,6 +348,47 @@ def test_promote_recent_keeps_articles_outside_window_folded():
     assert block["rel_count"] == 1
 
 
+def _staged(h, stage, hour):
+    """같은 KST 날짜 안의 기사 — UTC 0~14시가 같은 날에 든다."""
+    return _row(content_hash=h, transfer_stage=stage,
+                published_at=datetime(2026, 7, 21, hour, 0),
+                fetched_at=datetime(2026, 7, 21, hour, 0))
+
+
+def test_promote_recent_lifts_a_later_stage_on_the_same_day():
+    # 같은 날이어도 이야기가 한 단계 나아갔으면 꺼낸다 (2026-09-01 실물 —
+    # 대표가 「협상 중」 인데 「이적 합의」 가 12시간 뒤에 들어와 접혀 있었다).
+    rep, later = _staged("rep", "negotiating", 3), _staged("later", "agreed", 13)
+    block = {"rep": rep, "count": 2, "_articles": [rep, later], "rel_count": 1,
+             "branches": [{"label": "", "articles": [later]}]}
+    out = R.promote_recent([block], R.recent_days([rep, later]))
+    assert [b["rep"]["content_hash"] for b in out] == ["later"]
+
+
+def test_promote_recent_keeps_same_stage_on_the_same_day_folded():
+    # 단계가 같으면 그대로 접어 둔다 — 가드가 막으려던 「2분 차이의 같은 소식」 자리
+    rep, twin = _staged("rep", "agreed", 3), _staged("twin", "agreed", 13)
+    block = {"rep": rep, "count": 2, "_articles": [rep, twin], "rel_count": 1,
+             "branches": [{"label": "", "articles": [twin]}]}
+    assert R.promote_recent([block], R.recent_days([rep, twin])) == []
+
+
+def test_promote_recent_keeps_an_earlier_stage_on_the_same_day_folded():
+    # 뒤로 간 단계는 후속이 아니다
+    rep, back = _staged("rep", "agreed", 3), _staged("back", "interest", 13)
+    block = {"rep": rep, "count": 2, "_articles": [rep, back], "rel_count": 1,
+             "branches": [{"label": "", "articles": [back]}]}
+    assert R.promote_recent([block], R.recent_days([rep, back])) == []
+
+
+def test_promote_recent_does_not_rank_collapsed_against_the_ladder():
+    # 무산은 사다리 축에서 빠진다 (transfer_stage.py §8) — 순서를 매기지 않는다
+    rep, gone = _staged("rep", "negotiating", 3), _staged("gone", "collapsed", 13)
+    block = {"rep": rep, "count": 2, "_articles": [rep, gone], "rel_count": 1,
+             "branches": [{"label": "", "articles": [gone]}]}
+    assert R.promote_recent([block], R.recent_days([rep, gone])) == []
+
+
 def test_promote_recent_caps_per_player_and_day():
     # 한 선수가 그날 카드를 다 가져가지 않게 — 꺼내는 것은 공신력 높은 쪽부터
     rep = _p("rep", 15)
