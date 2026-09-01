@@ -2091,6 +2091,30 @@ def recent_days(articles: list[dict], n: int = PROMOTE_DAYS) -> set:
     return set(sorted(days, reverse=True)[:n])
 
 
+def _ladder_rank(row: dict) -> int | None:
+    """진행 사다리에서의 자리 — 앞설수록 작다. 사다리 밖이면 None.
+
+    순서는 transfer_stage.STAGE_ENUMS 를 그대로 쓴다 (단계 정의의 단일 출처).
+    무산은 진행 단계가 아니라 사다리 축에서 빠지므로 (transfer_stage.py §8) 뺀다 —
+    _LEAD_STAGE_RANK 는 1면 정렬용이라 여기 쓸 수 없다 (무산이 협상 중과 동률이고
+    관심 · 루머가 둘 다 0 이다)."""
+    stage = row.get("transfer_stage") or ""
+    if stage == "collapsed" or stage not in _stage.STAGE_ENUMS:
+        return None
+    return _stage.STAGE_ENUMS.index(stage)
+
+
+def _advances_past(article: dict, rep: dict | None) -> bool:
+    """접힌 기사가 대표 카드보다 이야기를 진전시켰나.
+
+    같은 날 가드는 「2분 차이의 같은 소식」 을 막으려고 날짜로만 뭉뚱그리는데,
+    단계가 나아간 후속은 중복이 아니라 다음 소식이다 (실측 2026-09-01 — 대표가
+    「협상 중」 인 은와네리 묶음에 「이적 합의」 가 12시간 뒤에 들어와 접혔다).
+    한쪽이라도 사다리 밖이면 순서가 정의되지 않으므로 판정하지 않는다."""
+    a, r = _ladder_rank(article), _ladder_rank(rep or {})
+    return a is not None and r is not None and a < r
+
+
 def promote_recent(blocks: list[dict], window: set,
                    cap: int = PROMOTE_PER_PLAYER_DAY) -> list[dict]:
     """접혀 있던 기사 중 최근 날짜 것을 꺼내 낱개 카드로 돌려준다 (안건 π).
@@ -2101,7 +2125,11 @@ def promote_recent(blocks: list[dict], window: set,
     **대표 카드가 이미 서 있는 날짜에서는 안 꺼낸다** (2026-08-28). 그 날짜에는
     그 이야기의 카드가 이미 있어서, 꺼내면 같은 소식이 나란히 두 장으로 선다
     (실측: 넬슨 계약 해지가 트윗 카드와 The Athletic 카드로 두 번 섰다 — 2분 차이의
-    같은 소식이다). 이 코드는 중복인지 아닌지를 안 보므로 날짜로만 막는다."""
+    같은 소식이다). 이 코드는 중복인지 아닌지를 안 보므로 날짜로만 막는다.
+
+    **단, 단계가 나아간 기사는 같은 날에도 꺼낸다** (2026-09-01). 날짜로만 막으면
+    후속 보도가 앞선 소식 뒤에 접힌다 — 실측에서 「협상 중」 대표 카드가 12시간 뒤의
+    「이적 합의」 를 덮었다. 판정은 _advances_past 가 한다."""
     promoted = []
     for b in blocks:
         rep_ts = _group_ts(b["rep"]) if b.get("rep") else None
@@ -2113,7 +2141,7 @@ def promote_recent(blocks: list[dict], window: set,
                 if ts is None or not _promotable(a):
                     continue
                 day = to_kst(ts).date()
-                if day == rep_day:
+                if day == rep_day and not _advances_past(a, b.get("rep")):
                     continue          # 그 날짜엔 대표 카드가 이미 서 있다
                 if day in window:
                     by_day.setdefault(day, []).append(a)
