@@ -232,17 +232,12 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .item.ctxdim{opacity:.45}                       /* 필터 밖 대표 — 묶음 문맥용으로만 남김 */
 .item.ctxdim .cardhead::after{content:"묶음 대표 · 필터 밖";font-size:10px;color:var(--dim);
   border:1px solid var(--hair);border-radius:2px;padding:0 4px;white-space:nowrap}
-.reltoggle{margin:6px 12px 2px;padding:3px 10px;background:none;border:1px solid var(--hair);
-  border-radius:2px;color:var(--mut);font:inherit;font-size:12px;cursor:pointer}
-.reltoggle:hover{color:var(--ink);border-color:var(--mut)}
-/* 꺼내 온 카드 → 그 선수 페이지 (안건 π 후속) — 관련 보도 버튼과 같은 자리 · 같은 급수 */
+/* 카드 → 그 선수 페이지 (안건 π 후속) */
 .storylink{display:inline-block;margin:6px 12px 2px;padding:3px 10px;
   border:1px solid var(--hair);border-radius:2px;color:var(--mut);font-size:12px}
-/* 두 버튼을 한 줄에 나란히 둔다 (2026-08-28 사용자 확정) — 위아래로 쌓으면 카드마다
-   높이가 달라져 같은 행의 카드 아래끝이 어긋난다. 좁은 화면에서는 접힌다. */
 .blocknav{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:6px 12px 2px}
 .blocknav:empty{display:none}
-.blocknav .storylink,.blocknav .reltoggle{margin:0}
+.blocknav .storylink{margin:0}
 /* 그 줄을 카드 아래끝에 붙인다 — 행 높이를 채우고 있으므로 사진 · 요약 유무로 카드
    키가 달라도 같은 행에서는 같은 높이에 놓인다 (최신 소식 한정). */
 .daylist:not(.flatlist) .block{display:flex;flex-direction:column}
@@ -258,19 +253,23 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .block.g0 .blocknav,.block.g1 .blocknav{margin-bottom:0}
 .storylink::after{content:" ›";color:var(--dim)}
 .storylink:hover{color:var(--ink);border-color:var(--mut)}
-.reltoggle[aria-expanded="true"]{color:var(--red);border-color:var(--red)}
-.related{padding:2px 12px 4px}
-.related[hidden]{display:none}
-/* 관련 보도 목록은 카드가 선 칸 안에 그대로 둔다 (2026-08-28 사용자 확정).
-   두 칸을 쓰게 해 봤더니 같은 행의 옆 카드가 한 줄 위로 올라가 화면이 크게 움직였다
-   — 목록이 길어지는 문제는 아래 더보기 (relmore) 로 푼다. */
-.branchlabel{font-size:11px;font-weight:700;color:var(--dim);margin:9px 0 3px;letter-spacing:.02em}
-.relitem{display:flex;gap:10px;align-items:baseline;justify-content:space-between;
-  padding:5px 0;border-top:1px solid var(--hair)}
-.relitem:first-of-type{border-top:0}
-.relitem:hover{color:var(--red)}
-.relitem .rt{font-size:13px;line-height:1.4;flex:1;min-width:0}
-.relitem .rm{font-size:11px;color:var(--dim);white-space:nowrap}
+/* 같은 소식 줄 (2026-09-02) — 언론사가 왼쪽 끝에 세로로 맞고 시각은 대표 카드의
+   시각과 같은 오른쪽 끝에 온다. 접지 않으므로 토글이 없다. */
+.same{margin:5px 12px 2px;padding-top:5px;border-top:1px dotted var(--hair);
+  display:flex;flex-direction:column;gap:1px}
+.keyline{display:flex;align-items:baseline;gap:8px;font-size:10.5px;
+  letter-spacing:.04em;margin-bottom:3px}
+.keyline .key{font-weight:700;color:var(--mut)}
+.keyline .keyn{margin-left:auto;color:var(--dim);font-variant-numeric:tabular-nums}
+.sameline{display:flex;align-items:baseline;gap:8px;font-size:11.5px;
+  color:var(--mut);line-height:1.8;min-width:0}
+.sameline:hover .st{color:var(--ink)}
+.sameline .sm{flex:0 0 84px;font-weight:700;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sameline .st{flex:1 1 auto;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sameline .sw{flex:0 0 auto;font-variant-numeric:tabular-nums;color:var(--dim)}
+@media (max-width:720px){.sameline .sm{flex-basis:72px}}
 
 /* ── 가십 구역 (spec2 §7) — 2열 압축 · 좌측 괘선 없음 · 이름 '가십' ──── */
 .gossiphead{margin-top:34px;border-top:2px solid var(--rule);padding-top:14px}
@@ -279,16 +278,10 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .gossiplist .item{padding:10px 0 12px}
 .gossiplist.weekcut .item.gwk{display:none}      /* 초기 7일 컷 (서버 표식) */
 .gossiplist .item.wcut{display:none}              /* 주 단위 더보기 — JS 관리 */
-.gossipmore,.latestmore,.relmore{display:block;width:100%;margin:14px 0 0;padding:10px;border:1px solid var(--hair);
+.gossipmore,.latestmore{display:block;width:100%;margin:14px 0 0;padding:10px;border:1px solid var(--hair);
   border-radius:2px;background:none;color:var(--mut);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
-.gossipmore:hover,.latestmore:hover,.relmore:hover{color:var(--ink);border-color:var(--mut)}
-.gossipmore[hidden],.latestmore[hidden],.relmore[hidden]{display:none}
-/* 관련 보도 목록의 더보기 (2026-08-28) — 갈래가 하나면 10건, 둘 이상이면 갈래마다
-   5건까지 먼저 보이고 누를 때마다 10건씩 편다. 63건짜리 목록이 펼치자마자 화면을
-   가득 채우던 것을 줄인다. 필터가 켜지면 이 접기는 걷는다 (조건에 맞는 것을 감추면
-   「몇 건」 과 목록이 또 어긋난다). */
-.relitem.relcut{display:none}
-.relmore{margin:10px 0 2px;font-size:12px;padding:8px}
+.gossipmore:hover,.latestmore:hover{color:var(--ink);border-color:var(--mut)}
+.gossipmore[hidden],.latestmore[hidden]{display:none}
 .latestmore{margin:18px 0 0}
 .gossipnote{font-size:12px;color:var(--dim);margin:12px 0 0}
 /* 카드 상단 줄 (§ 리뷰) — 영입 단계 · 언론사 · 공신력 왼쪽, 시각 오른쪽 */

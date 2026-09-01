@@ -19,6 +19,11 @@
   </div>
 </a>
 {% endmacro %}
-{% macro relitem(a, rep) %}<a class="relitem" href="article/{{ a.content_hash }}.html"
-   data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}" data-tier="{{ a._tier_key }}"
-   data-stage="{{ a._stage }}" data-dir="{{ a._dir }}" data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}"><span class="rt">{{ a._title }}</span><span class="rm">{{ a._outlet }}{% if a._reader_tier %} · {{ a._reader_tier }}{% endif %}{% if a._date and a._date != rep._date %} · {{ a._date }}{% endif %}</span></a>{% endmacro %}
+{# 같은 소식 줄 (2026-09-02) — 대표 카드 안에 한 줄씩 붙는다. 필터가 읽는 data-*
+   는 옛 관련 보도 항목 (relitem) 이 갖던 것을 그대로 옮긴 것이다. #}
+{% macro sameline(a) %}<a class="sameline" href="{{ root }}article/{{ a.content_hash }}.html"
+   data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-dir="{{ a._dir }}"
+   data-tier="{{ a._tier_key }}" data-outlet="{{ a._outlet }}"
+   data-journalist="{{ a._journalist }}" data-published="{{ a._published_iso }}"
+   data-confidence="{{ a.confidence_score or 0 }}"
+   data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}"><span class="sm">{{ a._outlet | replace(' (aggregator)', '') }}</span><span class="st">{{ a._title }}</span><span class="sw">{{ a._time }}</span></a>{% endmacro %}
