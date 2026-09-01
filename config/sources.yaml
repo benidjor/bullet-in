@@ -164,7 +164,14 @@ sources:
     config:
       search_url: "https://www.fmkorea.com/search.php?mid=football_news&search_target={target}&search_keyword={keyword}&page={page}"
       search_keywords:
-        - {keyword: "아스날", target: "title"}
+        # 제목 검색은 제목에 구단명이 없는 아스날 기사를 통째로 놓친다.
+        # 2026-09-01 이적시장 마감일 실측에서 여섯 건이 그렇게 사라졌다
+        # (알바레스 2건 · 은와네리 · 제주스 · 포파나) — 넷은 본문에 구단명이 있었다.
+        # 표기가 둘로 갈려 한쪽만으로는 부족하다
+        # (같은 실측에서 [Sky] · [MD] 두 건이 '아스널' 만 썼다).
+        # 본문만 스친 글은 뒤의 relevance_terms · 말머리 판정이 거른다.
+        - {keyword: "아스날", target: "title_content"}
+        - {keyword: "아스널", target: "title_content"}
         - {keyword: '"de roche"', target: "title_content"}
         - {keyword: "온스테인", target: "title_content"}
         # 아스날 감독 인터뷰는 제목에 '아스날' 이 없어 위 키워드에 안 걸린다 (2026-07-30 실측 유실).
