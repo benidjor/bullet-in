@@ -778,17 +778,17 @@ FILTER_SOURCES = {
 }
 
 
-def test_index_relitem_carries_filter_data_attrs():
-    # 접힌 관련 보도도 필터 대상 — 대표 카드와 같은 필터 키를 data 속성으로 가진다
-    # 이 선수 이야기는 최근 날짜 밖에 둔다 (안건 π) — 최근 날짜에 걸리면 r2 가 접히지
-    # 않고 자기 카드로 서서 relitem 이 아예 안 나온다. 최신 세 날짜는 다른 선수로 채운다.
+def test_index_sameline_carries_filter_data_attrs():
+    # 카드 안의 줄도 필터 대상 — 대표 카드와 같은 필터 키를 data 속성으로 가진다
+    # 이 선수 이야기는 1면에 뽑히지 않게 옛 날짜에 둔다 — 1면에 가면 목록에서 빠져
+    # 줄이 아예 안 나온다. 최신 세 날짜는 다른 선수로 채운다.
     rep = _row(content_hash="r1", source_id="skysports", tier=2,
                title_ko="아스날, 에제 영입 합의", transfer_stage="agreed",
                published_at=datetime(2026, 6, 20, 10, 0, 0))
-    # 최하는 이제 사건 묶음에 안 남고 가십 절로 간다 (2026-08-30) — 접힘을
-    # 재려면 최하가 아닌 등급이어야 한다
+    # 최하는 사건 묶음에 안 남고 가십 절로 간다 (2026-08-30) — 줄로 서려면
+    # 최하가 아닌 등급이어야 한다. 단계는 대표와 같아야 한 카드에 묶인다 (2026-09-02).
     rel = _row(content_hash="r2", source_id="goal", tier=3, summary_ko="한 줄",
-               title_ko="아스날, 에제 이적 임박", transfer_stage="rumour",
+               title_ko="아스날, 에제 이적 임박", transfer_stage="agreed",
                published_at=datetime(2026, 6, 20, 9, 0, 0))
     fill = [_row(content_hash=f"f{d}", source_id="skysports", tier=2,
                  title_ko=f"아스날, 6월 {d}일 소식", transfer_stage="rumour",
@@ -796,10 +796,10 @@ def test_index_relitem_carries_filter_data_attrs():
     html = render_index([rep, rel] + fill, FILTER_SOURCES, NOW)
     i = html.index('href="article/r2.html"')
     seg = html[max(0, i - 200):i + 700]
-    assert 'class="relitem"' in seg
+    assert 'class="sameline"' in seg
     assert 'data-outlet="Goal.com"' in seg
     assert 'data-tier="3"' in seg
-    assert 'data-stage="rumour"' in seg
+    assert 'data-stage="agreed"' in seg
     assert 'data-text=' in seg
 
 
@@ -875,7 +875,7 @@ from bullet_in.serve.render import render_all
 
 
 def test_all_page_flat_without_clusters():
-    # 같은 주인공 2건도 묶지 않고 낱개 카드로 — relitem 이 없어야 한다
+    # 같은 주인공 2건도 묶지 않고 낱개 카드로 — 카드 안의 줄이 없어야 한다
     a1 = _row(content_hash="f1", title_ko="아스날, 에제 영입 합의", tier=2,
               transfer_stage="agreed")
     a2 = _row(content_hash="f2", title_ko="아스날, 에제 이적 임박", tier=4,
@@ -883,8 +883,8 @@ def test_all_page_flat_without_clusters():
     html = render_all([a1, a2], SOURCES, NOW)
     assert 'href="article/f1.html"' in html
     assert 'href="article/f2.html"' in html
-    assert "relitem" not in html
-    assert 'class="reltoggle"' not in html
+    assert "sameline" not in html
+    assert 'class="keyline"' not in html
 
 
 def test_all_page_daygroup_carries_date_attr():
@@ -1041,34 +1041,6 @@ def test_article_with_an_image_uses_the_large_preview_card():
     assert '<meta name="twitter:card" content="summary_large_image">' in html
 
 
-def test_ending_card_is_not_drawn_on_the_home_page():
-    """결말 카드는 판정만 남기고 홈에는 안 그린다 (2026-08-23 공개 준비).
-
-    그 카드가 왜 붙어 있는지는 행선지 구단 배지가 설명하고 있었는데, 첫인상 정리로
-    배지를 떼자 같은 소식이 두 번 나온 것처럼 읽혔다 (배포 사본 실측 16블록).
-    판정 (ending_card) 은 관련 보도 갈래 라벨이 계속 쓰므로 그대로 두고 화면에서만 뺀다.
-
-    묶음을 만드는 경로는 DB (선수 사전) 를 타므로, 여기서는 결말이 든 블록을 손으로
-    만들어 템플릿에 그대로 넣는다 — 보려는 것이 「블록에 결말이 있을 때 그리는가」다."""
-    from bullet_in.serve.render import _env, _decorate
-    rep = _decorate(_row(content_hash="cr", title_ko="아스날, 로저스 관심"), SOURCES, NOW)
-    end = _decorate(_row(content_hash="ce", title_ko="첼시, 로저스 영입 합의"), SOURCES, NOW)
-    block = {"rep": rep, "ending": {"article": end, "club": "첼시"},
-             "branches": [], "rel_count": 0, "count": 2}
-    html = _env().get_template("index.html.j2").render(
-        lead=None, mains=[], gossip=[], gossip_hidden=0, gossip_days=3,
-        gossip_shown=0, gossip_total=0, news_today=0, gossip_today=0,
-        day_blocks=[{"date": "2026-06-29", "label": "오늘", "n": 1, "reports": 2,
-                     "all_dup": False, "blocks": [block]}],
-        facets={"team": {}, "tiers": [], "total": 0, "stage": {}, "stage_groups": [],
-                "other": 0, "outlets": {"initial": [], "stages": []},
-                "journalists": {"initial": [], "stages": [], "total": 0}},
-        active="home", root="", meta=None)
-    assert 'data-hash="cr"' in html          # 대표는 그린다 (검사가 헛돌지 않는지)
-    assert 'data-hash="ce"' not in html      # 결말은 안 그린다
-    assert "첼시, 로저스 영입 합의" not in html
-
-
 def test_no_analytics_script_without_a_measurement_id():
     # 측정 ID 가 비면 스크립트를 아예 넣지 않는다 — 로컬 렌더 · 목업에서 계측이 0 이어야
     # 목업을 띄우는 것만으로 공개 주간 수치가 흐려지지 않는다.
@@ -1142,7 +1114,7 @@ def test_lowest_goes_to_gossip_even_when_the_story_has_a_higher_source():
     low = _low(content_hash="lo", title_ko="아스날, 사카 이적설 부인")
     html = render_index([high, low], SOURCES, NOW)
     assert "lo" in _gossip(html)                       # 가십 절에 있다
-    assert 'class="relitem" href="article/lo' not in html   # 접힘에 안 남는다
+    assert 'class="sameline" href="article/lo' not in html   # 카드 안의 줄로도 안 남는다
     assert "hi" not in _gossip(html)                   # 상위는 그대로 카드
 
 
@@ -1212,3 +1184,52 @@ def test_lowest_tier_title_gets_two_lines_on_mobile():
     base, mobile = css.split("@media (max-width:640px)")
     assert re.search(r"\.item\.g4 \.htitle\{[^}]*-webkit-line-clamp:1", base)
     assert re.search(r"\.item\.g4 \.htitle\{[^}]*-webkit-line-clamp:2", mobile)
+
+
+# ── 홈 시간순 목록 (2026-09-02 · 안건 2ρ) ──────────────────────────────
+# 선수 이름은 conftest 가 스텁하는 roster_seed.ROSTER 에 있는 것을 쓴다 —
+# 명단에 없는 이름은 주인공으로 안 잡혀 묶임 자체가 일어나지 않는다.
+
+def _same_news_rows():
+    """같은 날 · 같은 선수 · 같은 단계 보도 둘 — 1면 지평 (10일) 밖에 둔다.
+
+    1면에 뽑히면 목록에서 빠져 묶음이 한 건이 되고, 그러면 접힘도 줄도 안 생겨
+    검사가 헛돈다."""
+    return [
+        _row(content_hash="top", tier=1.0, transfer_stage="interest", body_level=1,
+             title_ko="아스날, 에제 영입 제안받아", body_ko="아스날 본문",
+             published_at=datetime(2026, 6, 17, 1, 38),
+             fetched_at=datetime(2026, 6, 17, 1, 38)),
+        _row(content_hash="mid", tier=2.0, transfer_stage="interest", body_level=1,
+             title_ko="아스날, 에제 영입 검토", body_ko="아스날 본문",
+             published_at=datetime(2026, 6, 17, 7, 0),
+             fetched_at=datetime(2026, 6, 17, 7, 0)),
+    ]
+
+
+def test_home_no_longer_folds_reports_behind_a_button():
+    """같은 소식을 버튼 뒤에 접지 않는다 (2026-09-02).
+
+    블록이 rel_count 를 안 만들면 템플릿의 관련 보도 버튼이 그려지지 않는다."""
+    html = render_index(_same_news_rows(), SOURCES, NOW)
+    assert "reltoggle" not in html              # 접는 버튼이 없다
+    assert 'data-hash="top"' in html            # 공신력 최상이 대표로 선다
+
+
+def test_home_draws_same_news_as_lines_with_a_key_label():
+    """같은 소식은 대표 카드 안에 줄로 그려지고, 무엇으로 묶었는지가 함께 적힌다."""
+    html = render_index(_same_news_rows(), SOURCES, NOW)
+    assert 'class="sameline"' in html                 # 나머지가 줄로 그려진다
+    assert "아스날, 에제 영입 검토" in html              # 줄 제목이 화면에 있다
+    assert "보도 2건" in html                          # 건수는 대표를 포함한다
+
+
+def test_home_omits_the_key_label_on_a_card_that_stands_alone():
+    """혼자 선 카드에는 기준 라벨을 안 붙인다 — 설명할 것이 없다."""
+    rows = [_row(content_hash="solo", tier=1.0, transfer_stage="interest", body_level=1,
+                 title_ko="아스날, 에제 영입 검토", body_ko="아스날 본문",
+                 published_at=datetime(2026, 6, 17, 1, 38),
+                 fetched_at=datetime(2026, 6, 17, 1, 38))]
+    html = render_index(rows, SOURCES, NOW)
+    assert 'data-hash="solo"' in html
+    assert 'class="keyline"' not in html

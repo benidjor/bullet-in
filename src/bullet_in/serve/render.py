@@ -4,7 +4,6 @@ import logging
 import os
 import re
 import shutil
-import yaml
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -114,8 +113,9 @@ def group_by_day(articles: list[dict], now: datetime) -> list[dict]:
 
 
 def _same_day_reports(day_blocks: list[dict], d) -> int:
-    """그 날짜(d)에 실제 발행된 기사 수 (spec2 §4.1 개정).
-    묶음은 날짜 경계가 없어 여러 날 기사를 품으므로, 대표 날짜와 같은 날 기사만 센다."""
+    """그 날짜(d)에 실제 발행된 기사 수 — 그날 카드와 줄을 합친 수다.
+    묶음이 하루 단위라 그 묶음의 기사가 전부 그날 것이지만, 날짜가 없는 행을
+    거르려고 판정은 그대로 둔다."""
     return sum(1 for b in day_blocks for a in b.get("_articles", [])
                if _group_ts(a) is not None and to_kst(_group_ts(a)).date() == d)
 
@@ -356,8 +356,9 @@ def _is_aggregator_url(url: str) -> bool:
     u = (url or "").lower()
     return any(h in u for h in _AGGREGATOR_HOSTS)
 # done 은 종전 체계에서 agreed 로 저장되던 "타 매체 완료 보도" 의 거처라 상위 유지
-# (빠뜨리면 완료 당일 보도가 rank 0 으로 추락) · collapsed 는 결말 카드 문턱
-# (ending_card 의 >= 1) 을 넘도록 negotiating 급 (단계 재정의 2026-08-10 반영).
+# (빠뜨리면 완료 당일 보도가 rank 0 으로 추락) · collapsed 가 negotiating 급인 것은
+# 결말 카드 문턱을 넘기려던 것인데 그 카드는 2026-09-02 에 없어졌다 · 값은 그대로 둔다
+# (1면 정렬과 대표 선정의 마지막 축이 이 표를 계속 쓴다).
 _LEAD_STAGE_RANK = {"official": 6, "done": 5, "agreed": 4, "medical": 3,
                     "personal_terms": 2, "negotiating": 1, "collapsed": 1}
 _TOP_HORIZON_DAYS = 10
@@ -1167,7 +1168,7 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
                  stories: dict | None = None) -> str:
     ordered = [_decorate(a, sources, now, directory=directory, outlet_dir=outlet_dir)
                for a in _sorted_latest(articles)]
-    players, clubs = load_player_names(), load_clubs()
+    players = load_player_names()
     top = pick_top_stories(ordered, now, players)
     top_hashes = {a["content_hash"] for a in ([top["lead"]] if top["lead"] else []) + top["mains"]}
     rest = [a for a in ordered if a["content_hash"] not in top_hashes]
@@ -1180,21 +1181,13 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
     blocks = []
     for c in clusters:
         rep = pick_representative(c["articles"])
-        ending = ending_card(c, clubs)
-        # 대표가 이미 다른 구단 결말 기사면 결말 카드를 따로 세우지 않는다 (중복 방지)
-        if ending and _is_other_club_report(rep, c["key"], clubs):
-            ending = None
-        branches = branch_views(related_reports(c, rep, ending, clubs), ending)
-        blocks.append({"rep": rep, "ending": ending, "branches": branches, "key": c["key"],
-                       "rel_count": sum(len(br["articles"]) for br in branches),
+        # 대표를 뺀 나머지가 카드 안의 줄이 된다 (2026-09-02). 접지 않으므로 버튼이
+        # 없고, 그날 들어온 기사는 카드나 줄 어느 한쪽에 반드시 한 번 나온다.
+        same = [a for a in c["articles"] if a["content_hash"] != rep["content_hash"]]
+        same.sort(key=_sort_ts, reverse=True)
+        blocks.append({"rep": rep, "same": same, "key": c["key"],
+                       "stage_group": c.get("stage_group"),
                        "count": len(c["articles"]), "_articles": list(c["articles"])})
-    # 최근 며칠치 기사는 옛 카드 뒤에 접지 않고 자기 날짜에 세운다 (안건 π).
-    lifted = promote_recent(blocks, recent_days(ordered))
-    # 꺼낸 카드는 관련 보도가 없어 어느 이야기인지 화면에 안 남는다 — 그 선수 페이지로
-    # 가는 줄을 달아 맥락을 잇는다 (안건 π 후속 · 2026-08-27 사용자 확정 C안).
-    for b in lifted:
-        b["story"] = (stories or {}).get(b.get("key"))
-    blocks.extend(lifted)
     # 2026-08-30 사용자 확정 — 카드가 한 장도 안 선 최근 날짜는 가십에서 꺼내 세운다.
     # 그날 들어온 것이 전부 최하이면 날짜 그룹이 아예 안 생겨 홈이 멈춘 것처럼 보인다.
     # 꺼낸 블록에 다는 lowsolo 는 「한 장이어도 한 열로 펴지 말라」 는 표식이다 (app.js
@@ -1208,8 +1201,8 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
         taken = {a["content_hash"] for a in picked}
         gossip = [g for g in gossip if g["content_hash"] not in taken]
         blocks.extend(
-            {"rep": a, "ending": None, "branches": [], "rel_count": 0, "count": 1,
-             "_articles": [a], "promoted": True, "lowsolo": True,
+            {"rep": a, "same": [], "count": 1, "_articles": [a],
+             "promoted": True, "lowsolo": True, "stage_group": None,
              "key": protagonist(a.get("title_ko") or a.get("title_original") or "",
                                 players)}
             for a in picked)
@@ -1234,21 +1227,16 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
                       [b["rep"] for b in blocks if b.get("rep")] + band if _is_today(a)})
     gossip_today = sum(1 for g in gossip if _is_today(g))
 
-    # 대표 카드에도 같은 줄을 단다 (2026-08-28 사용자 확정) — 그전에는 꺼낸 카드에만
-    # 붙어 두 종류의 카드가 다르게 보였다. 관련 보도는 그대로 둔다: 두 줄은 서로
-    # 대체재가 아니라 다른 축이다 (관련 보도 = 이 사건의 다른 보도 · 선수 페이지 =
-    # 그 선수의 모든 소식). 실측에서 관련 보도 681건 중 79건은 선수 페이지로는 닿을
-    # 수 없었다 (선수 페이지가 없는 사람 60건 + 축이 갈려 빠지는 19건).
+    # 카드마다 그 선수 페이지로 가는 줄을 단다 (2026-08-28 사용자 확정) — 카드 안의
+    # 줄은 이 사건의 다른 보도이고 선수 페이지는 그 선수의 모든 소식이라 축이 다르다.
     for b in blocks:
-        b.setdefault("story", None)
-        if b["story"] is None and not b.get("band_dup"):
-            b["story"] = (stories or {}).get(b.get("key"))
+        b["story"] = None if b.get("band_dup") else (stories or {}).get(b.get("key"))
     # 밴드 (히어로 · 주요 소식) 기사도 목록에 숨김 카드로 내보낸다 — 필터가 기사 단위로
     # 전 기사에 닿도록 (spec2 §6.3). 평소엔 숨김, app.js 가 필터 활성 시에만 노출.
     for a in ordered:
         if a["content_hash"] in top_hashes:
-            blocks.append({"rep": a, "ending": None, "branches": [], "rel_count": 0,
-                           "count": 1, "_articles": [a], "band_dup": True})
+            blocks.append({"rep": a, "same": [], "count": 1, "_articles": [a],
+                           "band_dup": True, "key": None, "stage_group": None})
     day_blocks = group_blocks_by_day(blocks, now)
 
     facets = facet_counts(articles, sources, directory=directory, registry=registry,
@@ -1816,29 +1804,6 @@ def render_player(entry: dict, sources: dict, now: datetime,
                        f"player/{entry['slug']}.html", og_type="profile"))
 
 
-def load_clubs(path: str = "config/club_map.yaml") -> dict:
-    """구단 검출 사전 (결말 · 행선지 칩) — club_map 의 한글 구단명."""
-    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
-    return data.get("clubs") or {}
-
-
-def _first_clause(title: str) -> str:
-    """제목 첫 절 — '…' 앞까지 (spec2 §6.2 · 뒤에 덧붙인 다른 사건 배제)."""
-    for sep in ("…", "..."):
-        i = title.find(sep)
-        if i >= 0:
-            return title[:i].strip()
-    return title.strip()
-
-
-def club_in_title(first_clause: str, club_map: dict) -> str | None:
-    """첫 절에 등장하는 비-아스날 구단 (한글 키 부분 매치 · 긴 키 우선)."""
-    for club in sorted(club_map or {}, key=len, reverse=True):
-        if club in first_clause:
-            return club
-    return None
-
-
 def protagonist(title: str, players: list[str]) -> str | None:
     """사건 주인공 선수 (spec2 §4.3) — 전환어 뒤 선수를 우선, 없으면 첫 등장 선수.
 
@@ -1857,21 +1822,39 @@ def protagonist(title: str, players: list[str]) -> str | None:
 
 
 def cluster_events(articles: list[dict], players: list[str]) -> list[dict]:
-    """주인공 기준 사건 묶음 (spec2 §4) — 날짜 경계 없음 · 주인공 미상은 단독 묶음.
+    """같은 날 · 같은 선수 · 같은 표시 단계 기사를 한 묶음으로 (2026-09-02 개정).
+
+    그전에는 선수 이름 하나로만 묶고 날짜 경계가 없었다. 그러면 6월 기사와 오늘
+    기사가 한 묶음이 되고, 카드는 대표 하나만 서서 그날 들어온 것이 화면에서
+    사라진다 (실측 2026-08-28 — 기사 16건에 카드 1장 · 날짜 그룹이 아예 없는 날도
+    나흘 있었다).
+
+    단계는 표시 묶음 (_STAGE_GROUP_OF) 을 쓴다 — 화면에 같은 배지가 붙은 것끼리
+    묶여야 카드 안이 한 이야기로 읽힌다. 메디컬은 이적 합의로, 개인 합의는
+    제안 · 협상으로 접힌다.
+
+    묶지 않는 것은 셋이다 — 주인공을 못 찾은 기사 · 기준 시각이 없는 기사 ·
+    단계가 기타이거나 빈 기사. 셋 다 낱개 카드가 된다.
+
     입력 등장 순서를 보존한다 (호출부가 최신순으로 정렬해 전달)."""
     groups: dict = {}
     order: list = []
     singles: list = []
     for a in articles:
-        key = protagonist(a.get("title_ko") or a.get("title_original") or "", players)
-        if key is None:
-            singles.append({"key": None, "articles": [a]})
-        else:
-            if key not in groups:
-                groups[key] = []
-                order.append(key)
-            groups[key].append(a)
-    return [{"key": k, "articles": groups[k]} for k in order] + singles
+        name = protagonist(a.get("title_ko") or a.get("title_original") or "", players)
+        ts = _group_ts(a)
+        stage_group = _STAGE_GROUP_OF.get(a.get("transfer_stage") or "")
+        if name is None or ts is None or stage_group is None:
+            singles.append({"key": name, "day": to_kst(ts).date() if ts else None,
+                            "stage_group": stage_group, "articles": [a]})
+            continue
+        key = (to_kst(ts).date(), name, stage_group)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(a)
+    return [{"key": k[1], "day": k[0], "stage_group": k[2], "articles": groups[k]}
+            for k in order] + singles
 
 
 def _arsenal_subject_rank(a: dict) -> int:
@@ -1893,12 +1876,15 @@ def _has_body(a: dict) -> int:
 
 
 def pick_representative(articles: list[dict]) -> dict | None:
-    """묶음 대표 (spec2 §6.1) — 구단 공식 → 최하 제외 → 아스날 주어 → 최신 날짜 → 본문 → 최신 → 공신력 → 단계.
+    """묶음 대표 — 구단 공식 → 최하 제외 → 아스날 주어 → 공신력 → 본문 → 최신 → 단계.
 
-    최신을 **날짜와 시각 두 단계**로 나눠 본다 (2026-08-28). 시각 하나로 보면 몇 분
-    늦게 올라온 트윗이 같은 날 같은 소식의 원문 기사를 이긴다. 날짜로 먼저 자르면
-    옛 기사가 본문을 갖고 있다고 최신 소식을 밀어내는 일도 없다 (그 실수를 한 번
-    했다 — 본문을 최신보다 앞에 뒀더니 7월 기사가 대표가 됐다)."""
+    2026-09-02 에 공신력을 넷째로 올렸다. 그전에는 날짜와 시각이 공신력보다 앞이라
+    사실상 「가장 최신」 이 대표였다. 그렇게 둔 근거는 「옛 기사가 본문을 갖고 있다고
+    최신 소식을 밀어내던 것」 인데, 묶음이 하루 안에서만 만들어지면서 한 묶음의
+    기사가 모두 같은 날이 되어 그 위험이 사라졌다.
+
+    날짜 축도 같은 이유로 뺐다 — 비교할 것이 없다.
+    이 함수를 부르는 곳은 render_index 하나다 (선수 페이지 사다리는 _rep_key 를 쓴다)."""
     if not articles:
         return None
     has_higher = any(a.get("tier") is not None and float(a["tier"]) < 4.0 for a in articles)
@@ -1908,103 +1894,21 @@ def pick_representative(articles: list[dict]) -> dict | None:
         tv = float(tier) if tier is not None else 99.0
         official = 1 if tv == 0.0 else 0
         not_lowest = 0 if (has_higher and tv >= 4.0) else 1
-        ts = _sort_ts(a)[0]
-        return (official, not_lowest, _arsenal_subject_rank(a),
-                to_kst(ts).date(), _has_body(a), ts, -tv,
+        return (official, not_lowest, _arsenal_subject_rank(a), -tv,
+                _has_body(a), _sort_ts(a)[0],
                 _LEAD_STAGE_RANK.get(a.get("transfer_stage") or "", 0))
 
     return max(articles, key=key)
 
 
-# 아스날 인바운드 신호 (spec2 §6.2) — 현 소속이 제목 앞머리에 와도 아스날로 오는 사건.
-# '아스날 이적 의사' 는 '아스날 이적' 에, '아스날로 이적' 은 '아스날로' 에 걸린다.
-_ARSENAL_INBOUND = ("아스날 이적", "아스날 합류", "아스날행", "아스날로")
-
-
-def _is_other_club_report(a: dict, key: str | None, club_map: dict) -> str | None:
-    """다른 구단 관점 기사면 그 구단명, 아니면 None (제목 비-아스날 시작 + 첫 절 비아스날 구단).
-    첫 절에 아스날 인바운드 신호가 있으면 현 소속이 앞머리에 와도 다른 구단행이 아니다."""
-    title = a.get("title_ko") or ""
-    if title.lstrip().startswith("아스날"):
-        return None
-    fc = _first_clause(title)
-    if any(sig in fc for sig in _ARSENAL_INBOUND):
-        return None
-    if key and key not in fc:
-        return None
-    return club_in_title(fc, club_map)
-
-
-def ending_card(cluster: dict, club_map: dict) -> dict | None:
-    """결말 카드 (spec2 §6.2) — 다른 구단이 데려간 사건 · 단계 협상 중 이상."""
-    for a in cluster["articles"]:
-        club = _is_other_club_report(a, cluster["key"], club_map)
-        if club and _LEAD_STAGE_RANK.get(a.get("transfer_stage") or "", 0) >= 1:
-            return {"article": a, "club": club}
-    return None
-
-
-def related_reports(cluster: dict, rep: dict | None, ending: dict | None,
-                    club_map: dict) -> dict:
-    """관련 보도 갈래 (spec2 §6.3) — 아스날 관점 / 다른 구단 관점 · 각 갈래 시간순 (최신 먼저)."""
-    # 결말 기사는 갈래에서 빼지 않는다 (2026-08-28 사용자 결정).
-    # 홈은 결말 카드를 안 그리는데 (2026-08-23) 갈래에서까지 빼면 그 기사가 홈의 어느
-    # 자리에도 안 남는다 — 실측 12건이 그렇게 사라져 있었고 사이드바 건수와 필터 결과가
-    # 갈리는 원인의 하나였다 (「최상 94」 를 눌러도 91건). 카드를 되살리는 것이 아니라
-    # 관련 보도 목록의 한 줄로 남기는 것이라 같은 소식이 카드 두 장으로 서지는 않는다.
-    excluded = set()
-    if rep:
-        excluded.add(rep["content_hash"])
-    arsenal_side, other_side = [], []
-    other_clubs: Counter = Counter()
-    for a in cluster["articles"]:
-        if a["content_hash"] in excluded:
-            continue
-        club = _is_other_club_report(a, cluster["key"], club_map)
-        if club:
-            other_side.append(a)
-            other_clubs[club] += 1
-        else:
-            arsenal_side.append(a)
-    arsenal_side.sort(key=_sort_ts, reverse=True)
-    other_side.sort(key=_sort_ts, reverse=True)
-    return {"arsenal": arsenal_side, "other": other_side, "other_clubs": other_clubs}
-
-
-def branch_views(related: dict, ending: dict | None) -> list[dict]:
-    """관련 보도 갈래를 이름표와 함께 정렬 (spec2 §6.3).
-    결말 있으면 다른 구단 갈래를 위로 · 갈래가 하나면 이름표 생략."""
-    ars, oth = related["arsenal"], related["other"]
-    if ending:
-        club = ending["club"]
-        # 결말 기사 한 건의 구단명이 갈래 전체의 이름표가 되던 자리 (안건 τ-ⓐ).
-        # 그 갈래가 실제로 그 구단 이야기가 아니면 구단명을 빼고 일반 이름표로 돌린다
-        # — 결말 카드는 홈에 안 그려지므로 (2026-08-23) 틀린 구단명이 남는 자리는 여기뿐이다.
-        named = bool(oth) and related.get("other_clubs", Counter()).get(club, 0) / len(oth) >= 0.5
-        label = f"{club}행 관련" if named else "영입 경쟁"
-        branches = ([{"label": label, "articles": oth}] if oth else []) + \
-                   ([{"label": "아스날 쪽 보도", "articles": ars}] if ars else [])
-    else:
-        branches = ([{"label": "아스날 쪽 보도", "articles": ars}] if ars else []) + \
-                   ([{"label": "영입 경쟁", "articles": oth}] if oth else [])
-    if len(branches) == 1:
-        branches[0]["label"] = ""
-    return branches
-
-
-# ── 최근 며칠치 기사는 따로 세운다 (안건 π) ─────────────────────────────
-# 홈은 기사 한 건이 아니라 한 선수 이야기를 카드 한 장으로 보여 준다. 그래서 그
-# 이야기의 대표 기사가 오래됐으면, 오늘 새로 들어온 기사도 그 옛 카드 뒤로 접혀
-# 들어간다 (2026-08-27 실측 — 전날은 카드가 한 장도 없었고 그날 기사 9건이 전부
-# 접혀 있었다). 최근 며칠치 기사는 접지 않고 자기 날짜에 카드로 세운다.
+# ── 카드가 한 장도 안 선 날 가십에서 꺼내기 (2026-08-30) ────────────────
+# 두 값 모두 pick_empty_day_gossip 이 쓴다. 접힌 기사를 꺼내던 promote_recent 가
+# 여기서 함께 쓰다가 2026-09-02 에 없어졌다 (하루 단위 묶음이라 접힘이 안 생긴다).
 #
-# 세우는 장수를 제한하는 이유는 「같은 기사가 두 번 나와서」 가 아니다. 이 코드는
+# 한 선수당 장수를 제한하는 이유는 「같은 기사가 두 번 나와서」 가 아니다. 이 코드는
 # 중복인지 아닌지를 보지 않는다 — 제목에서 뽑은 선수 이름 (protagonist) 만 보고
-# 같은 이야기로 묶는다. 그래서 걸리는 두 장이 사실상 같은 소식일 때도 있고 같은
-# 선수의 전혀 다른 소식일 때도 있다. 제한이 없으면 한 선수가 그날 카드를 거의 다
-# 가져간다 (2026-08-27 실측 — 꺼낼 수 있는 18장 중 14장이 세 선수 것이었다).
-#
-# 원래부터 서 있던 대표 카드는 이 장수에 안 들어간다 (꺼내 온 것끼리만 센다).
+# 같은 이야기로 묶는다. 제한이 없으면 한 선수가 그날 카드를 거의 다 가져간다
+# (2026-08-27 실측 — 꺼낼 수 있는 18장 중 14장이 세 선수 것이었다).
 PROMOTE_DAYS = 3
 PROMOTE_PER_PLAYER_DAY = 3
 
@@ -2022,19 +1926,6 @@ def _mid_tier_rank(row: dict) -> int:
     if tier is None or float(tier) != MID_TIER:
         return 1
     return 0 if (row.get("_outlet") or row.get("outlet")) == MID_TIER_PREFERRED_OUTLET else 1
-
-
-def _promotable(row: dict) -> bool:
-    """접힘에서 꺼내 카드로 세워도 되는 기사인가 — 안 되는 자리가 둘이다.
-
-    하나는 단계가 비었거나 「기타」 인 기사다. 첫 화면에서 카드가 감춰지므로
-    (app.js 의 isOther) 꺼내면 관련 보도에서도 빠져 아무 데서도 안 보이게 된다.
-
-    다른 하나는 공신력 최하다. 2026-08-30 개정 뒤로 최하는 사건 묶음에 아예 안
-    들어가므로 (render_index 가 가십으로 먼저 가른다) 이 가드는 실제로 걸릴 일이
-    없지만, 「접힘에서 최하를 꺼내지 않는다」 는 계약을 이 자리에 남겨 둔다.
-    최하를 날짜 그룹에 세우는 경로는 pick_empty_day_gossip 하나뿐이다."""
-    return _stage_visible(row) and not is_lowest(row)
 
 
 def _stage_visible(row: dict) -> bool:
@@ -2089,87 +1980,6 @@ def recent_days(articles: list[dict], n: int = PROMOTE_DAYS) -> set:
         if ts is not None:
             days.add(to_kst(ts).date())
     return set(sorted(days, reverse=True)[:n])
-
-
-def _ladder_rank(row: dict) -> int | None:
-    """진행 사다리에서의 자리 — 앞설수록 작다. 사다리 밖이면 None.
-
-    순서는 transfer_stage.STAGE_ENUMS 를 그대로 쓴다 (단계 정의의 단일 출처).
-    무산은 진행 단계가 아니라 사다리 축에서 빠지므로 (transfer_stage.py §8) 뺀다 —
-    _LEAD_STAGE_RANK 는 1면 정렬용이라 여기 쓸 수 없다 (무산이 협상 중과 동률이고
-    관심 · 루머가 둘 다 0 이다)."""
-    stage = row.get("transfer_stage") or ""
-    if stage == "collapsed" or stage not in _stage.STAGE_ENUMS:
-        return None
-    return _stage.STAGE_ENUMS.index(stage)
-
-
-def _advances_past(article: dict, rep: dict | None) -> bool:
-    """접힌 기사가 대표 카드보다 이야기를 진전시켰나.
-
-    같은 날 가드는 「2분 차이의 같은 소식」 을 막으려고 날짜로만 뭉뚱그리는데,
-    단계가 나아간 후속은 중복이 아니라 다음 소식이다 (실측 2026-09-01 — 대표가
-    「협상 중」 인 은와네리 묶음에 「이적 합의」 가 12시간 뒤에 들어와 접혔다).
-    한쪽이라도 사다리 밖이면 순서가 정의되지 않으므로 판정하지 않는다."""
-    a, r = _ladder_rank(article), _ladder_rank(rep or {})
-    return a is not None and r is not None and a < r
-
-
-def promote_recent(blocks: list[dict], window: set,
-                   cap: int = PROMOTE_PER_PLAYER_DAY) -> list[dict]:
-    """접혀 있던 기사 중 최근 날짜 것을 꺼내 낱개 카드로 돌려준다 (안건 π).
-    한 선수 소식은 하루 cap 장까지만 꺼내고, 못 꺼낸 것은 접힌 채로 남는다.
-    꺼낸 기사는 원래 카드의 관련 보도와 기사 목록에서 빼 준다 — 안 그러면 같은
-    기사가 카드와 접힘에 두 번 나오고 날짜 머리글의 보도 건수도 두 번 센다.
-
-    **대표 카드가 이미 서 있는 날짜에서는 안 꺼낸다** (2026-08-28). 그 날짜에는
-    그 이야기의 카드가 이미 있어서, 꺼내면 같은 소식이 나란히 두 장으로 선다
-    (실측: 넬슨 계약 해지가 트윗 카드와 The Athletic 카드로 두 번 섰다 — 2분 차이의
-    같은 소식이다). 이 코드는 중복인지 아닌지를 안 보므로 날짜로만 막는다.
-
-    **단, 단계가 나아간 기사는 같은 날에도 꺼낸다** (2026-09-01). 날짜로만 막으면
-    후속 보도가 앞선 소식 뒤에 접힌다 — 실측에서 「협상 중」 대표 카드가 12시간 뒤의
-    「이적 합의」 를 덮었다. 판정은 _advances_past 가 한다."""
-    promoted = []
-    for b in blocks:
-        rep_ts = _group_ts(b["rep"]) if b.get("rep") else None
-        rep_day = to_kst(rep_ts).date() if rep_ts is not None else None
-        by_day: dict = {}
-        for br in b["branches"]:
-            for a in br["articles"]:
-                ts = _group_ts(a)
-                if ts is None or not _promotable(a):
-                    continue
-                day = to_kst(ts).date()
-                if day == rep_day and not _advances_past(a, b.get("rep")):
-                    continue          # 그 날짜엔 대표 카드가 이미 서 있다
-                if day in window:
-                    by_day.setdefault(day, []).append(a)
-        picks = []
-        for _, arts in sorted(by_day.items(), reverse=True):
-            arts.sort(key=_sort_ts, reverse=True)                     # 셋째 — 최신
-            arts.sort(key=_mid_tier_rank)                             # 둘째 — 중이면 Sky
-            arts.sort(key=lambda a: float(a["tier"])
-                      if a.get("tier") is not None else 99.0)         # 첫째 — 공신력
-            picks.extend(arts[:cap])
-        if not picks:
-            continue
-        taken = {a["content_hash"] for a in picks}
-        for br in b["branches"]:
-            br["articles"] = [a for a in br["articles"]
-                              if a["content_hash"] not in taken]
-        b["branches"] = [br for br in b["branches"] if br["articles"]]
-        if len(b["branches"]) == 1:
-            b["branches"][0]["label"] = ""      # 갈래가 하나면 이름표 생략 (branch_views)
-        b["rel_count"] = sum(len(br["articles"]) for br in b["branches"])
-        b["_articles"] = [a for a in b["_articles"]
-                          if a["content_hash"] not in taken]
-        b["count"] = len(b["_articles"])
-        promoted.extend({"rep": a, "ending": None, "branches": [], "rel_count": 0,
-                         "count": 1, "_articles": [a], "promoted": True,
-                         "key": b.get("key")}
-                        for a in picks)
-    return promoted
 
 
 def render_about() -> str:
