@@ -98,7 +98,15 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
   :root:not([data-theme="light"]) .ic-moon{display:none}
   :root:not([data-theme="light"]) .ic-sun{display:block}
 }
-.sortsel{padding:0 10px;font-size:13px}
+/* 정렬 셀렉트 — 브라우저 기본 화살표는 자리를 크게 먹고 글자에서 멀찍이 떨어져 붙는다
+   (실측 87 × 38px). 기본 모양을 끄고 삼각형을 오른쪽 끝에 직접 그려 상자를 줄인다
+   — 색은 토큰이라 테마를 따라간다. */
+.sortsel{appearance:none;-webkit-appearance:none;height:32px;padding:0 20px 0 9px;font-size:12.5px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--dim) 50%),
+                   linear-gradient(135deg,var(--dim) 50%,transparent 50%);
+  background-size:4px 4px,4px 4px;
+  background-position:right 12px center,right 8px center;
+  background-repeat:no-repeat}
 .hamb{display:none}
 
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:35;display:none}
@@ -208,6 +216,11 @@ html[data-theme="dark"] .ic-moon{display:none} html[data-theme="dark"] .ic-sun{d
 .daylist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 26px;align-items:stretch}
 /* .flatlist 는 이제 표식만 남았다 — 행 높이 정렬을 위 .daylist 가 전부 맡는다 */
 .daylist.solo,.gossiplist.solo{grid-template-columns:1fr}   /* 남은 카드가 하나면 한 열로 (JS 표식) */
+/* 그리드 아이템의 자동 최소 크기는 min-content 라, 한 줄로 버티는 메타 줄 (배지 ·
+   매체 · 공신력 · 시각) 의 폭이 그대로 카드 폭이 된다. 한 열로 접히는 좁은 화면에서
+   카드가 칸을 넘어 문서 전체가 가로로 넘쳤다 (실측 374px 뷰포트에서 카드 455px ·
+   문서 470px). 바닥을 뚫어 칸 안에서 줄을 바꾸게 한다. */
+.daylist > *,.gossiplist > *{min-width:0}
 .secside{display:flex;align-items:center;gap:10px}
 .seclink{display:inline-block;padding:5px 12px;border:1.5px solid var(--red);border-radius:2px;
   color:var(--red);font-size:12.5px;font-weight:700;white-space:nowrap}
@@ -470,10 +483,11 @@ h1.title{font-family:var(--serif);font-weight:800;font-size:36px;line-height:1.2
   .lead h2{font-size:23px}
   .topbar .inner{gap:10px;padding:10px 14px}
   .gossiplist{grid-template-columns:1fr}
-  /* 좁은 화면에서는 남은 시간만 남긴다 — 「여름 이적시장 마감까지」 를 함께 두면
-     로고와 단추 사이가 모자라 줄이 접힌다. title 에 전체 문구가 그대로 있다. */
+  /* 좁은 화면에서는 「이적 시장 D-121」 · 「이적 마감 D-30」 으로 줄인다 (문구는
+     app.js 가 고른다) — 「여름 이적시장 마감까지」 를 그대로 두면 로고와 단추 사이가
+     모자라 줄이 접히고, 통째로 지우면 숫자만 남아 무엇까지 남았는지 읽히지 않는다.
+     D 표기가 「121일 20시간」 보다 좁아 (26px 대 74px) 레이블 다섯 글자가 들어간다. */
   .mktclock{padding:0 4px}
-  .mktclock .mkt-label{display:none}
   /* 선수 페이지 사다리 — 한 줄에 날짜 · 단계 · 제목 · 매체 · 건수를 늘어놓는데, 좁은
      화면에서는 제목만 flex 로 줄어들어 자리를 잃는다 (2026-08-31 실측 386px 뷰포트에서
      제목 폭 19~45px · 높이 최대 538px 로 한 글자씩 세로로 흘렀다).
