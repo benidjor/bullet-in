@@ -1,11 +1,12 @@
-"""좁은 화면 회귀 가드 — 카드 가로 넘침과 이적시장 타이머 레이블.
+"""좁은 화면 회귀 가드 — 카드 가로 넘침과 이적시장 타이머 표기.
 
 pytest 는 브라우저를 안 띄우므로 여기서 고정하는 것은 style.css · app.js 가
 공유하는 문자열 계약뿐이다. 실제 폭은 브라우저에서 쟀다 (2026-09-02 · 배포본을
 393px 뷰포트에 올려 문서 폭 470px → 393px · 카드 455px → 342px).
 
 **이 검사가 못 보는 것** — 실제 렌더 폭, 기기별 글꼴 차이, 상단 바가 접히는 지점,
-320px 처럼 더 좁은 화면. 그래서 통과가 「화면이 안 깨진다」 는 증명은 아니다.
+320px 처럼 더 좁은 화면, D 표기 계산의 실행 결과. 그래서 통과가 「화면이 안 깨진다」
+는 증명은 아니다.
 """
 import re
 from pathlib import Path
@@ -26,8 +27,8 @@ def test_list_cards_may_shrink_below_their_min_content():
 
 
 def test_narrow_screen_keeps_a_label_beside_the_countdown():
-    # 레이블을 통째로 감추면 「2:05:12」 만 남아 무엇까지 남은 시간인지 읽히지
-    # 않는다 (2026-09-02 사용자 지적). 좁은 화면에서는 문구를 줄여서 남긴다.
+    # 레이블을 통째로 감추면 「2:05:12」 만 남아 무엇까지 남은 시간인지 읽히지 않는다
+    # (2026-09-02 사용자 지적). 좁은 화면에서는 문구를 줄여서 남긴다.
     css = (STATIC / "style.css").read_text(encoding="utf-8")
     assert not re.search(r"\.mktclock\s+\.mkt-label\s*\{[^}]*display\s*:\s*none", css), (
         "좁은 화면에서 타이머 레이블을 감추고 있음 — 숫자만 남는다"
@@ -36,6 +37,21 @@ def test_narrow_screen_keeps_a_label_beside_the_countdown():
     assert re.search(r"matchMedia\(\s*'\(max-width:\s*640px\)'\s*\)", js), (
         "app.js 가 좁은 화면을 판정하지 않음 — 줄인 문구를 고를 근거가 없다"
     )
-    assert re.search(r"narrow\s*\?\s*ev\.what", js), (
-        "좁은 화면에서 고를 짧은 문구 (「마감」 · 「개장」) 가 없음"
+    for word in ("이적 마감", "이적 시장"):
+        assert f"'{word}'" in js, f"좁은 화면 문구 「{word}」 가 없음"
+    assert "D-${" in js, "좁은 화면에서 남은 날짜를 D 표기로 적는 자리가 없음"
+
+
+def test_dday_counts_calendar_days_in_kst():
+    # D-N 은 남은 시간이 아니라 달력 날짜다. 남은 시간을 24 로 나누면 하루씩 어긋난다
+    # — 마감이 9월 2일 07:00 이고 지금이 9월 1일 20:00 이면 남은 시간은 11시간인데
+    # 달력으로는 D-1 이다. 기준 시간대는 화면 표기와 같은 KST 여야 한다.
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "KST_MS = 9 * 3600000" in js, "D 계산의 기준 시간대가 KST 로 고정돼 있지 않음"
+    assert re.search(r"ddayKst\s*=\s*\(at,\s*now\)", js), (
+        "달력 날짜로 D-N 을 세는 함수가 없음 — 남은 시간을 24 로 나누면 하루씩 어긋난다"
+    )
+    # 마지막 하루는 D-DAY 대신 시계 — 「하루 넘게 남았을 때만 D 표기」 라는 경계다.
+    assert re.search(r"narrow\s*&&\s*left\s*>=\s*86400000", js), (
+        "마지막 하루를 시계로 넘기는 경계가 없음 — D-0 이 화면에 뜬다"
     )

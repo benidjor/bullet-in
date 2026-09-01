@@ -117,6 +117,12 @@ if (mktClock) {
   };
 
   const pad = n => String(n).padStart(2, '0');
+  // D-N 은 남은 시간이 아니라 달력 날짜를 센다 — 남은 시간을 24 로 나누면 하루씩
+  // 어긋난다 (마감이 9월 2일 07:00 이고 지금이 9월 1일 20:00 이면 남은 시간은 11시간
+  // 이지만 달력으로는 D-1 이다). 기준 시간대는 화면 표기와 같은 KST 다.
+  const KST_MS = 9 * 3600000;
+  const ddayKst = (at, now) =>
+    Math.floor((at + KST_MS) / 86400000) - Math.floor((now + KST_MS) / 86400000);
   const remain = ms => {
     const s = Math.max(0, Math.floor(ms / 1000));
     const d = Math.floor(s / 86400);
@@ -132,12 +138,17 @@ if (mktClock) {
     const ev = nextEvent(now);
     if (!ev) { mktClock.hidden = true; return; }
     const left = ev.at - now;
-    // 좁은 화면에서는 「마감」 · 「개장」 두 글자만 — 전체 문구를 그대로 두면 상단 바가
-    // 모자라 줄이 접힌다 (실측 355px 뷰포트에서 「겨울 개장 121일 20시간」 이 넘쳤다).
-    // 전체 문구는 title 에 그대로 남는다.
+    // 좁은 화면은 「이적 시장 D-121」 · 「이적 마감 D-30」 으로 적는다 (2026-09-02 확정).
+    // 전체 문구를 그대로 두면 상단 바가 모자라 줄이 접히고 (실측 355px 뷰포트),
+    // 숫자만 남기면 무엇까지 남은 시간인지 읽히지 않는다. 전체 문구는 title 에 있다.
+    // 마지막 하루는 D-DAY 대신 시계로 바꾼다 — 하루 종일 같은 값을 보이느니 남은
+    // 시간을 세는 편이 그날 쓸모가 있고, 빨간 강조도 같은 구간에서 켜진다.
     const narrow = window.matchMedia('(max-width:640px)').matches;
-    const text = narrow ? ev.what : `${ev.name} 이적시장 ${ev.what}까지`;
-    const value = remain(left);
+    const text = narrow ? (ev.live ? '이적 마감' : '이적 시장')
+                        : `${ev.name} 이적시장 ${ev.what}까지`;
+    const value = narrow && left >= 86400000
+      ? `D-${ddayKst(ev.at, now)}`
+      : remain(left);
     if (text + value !== last) {
       labelEl.textContent = text;
       timeEl.textContent = value;
