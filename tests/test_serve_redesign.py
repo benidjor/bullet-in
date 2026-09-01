@@ -297,6 +297,32 @@ def test_pick_representative_official_always():
     assert R.pick_representative([off, ars]) is off
 
 
+def test_pick_representative_prefers_credibility_over_recency():
+    # 같은 날 같은 단계면 늦게 들어온 낮은 등급보다 공신력이 앞선다 (2026-09-02)
+    late_mid = _row(content_hash="late", tier=2.0, body_ko="본문", body_level=1,
+                    title_ko="아스날, 포파나 영입 검토",
+                    published_at=datetime(2026, 7, 20, 7, 0),
+                    fetched_at=datetime(2026, 7, 20, 7, 0))
+    early_top = _row(content_hash="early", tier=1.0, body_ko="본문", body_level=1,
+                     title_ko="아스날, 포파나 영입 제안받아",
+                     published_at=datetime(2026, 7, 20, 1, 38),
+                     fetched_at=datetime(2026, 7, 20, 1, 38))
+    assert R.pick_representative([late_mid, early_top]) is early_top
+
+
+def test_pick_representative_recency_still_breaks_a_credibility_tie():
+    # 공신력이 같으면 늦은 기사가 이긴다 (기존 성질 유지)
+    early = _row(content_hash="e", tier=1.0, body_ko="본문", body_level=1,
+                 title_ko="아스날, 포파나 영입 검토",
+                 published_at=datetime(2026, 7, 20, 1, 0),
+                 fetched_at=datetime(2026, 7, 20, 1, 0))
+    late = _row(content_hash="l", tier=1.0, body_ko="본문", body_level=1,
+                title_ko="아스날, 포파나 영입 추진",
+                published_at=datetime(2026, 7, 20, 9, 0),
+                fetched_at=datetime(2026, 7, 20, 9, 0))
+    assert R.pick_representative([early, late]) is late
+
+
 def test_ending_card_detects_other_club_transfer():
     cluster = {"key": "로저스", "articles": [
         _row(content_hash="e", tier=1.0, transfer_stage="agreed",

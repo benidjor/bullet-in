@@ -1911,12 +1911,15 @@ def _has_body(a: dict) -> int:
 
 
 def pick_representative(articles: list[dict]) -> dict | None:
-    """묶음 대표 (spec2 §6.1) — 구단 공식 → 최하 제외 → 아스날 주어 → 최신 날짜 → 본문 → 최신 → 공신력 → 단계.
+    """묶음 대표 — 구단 공식 → 최하 제외 → 아스날 주어 → 공신력 → 본문 → 최신 → 단계.
 
-    최신을 **날짜와 시각 두 단계**로 나눠 본다 (2026-08-28). 시각 하나로 보면 몇 분
-    늦게 올라온 트윗이 같은 날 같은 소식의 원문 기사를 이긴다. 날짜로 먼저 자르면
-    옛 기사가 본문을 갖고 있다고 최신 소식을 밀어내는 일도 없다 (그 실수를 한 번
-    했다 — 본문을 최신보다 앞에 뒀더니 7월 기사가 대표가 됐다)."""
+    2026-09-02 에 공신력을 넷째로 올렸다. 그전에는 날짜와 시각이 공신력보다 앞이라
+    사실상 「가장 최신」 이 대표였다. 그렇게 둔 근거는 「옛 기사가 본문을 갖고 있다고
+    최신 소식을 밀어내던 것」 인데, 묶음이 하루 안에서만 만들어지면서 한 묶음의
+    기사가 모두 같은 날이 되어 그 위험이 사라졌다.
+
+    날짜 축도 같은 이유로 뺐다 — 비교할 것이 없다.
+    이 함수를 부르는 곳은 render_index 하나다 (선수 페이지 사다리는 _rep_key 를 쓴다)."""
     if not articles:
         return None
     has_higher = any(a.get("tier") is not None and float(a["tier"]) < 4.0 for a in articles)
@@ -1926,9 +1929,8 @@ def pick_representative(articles: list[dict]) -> dict | None:
         tv = float(tier) if tier is not None else 99.0
         official = 1 if tv == 0.0 else 0
         not_lowest = 0 if (has_higher and tv >= 4.0) else 1
-        ts = _sort_ts(a)[0]
-        return (official, not_lowest, _arsenal_subject_rank(a),
-                to_kst(ts).date(), _has_body(a), ts, -tv,
+        return (official, not_lowest, _arsenal_subject_rank(a), -tv,
+                _has_body(a), _sort_ts(a)[0],
                 _LEAD_STAGE_RANK.get(a.get("transfer_stage") or "", 0))
 
     return max(articles, key=key)
