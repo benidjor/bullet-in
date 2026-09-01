@@ -519,6 +519,22 @@ h1.title{font-family:var(--serif);font-weight:800;font-size:36px;line-height:1.2
   .block.g0,.block.g1,
   .daylist.flatlist .item.g0,.daylist.flatlist .item.g1{
     margin-left:-8px;margin-right:-8px;padding-left:8px;padding-right:8px}
+  /* 사진이 붙은 카드는 메타 줄 자리가 215px 뿐이라 「긴 단계 배지 + 긴 매체명 + 공신력
+     최상」 이 겹치면 217px 이 되어 시각만 아랫줄로 떨어졌다 (2026-09-02 실측 · 홈 카드
+     13장 중 5장). 간격을 2px 좁히면 2장으로 줄고, 매체명 길이가 데이터에 달려 있어
+     간격만으로는 「항상」 을 보장하지 못한다.
+     그래서 줄을 아예 안 접고 매체명만 말줄임한다 — 바로 아래 「같은 소식」 줄
+     (.sameline .sm) 이 이미 쓰는 방식이라 화면에 새 규칙을 들이지 않는다.
+     공신력 라벨에 nowrap 을 함께 거는 이유 — 안 걸면 줄이 안 접히는 대신 「공신력 /
+     최상」 으로 그 칸 안에서 두 줄이 된다 (실측 메타 줄 높이 23 → 45px).
+     **선수 페이지 (.plist) 는 뺀다** — 그 목록은 시각 대신 날짜 (2026-09-01) 를 넣어
+     조각 하나가 두 배 넓고, 한 줄로 묶어도 이번엔 날짜가 칸 안에서 접힌다.
+     실측 10장 중 8장이 그대로 두 줄이고 매체명만 넷이 잘렸다 — 얻는 것 없이 잃기만 한다.
+     1면과 가십도 대상이 아니다 — 자리가 남아 좁힐 이유가 없다. */
+  .daylist:not(.plist) .item.hasthumb .cardhead{gap:5px;flex-wrap:nowrap}
+  .daylist:not(.plist) .item.hasthumb .cardhead .cred{white-space:nowrap}
+  .daylist:not(.plist) .item.hasthumb .cardhead .src{
+    min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   /* 공신력 최하 제목은 한 줄로 자른다 (덜 두드러지게 하려는 설계). 데스크톱에서는 그
      한 줄에 제목이 거의 다 들어가지만, 좁은 화면에서는 열 자 남짓만 남아 무슨 소식인지
      알 수 없다 (실측 386px — 썸네일이 붙은 카드에서 제목 자리가 169px). 모바일에서만
