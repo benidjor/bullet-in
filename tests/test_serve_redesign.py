@@ -244,6 +244,47 @@ def test_cluster_groups_same_protagonist():
     assert by_key["트로사르"] == ["c"]
 
 
+def _on_day(h, day, stage, title, hour=12):
+    """지정한 7월 날짜의 기사 — 묶음 키가 날짜로 갈리는지 보는 데 쓴다."""
+    return _row(content_hash=h, transfer_stage=stage, title_ko=title,
+                published_at=datetime(2026, 7, day, hour, 0),
+                fetched_at=datetime(2026, 7, day, hour, 0))
+
+
+def test_cluster_events_splits_by_day():
+    # 하루 안에서만 묶는다 — 어제 기사와 오늘 기사는 같은 선수라도 다른 카드다
+    a = _on_day("a", 20, "interest", "아스날, 로저스 영입 검토")
+    b = _on_day("b", 21, "interest", "아스날, 로저스 영입 추진")
+    out = R.cluster_events([b, a], ["로저스"])
+    assert len(out) == 2
+    assert {len(c["articles"]) for c in out} == {1, 1}
+
+
+def test_cluster_events_splits_by_display_stage():
+    # 같은 날 같은 선수라도 화면 배지가 다르면 다른 카드다
+    a = _on_day("a", 20, "interest", "아스날, 로저스 영입 검토", hour=1)
+    b = _on_day("b", 20, "agreed", "아스날, 로저스 영입 합의", hour=2)
+    out = R.cluster_events([b, a], ["로저스"])
+    assert len(out) == 2
+
+
+def test_cluster_events_folds_medical_into_agreed():
+    # 표시 묶음으로 묶으므로 메디컬과 이적 합의는 한 카드다 (배지가 같다)
+    a = _on_day("a", 20, "agreed", "아스날, 로저스 영입 합의", hour=1)
+    b = _on_day("b", 20, "medical", "로저스, 메디컬 테스트", hour=2)
+    out = R.cluster_events([b, a], ["로저스"])
+    assert len(out) == 1
+    assert out[0]["stage_group"] == "이적 합의"
+
+
+def test_cluster_events_keeps_unstaged_articles_single():
+    # 단계가 기타 · 빈 값이면 묶지 않는다 (카드에서 기본 숨김인 값이다)
+    a = _on_day("a", 20, "other", "아스날, 로저스 관련 보도", hour=1)
+    b = _on_day("b", 20, "other", "아스날, 로저스 다른 보도", hour=2)
+    out = R.cluster_events([b, a], ["로저스"])
+    assert len(out) == 2
+
+
 def test_pick_representative_lowest_excluded_when_higher_exists():
     afc = _row(content_hash="afc", tier=4.0, title_ko="아스날, 로저스 영입 추진", body_ko="")
     sky = _row(content_hash="sky", tier=1.0, title_ko="첼시, 로저스 영입 합의", body_ko="")

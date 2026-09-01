@@ -1857,21 +1857,39 @@ def protagonist(title: str, players: list[str]) -> str | None:
 
 
 def cluster_events(articles: list[dict], players: list[str]) -> list[dict]:
-    """주인공 기준 사건 묶음 (spec2 §4) — 날짜 경계 없음 · 주인공 미상은 단독 묶음.
+    """같은 날 · 같은 선수 · 같은 표시 단계 기사를 한 묶음으로 (2026-09-02 개정).
+
+    그전에는 선수 이름 하나로만 묶고 날짜 경계가 없었다. 그러면 6월 기사와 오늘
+    기사가 한 묶음이 되고, 카드는 대표 하나만 서서 그날 들어온 것이 화면에서
+    사라진다 (실측 2026-08-28 — 기사 16건에 카드 1장 · 날짜 그룹이 아예 없는 날도
+    나흘 있었다).
+
+    단계는 표시 묶음 (_STAGE_GROUP_OF) 을 쓴다 — 화면에 같은 배지가 붙은 것끼리
+    묶여야 카드 안이 한 이야기로 읽힌다. 메디컬은 이적 합의로, 개인 합의는
+    제안 · 협상으로 접힌다.
+
+    묶지 않는 것은 셋이다 — 주인공을 못 찾은 기사 · 기준 시각이 없는 기사 ·
+    단계가 기타이거나 빈 기사. 셋 다 낱개 카드가 된다.
+
     입력 등장 순서를 보존한다 (호출부가 최신순으로 정렬해 전달)."""
     groups: dict = {}
     order: list = []
     singles: list = []
     for a in articles:
-        key = protagonist(a.get("title_ko") or a.get("title_original") or "", players)
-        if key is None:
-            singles.append({"key": None, "articles": [a]})
-        else:
-            if key not in groups:
-                groups[key] = []
-                order.append(key)
-            groups[key].append(a)
-    return [{"key": k, "articles": groups[k]} for k in order] + singles
+        name = protagonist(a.get("title_ko") or a.get("title_original") or "", players)
+        ts = _group_ts(a)
+        stage_group = _STAGE_GROUP_OF.get(a.get("transfer_stage") or "")
+        if name is None or ts is None or stage_group is None:
+            singles.append({"key": name, "day": to_kst(ts).date() if ts else None,
+                            "stage_group": stage_group, "articles": [a]})
+            continue
+        key = (to_kst(ts).date(), name, stage_group)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(a)
+    return [{"key": k[1], "day": k[0], "stage_group": k[2], "articles": groups[k]}
+            for k in order] + singles
 
 
 def _arsenal_subject_rank(a: dict) -> int:
