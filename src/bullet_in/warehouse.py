@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pyarrow as pa
 
@@ -149,3 +149,33 @@ def next_watermark(rows: list[dict],
     """
     seen = [r["updated_at"] for r in rows if r.get("updated_at")]
     return max(seen) if seen else previous
+
+
+def snapshot_dates_to_drop(dates: list[date], today: date) -> list[date]:
+    """전량 스냅샷 중 지울 날짜.
+
+    90일 안쪽은 매일 남기고, 그보다 오래된 것은 월요일만 남긴다.
+    안 지우면 `articles_snapshot` 이 하루 3.0 MiB 씩 쌓여 약 414일에 GCS 무료
+    5 GB 를 채운다 (설계 §3.4).
+    """
+    cutoff = today - timedelta(days=SNAPSHOT_DAILY_DAYS)
+    return sorted(d for d in dates if d < cutoff and d.isoweekday() != 1)
+
+
+def expire_before(now: datetime) -> datetime:
+    """이 시각보다 오래된 Iceberg 스냅샷은 만료 대상.
+
+    부피 때문이 아니라 `metadata.json` 이 1 MB 로 막혀 있어서 한다.
+    스냅샷 하나가 약 1,015 바이트를 더하므로 그냥 두면 약 124일에 커밋이 실패한다.
+    """
+    return now - timedelta(days=EXPIRE_SNAPSHOT_DAYS)
+
+
+def files_to_compact(sizes: dict[str, int]) -> list[str]:
+    """합칠 데이터 파일 목록. 둘 미만이면 빈 목록이다.
+
+    회차마다 조금씩 쓰면 Parquet 압축이 안 들어 행당 부피가 6.15배가 된다
+    (실측 19,430 B 대 3,160 B · 설계 §2.5).
+    """
+    small = [p for p, n in sizes.items() if n < COMPACT_TARGET_BYTES]
+    return small if len(small) >= 2 else []

@@ -1,5 +1,5 @@
 """이력 레이크하우스의 판정 부분 테스트 — 적재 대상 · 워터마크 · 보관."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pyarrow as pa
 import pytest
@@ -153,3 +153,56 @@ def test_시간대_없는_DATETIME_은_UTC_로_읽는다():
     naive = datetime(2026, 9, 2, 3, 0, 0)
     t = warehouse.to_arrow([{"created_at": naive}], s, loaded_at=_t(2026, 9, 2))
     assert t.column("created_at").to_pylist() == [_t(2026, 9, 2, 3)]
+
+
+# --- 보관 판정 -------------------------------------------------------------
+
+def test_90일_안쪽_스냅샷은_하나도_안_지운다():
+    today = date(2026, 12, 1)
+    dates = [today - timedelta(days=n) for n in range(0, 90)]
+    assert warehouse.snapshot_dates_to_drop(dates, today) == []
+
+
+def test_90일_넘은_것_중_월요일은_남는다():
+    today = date(2026, 12, 1)
+    old_monday = date(2026, 6, 1)
+    assert old_monday.isoweekday() == 1
+    assert warehouse.snapshot_dates_to_drop([old_monday], today) == []
+
+
+def test_90일_넘은_것_중_월요일이_아니면_지운다():
+    today = date(2026, 12, 1)
+    old_tuesday = date(2026, 6, 2)
+    assert warehouse.snapshot_dates_to_drop([old_tuesday], today) == [old_tuesday]
+
+
+def test_지울_날짜는_오름차순으로_돌려준다():
+    today = date(2026, 12, 1)
+    d1, d2 = date(2026, 6, 2), date(2026, 5, 5)
+    assert warehouse.snapshot_dates_to_drop([d1, d2], today) == [d2, d1]
+
+
+def test_스냅샷_만료_기준은_7일_전():
+    now = _t(2026, 9, 10, 3)
+    assert warehouse.expire_before(now) == _t(2026, 9, 3, 3)
+
+
+def test_큰_파일은_컴팩션_대상이_아니다():
+    big = warehouse.COMPACT_TARGET_BYTES + 1
+    assert warehouse.files_to_compact({"a.parquet": big}) == []
+
+
+def test_작은_파일이_둘_이상이면_대상():
+    small = {"a.parquet": 1000, "b.parquet": 2000}
+    assert sorted(warehouse.files_to_compact(small)) == ["a.parquet", "b.parquet"]
+
+
+def test_작은_파일이_하나면_합칠_것이_없다():
+    # 하나를 다시 쓰면 커밋만 늘고 부피는 그대로다.
+    assert warehouse.files_to_compact({"a.parquet": 1000}) == []
+
+
+def test_큰_것과_작은_것이_섞이면_작은_것만_고른다():
+    mixed = {"big.parquet": warehouse.COMPACT_TARGET_BYTES + 1,
+             "s1.parquet": 10, "s2.parquet": 20}
+    assert sorted(warehouse.files_to_compact(mixed)) == ["s1.parquet", "s2.parquet"]
