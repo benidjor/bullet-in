@@ -206,3 +206,46 @@ def test_큰_것과_작은_것이_섞이면_작은_것만_고른다():
     mixed = {"big.parquet": warehouse.COMPACT_TARGET_BYTES + 1,
              "s1.parquet": 10, "s2.parquet": 20}
     assert sorted(warehouse.files_to_compact(mixed)) == ["s1.parquet", "s2.parquet"]
+
+
+# --- 카탈로그 · 테이블 (로컬 파일시스템) -------------------------------------
+
+@pytest.fixture
+def local_catalog(tmp_path, monkeypatch):
+    """운영과 같은 코드를 로컬 SQLite 카탈로그로 돌린다."""
+    monkeypatch.delenv("ICEBERG_CATALOG_URI", raising=False)
+    monkeypatch.setenv("ICEBERG_LOCAL_WAREHOUSE", str(tmp_path / "wh"))
+    catalog = warehouse.load_catalog()
+    warehouse.ensure_namespace(catalog)
+    return catalog
+
+
+def _schema():
+    return warehouse.arrow_schema([("id", "bigint"), ("url", "varchar")])
+
+
+def test_네임스페이스는_두_번_만들어도_안_죽는다(local_catalog):
+    warehouse.ensure_namespace(local_catalog)
+
+
+def test_테이블_생성이_멱등이다(local_catalog):
+    a = warehouse.ensure_table(local_catalog, "t", _schema())
+    b = warehouse.ensure_table(local_catalog, "t", _schema())
+    assert a.name() == b.name()
+
+
+def test_원본에_컬럼이_늘면_스키마에_붙는다(local_catalog):
+    # schema.sql 이 ALTER 로 컬럼을 계속 더하는 저장소라 이 성질이 필요하다.
+    warehouse.ensure_table(local_catalog, "t", _schema())
+    wider = warehouse.arrow_schema([("id", "bigint"), ("url", "varchar"),
+                                    ("newcol", "text")])
+    t = warehouse.ensure_table(local_catalog, "t", wider)
+    assert "newcol" in [f.name for f in t.schema().fields]
+
+
+def test_메타데이터_정리_속성이_붙는다(local_catalog):
+    # 안 붙이면 커밋마다 metadata.json 이 하나씩 영구히 쌓인다 (실측 41회에 42개).
+    # 오류가 안 나고 조용히 누적되는 자리라 여기서 고정한다.
+    t = warehouse.ensure_table(local_catalog, "t", _schema())
+    assert t.properties["write.metadata.delete-after-commit.enabled"] == "true"
+    assert int(t.properties["write.metadata.previous-versions-max"]) >= 1

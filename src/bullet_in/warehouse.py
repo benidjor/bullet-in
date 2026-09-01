@@ -10,8 +10,10 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 import pyarrow as pa
 
@@ -179,3 +181,84 @@ def files_to_compact(sizes: dict[str, int]) -> list[str]:
     """
     small = [p for p, n in sizes.items() if n < COMPACT_TARGET_BYTES]
     return small if len(small) >= 2 else []
+
+
+# --- 카탈로그 (부수효과) ----------------------------------------------------
+
+# 테이블 생성 속성. 안 주면 커밋마다 `metadata.json` 이 하나씩 영구히 쌓인다
+# (실측 — 켠 테이블은 커밋 10회 뒤 4개가 남고 안 켠 테이블은 41회 뒤 42개가 남았다).
+# 하루 8회 커밋이면 한 해에 객체 8,760개가 그냥 늘어난다.
+TABLE_PROPERTIES = {
+    "write.metadata.delete-after-commit.enabled": "true",
+    "write.metadata.previous-versions-max": "5",
+}
+
+
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"환경변수 {name} 가 필요하다")
+    return value
+
+
+def load_catalog():
+    """이력 카탈로그에 붙는다.
+
+    `ICEBERG_CATALOG_URI` 가 있으면 그것으로 (운영 = Lakehouse REST), 없으면
+    `ICEBERG_LOCAL_WAREHOUSE` 아래 SQLite 카탈로그로 붙는다 (개발 · 테스트).
+    같은 코드가 둘 다 다뤄야 개발과 운영이 갈리지 않는다.
+
+    이름이 바뀌었지만 주소는 그대로다 — 2026-04-20 에 BigLake 가 Lakehouse 로,
+    BigLake metastore 가 Lakehouse runtime catalog 로 이름이 바뀌었고
+    API 주소와 IAM 이름은 `biglake` 를 그대로 쓴다.
+
+    `auth` 는 문자열이 아니라 딕셔너리다 — PyIceberg 가 `auth["type"]` 을 읽으므로
+    문자열을 주면 AttributeError 로 죽는다.
+    """
+    from pyiceberg.catalog.rest import RestCatalog
+    from pyiceberg.catalog.sql import SqlCatalog
+
+    uri = os.environ.get("ICEBERG_CATALOG_URI")
+    if uri:
+        return RestCatalog("bullet_in", **{
+            "uri": uri,
+            "warehouse": _require_env("ICEBERG_WAREHOUSE"),
+            "auth": {
+                "type": "google",
+                "google": {"scopes": ["https://www.googleapis.com/auth/cloud-platform"]},
+            },
+        })
+    local = Path(_require_env("ICEBERG_LOCAL_WAREHOUSE"))
+    local.mkdir(parents=True, exist_ok=True)
+    return SqlCatalog("bullet_in", **{
+        "uri": f"sqlite:///{local}/catalog.db",
+        "warehouse": f"file://{local}",
+    })
+
+
+def ensure_namespace(catalog) -> None:
+    """네임스페이스를 멱등하게 만든다."""
+    from pyiceberg.exceptions import NamespaceAlreadyExistsError
+    try:
+        catalog.create_namespace(NAMESPACE)
+    except NamespaceAlreadyExistsError:
+        pass
+
+
+def ensure_table(catalog, name: str, schema):
+    """테이블을 멱등하게 만들고 돌려준다.
+
+    원본에 컬럼이 늘어나는 저장소라 (`schema.sql` 이 ALTER 를 계속 더한다)
+    있는 테이블에는 union_by_name 으로 새 컬럼을 붙인다.
+    """
+    from pyiceberg.exceptions import NoSuchTableError
+
+    ident = f"{NAMESPACE}.{name}"
+    try:
+        table = catalog.load_table(ident)
+    except NoSuchTableError:
+        return catalog.create_table(ident, schema=schema,
+                                    properties=TABLE_PROPERTIES)
+    with table.update_schema() as u:
+        u.union_by_name(schema)
+    return table
