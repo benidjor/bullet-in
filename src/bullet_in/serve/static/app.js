@@ -48,7 +48,7 @@ function track(name, params) {
 
 // ② 카드 클릭 — 이적설인가 오피셜인가 · 무엇을 보러 오나
 document.addEventListener('click', (e) => {
-  const card = e.target.closest?.('a.item, a.relitem, a.mitem, a.pcard, a.tltitle');
+  const card = e.target.closest?.('a.item, a.sameline, a.mitem, a.pcard, a.tltitle');
   if (!card) return;
   track('bi_card_click', {
     card_hash: card.dataset.hash || '',
@@ -222,80 +222,6 @@ const searchInput = document.getElementById('q');
 const sortSel = document.getElementById('sortSel');
 const daylists = [...document.querySelectorAll('.daylist')];
 const items = [...document.querySelectorAll('.daylist .item, .gossiplist .item')];
-
-// 관련 보도 펼치기 (사건 블록 안 접힌 갈래)
-// 버튼은 .blocknav 안에 있고 관련 보도 목록은 그 밖의 형제라, 형제 관계로 찾으면
-// 안 잡힌다 (2026-08-28 에 두 버튼을 한 줄로 묶으면서 깨졌다 — 클릭해도 안 펼쳐졌다).
-// 블록을 기준으로 찾는다 — 아래 필터 코드가 쓰는 것과 같은 방식이다.
-// ── 관련 보도 — 펼치기 · 목록 접기 · 더보기 (2026-08-28) ──────────────
-// 갈래가 하나면 10건, 둘 이상이면 갈래마다 5건까지 먼저 보인다 (63건짜리 목록이
-// 펼치자마자 화면을 덮었다). 더보기는 누를 때마다 10건씩 편다.
-const REL_FIRST_ONE = 10, REL_FIRST_MANY = 5, REL_STEP = 10;
-
-function relBranches(rel) {
-  // 갈래 = 이름표 뒤에 이어지는 .relitem 묶음. 이름표가 없으면 전체가 한 갈래다.
-  const labels = [...rel.querySelectorAll('.branchlabel')];
-  if (!labels.length) return [[...rel.querySelectorAll('.relitem')]];
-  return labels.map(lb => {
-    const out = [];
-    let n = lb.nextElementSibling;
-    while (n && n.classList.contains('relitem')) { out.push(n); n = n.nextElementSibling; }
-    return out;
-  });
-}
-
-function relTrim(rel) {
-  const groups = relBranches(rel);
-  const first = groups.length > 1 ? REL_FIRST_MANY : REL_FIRST_ONE;
-  let cut = 0;
-  groups.forEach(g => g.forEach((it, i) => {
-    const hide = i >= first;
-    it.classList.toggle('relcut', hide);
-    if (hide) cut++;
-  }));
-  let more = rel.querySelector('.relmore');
-  if (cut > 0 && !more) {
-    more = document.createElement('button');
-    more.type = 'button';
-    more.className = 'relmore';
-    more.onclick = () => {
-      const rest = [...rel.querySelectorAll('.relitem.relcut')];
-      rest.slice(0, REL_STEP).forEach(it => it.classList.remove('relcut'));
-      relSyncMore(rel);
-    };
-    rel.appendChild(more);
-  }
-  relSyncMore(rel);
-}
-
-function relSyncMore(rel) {
-  const more = rel.querySelector('.relmore');
-  if (!more) return;
-  const left = rel.querySelectorAll('.relitem.relcut').length;
-  more.hidden = left === 0;
-  more.textContent = `관련 보도 더보기 · 남은 ${left}건`;
-}
-
-function relUntrim(rel) {          // 필터가 켜지면 접기를 걷는다 — 조건에 맞는 것을
-  rel.querySelectorAll('.relitem.relcut')   // 감추면 「몇 건」 과 목록이 또 어긋난다
-     .forEach(it => it.classList.remove('relcut'));
-  const more = rel.querySelector('.relmore');
-  if (more) more.hidden = true;
-}
-
-document.querySelectorAll('.related').forEach(relTrim);
-
-document.querySelectorAll('.reltoggle').forEach(btn => {
-  btn.onclick = () => {
-    const bl = btn.closest('.block');
-    const rel = bl?.querySelector('.related');
-    if (!rel) return;
-    // 목록은 카드가 선 칸 안에 그대로 둔다 (2026-08-28 사용자 확정) — 두 칸을 쓰게
-    // 해 봤더니 같은 행의 옆 카드가 한 줄 위로 올라가 화면이 크게 움직였다.
-    rel.hidden = !rel.hidden;
-    btn.setAttribute('aria-expanded', rel.hidden ? 'false' : 'true');
-  };
-});
 
 // ── 가십 — 주 단위 더보기 · 접기 (초기 = 최근 7일, 서버 gwk 표식) ────
 const gossipList = document.querySelector('.gossiplist');
@@ -515,40 +441,22 @@ function applyFilters() {
   }
   for (const bl of document.querySelectorAll('.block')) {
     if (bl.querySelector('.dupcard')) continue;
-    const cards = [...bl.querySelectorAll('.item')];     // 대표 + 결말
-    const rels = [...bl.querySelectorAll('.relitem')];
-    const relHits = active ? rels.filter(r => match(r.dataset)) : [];
-    const blockHit = cards.some(c => selfHit.get(c)) || relHits.length > 0;
-    shown += cards.filter(c => selfHit.get(c)).length + relHits.length;
+    const cards = [...bl.querySelectorAll('.item')];
+    const lines = [...bl.querySelectorAll('.sameline')];
+    const lineHits = active ? lines.filter(r => match(r.dataset)) : [];
+    const blockHit = cards.some(c => selfHit.get(c)) || lineHits.length > 0;
+    shown += cards.filter(c => selfHit.get(c)).length + lineHits.length;
     for (const c of cards) {
       // 조건 없음 = 기존 카드 단위 (기타 단계 숨김 유지) · 조건 있음 = 블록 단위
       c.style.display = (active ? blockHit : selfHit.get(c)) ? '' : 'none';
       c.classList.toggle('ctxdim', active && blockHit && !selfHit.get(c));
     }
-    const rel = bl.querySelector('.related');
-    const tog = bl.querySelector('.reltoggle');
-    if (active) {
-      if (rel) relUntrim(rel);        // 조건이 걸린 동안은 목록 접기를 걷는다
-      rels.forEach(r => { r.style.display = relHits.includes(r) ? '' : 'none'; });
-      if (rel) rel.hidden = relHits.length === 0;
-      if (tog) {
-        tog.style.display = relHits.length ? '' : 'none';
-        tog.setAttribute('aria-expanded', relHits.length ? 'true' : 'false');
-      }
-      bl.querySelectorAll('.branchlabel').forEach(lb => {
-        let n = lb.nextElementSibling, any = false;
-        while (n && n.classList.contains('relitem')) {
-          if (n.style.display !== 'none') any = true;
-          n = n.nextElementSibling;
-        }
-        lb.style.display = any ? '' : 'none';
-      });
-    } else {                                             // 조건 없음 — 접힌 원상태로
-      rels.forEach(r => { r.style.display = ''; });
-      if (rel) { rel.hidden = true; relTrim(rel); }      // 목록 접기도 처음 상태로
-      if (tog) { tog.style.display = ''; tog.setAttribute('aria-expanded', 'false'); }
-      bl.querySelectorAll('.branchlabel').forEach(lb => { lb.style.display = ''; });
+    // 줄은 늘 펴져 있다 — 조건이 걸리면 안 맞는 줄만 감춘다
+    for (const r of lines) {
+      r.style.display = (!active || lineHits.includes(r)) ? '' : 'none';
     }
+    const same = bl.querySelector('.same');
+    if (same) same.style.display = (!active || lineHits.length) ? '' : 'none';
   }
   const bandwrap = document.querySelector('.bandwrap');
   if (bandwrap) bandwrap.style.display = active ? 'none' : '';
