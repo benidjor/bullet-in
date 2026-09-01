@@ -132,6 +132,36 @@ def test_arsenal_subject_startswith():
     assert R.arsenal_subject({"title_ko": None}) is False
 
 
+def test_arsenal_subject_true_for_club_official_whatever_the_title():
+    # 구단 공식은 아스날이 직접 낸 발표라 제목이 선수 이름으로 시작해도 주체가 아스날이다
+    # (2026-09-02 실측 — Arsenal.com 의 「가브리엘 제주스, FC 바르셀로나로 완전 이적」 이
+    #  제목 첫 글자 때문에 남의 소식으로 판정돼 1면에서 밀렸다)
+    assert R.arsenal_subject({"title_ko": "가브리엘 제주스, FC 바르셀로나로 완전 이적",
+                              "tier": 0.0}) is True
+
+
+def test_arsenal_subject_keeps_title_rule_below_club_official():
+    # 구단 공식이 아니면 종전대로 제목으로 판정한다
+    assert R.arsenal_subject({"title_ko": "바르셀로나, 제주스 영입 완료",
+                              "tier": 1.0}) is False
+    assert R.arsenal_subject({"title_ko": "아스날, 제주스 이적 합의",
+                              "tier": 1.0}) is True
+
+
+def test_top_story_club_official_beats_an_earlier_one_by_time():
+    # 같은 구단 공식끼리는 시각으로 갈린다 — 제목 형태가 그 앞을 가로막지 않는다
+    now = datetime(2026, 7, 20, 18, 0)
+    early = _row(content_hash="early", tier=0.0, transfer_stage="official",
+                 title_ko="아스날 미드필더 트로사르, 함부르크로 완전 이적",
+                 published_at=datetime(2026, 7, 20, 11, 0),
+                 fetched_at=datetime(2026, 7, 20, 11, 0))
+    late = _row(content_hash="late", tier=0.0, transfer_stage="official",
+                title_ko="가브리엘 제주스, FC 바르셀로나로 완전 이적",
+                published_at=datetime(2026, 7, 20, 12, 47),
+                fetched_at=datetime(2026, 7, 20, 12, 47))
+    assert R.pick_top_stories([early, late], now)["lead"] is late
+
+
 def test_top_story_excludes_below_top_three_tiers():
     now = datetime(2026, 7, 20, 12, 0)
     low = _row(tier=4.0, title_ko="아스날 트로사르 방출")

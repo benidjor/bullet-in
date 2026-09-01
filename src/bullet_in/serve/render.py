@@ -365,7 +365,18 @@ _TOP_HORIZON_DAYS = 10
 
 
 def arsenal_subject(row: dict) -> bool:
-    """제목이 '아스날' 로 시작하는지 — 아스날 주체 근사 (spec2 §5 · team 플래그로는 못 가림)."""
+    """아스날 주체인가 — 구단 공식이거나 제목이 '아스날' 로 시작하는지 (spec2 §5).
+
+    제목 첫 글자로만 보던 근사에 구단 공식 예외를 더했다 (2026-09-02). 구단 공식은
+    아스날이 직접 낸 발표라 제목이 선수 이름으로 시작해도 주체가 아스날인데, 옛 판정은
+    그런 기사를 남의 소식으로 보고 1면에서 밀어냈다 — Arsenal.com 의 「가브리엘 제주스,
+    FC 바르셀로나로 완전 이적」 이 같은 등급 · 같은 단계의 한 시간 반 앞선 발표에 졌다.
+
+    이 함수를 부르는 곳은 top_story_key 하나다 (선수 페이지의 _arsenal_subject_rank 는
+    이름만 비슷한 다른 판정이다)."""
+    tier = row.get("tier")
+    if tier is not None and float(tier) == 0.0:
+        return True
     return (row.get("title_ko") or "").lstrip().startswith("아스날")
 
 
