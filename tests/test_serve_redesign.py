@@ -323,50 +323,6 @@ def test_pick_representative_recency_still_breaks_a_credibility_tie():
     assert R.pick_representative([early, late]) is late
 
 
-def test_ending_card_detects_other_club_transfer():
-    cluster = {"key": "로저스", "articles": [
-        _row(content_hash="e", tier=1.0, transfer_stage="agreed",
-             title_ko="첼시, 로저스 영입 합의"),
-        _row(content_hash="a", tier=2.0, transfer_stage="rumour",
-             title_ko="아스날, 로저스 관심"),
-    ]}
-    end = R.ending_card(cluster, CLUBS)
-    assert end["article"]["content_hash"] == "e"
-    assert end["club"] == "첼시"
-
-
-def test_ending_card_ignores_arsenal_subject():
-    cluster = {"key": "트로사르", "articles": [
-        _row(content_hash="a", transfer_stage="agreed", title_ko="아스날, 트로사르 방출 합의"),
-    ]}
-    assert R.ending_card(cluster, CLUBS) is None
-
-
-def test_related_reports_branch_sorted_by_sort_ts_desc():
-    # 발행 시각 있음 · day 정밀도 보간 · 시각 부재 폴백이 섞여도 갈래는 최신 먼저 (spec2 §6.3)
-    rep = _row(content_hash="rep", title_ko="아스날, 로저스 영입 추진")
-    newest = _row(content_hash="n", title_ko="아스날, 로저스 관련 최신",
-                  published_at=datetime(2026, 7, 21, 10, 0), published_precision="time",
-                  fetched_at=datetime(2026, 7, 21, 12, 0))
-    midday = _row(content_hash="m", title_ko="아스날, 로저스 관련 중간",
-                  published_at=datetime(2026, 7, 20, 0, 0), published_precision="day",
-                  fetched_at=datetime(2026, 7, 20, 15, 0))
-    publess = _row(content_hash="o", title_ko="아스날, 로저스 관련 시각부재",
-                   published_at=None, fetched_at=datetime(2026, 7, 19, 9, 0))
-    cluster = {"key": "로저스", "articles": [publess, midday, newest, rep]}
-    rel = R.related_reports(cluster, rep, None, CLUBS)
-    assert [a["content_hash"] for a in rel["arsenal"]] == ["n", "m", "o"]
-
-
-def test_is_other_club_report_arsenal_inbound_excluded():
-    # 현 소속이 제목 앞머리에 나와도 '아스날 이적 의사' 면 아스날로 오는 사건 (오탐 차단)
-    inbound = {"title_ko": "뉴캐슬 주장 기마랑이스, 아스날 이적 의사 구단에 전달"}
-    assert R._is_other_club_report(inbound, "기마랑이스", CLUBS) is None
-    # 실제 다른 구단행은 그대로 구단명 반환
-    other = {"title_ko": "첼시, 로저스 영입 합의"}
-    assert R._is_other_club_report(other, "로저스", CLUBS) == "첼시"
-
-
 def test_top_stories_dedup_by_event():
     now = datetime(2026, 7, 20, 12, 0)
     rows = [_row(content_hash=f"t{i}", tier=1.0, title_ko="아스날, 트로사르 방출",
@@ -394,164 +350,11 @@ def test_recent_days_counts_articles_not_blocks():
     assert R.recent_days(arts) == {date(2026, 7, 21), date(2026, 7, 20), date(2026, 7, 18)}
 
 
-def test_promote_recent_lifts_folded_article_in_window():
-    # 최근 날짜에 든 기사는 접힘에서 나와 자기 카드를 갖는다
-    rep, new = _p("rep", 15), _p("new", 21)
-    block = {"rep": rep, "count": 2, "_articles": [rep, new], "rel_count": 1,
-             "branches": [{"label": "", "articles": [new]}]}
-    out = R.promote_recent([block], R.recent_days([rep, new]))
-    assert [b["rep"]["content_hash"] for b in out] == ["new"]
-    assert out[0]["rel_count"] == 0 and out[0]["branches"] == []
-    assert block["rel_count"] == 0 and block["branches"] == []
-    assert block["_articles"] == [rep]          # 날짜 머리글 건수가 두 번 세지 않게
-
-
-def test_promote_recent_keeps_articles_outside_window_folded():
-    rep, old = _p("rep", 15), _p("old", 16)
-    block = {"rep": rep, "count": 2, "_articles": [rep, old], "rel_count": 1,
-             "branches": [{"label": "", "articles": [old]}]}
-    window = R.recent_days([rep, old, _p("x", 21), _p("y", 20), _p("z", 19)])
-    assert R.promote_recent([block], window) == []
-    assert block["rel_count"] == 1
-
-
-def _staged(h, stage, hour):
-    """같은 KST 날짜 안의 기사 — UTC 0~14시가 같은 날에 든다."""
-    return _row(content_hash=h, transfer_stage=stage,
-                published_at=datetime(2026, 7, 21, hour, 0),
-                fetched_at=datetime(2026, 7, 21, hour, 0))
-
-
-def test_promote_recent_lifts_a_later_stage_on_the_same_day():
-    # 같은 날이어도 이야기가 한 단계 나아갔으면 꺼낸다 (2026-09-01 실물 —
-    # 대표가 「협상 중」 인데 「이적 합의」 가 12시간 뒤에 들어와 접혀 있었다).
-    rep, later = _staged("rep", "negotiating", 3), _staged("later", "agreed", 13)
-    block = {"rep": rep, "count": 2, "_articles": [rep, later], "rel_count": 1,
-             "branches": [{"label": "", "articles": [later]}]}
-    out = R.promote_recent([block], R.recent_days([rep, later]))
-    assert [b["rep"]["content_hash"] for b in out] == ["later"]
-
-
-def test_promote_recent_keeps_same_stage_on_the_same_day_folded():
-    # 단계가 같으면 그대로 접어 둔다 — 가드가 막으려던 「2분 차이의 같은 소식」 자리
-    rep, twin = _staged("rep", "agreed", 3), _staged("twin", "agreed", 13)
-    block = {"rep": rep, "count": 2, "_articles": [rep, twin], "rel_count": 1,
-             "branches": [{"label": "", "articles": [twin]}]}
-    assert R.promote_recent([block], R.recent_days([rep, twin])) == []
-
-
-def test_promote_recent_keeps_an_earlier_stage_on_the_same_day_folded():
-    # 뒤로 간 단계는 후속이 아니다
-    rep, back = _staged("rep", "agreed", 3), _staged("back", "interest", 13)
-    block = {"rep": rep, "count": 2, "_articles": [rep, back], "rel_count": 1,
-             "branches": [{"label": "", "articles": [back]}]}
-    assert R.promote_recent([block], R.recent_days([rep, back])) == []
-
-
-def test_promote_recent_does_not_rank_collapsed_against_the_ladder():
-    # 무산은 사다리 축에서 빠진다 (transfer_stage.py §8) — 순서를 매기지 않는다
-    rep, gone = _staged("rep", "negotiating", 3), _staged("gone", "collapsed", 13)
-    block = {"rep": rep, "count": 2, "_articles": [rep, gone], "rel_count": 1,
-             "branches": [{"label": "", "articles": [gone]}]}
-    assert R.promote_recent([block], R.recent_days([rep, gone])) == []
-
-
-def test_promote_recent_caps_per_player_and_day():
-    # 한 선수가 그날 카드를 다 가져가지 않게 — 꺼내는 것은 공신력 높은 쪽부터
-    rep = _p("rep", 15)
-    low, mid, high = _p("low", 21, tier=4.0), _p("mid", 21, tier=2.0), _p("high", 21, tier=1.0)
-    block = {"rep": rep, "count": 4, "_articles": [rep, low, mid, high], "rel_count": 3,
-             "branches": [{"label": "", "articles": [low, mid, high]}]}
-    out = R.promote_recent([block], R.recent_days([rep, low]), cap=1)
-    assert [b["rep"]["content_hash"] for b in out] == ["high"]
-    assert block["rel_count"] == 2               # 못 꺼낸 둘은 접힌 채로 남는다
-
-
-def test_promote_recent_default_is_three_per_player_a_day():
-    # 기본값 = 한 선수 소식 하루 세 장 (2026-08-27 사용자 확정)
-    rep = _p("rep", 15)
-    worst, low = _p("worst", 21, tier=4.0), _p("low", 21, tier=3.0)
-    mid, high = _p("mid", 21, tier=2.0), _p("high", 21, tier=1.0)
-    block = {"rep": rep, "count": 5, "_articles": [rep, worst, low, mid, high],
-             "rel_count": 4,
-             "branches": [{"label": "", "articles": [worst, low, mid, high]}]}
-    out = R.promote_recent([block], R.recent_days([rep, low]))
-    assert R.PROMOTE_PER_PLAYER_DAY == 3
-    assert [b["rep"]["content_hash"] for b in out] == ["high", "mid", "low"]
-    assert block["rel_count"] == 1              # 공신력 최하 한 장만 접힌 채로 남는다
-
-
-def test_promote_recent_prefers_sky_within_mid_tier():
-    # 공신력 중끼리 겹치면 Sky Sports 를 먼저 세운다 (2026-08-27 사용자 결정)
-    rep = _p("rep", 15)
-    espn = _p("espn", 21, tier=2.0, hour=9) | {"_outlet": "ESPN"}
-    sky = _p("sky", 21, tier=2.0, hour=2) | {"_outlet": "Sky Sports"}
-    block = {"rep": rep, "count": 3, "_articles": [rep, espn, sky], "rel_count": 2,
-             "branches": [{"label": "", "articles": [espn, sky]}]}
-    out = R.promote_recent([block], R.recent_days([rep, espn]), cap=1)
-    assert [b["rep"]["content_hash"] for b in out] == ["sky"]   # 더 옛 기사인데도 Sky
-
-
-def test_promote_recent_sky_preference_does_not_beat_credibility():
-    # 등급이 먼저다 — 공신력 상 기사가 있으면 Sky (중) 보다 그쪽이 선다
-    rep = _p("rep", 15)
-    sky = _p("sky", 21, tier=2.0, hour=9) | {"_outlet": "Sky Sports"}
-    athletic = _p("ath", 21, tier=1.5, hour=2) | {"_outlet": "The Athletic"}
-    block = {"rep": rep, "count": 3, "_articles": [rep, sky, athletic], "rel_count": 2,
-             "branches": [{"label": "", "articles": [sky, athletic]}]}
-    out = R.promote_recent([block], R.recent_days([rep, sky]), cap=1)
-    assert [b["rep"]["content_hash"] for b in out] == ["ath"]
-
-
-def test_promote_recent_leaves_hidden_stage_folded():
-    # 「기타」 단계는 첫 화면에서 카드가 감춰진다 — 꺼내면 관련 보도에서도 사라져
-    # 아무 데서도 안 보이게 되므로 접힌 채로 둔다
-    rep = _p("rep", 15)
-    other = _p("other", 21) | {"transfer_stage": "other"}
-    blank = _p("blank", 21) | {"transfer_stage": None}
-    ok = _p("ok", 21)
-    block = {"rep": rep, "count": 4, "_articles": [rep, other, blank, ok], "rel_count": 3,
-             "branches": [{"label": "", "articles": [other, blank, ok]}]}
-    out = R.promote_recent([block], R.recent_days([rep, ok]))
-    assert [b["rep"]["content_hash"] for b in out] == ["ok"]
-    assert block["rel_count"] == 2               # 기타 · 무단계 둘은 접힌 채로 남는다
-
-
-def test_promote_recent_leaves_lowest_tier_folded():
-    # 원래 최신 소식에는 최하 카드가 설 수 없었다 (대표 선정의 not_lowest · 전부 최하인
-    # 묶음은 가십 절로) — 꺼내기가 그 불변 조건을 깨지 않게 한다
-    rep = _p("rep", 15)
-    lowest, ok = _p("lowest", 21, tier=4.0), _p("ok", 21, tier=3.0)
-    block = {"rep": rep, "count": 3, "_articles": [rep, lowest, ok], "rel_count": 2,
-             "branches": [{"label": "", "articles": [lowest, ok]}]}
-    out = R.promote_recent([block], R.recent_days([rep, ok]))
-    assert [b["rep"]["content_hash"] for b in out] == ["ok"]
-    assert block["rel_count"] == 1              # 최하는 접힌 채로 남는다
-
-
 def test_story_links_only_for_players_with_a_page():
     # 페이지가 만들어진 선수만 담는다 — 없는 선수에게 링크를 달면 죽은 링크가 된다
     entries = [{"ko_name": "알바레스", "slug": "alvarez", "count": 77},
                {"ko_name": None, "slug": "nameless", "count": 3}]
     assert R.story_links(entries) == {"알바레스": {"slug": "alvarez", "count": 77}}
-
-
-def test_promote_recent_carries_story_key():
-    # 꺼낸 카드가 어느 선수 이야기에서 나왔는지 들고 나와야 선수 페이지로 이을 수 있다
-    rep, new = _p("rep", 15), _p("new", 21)
-    block = {"rep": rep, "key": "알바레스", "count": 2, "_articles": [rep, new],
-             "rel_count": 1, "branches": [{"label": "", "articles": [new]}]}
-    out = R.promote_recent([block], R.recent_days([rep, new]))
-    assert out[0]["key"] == "알바레스"
-
-
-def test_promote_recent_counts_each_day_separately():
-    # 장수는 날짜마다 따로 센다 — 같은 선수라도 날이 다르면 각각 한 장씩 선다
-    rep, d20, d21 = _p("rep", 15), _p("d20", 20), _p("d21", 21)
-    block = {"rep": rep, "count": 3, "_articles": [rep, d20, d21], "rel_count": 2,
-             "branches": [{"label": "", "articles": [d21, d20]}]}
-    out = R.promote_recent([block], R.recent_days([rep, d20, d21]), cap=1)
-    assert sorted(b["rep"]["content_hash"] for b in out) == ["d20", "d21"]
 
 
 # 성이 겹치는 남의 이름 (2026-08-28) — 사전은 대부분 성만 담아 부분 매치로 걸린다
@@ -599,33 +402,6 @@ def test_mask_keeps_title_length():
     assert len(R.mask_other_people(t)) == len(t)
 
 
-def test_branch_label_keeps_club_when_branch_is_mostly_that_club():
-    # 갈래의 다수가 결말 구단이면 이름표에 구단명이 그대로 남는다 (안건 τ-ⓐ)
-    oth = [_row(content_hash="o1"), _row(content_hash="o2")]
-    related = {"arsenal": [_row(content_hash="a1")], "other": oth,
-               "other_clubs": Counter({"첼시": 2})}
-    labels = [b["label"] for b in R.branch_views(related, {"club": "첼시"})]
-    assert labels == ["첼시행 관련", "아스날 쪽 보도"]
-
-
-def test_branch_label_drops_club_when_branch_is_mostly_other_clubs():
-    # 결말 한 건의 구단명이 갈래 전체를 대표하지 못하면 구단명을 뺀다 (안건 τ-ⓐ)
-    oth = [_row(content_hash="o%d" % i) for i in range(4)]
-    related = {"arsenal": [_row(content_hash="a1")], "other": oth,
-               "other_clubs": Counter({"토트넘": 3, "첼시": 1})}
-    labels = [b["label"] for b in R.branch_views(related, {"club": "첼시"})]
-    assert labels == ["영입 경쟁", "아스날 쪽 보도"]
-
-
-def test_related_reports_counts_other_clubs():
-    rep = _row(content_hash="rep", title_ko="아스날, 로저스 영입 추진")
-    a = _row(content_hash="a", title_ko="첼시, 로저스 영입 임박")
-    b = _row(content_hash="b", title_ko="첼시, 로저스 메디컬 진행")
-    cluster = {"key": "로저스", "articles": [rep, a, b]}
-    rel = R.related_reports(cluster, rep, None, CLUBS)
-    assert rel["other_clubs"] == Counter({"첼시": 2})
-
-
 # ── 최하는 전부 가십 절로 · 카드가 없는 날짜는 가십에서 꺼낸다 ──────────
 
 def test_is_lowest_reads_the_tier_not_the_cluster():
@@ -663,7 +439,7 @@ def test_pick_empty_day_gossip_skips_days_outside_the_window():
 
 
 def test_pick_empty_day_gossip_leaves_hidden_stage_behind():
-    # 기타 단계는 카드가 화면에서 숨으므로 꺼내면 아무 데서도 안 보인다 (_promotable 과 같은 가드)
+    # 기타 단계는 카드가 화면에서 숨으므로 꺼내면 아무 데서도 안 보인다 (_stage_visible 가드)
     low = [_p("other", 21, tier=4.0), _p("ok", 21, tier=4.0)]
     low[0]["transfer_stage"] = "other"
     picks = R.pick_empty_day_gossip(low, carded=set(), window=R.recent_days(low),
@@ -672,7 +448,7 @@ def test_pick_empty_day_gossip_leaves_hidden_stage_behind():
 
 
 def test_pick_empty_day_gossip_caps_per_player_and_day():
-    # 한 선수가 그날 카드를 다 가져가지 않게 — promote_recent 과 같은 계약
+    # 한 선수가 그날 카드를 다 가져가지 않게 (PROMOTE_PER_PLAYER_DAY)
     low = [_p(f"t{i}", 21, tier=4.0, hour=i) for i in range(4)]
     for a in low:
         a["title_ko"] = "아스날, 트로사르 이적설"
