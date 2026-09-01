@@ -15,11 +15,11 @@ import argparse, asyncio, logging, os
 from pathlib import Path
 
 import yaml
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
+from sqlalchemy import create_engine
 
-from bullet_in.collect_fmkorea import (STATE_PATH, build_fmkorea_adapter, persist,
-                                       read_last_contact, should_supplement,
+# existing_titles 는 정기 보충의 따라잡기 회차도 쓰므로 collect 쪽에 둔다 (안건 2ι).
+from bullet_in.collect_fmkorea import (STATE_PATH, build_fmkorea_adapter, existing_titles,
+                                       persist, read_last_contact, should_supplement,
                                        tunnel_alive, write_last_contact)
 from bullet_in.storage.mariadb import MartStore
 
@@ -28,16 +28,6 @@ log = logging.getLogger(__name__)
 REQUEST_GAP_SEC = 1.5   # backfill_journalist 와 같은 기준 (라이브 사이트 부담 회피)
 DEFAULT_PAGES = 3       # 실측 2026-07-25 — 페이지당 20건 · 2페이지가 07-18 까지 도달
 MAX_POSTS = 60          # 한 회차 신규 처리 상한 (키워드 3 × 페이지당 20)
-
-_TITLES_SQL = text(
-    "SELECT title_original FROM articles WHERE source_id='fmkorea'")
-
-
-def existing_titles(engine: Engine) -> set[str]:
-    """이미 적재된 fmkorea 글 제목 — 어댑터에 넘길 배제 집합.
-    fmkorea 행의 title_original 은 게시글 제목 그대로라 후보 제목과 직접 비교된다."""
-    with engine.connect() as c:
-        return {t for (t,) in c.execute(_TITLES_SQL).all() if t}
 
 
 def check_page_placeholder(search_url: str, pages: int) -> None:
