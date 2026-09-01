@@ -16,6 +16,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pyarrow as pa
+from sqlalchemy import text
 
 log = logging.getLogger(__name__)
 
@@ -262,3 +263,133 @@ def ensure_table(catalog, name: str, schema):
     with table.update_schema() as u:
         u.union_by_name(schema)
     return table
+
+
+# --- 적재 (부수효과) --------------------------------------------------------
+
+def columns_of(engine, table: str) -> list[tuple[str, str]]:
+    """MariaDB 에서 컬럼 이름과 타입을 읽는다."""
+    with engine.connect() as c:
+        return [(r[0], r[1]) for r in
+                c.execute(text(COLUMN_SQL), {"t": table}).all()]
+
+
+def _fetch(engine, sql: str, params: dict) -> list[dict]:
+    with engine.connect() as c:
+        return [dict(r) for r in c.execute(text(sql), params).mappings().all()]
+
+
+def _max_of(table, column: str) -> datetime | None:
+    """이미 쌓인 행에서 그 열의 최댓값. 비어 있으면 None."""
+    import pyarrow.compute as pc
+
+    scan = table.scan(selected_fields=(column,)).to_arrow()
+    if scan.num_rows == 0:
+        return None
+    return pc.max(scan.column(column)).as_py()
+
+
+def read_watermark(table) -> datetime | None:
+    """이미 쌓인 변경분에서 마지막 `updated_at` 을 읽는다.
+
+    상태 파일을 따로 두지 않는다 — 적재된 결과 자체가 워터마크라 둘이 어긋날 수 없다.
+    """
+    return _max_of(table, "updated_at")
+
+
+def _last_daily_at(catalog) -> datetime | None:
+    """하루 1회짜리를 마지막으로 뜬 시각.
+
+    `articles_snapshot` 의 `_loaded_at` 최댓값으로 본다 — 넷이 한 묶음으로 돌아서
+    하나만 보면 된다. 테이블이 아직 없으면 한 번도 안 뜬 것이다.
+    """
+    from pyiceberg.exceptions import NoSuchTableError
+
+    try:
+        t = catalog.load_table(f"{NAMESPACE}.articles_snapshot")
+    except NoSuchTableError:
+        return None
+    return _max_of(t, LOADED_AT)
+
+
+def load_changes(engine, catalog, plan: LoadPlan, now: datetime) -> int:
+    """워터마크 이후 바뀐 행만 덧붙인다. 넣은 행 수를 돌려준다."""
+    schema = arrow_schema(columns_of(engine, plan.source))
+    table = ensure_table(catalog, plan.table, schema)
+    wm = read_watermark(table)
+    sql, params = changes_sql(wm)
+    rows = _fetch(engine, sql, params)
+    if not rows:
+        log.info("%s — 워터마크 %s 이후 바뀐 행이 없다", plan.table, wm)
+        return 0
+    table.append(to_arrow(rows, schema, loaded_at=now))
+    log.info("%s — %d행 적재 (워터마크 %s → %s)",
+             plan.table, len(rows), wm, next_watermark(rows, wm))
+    return len(rows)
+
+
+def load_snapshot(engine, catalog, plan: LoadPlan, now: datetime) -> int:
+    """전량을 그날 파티션에 넣는다. 같은 날 두 번 돌면 그 파티션만 갈린다.
+
+    이 덮어쓰기가 이 적재의 멱등성이다 — `players` 와 `article_players` 는
+    변경 시각 컬럼이 없어 변경분을 원본에서 뽑을 수 없고, 대신 스냅샷끼리
+    대조해서 무엇이 달라졌는지 도출한다 (설계 §3.2).
+    """
+    from pyiceberg.expressions import EqualTo
+
+    schema = arrow_schema(columns_of(engine, plan.source))
+    table = ensure_table(catalog, plan.table, schema)
+    rows = _fetch(engine, snapshot_sql(plan.source), {})
+    arrow = to_arrow(rows, schema, loaded_at=now)
+    # 그날 파티션이 아직 없으면 PyIceberg 가 「Delete operation did not match any
+    # records」 경고를 낸다. 그날 첫 적재에서는 늘 나오는 것이고 고장이 아니다.
+    table.overwrite(arrow,
+                    overwrite_filter=EqualTo(LOADED_DATE, now.date().isoformat()))
+    log.info("%s — 전량 %d행 스냅샷 (%s)", plan.table, len(rows), now.date())
+    return len(rows)
+
+
+# 운영 기록 둘. 삽입만 일어나 원본이 이미 이력이라 하루 1회로 묶었다
+# (무료 구간 유지 조건 · 설계 §3.1). 계획 이름은 `ops_daily` 하나이고
+# 실제 테이블은 원본마다 하나씩 둘이다.
+OPS_SOURCES = (("pipeline_runs", "started_at"), ("source_freshness", "checked_at"))
+
+
+def load_ops(engine, catalog, now: datetime) -> int:
+    """`pipeline_runs` 와 `source_freshness` 에서 새 행만 덧붙인다."""
+    total = 0
+    for source, key in OPS_SOURCES:
+        schema = arrow_schema(columns_of(engine, source))
+        table = ensure_table(catalog, f"ops_{source}", schema)
+        wm = _max_of(table, key)
+        sql = f"SELECT * FROM {source}"
+        params: dict = {}
+        if wm is not None:
+            sql += f" WHERE {key} > :wm"
+            params = {"wm": wm}
+        rows = _fetch(engine, sql, params)
+        if not rows:
+            log.info("ops_%s — 새 행이 없다 (워터마크 %s)", source, wm)
+            continue
+        table.append(to_arrow(rows, schema, loaded_at=now))
+        log.info("ops_%s — %d행 적재", source, len(rows))
+        total += len(rows)
+    return total
+
+
+def run_load(now: datetime | None = None) -> None:
+    """이번 회차의 적재를 끝낸다."""
+    from sqlalchemy import create_engine
+
+    now = now or datetime.now(timezone.utc)
+    engine = create_engine(_require_env("MARIADB_URL"))
+    catalog = load_catalog()
+    ensure_namespace(catalog)
+
+    for plan in plans_for(now, _last_daily_at(catalog)):
+        if plan.mode == "changes":
+            load_changes(engine, catalog, plan, now)
+        elif plan.mode == "snapshot":
+            load_snapshot(engine, catalog, plan, now)
+        else:
+            load_ops(engine, catalog, now)

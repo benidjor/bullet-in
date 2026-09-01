@@ -249,3 +249,85 @@ def test_메타데이터_정리_속성이_붙는다(local_catalog):
     t = warehouse.ensure_table(local_catalog, "t", _schema())
     assert t.properties["write.metadata.delete-after-commit.enabled"] == "true"
     assert int(t.properties["write.metadata.previous-versions-max"]) >= 1
+
+
+# --- 적재 -------------------------------------------------------------------
+
+@pytest.fixture
+def fake_mart(monkeypatch):
+    """MariaDB 자리에 메모리 위의 행을 둔다.
+
+    재려는 것은 SQL 이 아니라 적재 경로다 — 워터마크를 어디서 읽고, 무엇을 덧붙이고,
+    같은 날 두 번 돌면 어떻게 되는지. Iceberg 쪽은 진짜로 돈다.
+    """
+    state = {"columns": [("id", "bigint"), ("url", "varchar"),
+                         ("updated_at", "datetime")],
+             "rows": []}
+
+    def _columns_of(engine, table):
+        return state["columns"]
+
+    def _fetch(engine, sql, params):
+        rows = state["rows"]
+        wm = params.get("wm")
+        if wm is not None:
+            rows = [r for r in rows if r["updated_at"] > wm]
+        return rows
+
+    monkeypatch.setattr(warehouse, "columns_of", _columns_of)
+    monkeypatch.setattr(warehouse, "_fetch", _fetch)
+    return state
+
+
+def test_변경분은_워터마크_이후만_가져온다(local_catalog, fake_mart):
+    plan = warehouse.LoadPlan("articles_changes", "articles", "changes")
+    fake_mart["rows"] = [{"id": 1, "url": "a", "updated_at": _t(2026, 9, 2, 1)},
+                         {"id": 2, "url": "b", "updated_at": _t(2026, 9, 2, 5)}]
+    assert warehouse.load_changes(None, local_catalog, plan, _t(2026, 9, 2, 6)) == 2
+    # 원본이 그대로면 두 번째 회차는 가져올 것이 없다.
+    assert warehouse.load_changes(None, local_catalog, plan, _t(2026, 9, 2, 7)) == 0
+
+
+def test_변경분은_새로_바뀐_행만_덧붙인다(local_catalog, fake_mart):
+    plan = warehouse.LoadPlan("articles_changes", "articles", "changes")
+    fake_mart["rows"] = [{"id": 1, "url": "a", "updated_at": _t(2026, 9, 2, 1)}]
+    warehouse.load_changes(None, local_catalog, plan, _t(2026, 9, 2, 2))
+    fake_mart["rows"].append({"id": 2, "url": "b", "updated_at": _t(2026, 9, 2, 9)})
+    assert warehouse.load_changes(None, local_catalog, plan, _t(2026, 9, 2, 10)) == 1
+    t = local_catalog.load_table(f"{warehouse.NAMESPACE}.articles_changes")
+    assert t.scan().to_arrow().num_rows == 2
+
+
+def test_스냅샷은_같은_날_두_번_돌려도_행이_안_는다(local_catalog, fake_mart):
+    # 이 덮어쓰기가 적재의 멱등성이다.
+    plan = warehouse.LoadPlan("players_snapshot", "players", "snapshot")
+    fake_mart["rows"] = [{"id": 1, "url": "a", "updated_at": None},
+                         {"id": 2, "url": "b", "updated_at": None}]
+    warehouse.load_snapshot(None, local_catalog, plan, _t(2026, 9, 2, 3))
+    warehouse.load_snapshot(None, local_catalog, plan, _t(2026, 9, 2, 9))
+    t = local_catalog.load_table(f"{warehouse.NAMESPACE}.players_snapshot")
+    assert t.scan().to_arrow().num_rows == 2
+
+
+def test_스냅샷은_날이_바뀌면_쌓인다(local_catalog, fake_mart):
+    plan = warehouse.LoadPlan("players_snapshot", "players", "snapshot")
+    fake_mart["rows"] = [{"id": 1, "url": "a", "updated_at": None},
+                         {"id": 2, "url": "b", "updated_at": None}]
+    warehouse.load_snapshot(None, local_catalog, plan, _t(2026, 9, 2, 3))
+    warehouse.load_snapshot(None, local_catalog, plan, _t(2026, 9, 3, 3))
+    t = local_catalog.load_table(f"{warehouse.NAMESPACE}.players_snapshot")
+    assert t.scan().to_arrow().num_rows == 4
+    assert set(t.scan().to_arrow().column("_loaded_date").to_pylist()) == {
+        "2026-09-02", "2026-09-03"}
+
+
+def test_하루1회_판정이_스냅샷_적재를_따라간다(local_catalog, fake_mart):
+    # 스냅샷을 뜬 날에는 그날 다시 불러도 변경분만 대상이 된다.
+    plan = warehouse.LoadPlan("articles_snapshot", "articles", "snapshot")
+    fake_mart["rows"] = [{"id": 1, "url": "a", "updated_at": None}]
+    assert warehouse._last_daily_at(local_catalog) is None
+    warehouse.load_snapshot(None, local_catalog, plan, _t(2026, 9, 2, 3))
+    assert warehouse._last_daily_at(local_catalog) == _t(2026, 9, 2, 3)
+    plans = warehouse.plans_for(_t(2026, 9, 2, 12),
+                                warehouse._last_daily_at(local_catalog))
+    assert [p.table for p in plans] == ["articles_changes"]
