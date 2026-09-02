@@ -8,5 +8,7 @@ Type=oneshot
 User=ubuntu
 WorkingDirectory=/home/ubuntu/bullet-in
 EnvironmentFile=/home/ubuntu/bullet-in/.env
+# 적재 유닛과 같은 이유로 변경 이력 전용 계정을 쓴다 (bullet-in-warehouse.service 주석 참조).
+Environment=GOOGLE_APPLICATION_CREDENTIALS=/home/ubuntu/.bullet-in-lakehouse.json
 ExecStart=/home/ubuntu/.local/bin/uv run python -m bullet_in.warehouse maint
 TimeoutStartSec=3600
