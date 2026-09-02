@@ -195,6 +195,30 @@ def flat_schema(rows: list[dict]) -> pa.Schema:
     return pa.schema(fields)
 
 
+# 팩트의 알갱이는 클릭 한 건이다. 표본 수 (`n_clicks`) 는 여기 두지 않고
+# 집계 함수가 낸다 — 행마다 값이 1인 컬럼은 뜻이 없다.
+FACT_COLUMNS = ("bi_cid", "event_at", "event_date_kst", "card_hash", "card_slug",
+                "card_stage", "card_tier", "card_outlet", "card_surface",
+                "page_location", "device_category", "geo_country")
+
+
+def fact_rows(flat: list[dict]) -> list[dict]:
+    """카드 클릭만 골라 정한 축만 남긴다."""
+    return [{c: row.get(c) for c in FACT_COLUMNS}
+            for row in flat if row.get("event_name") == "bi_card_click"]
+
+
+def dim_date_rows(dates) -> list[dict]:
+    """날짜 축. 공개일로부터 며칠째인지를 함께 담는다."""
+    out = []
+    for iso in sorted({d for d in dates if d}):
+        day = date.fromisoformat(iso)
+        out.append({"date": iso, "weekday": day.isoweekday(),
+                    "days_since_launch": (day - LAUNCH_DATE).days,
+                    "is_launch_day": day == LAUNCH_DATE})
+    return out
+
+
 # 일별 내보내기 표만 고른다. `events_intraday_*` 는 그날이 끝나면 사라지고 완결된
 # 표로 갈리므로 실으면 반쯤 찬 하루가 영구히 남는다.
 EVENTS_TABLE_RE = re.compile(r"^events_(\d{8})$")
@@ -631,6 +655,52 @@ def load_ga4_events(catalog, now: datetime) -> int:
     return total
 
 
+FACT_TABLE = "fact_card_click"
+DIM_DATE_TABLE = "dim_date"
+
+_FACT_TYPES = {"event_at": pa.timestamp("us", tz="UTC")}
+_DIM_DATE_TYPES = {"date": pa.string(), "weekday": pa.int32(),
+                   "days_since_launch": pa.int32(), "is_launch_day": pa.bool_()}
+
+
+def _typed_schema(names, types: dict) -> pa.Schema:
+    fields = [pa.field(n, types.get(n, pa.string())) for n in names]
+    fields.append(pa.field(LOADED_AT, pa.timestamp("us", tz="UTC")))
+    fields.append(pa.field(LOADED_DATE, pa.string()))
+    return pa.schema(fields)
+
+
+def build_gold(catalog, now: datetime) -> int:
+    """평탄화본 전량에서 팩트와 날짜 디멘션을 다시 세운다.
+
+    덧붙이지 않고 갈아 끼운다 — 원본이 남아 있어 언제든 다시 만들 수 있고,
+    그래야 겹침 접기 규칙을 고쳤을 때 옛 결과가 안 남는다.
+
+    기사 · 선수 디멘션은 `mart_history` 에 이미 있어 새로 만들지 않고 참조한다
+    (설계 §3.5).
+    """
+    from pyiceberg.exceptions import NoSuchTableError
+
+    try:
+        flat_table = catalog.load_table(f"{BEHAVIOR_NS}.{GA4_FLAT_TABLE}")
+    except NoSuchTableError:
+        log.info("%s — 평탄화본이 아직 없다", FACT_TABLE)
+        return 0
+
+    flat = flat_table.scan().to_arrow().to_pylist()
+    facts = fact_rows(flat)
+    dims = dim_date_rows(r.get("event_date_kst") for r in flat)
+
+    for name, rows, names, types in (
+            (FACT_TABLE, facts, FACT_COLUMNS, _FACT_TYPES),
+            (DIM_DATE_TABLE, dims, tuple(_DIM_DATE_TYPES), _DIM_DATE_TYPES)):
+        schema = _typed_schema(names, types)
+        table = ensure_table(catalog, name, schema, namespace=BEHAVIOR_NS)
+        table.overwrite(to_arrow(rows, schema, loaded_at=now))
+        log.info("%s — %d행 갈아 끼움", name, len(rows))
+    return len(facts)
+
+
 def compact(table) -> dict:
     """조각난 데이터 파일을 한 파일로 다시 쓴다.
 
@@ -750,6 +820,7 @@ def run_load(now: datetime | None = None) -> None:
     # 이미 끝났으므로 회차를 통째로 죽이지 않는다.
     try:
         load_ga4_events(catalog, now)
+        build_gold(catalog, now)
     except Exception:
         log.warning("행동 기록 적재 실패 — 마트 이력 적재는 끝났다", exc_info=True)
 

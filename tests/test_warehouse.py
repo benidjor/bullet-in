@@ -670,3 +670,45 @@ def test_평탄화본도_같은_날을_두_번_안_넣는다(local_catalog, fake
     flat = local_catalog.load_table(
         f"{warehouse.BEHAVIOR_NS}.{warehouse.GA4_FLAT_TABLE}").scan().to_arrow()
     assert flat.num_rows == 3
+
+
+# --- 행동 기록 · gold -------------------------------------------------------
+
+def test_팩트는_카드_클릭만_담는다():
+    flat = warehouse.flatten_rows([
+        _event(name="bi_card_click", params=[_p("card_hash", string_value="abc")]),
+        _event(name="page_view"),
+    ])
+    got = warehouse.fact_rows(flat)
+    assert len(got) == 1
+    assert got[0]["card_hash"] == "abc"
+
+
+def test_팩트는_정한_컬럼만_남긴다():
+    flat = warehouse.flatten_rows([
+        _event(params=[_p("card_hash", string_value="abc"),
+                       _p("ga_session_id", string_value="9")])])
+    assert set(warehouse.fact_rows(flat)[0]) == set(warehouse.FACT_COLUMNS)
+
+
+def test_날짜_디멘션이_공개일을_표시한다():
+    got = {r["date"]: r for r in warehouse.dim_date_rows(["2026-08-29", "2026-08-30"])}
+    assert got["2026-08-29"]["is_launch_day"] is True
+    assert got["2026-08-30"]["is_launch_day"] is False
+    assert got["2026-08-30"]["days_since_launch"] == 1
+
+
+def test_날짜_디멘션은_같은_날을_한_번만_담는다():
+    got = warehouse.dim_date_rows(["2026-08-30", "2026-08-30"])
+    assert len(got) == 1
+
+
+def test_gold_는_평탄화본에서_다시_세운다(local_catalog, fake_ga4):
+    fake_ga4["days"] = {"20260901": 3}
+    warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3))
+    assert warehouse.build_gold(local_catalog, _t(2026, 9, 2, 3)) == 3
+    # 두 번 돌려도 갈아 끼우므로 행이 안 는다.
+    assert warehouse.build_gold(local_catalog, _t(2026, 9, 2, 4)) == 3
+    fact = local_catalog.load_table(
+        f"{warehouse.BEHAVIOR_NS}.{warehouse.FACT_TABLE}").scan().to_arrow()
+    assert fact.num_rows == 3
