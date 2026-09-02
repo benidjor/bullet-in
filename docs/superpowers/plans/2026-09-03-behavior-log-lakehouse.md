@@ -110,7 +110,7 @@ PyIceberg 가 이미 Arrow 로 돌려주고, 하루 821행 · 전체 13,035행�
 - Consumes: 없음
 - Produces: 뒤 태스크가 기대는 사실 셋 — 서비스 계정이 읽는가 · 중첩이 커밋되는가 · `union_by_name` 으로 컬럼이 느는가
 
-- [ ] **Step 1: 프로젝트를 건너 읽는 권한 둘을 붙인다**
+- [x] **Step 1: 프로젝트를 건너 읽는 권한 둘을 붙인다**
 
 ```bash
 gcloud projects add-iam-policy-binding bullet-in-analytics \
@@ -124,7 +124,7 @@ gcloud projects add-iam-policy-binding bullet-in-analytics \
   --role=roles/bigquery.jobUser
 ```
 
-- [ ] **Step 2: 권한이 실제로 붙었는지 정책에서 확인한다**
+- [x] **Step 2: 권한이 실제로 붙었는지 정책에서 확인한다**
 
 ```bash
 gcloud projects get-iam-policy bullet-in-analytics \
@@ -136,7 +136,7 @@ gcloud projects get-iam-policy bullet-in-analytics \
 기대: `roles/bigquery.dataViewer` 와 `roles/bigquery.jobUser` 두 줄.
 한 줄만 나오면 앞 단계가 반쯤 돌았다는 뜻이므로 없는 쪽을 다시 붙인다.
 
-- [ ] **Step 3: 시험용 스크립트를 VM 에 두고 서비스 계정으로 읽어 본다**
+- [x] **Step 3: 시험용 스크립트를 VM 에 두고 서비스 계정으로 읽어 본다**
 
 VM 에만 서비스 계정 키가 있다.
 로컬에서 도는 것은 사용자 계정이라 이 태스크가 재려는 것을 못 잰다.
@@ -191,7 +191,7 @@ print("진화 뒤 행", t.scan().to_arrow().num_rows)
 scp -i ~/.ssh/seoulnow_deploy /tmp/probe_behavior.py ubuntu@155.248.164.17:/tmp/probe_behavior.py
 ```
 
-- [ ] **Step 4: VM 에서 돌린다**
+- [x] **Step 4: VM 에서 돌린다**
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
@@ -217,7 +217,7 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
 `403` 이 나면 ① 에서 막힌 것이고 권한 전파를 1분 기다렸다 다시 돌린다.
 중첩 커밋에서 죽으면 스펙 §6 의 대비책 (원본을 평탄화된 형태로만 받기) 으로 돌리고, 그때는 이 계획의 Task 4 와 Task 5 를 하나로 합친다.
 
-- [ ] **Step 5: 시험용 자국을 지운다**
+- [x] **Step 5: 시험용 자국을 지운다**
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
@@ -235,7 +235,7 @@ print(\"지웠다\", c.list_namespaces())'"
 
 기대: 마지막 줄의 목록에 `probe` 가 없다.
 
-- [ ] **Step 6: 결과를 런북에 적고 스펙의 낡은 칸을 고친다**
+- [x] **Step 6: 결과를 런북에 적고 스펙의 낡은 칸을 고친다**
 
 `docs/runbook/2026-08-24-wiring-analytics-and-proving-it-arrives.md` 끝에 절을 하나 더한다.
 확인한 값 셋 (읽은 행 수 · 커밋된 행 수 · 진화 뒤 컬럼 수) 을 그대로 적는다.
@@ -243,7 +243,7 @@ print(\"지웠다\", c.list_namespaces())'"
 스펙 §6 위험표의 「표본 편중을 잊고 수치를 읽는 것」 행이 아직 「화면은 만들지 않는다」 라고 적혀 있다.
 §2.1 과 §3.8 이 화면을 만든다고 고쳐졌으므로 이 칸만 「화면에도 표본 수를 함께 적는다」 로 바꾼다.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add docs/runbook/2026-08-24-wiring-analytics-and-proving-it-arrives.md \
@@ -271,7 +271,7 @@ git commit -m "docs(warehouse): 프로젝트를 건너 읽는 권한과 중첩 �
   - `warehouse.ensure_table(catalog, name: str, schema, namespace: str = NAMESPACE)`
   - `warehouse._existing_tables(catalog, namespace: str = NAMESPACE) -> list[str]`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `tests/test_warehouse.py` 의 「카탈로그 · 테이블」 절 끝에 붙인다.
 
@@ -295,7 +295,7 @@ def test_표_목록은_네임스페이스마다_따로_센다(local_catalog):
         local_catalog, warehouse.BEHAVIOR_NS) == ["only_behavior"]
 ```
 
-- [ ] **Step 2: 실패하는 것을 눈으로 본다**
+- [x] **Step 2: 실패하는 것을 눈으로 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -k 네임스페이스 -v
@@ -304,7 +304,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -k 네임스페이
 기대: `TypeError: ensure_namespace() takes 1 positional argument but 2 were given` 로 실패.
 **통과가 나오면 멈춘다** — 이름을 잘못 짚었거나 이미 있는 함수를 부르고 있다는 뜻이다.
 
-- [ ] **Step 3: 매개변수를 연다**
+- [x] **Step 3: 매개변수를 연다**
 
 `src/bullet_in/warehouse.py` 의 `NAMESPACE` 바로 아래에 더한다.
 
@@ -361,7 +361,7 @@ def _existing_tables(catalog, namespace: str = NAMESPACE) -> list[str]:
         return []
 ```
 
-- [ ] **Step 4: 유지보수와 보기가 두 네임스페이스를 함께 돌게 한다**
+- [x] **Step 4: 유지보수와 보기가 두 네임스페이스를 함께 돌게 한다**
 
 `run_maintenance` 와 `run_show` 의 루프를 네임스페이스 바깥 루프로 감싼다.
 
@@ -405,7 +405,7 @@ def run_show() -> None:
                   f"스냅샷 {len(t.metadata.snapshots):>3}개")
 ```
 
-- [ ] **Step 5: 의존을 더한다**
+- [x] **Step 5: 의존을 더한다**
 
 `pyproject.toml` 의 `dependencies` 에서 `pyiceberg` 줄 아래에 넣는다.
 
@@ -413,7 +413,7 @@ def run_show() -> None:
   "google-cloud-bigquery>=3.25",        # 행동 기록 원본 — storage 패키지 없이 REST 로 중첩까지 받는다
 ```
 
-- [ ] **Step 6: 테스트가 통과하는 것을 본다**
+- [x] **Step 6: 테스트가 통과하는 것을 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -v
@@ -422,7 +422,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -v
 기대: 새 둘을 포함해 전량 PASS.
 기존 47개가 하나라도 깨지면 기본값을 안 준 자리가 있다는 뜻이다.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add pyproject.toml uv.lock src/bullet_in/warehouse.py tests/test_warehouse.py
@@ -447,7 +447,7 @@ git commit -m "feat(warehouse): 네임스페이스를 매개변수로 열고 Big
   - `warehouse.event_dates_of(table_ids: Iterable[str]) -> list[str]` — `"20260901"` 꼴의 오름차순 목록
   - `warehouse.dates_to_load(available: list[str], loaded: set[str]) -> list[str]`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `tests/test_warehouse.py` 에 새 절로 붙인다.
 
@@ -485,7 +485,7 @@ def test_다_실었으면_대상이_없다():
     assert warehouse.dates_to_load(["20260901"], {"20260901"}) == []
 ```
 
-- [ ] **Step 2: 실패하는 것을 눈으로 본다**
+- [x] **Step 2: 실패하는 것을 눈으로 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -k "날짜 or 표" -v
@@ -493,7 +493,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -k "날짜 or 표"
 
 기대: `AttributeError: module 'bullet_in.warehouse' has no attribute 'event_dates_of'`.
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 `warehouse.py` 의 `import` 에 `re` 를 더하고 판정 절 끝에 넣는다.
 
@@ -518,7 +518,7 @@ def dates_to_load(available: list[str], loaded: set[str]) -> list[str]:
     return [d for d in sorted(available) if d not in loaded]
 ```
 
-- [ ] **Step 4: 통과하는 것을 본다**
+- [x] **Step 4: 통과하는 것을 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -v
@@ -526,7 +526,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -v
 
 기대: 전량 PASS.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add src/bullet_in/warehouse.py tests/test_warehouse.py
@@ -552,7 +552,7 @@ BigQuery 가 준 31컬럼을 손대지 않고 넣는다.
   - `warehouse.loaded_event_dates(table) -> set[str]`
   - `warehouse.load_ga4_events(catalog, now: datetime) -> int` — 넣은 행 수
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 ```python
 # --- 행동 기록 · 적재 시각 컬럼 ---------------------------------------------
@@ -625,7 +625,7 @@ def test_설정이_없으면_조용히_넘어간다(local_catalog, fake_ga4, mon
     assert warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3)) == 0
 ```
 
-- [ ] **Step 2: 실패하는 것을 눈으로 본다**
+- [x] **Step 2: 실패하는 것을 눈으로 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -k "적재_컬럼 or 실은_날짜 or 두_번_실어도 or 조용히" -v
@@ -633,7 +633,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -k "적재_컬럼 
 
 기대: `AttributeError: ... has no attribute 'with_load_columns'`.
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 「적재」 절 끝, `load_ops` 아래에 넣는다.
 
@@ -724,7 +724,7 @@ def load_ga4_events(catalog, now: datetime) -> int:
     return total
 ```
 
-- [ ] **Step 4: `run_load` 에 갈래를 더한다**
+- [x] **Step 4: `run_load` 에 갈래를 더한다**
 
 앞의 적재가 이 갈래 때문에 죽지 않게 가른다 (스펙 §6).
 
@@ -754,7 +754,7 @@ def run_load(now: datetime | None = None) -> None:
         log.warning("행동 기록 적재 실패 — 마트 이력 적재는 끝났다", exc_info=True)
 ```
 
-- [ ] **Step 5: 통과하는 것을 본다**
+- [x] **Step 5: 통과하는 것을 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -v
@@ -762,7 +762,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -v
 
 기대: 전량 PASS.
 
-- [ ] **Step 6: 일부러 깨뜨려 테스트가 진짜 보는지 확인한다**
+- [x] **Step 6: 일부러 깨뜨려 테스트가 진짜 보는지 확인한다**
 
 `dates_to_load` 의 `if d not in loaded` 를 `if True` 로 바꾸고 돌린다.
 
@@ -774,7 +774,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -k 두_번_실어�
 **통과하면 테스트가 엉뚱한 자리를 보고 있는 것이다** — 되돌리기 전에 테스트를 고친다.
 확인 뒤 `if d not in loaded` 로 되돌린다.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add src/bullet_in/warehouse.py tests/test_warehouse.py
@@ -801,7 +801,7 @@ git commit -m "feat(warehouse): 행동 기록 하루치를 bronze 로 그대로 
   - `warehouse.dedupe_events(rows: list[dict]) -> list[dict]`
   - `warehouse.flat_schema(rows: list[dict]) -> pa.Schema`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 ```python
 # --- 행동 기록 · 평탄화 -----------------------------------------------------
@@ -908,7 +908,7 @@ def test_기본_컬럼과_이름이_겹치면_갈라_둔다():
     assert rows[0]["event_name_param"] == "x"
 ```
 
-- [ ] **Step 2: 실패하는 것을 눈으로 본다**
+- [x] **Step 2: 실패하는 것을 눈으로 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -k "평탄화 or 파라미터 or 중첩_축 or 겹친 or 스키마는" -v
@@ -916,7 +916,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -k "평탄화 or �
 
 기대: `AttributeError: ... has no attribute 'flatten_rows'`.
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 판정 절에 넣는다.
 `from datetime import ...` 에 이미 `timedelta` 가 있다.
@@ -1045,7 +1045,7 @@ def flat_schema(rows: list[dict]) -> pa.Schema:
     return pa.schema(fields)
 ```
 
-- [ ] **Step 4: 통과하는 것을 본다**
+- [x] **Step 4: 통과하는 것을 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -v
@@ -1053,7 +1053,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -v
 
 기대: 전량 PASS.
 
-- [ ] **Step 5: 일부러 깨뜨려 확인한다**
+- [x] **Step 5: 일부러 깨뜨려 확인한다**
 
 `dedupe_events` 의 `if not cid: out.append(row); continue` 두 줄을 지우고 돌린다.
 
@@ -1064,7 +1064,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -k 식별자가_�
 기대: FAIL (`assert 1 == 2`).
 확인 뒤 되돌린다.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add src/bullet_in/warehouse.py tests/test_warehouse.py
@@ -1088,7 +1088,7 @@ git commit -m "feat(warehouse): 행동 기록 평탄화와 겹침 접기를 순�
   - `warehouse.GA4_FLAT_TABLE: str` — `"ga4_events_flat"`
   - `warehouse.flatten_day(arrow: pa.Table) -> list[dict]` — 평탄화 · 겹침 접기까지 끝낸 행
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `fake_ga4` 픽스처의 `_read` 를 파라미터까지 담게 바꾸고 테스트를 더한다.
 
@@ -1135,7 +1135,7 @@ def test_평탄화본도_같은_날을_두_번_안_넣는다(local_catalog, fake
     assert flat.num_rows == 3
 ```
 
-- [ ] **Step 2: 실패하는 것을 눈으로 본다**
+- [x] **Step 2: 실패하는 것을 눈으로 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -k 평탄화본 -v
@@ -1143,7 +1143,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -k 평탄화본 -v
 
 기대: `AttributeError: ... has no attribute 'GA4_FLAT_TABLE'`.
 
-- [ ] **Step 3: 구현한다**
+- [x] **Step 3: 구현한다**
 
 `GA4_TABLE` 곁에 이름을 더한다.
 
@@ -1188,7 +1188,7 @@ def flatten_day(arrow: pa.Table) -> list[dict]:
 `to_arrow` 는 `bool` 컬럼을 다루지 않은 적이 없으므로 `is_article_click` 이 처음이다.
 `pa.array([True, False], type=pa.bool_())` 는 그대로 통하므로 고칠 것이 없다.
 
-- [ ] **Step 4: 통과하는 것을 본다**
+- [x] **Step 4: 통과하는 것을 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -v
@@ -1196,7 +1196,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -v
 
 기대: 전량 PASS.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add src/bullet_in/warehouse.py tests/test_warehouse.py
@@ -1223,7 +1223,7 @@ git commit -m "feat(warehouse): 행동 기록 평탄화본을 silver 로 함께 
   - `warehouse.dim_date_rows(dates) -> list[dict]`
   - `warehouse.build_gold(catalog, now: datetime) -> int`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 ```python
 # --- 행동 기록 · gold -------------------------------------------------------
@@ -1268,7 +1268,7 @@ def test_gold_는_평탄화본에서_다시_세운다(local_catalog, fake_ga4):
     assert fact.num_rows == 3
 ```
 
-- [ ] **Step 2: 실패하는 것을 눈으로 본다**
+- [x] **Step 2: 실패하는 것을 눈으로 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -k "팩트 or 날짜_디멘션 or gold_는" -v
@@ -1276,7 +1276,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -k "팩트 or 날�
 
 기대: `AttributeError: ... has no attribute 'fact_rows'`.
 
-- [ ] **Step 3: 판정 둘을 구현한다**
+- [x] **Step 3: 판정 둘을 구현한다**
 
 평탄화 절 끝에 붙인다.
 
@@ -1305,7 +1305,7 @@ def dim_date_rows(dates) -> list[dict]:
     return out
 ```
 
-- [ ] **Step 4: 세우는 쪽을 구현한다**
+- [x] **Step 4: 세우는 쪽을 구현한다**
 
 적재 절 끝에 붙인다.
 
@@ -1363,7 +1363,7 @@ def build_gold(catalog, now: datetime) -> int:
         log.warning("행동 기록 적재 실패 — 마트 이력 적재는 끝났다", exc_info=True)
 ```
 
-- [ ] **Step 5: 통과하는 것을 본다**
+- [x] **Step 5: 통과하는 것을 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -v
@@ -1371,7 +1371,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -v
 
 기대: 전량 PASS.
 
-- [ ] **Step 6: 일부러 깨뜨려 확인한다**
+- [x] **Step 6: 일부러 깨뜨려 확인한다**
 
 `build_gold` 의 `table.overwrite(...)` 를 `table.append(...)` 로 바꾸고 돌린다.
 
@@ -1382,7 +1382,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -k gold_는 -v
 기대: FAIL (`assert 6 == 3`).
 확인 뒤 되돌린다.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add src/bullet_in/warehouse.py tests/test_warehouse.py
@@ -1423,7 +1423,7 @@ git commit -m "feat(warehouse): 행동 기록 gold 팩트와 날짜 디멘션"
 }
 ```
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 ```python
 # --- 행동 기록 · 집계 -------------------------------------------------------
@@ -1469,7 +1469,7 @@ def test_클릭이_하나도_없으면_빈_집계가_나온다():
     assert got["axes"]["card_outlet"] == []
 ```
 
-- [ ] **Step 2: 실패하는 것을 눈으로 본다**
+- [x] **Step 2: 실패하는 것을 눈으로 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -k "집계 or 축별 or 기사_수로" -v
@@ -1477,7 +1477,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -k "집계 or 축�
 
 기대: `AttributeError: ... has no attribute 'aggregate'`.
 
-- [ ] **Step 3: 집계를 구현한다**
+- [x] **Step 3: 집계를 구현한다**
 
 판정 절 끝에 붙인다.
 `import` 에 `from collections import Counter` 를 더한다.
@@ -1525,7 +1525,7 @@ def aggregate(facts: list[dict], articles: list[dict]) -> dict:
             "axes": axes}
 ```
 
-- [ ] **Step 4: 떨어뜨리는 쪽을 구현한다**
+- [x] **Step 4: 떨어뜨리는 쪽을 구현한다**
 
 적재 절 끝에 붙인다.
 `import json` 을 더한다.
@@ -1580,7 +1580,7 @@ def write_metrics(catalog, now: datetime) -> dict:
         log.warning("행동 기록 적재 실패 — 마트 이력 적재는 끝났다", exc_info=True)
 ```
 
-- [ ] **Step 5: `state/` 를 무시 목록에 넣는다**
+- [x] **Step 5: `state/` 를 무시 목록에 넣는다**
 
 `.gitignore` 의 `site/` 아래에 넣는다.
 
@@ -1588,7 +1588,7 @@ def write_metrics(catalog, now: datetime) -> dict:
 state/
 ```
 
-- [ ] **Step 6: 통과하는 것을 본다**
+- [x] **Step 6: 통과하는 것을 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_warehouse.py -v
@@ -1596,7 +1596,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -v
 
 기대: 전량 PASS.
 
-- [ ] **Step 7: 일부러 깨뜨려 확인한다**
+- [x] **Step 7: 일부러 깨뜨려 확인한다**
 
 `aggregate` 의 `counted` 를 `counted = facts` 로 바꾸고 돌린다.
 
@@ -1607,7 +1607,7 @@ uv run --project . --extra dev pytest tests/test_warehouse.py -k 공개일_클�
 기대: FAIL.
 확인 뒤 되돌린다.
 
-- [ ] **Step 8: 커밋**
+- [x] **Step 8: 커밋**
 
 ```bash
 git add src/bullet_in/warehouse.py tests/test_warehouse.py .gitignore
@@ -1632,7 +1632,7 @@ git commit -m "feat(warehouse): 행동 지표 집계를 내고 화면이 읽을 
   - `render.render_behavior(metrics: dict) -> str`
   - `render.write_behavior(metrics_path, out_dir) -> bool` — 그렸으면 True
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `tests/test_behavior_view.py` 를 만든다.
 
@@ -1689,7 +1689,7 @@ def test_집계_파일이_있으면_페이지를_그린다(tmp_path):
     assert "The Athletic" in (tmp_path / "behavior.html").read_text(encoding="utf-8")
 ```
 
-- [ ] **Step 2: 실패하는 것을 눈으로 본다**
+- [x] **Step 2: 실패하는 것을 눈으로 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_behavior_view.py -v
@@ -1697,7 +1697,7 @@ uv run --project . --extra dev pytest tests/test_behavior_view.py -v
 
 기대: `ImportError: cannot import name 'render_behavior'`.
 
-- [ ] **Step 3: 템플릿을 만든다**
+- [x] **Step 3: 템플릿을 만든다**
 
 `src/bullet_in/serve/templates/behavior.html.j2`.
 `ops.html.j2` 의 스타일 규약 (같은 색 변수 · `.hbar` 막대) 을 그대로 쓴다.
@@ -1778,7 +1778,7 @@ uv run --project . --extra dev pytest tests/test_behavior_view.py -v
 </html>
 ```
 
-- [ ] **Step 4: 렌더 둘을 더한다**
+- [x] **Step 4: 렌더 둘을 더한다**
 
 `render.py` 의 `write_ops` 아래에 붙인다.
 
@@ -1812,7 +1812,7 @@ def write_behavior(metrics_path: str | Path, out_dir: str | Path) -> bool:
 
 `render.py` 는 `import json` 을 이미 갖고 있으므로 import 는 손댈 것이 없다.
 
-- [ ] **Step 5: 회차에 붙인다**
+- [x] **Step 5: 회차에 붙인다**
 
 `run.py` 의 `write_ops` 호출을 감싼 `try` 바로 아래에 같은 모양으로 붙인다.
 
@@ -1828,7 +1828,7 @@ def write_behavior(metrics_path: str | Path, out_dir: str | Path) -> bool:
 
 `run.py:25` 의 import 에 `write_behavior` 를 더한다.
 
-- [ ] **Step 6: 통과하는 것을 본다**
+- [x] **Step 6: 통과하는 것을 본다**
 
 ```bash
 uv run --project . --extra dev pytest tests/test_behavior_view.py -v
@@ -1836,7 +1836,7 @@ uv run --project . --extra dev pytest tests/test_behavior_view.py -v
 
 기대: 전량 PASS.
 
-- [ ] **Step 7: 일부러 깨뜨려 확인한다**
+- [x] **Step 7: 일부러 깨뜨려 확인한다**
 
 템플릿의 `<td class="n">{{ r.n_articles or "" }}</td>` 줄을 지우고 돌린다.
 
@@ -1847,7 +1847,7 @@ uv run --project . --extra dev pytest tests/test_behavior_view.py -k 표본_수�
 기대: FAIL (`24` 를 못 찾는다).
 확인 뒤 되돌린다.
 
-- [ ] **Step 8: 전체 테스트를 돌린다**
+- [x] **Step 8: 전체 테스트를 돌린다**
 
 ```bash
 uv run --project . --extra dev pytest -q
@@ -1856,7 +1856,7 @@ uv run --project . --extra dev pytest -q
 기대: 기존 통과 수 + 새 테스트.
 실패가 있으면 그 자리를 고치고 다시 돌린다.
 
-- [ ] **Step 9: 커밋**
+- [x] **Step 9: 커밋**
 
 ```bash
 git add src/bullet_in/serve/templates/behavior.html.j2 src/bullet_in/serve/render.py \
@@ -1878,7 +1878,7 @@ git commit -m "feat(serve): 행동 지표 페이지를 회차 렌더에 더한�
 - Consumes: Task 1에서 Task 9까지 전부
 - Produces: 운영에서 도는 행동 기록 갈래와 배포된 페이지
 
-- [ ] **Step 1: 설정 이름을 예시 파일에 적는다**
+- [x] **Step 1: 설정 이름을 예시 파일에 적는다**
 
 `.env.example` 에 더한다.
 
@@ -1887,7 +1887,7 @@ git commit -m "feat(serve): 행동 지표 페이지를 회차 렌더에 더한�
 GA4_DATASET=bullet-in-analytics.analytics_551139164
 ```
 
-- [ ] **Step 2: 커밋하고 PR 을 올린다**
+- [x] **Step 2: 커밋하고 PR 을 올린다**
 
 ```bash
 git add .env.example
@@ -1898,7 +1898,7 @@ git push -u origin worktree-behavior-log
 PR 본문은 `.claude/tools/check-pr-format.py --body <파일> --title "<제목>"` 을 통과시킨 뒤 올린다.
 **머지는 사용자가 한다.**
 
-- [ ] **Step 3: 머지된 뒤 VM 을 최신으로 만들고 설정을 넣는다**
+- [x] **Step 3: 머지된 뒤 VM 을 최신으로 만들고 설정을 넣는다**
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
@@ -1911,7 +1911,7 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
    echo 'GA4_DATASET=bullet-in-analytics.analytics_551139164' >> /home/ubuntu/bullet-in/.env"
 ```
 
-- [ ] **Step 4: 적재를 손으로 한 번 돌린다**
+- [x] **Step 4: 적재를 손으로 한 번 돌린다**
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
@@ -1926,7 +1926,7 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
 기대: `ga4_events — 20260824 ... 적재` 가 날짜 수만큼 · `fact_card_click — N행 갈아 끼움` · `state/behavior_metrics.json — 클릭 N건 ... 기준 집계`.
 **로그를 한 번만 받아 여러 번 세라** — 같은 명령을 다시 치면 창이 밀려 앞줄이 사라진다.
 
-- [ ] **Step 5: 쌓인 것을 센다**
+- [x] **Step 5: 쌓인 것을 센다**
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
@@ -1947,14 +1947,14 @@ bq --project_id=bullet-in-analytics query --use_legacy_sql=false --format=pretty
 
 두 값이 다르면 그 차이가 실은 날짜 수 차이인지부터 본다.
 
-- [ ] **Step 6: 회차를 돌려 페이지를 배포한다**
+- [x] **Step 6: 회차를 돌려 페이지를 배포한다**
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
   "sudo systemctl start bullet-in.service"
 ```
 
-- [ ] **Step 7: 배포본에서 페이지를 확인한다**
+- [x] **Step 7: 배포본에서 페이지를 확인한다**
 
 ```bash
 curl -s https://bullet-in.pages.dev/behavior.html -o /tmp/behavior.html -w '%{http_code}\n'
@@ -1967,14 +1967,14 @@ grep -c '<tr>' /tmp/behavior.html
 기대: `200` 과 축 넷의 행 수 합.
 **받아 둔 파일을 여러 번 세고 curl 을 다시 치지 않는다.**
 
-- [ ] **Step 8: 런북에 절을 더한다**
+- [x] **Step 8: 런북에 절을 더한다**
 
 `docs/runbook/2026-09-02-warehouse-history-load.md` 에 행동 기록 갈래를 적는다.
 설정 이름 · 손으로 돌리는 법 · 도착이 하루 늦다는 것 · 집계 파일의 자리와 그것을 읽는 쪽을 담는다.
 
 `humanize-korean` fast 를 1회 통과시킨다 (`docs/` 는 서술형).
 
-- [ ] **Step 9: 커밋하고 PR 을 올린다**
+- [x] **Step 9: 커밋하고 PR 을 올린다**
 
 ```bash
 git add docs/runbook/2026-09-02-warehouse-history-load.md
