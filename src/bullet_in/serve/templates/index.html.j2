@@ -18,7 +18,7 @@
   <div class="mains">
     <h3 class="bandhead">주요 소식</h3>
     {% for m in mains %}
-    <a class="mitem" href="article/{{ m.content_hash }}.html">
+    <a class="mitem" href="article/{{ m.content_hash }}.html" data-hash="{{ m.content_hash }}">
       {% if m.image_url %}<div class="rimg"><img src="{{ m.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.rimg').style.display='none'"></div>{% else %}<div class="rimg"></div>{% endif %}
       <div>
         <div class="cardhead">{{ stage_badge(m._stage_disp) }}<span class="src">{{ m._outlet }}</span>{% if m._reader_tier %}<span class="cred">{{ m._reader_tier }}</span>{% endif %}<span class="when">{{ m._date or m._when }}</span></div>

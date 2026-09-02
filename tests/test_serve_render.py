@@ -1233,3 +1233,16 @@ def test_home_omits_the_key_label_on_a_card_that_stands_alone():
     html = render_index(rows, SOURCES, NOW)
     assert 'data-hash="solo"' in html
     assert 'class="keyline"' not in html
+
+
+def test_main_item_carries_the_article_hash_for_click_tracking():
+    """주요 소식 항목에도 기사 해시를 싣는다 (2026-09-02).
+
+    클릭 계측이 `dataset.hash` 를 읽는데 이 자리에만 속성이 없어,
+    표면 `mitem` 의 클릭 88건이 어느 기사인지 모르는 채로 쌓였다."""
+    rows = [_row(content_hash="lead1", tier=1.0, title_ko="아스날, 첫 소식"),
+            _row(content_hash="main1", tier=1.0, title_ko="아스날, 다른 소식",
+                 published_at=datetime(2026, 6, 29, 9, 0, 0))]
+    html = render_index(rows, SOURCES, NOW)
+    # 같은 해시가 최신 뉴스 카드에도 실리므로 mitem 태그 안에서 찾아야 한다.
+    assert re.search(r'class="mitem"[^>]*data-hash="main1"', html)

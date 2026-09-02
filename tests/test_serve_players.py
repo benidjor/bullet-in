@@ -948,3 +948,16 @@ def test_layout_carries_the_schedule_to_the_page():
                           datetime(2026, 8, 3))
     assert 'id="mktClock"' in html and "data-windows=" in html
     assert "여름" in html and "겨울" in html
+
+
+def test_timeline_title_carries_the_article_hash_for_click_tracking():
+    """선수 페이지 타임라인 제목에도 기사 해시를 싣는다 (2026-09-02).
+
+    클릭 계측이 `dataset.hash` 를 읽는데 이 자리에만 속성이 없어,
+    표면 `tltitle` 의 클릭이 어느 기사인지 모르는 채로 쌓였다."""
+    arts = [_art("tlh1", 1, "interest", "스톤스, 아스날 관심")]
+    players = [_player(1, "Stones", "스톤스", "incoming",
+                       [{"content_hash": "tlh1", "stage": "interest"}])]
+    [e] = build_player_entries(arts, players)
+    html = render_player(e, SOURCES, NOW)
+    assert re.search(r'class="tltitle"[^>]*data-hash="tlh1"', html)
