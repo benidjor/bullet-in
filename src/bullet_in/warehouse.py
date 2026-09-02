@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -68,6 +69,26 @@ def plans_for(now: datetime,
     if last_daily_at is None or last_daily_at.date() != now.date():
         plans.extend(_DAILY)
     return tuple(plans)
+
+
+# 일별 내보내기 표만 고른다. `events_intraday_*` 는 그날이 끝나면 사라지고 완결된
+# 표로 갈리므로 실으면 반쯤 찬 하루가 영구히 남는다.
+EVENTS_TABLE_RE = re.compile(r"^events_(\d{8})$")
+
+
+def event_dates_of(table_ids) -> list[str]:
+    """내보내기 표 이름 목록에서 날짜만 오름차순으로 뽑는다."""
+    return sorted(m.group(1) for t in table_ids
+                  if (m := EVENTS_TABLE_RE.match(t)))
+
+
+def dates_to_load(available: list[str], loaded: set[str]) -> list[str]:
+    """아직 안 실은 날짜를 오래된 것부터.
+
+    상태 파일을 두지 않는다 — 실린 결과 자체가 워터마크라 둘이 어긋날 수 없다
+    (`read_watermark` 와 같은 규율).
+    """
+    return [d for d in sorted(available) if d not in loaded]
 
 
 # information_schema.DATA_TYPE 이 주는 이름에서 Arrow 타입으로.

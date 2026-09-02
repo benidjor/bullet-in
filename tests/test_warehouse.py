@@ -208,6 +208,39 @@ def test_큰_것과_작은_것이_섞이면_작은_것만_고른다():
     assert sorted(warehouse.files_to_compact(mixed)) == ["s1.parquet", "s2.parquet"]
 
 
+# --- 행동 기록 · 실을 날짜 판정 ---------------------------------------------
+
+def test_일별_표에서_날짜만_뽑는다():
+    got = warehouse.event_dates_of(["events_20260901", "events_20260828"])
+    assert got == ["20260828", "20260901"]
+
+
+def test_반쯤_찬_당일_표는_거른다():
+    # GA4 가 스트리밍 내보내기를 켜면 events_intraday_* 를 만든다. 그날이 끝나면
+    # 사라지고 완결된 표로 갈리므로 실으면 반쯤 찬 하루가 영구히 남는다.
+    got = warehouse.event_dates_of(["events_20260901", "events_intraday_20260902"])
+    assert got == ["20260901"]
+
+
+def test_이벤트_표가_아닌_이름은_무시한다():
+    assert warehouse.event_dates_of(["pseudonymous_users_20260901", "sessions"]) == []
+
+
+def test_이미_실은_날짜는_대상에서_빠진다():
+    got = warehouse.dates_to_load(["20260828", "20260829", "20260901"],
+                                  {"20260828", "20260901"})
+    assert got == ["20260829"]
+
+
+def test_실을_날짜는_오래된_것부터다():
+    got = warehouse.dates_to_load(["20260901", "20260824"], set())
+    assert got == ["20260824", "20260901"]
+
+
+def test_다_실었으면_대상이_없다():
+    assert warehouse.dates_to_load(["20260901"], {"20260901"}) == []
+
+
 # --- 카탈로그 · 테이블 (로컬 파일시스템) -------------------------------------
 
 @pytest.fixture
