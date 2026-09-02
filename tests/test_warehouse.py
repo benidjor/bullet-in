@@ -241,6 +241,110 @@ def test_다_실었으면_대상이_없다():
     assert warehouse.dates_to_load(["20260901"], {"20260901"}) == []
 
 
+# --- 행동 기록 · 평탄화 -----------------------------------------------------
+
+def _event(name="bi_card_click", ts=1_787_536_000_000_000, params=None, **extra):
+    row = {"event_date": "20260901", "event_timestamp": ts, "event_name": name,
+           "user_pseudo_id": "u1", "platform": "WEB",
+           "device": {"category": "mobile", "operating_system": "iOS",
+                      "web_info": {"browser": "Safari"}},
+           "geo": {"country": "South Korea", "region": "Seoul"},
+           "traffic_source": {"source": "google", "medium": "organic",
+                              "name": "(direct)"},
+           "event_params": params or []}
+    row.update(extra)
+    return row
+
+
+def _p(key, **value):
+    return {"key": key, "value": {"string_value": None, "int_value": None,
+                                  "float_value": None, "double_value": None,
+                                  **value}}
+
+
+def test_파라미터_키가_컬럼이_된다():
+    got = warehouse.flatten_rows([_event(params=[_p("card_hash", string_value="abc")])])
+    assert got[0]["card_hash"] == "abc"
+
+
+def test_값이_어느_칸에_있든_문자열로_모은다():
+    # 같은 키가 두 타입으로 오는 자리가 실제로 있다 (session_engaged · card_tier).
+    got = warehouse.flatten_rows([_event(params=[
+        _p("session_engaged", int_value=1), _p("card_tier", double_value=2.5)])])
+    assert got[0]["session_engaged"] == "1"
+    assert got[0]["card_tier"] == "2.5"
+
+
+def test_중첩_축이_컬럼으로_펴진다():
+    got = warehouse.flatten_rows([_event()])
+    assert got[0]["device_category"] == "mobile"
+    assert got[0]["device_browser"] == "Safari"
+    assert got[0]["geo_country"] == "South Korea"
+    assert got[0]["traffic_source"] == "google"
+
+
+def test_없는_중첩_축은_널로_남는다():
+    got = warehouse.flatten_rows([_event(geo=None)])
+    assert got[0]["geo_country"] is None
+
+
+def test_수집_시각이_시각_타입으로_간다():
+    got = warehouse.flatten_rows([_event(ts=1_787_536_000_000_000)])
+    assert got[0]["event_at"] == datetime(2026, 8, 24, 1, 46, 40, tzinfo=timezone.utc)
+
+
+def test_KST_날짜는_UTC_와_다를_수_있다():
+    # UTC 2026-08-24 20:00 은 KST 로 2026-08-25 다.
+    got = warehouse.flatten_rows([_event(ts=1_787_601_600_000_000)])
+    assert got[0]["event_date_kst"] == "2026-08-25"
+
+
+def test_기사_클릭_판정은_해시가_있을_때만_참():
+    with_hash = warehouse.flatten_rows(
+        [_event(params=[_p("card_hash", string_value="abc")])])
+    without = warehouse.flatten_rows(
+        [_event(params=[_p("card_slug", string_value="saka")])])
+    assert with_hash[0]["is_article_click"] is True
+    assert without[0]["is_article_click"] is False
+
+
+def test_빈_값을_채우지_않는다():
+    # card_hash 가 없다는 것은 기사 카드가 아니라는 뜻이고 채우면 거짓이 된다.
+    got = warehouse.flatten_rows([_event(params=[])])
+    assert got[0].get("card_hash") is None
+
+
+def test_겹친_행을_하나로_접는다():
+    rows = warehouse.flatten_rows([
+        _event(params=[_p("bi_cid", string_value="c1"),
+                       _p("bi_ts", string_value="2026-09-01T00:00:00Z")]),
+        _event(ts=1_787_536_009_000_000,
+               params=[_p("bi_cid", string_value="c1"),
+                       _p("bi_ts", string_value="2026-09-01T00:00:00Z")]),
+    ])
+    assert len(warehouse.dedupe_events(rows)) == 1
+
+
+def test_식별자가_없는_행은_안_접는다():
+    # 자동 수집 이벤트에는 bi_cid 가 없다. 널을 키로 접으면 3분의 2가 사라진다.
+    rows = warehouse.flatten_rows([_event(name="page_view"),
+                                   _event(name="page_view")])
+    assert len(warehouse.dedupe_events(rows)) == 2
+
+
+def test_스키마는_나타난_키_전량으로_선다():
+    rows = warehouse.flatten_rows([_event(params=[_p("새키", string_value="v")])])
+    names = [f.name for f in warehouse.flat_schema(rows)]
+    assert "새키" in names
+    assert names[-2:] == [warehouse.LOADED_AT, warehouse.LOADED_DATE]
+
+
+def test_기본_컬럼과_이름이_겹치면_갈라_둔다():
+    rows = warehouse.flatten_rows([_event(params=[_p("event_name", string_value="x")])])
+    assert rows[0]["event_name"] == "bi_card_click"
+    assert rows[0]["event_name_param"] == "x"
+
+
 # --- 행동 기록 · 적재 시각 컬럼 ---------------------------------------------
 
 def test_중첩을_지키면서_적재_컬럼을_붙인다():
@@ -503,8 +607,23 @@ def fake_ga4(monkeypatch):
     def _read(dataset, table_id):
         day = table_id.removeprefix("events_")
         n = state["days"][day]
+        params = pa.array(
+            [[{"key": "bi_cid", "value": {"string_value": f"c{i}",
+                                          "int_value": None,
+                                          "float_value": None,
+                                          "double_value": None}}]
+             for i in range(n)],
+            type=pa.list_(pa.struct([
+                ("key", pa.string()),
+                ("value", pa.struct([("string_value", pa.string()),
+                                     ("int_value", pa.int64()),
+                                     ("float_value", pa.float64()),
+                                     ("double_value", pa.float64())]))])))
         return pa.table({"event_date": pa.array([day] * n),
-                         "event_name": pa.array(["bi_card_click"] * n)})
+                         "event_timestamp": pa.array([1_787_536_000_000_000] * n,
+                                                     type=pa.int64()),
+                         "event_name": pa.array(["bi_card_click"] * n),
+                         "event_params": params})
 
     monkeypatch.setattr(warehouse, "_bq_table_ids", _list)
     monkeypatch.setattr(warehouse, "_bq_read_day", _read)
@@ -532,3 +651,64 @@ def test_같은_날을_두_번_실어도_행이_안_는다(local_catalog, fake_g
 def test_설정이_없으면_조용히_넘어간다(local_catalog, fake_ga4, monkeypatch):
     monkeypatch.delenv("GA4_DATASET")
     assert warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3)) == 0
+
+
+def test_평탄화본이_원본과_같은_날_함께_실린다(local_catalog, fake_ga4):
+    fake_ga4["days"] = {"20260901": 3}
+    warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3))
+    flat = local_catalog.load_table(
+        f"{warehouse.BEHAVIOR_NS}.{warehouse.GA4_FLAT_TABLE}").scan().to_arrow()
+    assert flat.num_rows == 3
+    assert "bi_cid" in flat.schema.names
+    assert "event_params" not in flat.schema.names
+
+
+def test_평탄화본도_같은_날을_두_번_안_넣는다(local_catalog, fake_ga4):
+    fake_ga4["days"] = {"20260901": 3}
+    warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3))
+    warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 12))
+    flat = local_catalog.load_table(
+        f"{warehouse.BEHAVIOR_NS}.{warehouse.GA4_FLAT_TABLE}").scan().to_arrow()
+    assert flat.num_rows == 3
+
+
+# --- 행동 기록 · gold -------------------------------------------------------
+
+def test_팩트는_카드_클릭만_담는다():
+    flat = warehouse.flatten_rows([
+        _event(name="bi_card_click", params=[_p("card_hash", string_value="abc")]),
+        _event(name="page_view"),
+    ])
+    got = warehouse.fact_rows(flat)
+    assert len(got) == 1
+    assert got[0]["card_hash"] == "abc"
+
+
+def test_팩트는_정한_컬럼만_남긴다():
+    flat = warehouse.flatten_rows([
+        _event(params=[_p("card_hash", string_value="abc"),
+                       _p("ga_session_id", string_value="9")])])
+    assert set(warehouse.fact_rows(flat)[0]) == set(warehouse.FACT_COLUMNS)
+
+
+def test_날짜_디멘션이_공개일을_표시한다():
+    got = {r["date"]: r for r in warehouse.dim_date_rows(["2026-08-29", "2026-08-30"])}
+    assert got["2026-08-29"]["is_launch_day"] is True
+    assert got["2026-08-30"]["is_launch_day"] is False
+    assert got["2026-08-30"]["days_since_launch"] == 1
+
+
+def test_날짜_디멘션은_같은_날을_한_번만_담는다():
+    got = warehouse.dim_date_rows(["2026-08-30", "2026-08-30"])
+    assert len(got) == 1
+
+
+def test_gold_는_평탄화본에서_다시_세운다(local_catalog, fake_ga4):
+    fake_ga4["days"] = {"20260901": 3}
+    warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3))
+    assert warehouse.build_gold(local_catalog, _t(2026, 9, 2, 3)) == 3
+    # 두 번 돌려도 갈아 끼우므로 행이 안 는다.
+    assert warehouse.build_gold(local_catalog, _t(2026, 9, 2, 4)) == 3
+    fact = local_catalog.load_table(
+        f"{warehouse.BEHAVIOR_NS}.{warehouse.FACT_TABLE}").scan().to_arrow()
+    assert fact.num_rows == 3

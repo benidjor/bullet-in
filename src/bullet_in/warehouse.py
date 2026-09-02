@@ -71,6 +71,154 @@ def plans_for(now: datetime,
     return tuple(plans)
 
 
+# --- 행동 기록 평탄화 (부수효과 없음) ---------------------------------------
+
+KST = timezone(timedelta(hours=9))
+# 공개일. 이 하루가 표본의 58% 라 집계에서 가른다 (설계 §2.1).
+LAUNCH_DATE = date(2026, 8, 29)
+
+# 평탄화 결과에서 타입을 주는 컬럼. 나머지는 전부 문자열이다.
+FLAT_BASE_TYPES = {
+    "event_date": pa.string(), "event_timestamp": pa.int64(),
+    "event_name": pa.string(), "user_pseudo_id": pa.string(),
+    "platform": pa.string(),
+    "event_at": pa.timestamp("us", tz="UTC"),
+    "event_date_kst": pa.string(), "is_article_click": pa.bool_(),
+}
+
+# 중첩 레코드에서 꺼내 컬럼으로 펴는 축.
+NESTED_COLUMNS = {
+    "device_category": ("device", "category"),
+    "device_os": ("device", "operating_system"),
+    "device_browser": ("device", "web_info", "browser"),
+    "geo_country": ("geo", "country"),
+    "geo_region": ("geo", "region"),
+    "traffic_source": ("traffic_source", "source"),
+    "traffic_medium": ("traffic_source", "medium"),
+    "traffic_name": ("traffic_source", "name"),
+}
+
+# 파라미터 값이 네 칸에 나뉘어 온다. 있는 것 하나를 문자열로 모은다.
+_PARAM_VALUE_FIELDS = ("string_value", "int_value", "float_value", "double_value")
+
+# 원본에서 그대로 가져오는 컬럼. 파생 컬럼 셋은 여기 없다.
+_FLAT_SOURCE_COLUMNS = ("event_date", "event_timestamp", "event_name",
+                        "user_pseudo_id", "platform")
+
+
+def _dig(row, path: tuple[str, ...]):
+    """중첩 레코드를 따라 내려간다. 도중에 없으면 None."""
+    cur = row
+    for key in path:
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(key)
+    return cur
+
+
+def _param_value(value: dict | None) -> str | None:
+    for field in _PARAM_VALUE_FIELDS:
+        got = (value or {}).get(field)
+        if got is not None:
+            return str(got)
+    return None
+
+
+def flatten_rows(rows: list[dict]) -> list[dict]:
+    """원본 행을 컬럼 하나에 값 하나인 모양으로 편다.
+
+    빈 값은 채우지 않는다 — `card_hash` 가 없다는 것은 기사 카드가 아니라는
+    뜻이고 채우면 거짓이 된다 (설계 §3.3).
+    """
+    out = []
+    for row in rows:
+        flat = {c: row.get(c) for c in _FLAT_SOURCE_COLUMNS}
+        for name, path in NESTED_COLUMNS.items():
+            flat[name] = _dig(row, path)
+        for param in (row.get("event_params") or []):
+            key = param.get("key")
+            if not key:
+                continue
+            # 계측이 심는 키라 기본 컬럼과 겹칠 수 있다. 겹치면 밑에 깔리므로 가른다.
+            if key in FLAT_BASE_TYPES or key in NESTED_COLUMNS:
+                key = f"{key}_param"
+            flat[key] = _param_value(param.get("value"))
+
+        micros = flat.get("event_timestamp")
+        at = (datetime.fromtimestamp(micros / 1_000_000, tz=timezone.utc)
+              if micros else None)
+        flat["event_at"] = at
+        flat["event_date_kst"] = at.astimezone(KST).date().isoformat() if at else None
+        flat["is_article_click"] = bool(flat.get("event_name") == "bi_card_click"
+                                        and flat.get("card_hash"))
+        out.append(flat)
+    return out
+
+
+def dedupe_events(rows: list[dict]) -> list[dict]:
+    """같은 행동이 두 번 도착한 것을 접는다 (실측 51건 · 설계 §1.5).
+
+    `bi_cid` 가 없는 행은 접지 않는다 — 자동 수집 이벤트에는 그 값이 없어서
+    키가 전부 널이 되고, 한 덩어리로 뭉쳐 3분의 2가 사라진다.
+    """
+    seen: set[tuple] = set()
+    out = []
+    for row in rows:
+        cid = row.get("bi_cid")
+        if not cid:
+            out.append(row)
+            continue
+        key = (cid, row.get("bi_ts"), row.get("event_name"))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(row)
+    return out
+
+
+def flat_schema(rows: list[dict]) -> pa.Schema:
+    """나타난 키 전량으로 스키마를 세운다.
+
+    목록을 사람이 관리하지 않으므로 계측이 바뀌어도 낡지 않는다 (설계 §2 결정 7).
+    새 키가 나타나면 `ensure_table` 의 union_by_name 이 컬럼을 늘린다.
+    """
+    names = list(FLAT_BASE_TYPES) + list(NESTED_COLUMNS)
+    seen = set(names)
+    for row in rows:
+        for key in row:
+            if key not in seen:
+                seen.add(key)
+                names.append(key)
+    fields = [pa.field(n, FLAT_BASE_TYPES.get(n, pa.string())) for n in names]
+    fields.append(pa.field(LOADED_AT, pa.timestamp("us", tz="UTC")))
+    fields.append(pa.field(LOADED_DATE, pa.string()))
+    return pa.schema(fields)
+
+
+# 팩트의 알갱이는 클릭 한 건이다. 표본 수 (`n_clicks`) 는 여기 두지 않고
+# 집계 함수가 낸다 — 행마다 값이 1인 컬럼은 뜻이 없다.
+FACT_COLUMNS = ("bi_cid", "event_at", "event_date_kst", "card_hash", "card_slug",
+                "card_stage", "card_tier", "card_outlet", "card_surface",
+                "page_location", "device_category", "geo_country")
+
+
+def fact_rows(flat: list[dict]) -> list[dict]:
+    """카드 클릭만 골라 정한 축만 남긴다."""
+    return [{c: row.get(c) for c in FACT_COLUMNS}
+            for row in flat if row.get("event_name") == "bi_card_click"]
+
+
+def dim_date_rows(dates) -> list[dict]:
+    """날짜 축. 공개일로부터 며칠째인지를 함께 담는다."""
+    out = []
+    for iso in sorted({d for d in dates if d}):
+        day = date.fromisoformat(iso)
+        out.append({"date": iso, "weekday": day.isoweekday(),
+                    "days_since_launch": (day - LAUNCH_DATE).days,
+                    "is_launch_day": day == LAUNCH_DATE})
+    return out
+
+
 # 일별 내보내기 표만 고른다. `events_intraday_*` 는 그날이 끝나면 사라지고 완결된
 # 표로 갈리므로 실으면 반쯤 찬 하루가 영구히 남는다.
 EVENTS_TABLE_RE = re.compile(r"^events_(\d{8})$")
@@ -407,6 +555,7 @@ def load_ops(engine, catalog, now: datetime) -> int:
 # --- 행동 기록 (BigQuery -> bronze) ----------------------------------------
 
 GA4_TABLE = "ga4_events"
+GA4_FLAT_TABLE = "ga4_events_flat"
 
 
 def with_load_columns(table: pa.Table, loaded_at: datetime) -> pa.Table:
@@ -423,6 +572,11 @@ def with_load_columns(table: pa.Table, loaded_at: datetime) -> pa.Table:
             .append_column(pa.field(LOADED_DATE, pa.string()),
                            pa.array([loaded_at.date().isoformat()] * n,
                                     type=pa.string())))
+
+
+def flatten_day(arrow: pa.Table) -> list[dict]:
+    """하루치 원본에서 평탄화 · 겹침 접기까지 끝낸 행을 만든다."""
+    return dedupe_events(flatten_rows(arrow.to_pylist()))
 
 
 def loaded_event_dates(table) -> set[str]:
@@ -481,13 +635,70 @@ def load_ga4_events(catalog, now: datetime) -> int:
 
     total = 0
     for day in days:
-        arrow = with_load_columns(_bq_read_day(dataset, f"events_{day}"), now)
+        raw = _bq_read_day(dataset, f"events_{day}")
+        arrow = with_load_columns(raw, now)
         table = ensure_table(catalog, GA4_TABLE, arrow.schema,
                              namespace=BEHAVIOR_NS)
         table.append(arrow)
-        log.info("%s — %s %d행 적재", GA4_TABLE, day, arrow.num_rows)
+
+        # 평탄화본은 원본에서 파생한다. 모양이 마음에 안 들면 통째로 지우고
+        # 원본에서 다시 만들 수 있다 (설계 §3.3).
+        flat = flatten_day(raw)
+        schema = flat_schema(flat)
+        flat_table = ensure_table(catalog, GA4_FLAT_TABLE, schema,
+                                  namespace=BEHAVIOR_NS)
+        flat_table.append(to_arrow(flat, schema, loaded_at=now))
+
+        log.info("%s — %s 원본 %d행 · 평탄화 %d행 적재",
+                 GA4_TABLE, day, arrow.num_rows, len(flat))
         total += arrow.num_rows
     return total
+
+
+FACT_TABLE = "fact_card_click"
+DIM_DATE_TABLE = "dim_date"
+
+_FACT_TYPES = {"event_at": pa.timestamp("us", tz="UTC")}
+_DIM_DATE_TYPES = {"date": pa.string(), "weekday": pa.int32(),
+                   "days_since_launch": pa.int32(), "is_launch_day": pa.bool_()}
+
+
+def _typed_schema(names, types: dict) -> pa.Schema:
+    fields = [pa.field(n, types.get(n, pa.string())) for n in names]
+    fields.append(pa.field(LOADED_AT, pa.timestamp("us", tz="UTC")))
+    fields.append(pa.field(LOADED_DATE, pa.string()))
+    return pa.schema(fields)
+
+
+def build_gold(catalog, now: datetime) -> int:
+    """평탄화본 전량에서 팩트와 날짜 디멘션을 다시 세운다.
+
+    덧붙이지 않고 갈아 끼운다 — 원본이 남아 있어 언제든 다시 만들 수 있고,
+    그래야 겹침 접기 규칙을 고쳤을 때 옛 결과가 안 남는다.
+
+    기사 · 선수 디멘션은 `mart_history` 에 이미 있어 새로 만들지 않고 참조한다
+    (설계 §3.5).
+    """
+    from pyiceberg.exceptions import NoSuchTableError
+
+    try:
+        flat_table = catalog.load_table(f"{BEHAVIOR_NS}.{GA4_FLAT_TABLE}")
+    except NoSuchTableError:
+        log.info("%s — 평탄화본이 아직 없다", FACT_TABLE)
+        return 0
+
+    flat = flat_table.scan().to_arrow().to_pylist()
+    facts = fact_rows(flat)
+    dims = dim_date_rows(r.get("event_date_kst") for r in flat)
+
+    for name, rows, names, types in (
+            (FACT_TABLE, facts, FACT_COLUMNS, _FACT_TYPES),
+            (DIM_DATE_TABLE, dims, tuple(_DIM_DATE_TYPES), _DIM_DATE_TYPES)):
+        schema = _typed_schema(names, types)
+        table = ensure_table(catalog, name, schema, namespace=BEHAVIOR_NS)
+        table.overwrite(to_arrow(rows, schema, loaded_at=now))
+        log.info("%s — %d행 갈아 끼움", name, len(rows))
+    return len(facts)
 
 
 def compact(table) -> dict:
@@ -609,6 +820,7 @@ def run_load(now: datetime | None = None) -> None:
     # 이미 끝났으므로 회차를 통째로 죽이지 않는다.
     try:
         load_ga4_events(catalog, now)
+        build_gold(catalog, now)
     except Exception:
         log.warning("행동 기록 적재 실패 — 마트 이력 적재는 끝났다", exc_info=True)
 
