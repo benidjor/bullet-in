@@ -22,7 +22,8 @@ from bullet_in.enrich import (enrich_rows, classify_stage_rows, resummarize_rows
 from bullet_in.tone import select_tone_backfill
 from bullet_in import transfer_stage
 from bullet_in import roster
-from bullet_in.serve.render import (write_site, write_ops, unmatched_articles,
+from bullet_in.serve.render import (write_site, write_ops, write_behavior,
+                                    unmatched_articles,
                                     mask_other_people, mask_ambiguous)
 from bullet_in.quality import (success_rate, volume_anomalies, evaluate_freshness,
                                evaluate_coverage, candidate_cliffs, filter_miss_suspects,
@@ -559,6 +560,14 @@ async def main(concurrency: int):
     except Exception:
         logging.getLogger(__name__).warning(
             "ops 뷰 생성 실패 — 파이프라인은 계속 진행", exc_info=True)
+
+    # 행동 지표 (behavior.html): 웨어하우스 타이머가 떨어뜨린 집계를 읽어 그린다.
+    # 그 타이머는 회차와 따로 도므로 파일이 없을 수 있고, 없으면 안 그리고 넘어간다.
+    try:
+        write_behavior("state/behavior_metrics.json", "site")
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "행동 지표 뷰 생성 실패 — 파이프라인은 계속 진행", exc_info=True)
 
     # dbt 품질 게이트 (설계 2026-08-31): 마트가 이번 회차 행을 담은 뒤에 돌린다.
     # 차단 사유가 있으면 여기서 회차가 실패로 끝나고, systemd 가 ExecStartPost
