@@ -30,8 +30,13 @@
 
 `.env` 의 `GOOGLE_APPLICATION_CREDENTIALS` 는 백업 계정을 가리킨다.
 백업 계정에는 객체를 지울 권한이 없다.
-유지보수는 파일을 지워야 하므로 변경 이력 유닛 둘만 `Environment=` 로 자기 계정을 덮어쓴다.
-자격을 옮길 일이 생기면 `.env` 가 아니라 그 두 줄을 고친다.
+유지보수는 파일을 지워야 하므로 변경 이력 유닛 둘만 자기 계정을 쓴다.
+자격을 옮길 일이 생기면 `.env` 가 아니라 두 유닛의 `ExecStart=` 를 고친다.
+
+**`Environment=` 로는 못 덮는다.**
+systemd 가 `EnvironmentFile=` 을 나중에 읽어 `Environment=` 로 지정한 값을 덮어쓰기 때문이다.
+줄 순서를 바꿔도 결과가 같아서 `ExecStart=` 를 `/usr/bin/env` 로 감쌌다.
+이것을 모르고 `Environment=` 로 적었다가 유닛이 백업 계정으로 붙어 403 `USER_PROJECT_DENIED` 가 났다.
 
 ## 손으로 돌리고 쌓인 것을 보는 법
 
