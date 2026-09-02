@@ -21,6 +21,7 @@ dependencies = [
   "python-dateutil>=2.9",
   "pyiceberg[sql-sqlite]>=0.11,<0.12",  # 이력 레이크하우스 — 커밋 API 가 마이너 사이에 바뀐다
   "pyarrow>=17",                        # Iceberg 가 Parquet 만 받는다 (Lakehouse 카탈로그 제약)
+  "google-cloud-bigquery>=3.25",        # 행동 기록 원본 — storage 패키지 없이 REST 로 중첩까지 받는다
   "dbt-duckdb>=1.8",
 ]
 

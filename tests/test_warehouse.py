@@ -208,6 +208,61 @@ def test_큰_것과_작은_것이_섞이면_작은_것만_고른다():
     assert sorted(warehouse.files_to_compact(mixed)) == ["s1.parquet", "s2.parquet"]
 
 
+# --- 행동 기록 · 실을 날짜 판정 ---------------------------------------------
+
+def test_일별_표에서_날짜만_뽑는다():
+    got = warehouse.event_dates_of(["events_20260901", "events_20260828"])
+    assert got == ["20260828", "20260901"]
+
+
+def test_반쯤_찬_당일_표는_거른다():
+    # GA4 가 스트리밍 내보내기를 켜면 events_intraday_* 를 만든다. 그날이 끝나면
+    # 사라지고 완결된 표로 갈리므로 실으면 반쯤 찬 하루가 영구히 남는다.
+    got = warehouse.event_dates_of(["events_20260901", "events_intraday_20260902"])
+    assert got == ["20260901"]
+
+
+def test_이벤트_표가_아닌_이름은_무시한다():
+    assert warehouse.event_dates_of(["pseudonymous_users_20260901", "sessions"]) == []
+
+
+def test_이미_실은_날짜는_대상에서_빠진다():
+    got = warehouse.dates_to_load(["20260828", "20260829", "20260901"],
+                                  {"20260828", "20260901"})
+    assert got == ["20260829"]
+
+
+def test_실을_날짜는_오래된_것부터다():
+    got = warehouse.dates_to_load(["20260901", "20260824"], set())
+    assert got == ["20260824", "20260901"]
+
+
+def test_다_실었으면_대상이_없다():
+    assert warehouse.dates_to_load(["20260901"], {"20260901"}) == []
+
+
+# --- 행동 기록 · 적재 시각 컬럼 ---------------------------------------------
+
+def test_중첩을_지키면서_적재_컬럼을_붙인다():
+    # 중첩 컬럼을 행 딕셔너리로 되돌리지 않는 것이 요점이다 — 되돌리면
+    # event_params 배열이 뭉개진다.
+    params = pa.array([[{"key": "card_hash", "value": {"string_value": "abc"}}]],
+                      type=pa.list_(pa.struct([
+                          ("key", pa.string()),
+                          ("value", pa.struct([("string_value", pa.string())]))])))
+    src = pa.table({"event_date": pa.array(["20260901"]), "event_params": params})
+    got = warehouse.with_load_columns(src, _t(2026, 9, 2, 3))
+    assert got.column(warehouse.LOADED_DATE).to_pylist() == ["2026-09-02"]
+    assert got.column("event_params").to_pylist()[0][0]["key"] == "card_hash"
+    assert got.num_rows == 1
+
+
+def test_적재_컬럼은_행마다_같은_값이다():
+    src = pa.table({"event_date": pa.array(["20260901", "20260901"])})
+    got = warehouse.with_load_columns(src, _t(2026, 9, 2, 3))
+    assert got.column(warehouse.LOADED_AT).to_pylist() == [_t(2026, 9, 2, 3)] * 2
+
+
 # --- 카탈로그 · 테이블 (로컬 파일시스템) -------------------------------------
 
 @pytest.fixture
@@ -249,6 +304,25 @@ def test_메타데이터_정리_속성이_붙는다(local_catalog):
     t = warehouse.ensure_table(local_catalog, "t", _schema())
     assert t.properties["write.metadata.delete-after-commit.enabled"] == "true"
     assert int(t.properties["write.metadata.previous-versions-max"]) >= 1
+
+
+def test_다른_네임스페이스에_같은_이름의_표를_따로_만든다(local_catalog):
+    # mart_history 와 behavior 가 이름이 겹쳐도 서로를 덮지 않아야 한다.
+    warehouse.ensure_namespace(local_catalog, warehouse.BEHAVIOR_NS)
+    a = warehouse.ensure_table(local_catalog, "t", _schema())
+    b = warehouse.ensure_table(local_catalog, "t", _schema(),
+                               namespace=warehouse.BEHAVIOR_NS)
+    assert a.name() != b.name()
+
+
+def test_표_목록은_네임스페이스마다_따로_센다(local_catalog):
+    warehouse.ensure_namespace(local_catalog, warehouse.BEHAVIOR_NS)
+    warehouse.ensure_table(local_catalog, "only_mart", _schema())
+    warehouse.ensure_table(local_catalog, "only_behavior", _schema(),
+                           namespace=warehouse.BEHAVIOR_NS)
+    assert warehouse._existing_tables(local_catalog) == ["only_mart"]
+    assert warehouse._existing_tables(
+        local_catalog, warehouse.BEHAVIOR_NS) == ["only_behavior"]
 
 
 # --- 적재 -------------------------------------------------------------------
@@ -410,3 +484,51 @@ def test_하루1회_판정이_스냅샷_적재를_따라간다(local_catalog, fa
     plans = warehouse.plans_for(_t(2026, 9, 2, 12),
                                 warehouse._last_daily_at(local_catalog))
     assert [p.table for p in plans] == ["articles_changes"]
+
+
+# --- 행동 기록 · 적재 -------------------------------------------------------
+
+@pytest.fixture
+def fake_ga4(monkeypatch):
+    """BigQuery 자리에 메모리 위의 하루치를 둔다.
+
+    재려는 것은 BigQuery 가 아니라 적재 경로다 — 어느 날짜를 고르고, 두 번 돌면
+    어떻게 되는지. Iceberg 쪽은 진짜로 돈다.
+    """
+    state = {"days": {}}
+
+    def _list(dataset):
+        return sorted(f"events_{d}" for d in state["days"])
+
+    def _read(dataset, table_id):
+        day = table_id.removeprefix("events_")
+        n = state["days"][day]
+        return pa.table({"event_date": pa.array([day] * n),
+                         "event_name": pa.array(["bi_card_click"] * n)})
+
+    monkeypatch.setattr(warehouse, "_bq_table_ids", _list)
+    monkeypatch.setattr(warehouse, "_bq_read_day", _read)
+    monkeypatch.setenv("GA4_DATASET", "p.d")
+    return state
+
+
+def test_아직_안_실은_날짜만_실린다(local_catalog, fake_ga4):
+    fake_ga4["days"] = {"20260901": 3}
+    assert warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3)) == 3
+    fake_ga4["days"]["20260902"] = 2
+    assert warehouse.load_ga4_events(local_catalog, _t(2026, 9, 3, 3)) == 2
+    t = local_catalog.load_table(f"{warehouse.BEHAVIOR_NS}.{warehouse.GA4_TABLE}")
+    assert t.scan().to_arrow().num_rows == 5
+
+
+def test_같은_날을_두_번_실어도_행이_안_는다(local_catalog, fake_ga4):
+    fake_ga4["days"] = {"20260901": 3}
+    warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3))
+    assert warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 12)) == 0
+    t = local_catalog.load_table(f"{warehouse.BEHAVIOR_NS}.{warehouse.GA4_TABLE}")
+    assert t.scan().to_arrow().num_rows == 3
+
+
+def test_설정이_없으면_조용히_넘어간다(local_catalog, fake_ga4, monkeypatch):
+    monkeypatch.delenv("GA4_DATASET")
+    assert warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3)) == 0

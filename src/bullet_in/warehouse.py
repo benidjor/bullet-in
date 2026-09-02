@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -22,6 +23,8 @@ from sqlalchemy import text
 log = logging.getLogger(__name__)
 
 NAMESPACE = "mart_history"
+# 행동 기록은 성격이 달라 같은 이름 아래 두면 이름과 내용이 어긋난다 (설계 §3.1).
+BEHAVIOR_NS = "behavior"
 
 # 스냅샷을 며칠까지 매일 남기나. 이후는 주 1회만 남긴다 (설계 §3.4).
 SNAPSHOT_DAILY_DAYS = 90
@@ -66,6 +69,26 @@ def plans_for(now: datetime,
     if last_daily_at is None or last_daily_at.date() != now.date():
         plans.extend(_DAILY)
     return tuple(plans)
+
+
+# 일별 내보내기 표만 고른다. `events_intraday_*` 는 그날이 끝나면 사라지고 완결된
+# 표로 갈리므로 실으면 반쯤 찬 하루가 영구히 남는다.
+EVENTS_TABLE_RE = re.compile(r"^events_(\d{8})$")
+
+
+def event_dates_of(table_ids) -> list[str]:
+    """내보내기 표 이름 목록에서 날짜만 오름차순으로 뽑는다."""
+    return sorted(m.group(1) for t in table_ids
+                  if (m := EVENTS_TABLE_RE.match(t)))
+
+
+def dates_to_load(available: list[str], loaded: set[str]) -> list[str]:
+    """아직 안 실은 날짜를 오래된 것부터.
+
+    상태 파일을 두지 않는다 — 실린 결과 자체가 워터마크라 둘이 어긋날 수 없다
+    (`read_watermark` 와 같은 규율).
+    """
+    return [d for d in sorted(available) if d not in loaded]
 
 
 # information_schema.DATA_TYPE 이 주는 이름에서 Arrow 타입으로.
@@ -238,24 +261,25 @@ def load_catalog():
     })
 
 
-def ensure_namespace(catalog) -> None:
+def ensure_namespace(catalog, namespace: str = NAMESPACE) -> None:
     """네임스페이스를 멱등하게 만든다."""
     from pyiceberg.exceptions import NamespaceAlreadyExistsError
     try:
-        catalog.create_namespace(NAMESPACE)
+        catalog.create_namespace(namespace)
     except NamespaceAlreadyExistsError:
         pass
 
 
-def ensure_table(catalog, name: str, schema):
+def ensure_table(catalog, name: str, schema, namespace: str = NAMESPACE):
     """테이블을 멱등하게 만들고 돌려준다.
 
-    원본에 컬럼이 늘어나는 저장소라 (`schema.sql` 이 ALTER 를 계속 더한다)
-    있는 테이블에는 union_by_name 으로 새 컬럼을 붙인다.
+    원본에 컬럼이 늘어나는 저장소라 (`schema.sql` 이 ALTER 를 계속 더하고,
+    행동 기록은 계측이 새 키를 심는다) 있는 테이블에는 union_by_name 으로
+    새 컬럼을 붙인다.
     """
     from pyiceberg.exceptions import NoSuchTableError
 
-    ident = f"{NAMESPACE}.{name}"
+    ident = f"{namespace}.{name}"
     try:
         table = catalog.load_table(ident)
     except NoSuchTableError:
@@ -380,6 +404,92 @@ def load_ops(engine, catalog, now: datetime) -> int:
 
 # --- 유지보수 (부수효과) ----------------------------------------------------
 
+# --- 행동 기록 (BigQuery -> bronze) ----------------------------------------
+
+GA4_TABLE = "ga4_events"
+
+
+def with_load_columns(table: pa.Table, loaded_at: datetime) -> pa.Table:
+    """중첩을 그대로 둔 채 적재 시각 두 컬럼만 덧붙인다.
+
+    `to_arrow()` 를 쓰지 않는다 — 그쪽은 행 딕셔너리에서 세우는 길이라
+    `event_params` 배열과 `device` 레코드가 뭉개진다.
+    """
+    n = table.num_rows
+    ts = pa.timestamp("us", tz="UTC")
+    return (table
+            .append_column(pa.field(LOADED_AT, ts),
+                           pa.array([loaded_at] * n, type=ts))
+            .append_column(pa.field(LOADED_DATE, pa.string()),
+                           pa.array([loaded_at.date().isoformat()] * n,
+                                    type=pa.string())))
+
+
+def loaded_event_dates(table) -> set[str]:
+    """이미 실린 날짜. 비어 있으면 빈 집합이다."""
+    scan = table.scan(selected_fields=("event_date",)).to_arrow()
+    if scan.num_rows == 0:
+        return set()
+    return set(scan.column("event_date").to_pylist())
+
+
+def _bq_client():
+    """읽기 전용 BigQuery 클라이언트.
+
+    자격은 `GOOGLE_APPLICATION_CREDENTIALS` 가 가리키는 서비스 계정이고,
+    그 계정은 `bullet-in-analytics` 에 `bigquery.dataViewer` 를 받아 두었다.
+    """
+    from google.cloud import bigquery
+    return bigquery.Client(project=os.environ.get("GA4_BILLING_PROJECT")
+                           or "bullet-in-lakehouse")
+
+
+def _bq_table_ids(dataset: str) -> list[str]:
+    return [t.table_id for t in _bq_client().list_tables(dataset)]
+
+
+def _bq_read_day(dataset: str, table_id: str) -> pa.Table:
+    return _bq_client().list_rows(f"{dataset}.{table_id}").to_arrow()
+
+
+def load_ga4_events(catalog, now: datetime) -> int:
+    """아직 안 실은 날짜를 오래된 것부터 원본 그대로 넣는다.
+
+    `GA4_DATASET` 이 없으면 아무것도 안 한다 — 개발 환경에는 이 설정이 없고,
+    없다는 것이 고장은 아니다.
+    """
+    dataset = os.environ.get("GA4_DATASET")
+    if not dataset:
+        log.info("%s — GA4_DATASET 이 없어 넘어간다", GA4_TABLE)
+        return 0
+
+    from pyiceberg.exceptions import NoSuchTableError
+
+    # 자기 표를 담을 자리는 자기가 챙긴다 — 부르는 쪽 순서에 기대면 이 함수만
+    # 따로 돌릴 수 없다.
+    ensure_namespace(catalog, BEHAVIOR_NS)
+    try:
+        loaded = loaded_event_dates(
+            catalog.load_table(f"{BEHAVIOR_NS}.{GA4_TABLE}"))
+    except NoSuchTableError:
+        loaded = set()
+
+    days = dates_to_load(event_dates_of(_bq_table_ids(dataset)), loaded)
+    if not days:
+        log.info("%s — 새로 실을 날짜가 없다 (실린 날 %d일)", GA4_TABLE, len(loaded))
+        return 0
+
+    total = 0
+    for day in days:
+        arrow = with_load_columns(_bq_read_day(dataset, f"events_{day}"), now)
+        table = ensure_table(catalog, GA4_TABLE, arrow.schema,
+                             namespace=BEHAVIOR_NS)
+        table.append(arrow)
+        log.info("%s — %s %d행 적재", GA4_TABLE, day, arrow.num_rows)
+        total += arrow.num_rows
+    return total
+
+
 def compact(table) -> dict:
     """조각난 데이터 파일을 한 파일로 다시 쓴다.
 
@@ -442,7 +552,7 @@ def drop_old_snapshot_dates(table, today: date) -> int:
     return len(drop)
 
 
-def _existing_tables(catalog) -> list[str]:
+def _existing_tables(catalog, namespace: str = NAMESPACE) -> list[str]:
     """네임스페이스 안의 테이블 이름. 아직 아무것도 없으면 빈 목록이다.
 
     네임스페이스가 없는 것은 고장이 아니라 「아직 한 번도 안 실었다」 는 뜻이다.
@@ -452,7 +562,7 @@ def _existing_tables(catalog) -> list[str]:
     from pyiceberg.exceptions import NoSuchNamespaceError
 
     try:
-        return [t[-1] for t in catalog.list_tables(NAMESPACE)]
+        return [t[-1] for t in catalog.list_tables(namespace)]
     except NoSuchNamespaceError:
         return []
 
@@ -463,17 +573,19 @@ def run_maintenance(now: datetime | None = None) -> None:
 
     now = now or datetime.now(timezone.utc)
     catalog = load_catalog()
-    for name in _existing_tables(catalog):
-        try:
-            table = catalog.load_table(f"{NAMESPACE}.{name}")
-        except NoSuchTableError:
-            continue
-        if name.endswith("_snapshot"):
-            drop_old_snapshot_dates(table, now.date())
-        compact(table)
-        expire(table, now)
-        # 남은 스냅샷 수를 남긴다 — 1 MB 한도까지 얼마나 남았는지 보는 눈이다.
-        log.info("%s — 남은 스냅샷 %d개", name, len(table.metadata.snapshots))
+    for ns in (NAMESPACE, BEHAVIOR_NS):
+        for name in _existing_tables(catalog, ns):
+            try:
+                table = catalog.load_table(f"{ns}.{name}")
+            except NoSuchTableError:
+                continue
+            if name.endswith("_snapshot"):
+                drop_old_snapshot_dates(table, now.date())
+            compact(table)
+            expire(table, now)
+            # 남은 스냅샷 수를 남긴다 — 1 MB 한도까지 얼마나 남았는지 보는 눈이다.
+            log.info("%s.%s — 남은 스냅샷 %d개", ns, name,
+                     len(table.metadata.snapshots))
 
 
 def run_load(now: datetime | None = None) -> None:
@@ -493,6 +605,13 @@ def run_load(now: datetime | None = None) -> None:
         else:
             load_ops(engine, catalog, now)
 
+    # 행동 기록은 출처가 다르고 하루 늦게 도착한다. 여기서 실패해도 위의 적재는
+    # 이미 끝났으므로 회차를 통째로 죽이지 않는다.
+    try:
+        load_ga4_events(catalog, now)
+    except Exception:
+        log.warning("행동 기록 적재 실패 — 마트 이력 적재는 끝났다", exc_info=True)
+
 
 def run_show() -> None:
     """쌓인 테이블의 행 수 · 파일 수 · 남은 스냅샷 수를 보여 준다.
@@ -501,13 +620,14 @@ def run_show() -> None:
     뒤는 만료가 도는지를 말해 준다.
     """
     catalog = load_catalog()
-    for name in sorted(_existing_tables(catalog)):
-        t = catalog.load_table(f"{NAMESPACE}.{name}")
-        files = list(t.scan().plan_files())
-        size = sum(f.file.file_size_in_bytes for f in files)
-        print(f"{name:28} {t.scan().to_arrow().num_rows:>8,}행  "
-              f"파일 {len(files):>3}개  {size:>12,}B  "
-              f"스냅샷 {len(t.metadata.snapshots):>3}개")
+    for ns in (NAMESPACE, BEHAVIOR_NS):
+        for name in sorted(_existing_tables(catalog, ns)):
+            t = catalog.load_table(f"{ns}.{name}")
+            files = list(t.scan().plan_files())
+            size = sum(f.file.file_size_in_bytes for f in files)
+            print(f"{ns}.{name:28} {t.scan().to_arrow().num_rows:>8,}행  "
+                  f"파일 {len(files):>3}개  {size:>12,}B  "
+                  f"스냅샷 {len(t.metadata.snapshots):>3}개")
 
 
 if __name__ == "__main__":

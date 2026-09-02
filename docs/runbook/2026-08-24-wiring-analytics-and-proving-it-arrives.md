@@ -369,7 +369,66 @@ tbl = bigquery.Client(project="bullet-in-analytics").list_rows(
 - **지출을 막지 않는다.** 넘어도 서비스는 그대로 돌고 메일만 온다.
 - 만든 뒤 임계값과 수신자를 화면에서 한 번 확인한다.
 
-## 7. 참조
+## 7. 우리 레이크하우스로 들일 때 미리 확인한 것 (2026-09-03)
+
+행동 기록을 Iceberg 로 옮기는 설계는 세 가지를 확인하지 않은 채 끝났다.
+구현에 들어가기 전에 셋을 한 번에 재고 그 결과를 여기 남긴다.
+
+### 7.1. 프로젝트를 건너 읽는 권한
+
+적재를 도는 서비스 계정은 `bullet-in-lakehouse` 프로젝트의 것이고 내보내기는 `bullet-in-analytics` 에 있다.
+역할 둘을 붙여야 한다.
+
+```bash
+gcloud projects add-iam-policy-binding bullet-in-analytics \
+  --member=serviceAccount:bullet-in-lakehouse@bullet-in-lakehouse.iam.gserviceaccount.com \
+  --role=roles/bigquery.dataViewer
+```
+
+`roles/bigquery.jobUser` 도 같은 방식으로 붙인다.
+붙었는지는 정책에서 되읽어 확인한다.
+
+```bash
+gcloud projects get-iam-policy bullet-in-analytics \
+  --flatten=bindings[].members \
+  --filter=bindings.members:bullet-in-lakehouse@bullet-in-lakehouse.iam.gserviceaccount.com \
+  --format='value(bindings.role)'
+```
+
+두 줄이 나와야 한다.
+`add-iam-policy-binding` 은 성공하면 정책 전문을 그대로 뱉어서 어느 역할이 붙었는지가 출력에 안 드러난다.
+그래서 붙이는 명령의 성공 여부가 아니라 되읽은 목록으로 판정한다.
+
+### 7.2. 잰 값 셋
+
+VM 에서 서비스 계정으로 돌려 확인했다.
+로컬에서 돌리면 사용자 계정이 쓰이므로 권한을 재는 뜻이 없다.
+
+| 확인한 것 | 값 |
+| --- | --- |
+| 서비스 계정으로 표 목록 읽기 | 6개 |
+| 하루치 읽기 | 821행 · 31컬럼 |
+| 중첩 구조를 카탈로그에 커밋 | 821행 그대로 들어갔다 |
+| 스키마 진화 | `union_by_name` 뒤 31 → 32컬럼 · 다시 실어 1,642행 |
+| arm64 VM 의 패키지 설치 | `google-cloud-bigquery` 가 전이 의존 26개와 함께 붙었다 |
+
+`event_params` 배열과 `device` · `geo` · `traffic_source` 레코드가 형태를 잃지 않고 커밋됐다.
+설계가 대비책으로 적어 둔 「평탄화된 형태로만 받기」 는 쓸 일이 없다.
+
+### 7.3. 표를 지워도 파일은 남는다
+
+시험용 표를 `drop_table` 로 지운 뒤 저장소를 보니 객체 10개 · 385,590 바이트가 그대로 있었다.
+카탈로그에서 이름만 사라지고 데이터 파일과 메타데이터는 남는다.
+
+```bash
+gcloud storage ls -r "gs://bullet-in-lakehouse-prod/<네임스페이스>/**"
+gcloud storage rm -r "gs://bullet-in-lakehouse-prod/<네임스페이스>"
+```
+
+시험 삼아 만든 표는 지운 뒤 저장소까지 확인한다.
+안 그러면 아무도 안 읽는 파일에 요금이 계속 붙고, 무료 구간 안이라 청구서로도 안 드러난다.
+
+## 8. 참조
 
 - 도착을 못 본 경위 — `docs/troubleshooting/2026-08-24-we-called-gtag-and-nothing-arrived.md`
 - 회차 반영 · 배포 — `docs/runbook/2026-07-20-vm-cohost-bootstrap.md` §6.1
