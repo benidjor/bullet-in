@@ -217,7 +217,134 @@ bq query --project_id=bullet-in-analytics --use_legacy_sql=false \
 MariaDB 에서 읽어 pyarrow 로 바꾸고 `us-central1` 의 Iceberg 에 쓴다.
 출처를 BigQuery 로 하나 더 늘리면 되고, 그래서 버킷 리전을 옮길 이유가 없다.
 
-**아직 안 잰 것** — BigQuery 에서 GCP 밖으로 나가는 이그레스 요금이다. 월 66 MiB 규모라 작을 것으로 보이지만 과금 원장으로 확인해야 한다 (`docs/runbook/2026-09-02-reading-gcp-prices-from-the-billing-catalog.md`).
+**이그레스 요금은 2026-09-02 에 쟀다** (아래 5.11).
+
+### 5.8. 무엇이 얼마나 쌓였는지 세는 조회 (2026-09-03 추가)
+
+먼저 이벤트 종류와 건수를 본다.
+
+```bash
+bq --project_id=bullet-in-analytics query --use_legacy_sql=false --format=pretty \
+  'SELECT event_name, COUNT(*) AS n
+   FROM `bullet-in-analytics.analytics_551139164.events_*`
+   GROUP BY event_name ORDER BY n DESC'
+```
+
+2026-09-02 기준으로 10종이 나왔고 우리가 심은 `bi_` 로 시작하는 넷은 4,007건으로 전체의 31% 였다.
+나머지는 향상된 측정이 자동으로 붙이는 것이다.
+
+파라미터 키와 그 타입 분포는 이렇게 본다.
+
+```bash
+bq --project_id=bullet-in-analytics query --use_legacy_sql=false --format=pretty \
+  'SELECT p.key, COUNT(*) AS n,
+          COUNTIF(p.value.string_value IS NOT NULL) AS s,
+          COUNTIF(p.value.int_value IS NOT NULL) AS i,
+          COUNTIF(p.value.double_value IS NOT NULL) AS d
+   FROM `bullet-in-analytics.analytics_551139164.events_*`, UNNEST(event_params) AS p
+   GROUP BY p.key ORDER BY n DESC'
+```
+
+키는 39개였고 **둘은 같은 키가 두 타입으로 온다.**
+`session_engaged` 는 문자열 12,231건과 정수 804건이고, `card_tier` 는 정수 406건과 실수 41건이다.
+키마다 타입을 정하려 들면 이런 예외를 손으로 다뤄야 하므로, 평탄화할 때는 값을 전부 문자열로 모으고 숫자로 쓸 때만 변환한다.
+
+**한글 별칭을 쓰면 질의가 깨진다.**
+`COUNT(*) AS 전체` 처럼 적으면 `Illegal input character` 가 나므로 별칭은 영문으로 둔다.
+
+### 5.9. 조인 키가 빈 행의 원인은 표면 종류다
+
+`bi_card_click` 의 `card_hash` 가 74% 에만 있어 처음에는 「조인하면 4분의 1이 사라진다」 로 읽었다.
+어느 화면에서 눌렸는지로 나눠 보니 사라지는 것이 아니었다.
+
+```bash
+bq --project_id=bullet-in-analytics query --use_legacy_sql=false --format=pretty \
+  'SELECT (SELECT value.string_value FROM UNNEST(event_params) WHERE key="card_surface") AS surface,
+          COUNT(*) AS n,
+          COUNTIF((SELECT value.string_value FROM UNNEST(event_params) WHERE key="card_hash") IS NOT NULL) AS with_hash
+   FROM `bullet-in-analytics.analytics_551139164.events_*`
+   WHERE event_name="bi_card_click" GROUP BY surface ORDER BY n DESC'
+```
+
+| 표면 | 건수 | 정체 |
+| --- | --- | --- |
+| `item` | 432 | 기사 카드 · 해시 전량 보유 |
+| `mitem` | 88 | 홈의 주요 소식 항목 · **PR #437 에서 고쳤다** |
+| `pcard` | 48 | 선수 카드 · 기사가 아니라 원래 없는 것이 맞다 |
+| `relitem` | 15 | 템플릿에 주석으로만 남은 옛 마크업 |
+| `tltitle` | 4 | 선수 페이지 타임라인 제목 · **PR #437 에서 고쳤다** |
+
+**`relitem` 이 알려 주는 것이 중요하다.**
+지금 화면에 없는 마크업이 기록에는 살아 있다.
+행동 기록은 과거 배포본의 흔적을 담으므로 **표면 값의 목록을 코드에 박으면 안 된다.**
+
+### 5.10. 같은 행동이 두 번 도착한다
+
+우리 계측 4,007건에서 51건이 겹친다.
+
+```bash
+bq --project_id=bullet-in-analytics query --use_legacy_sql=false --format=pretty \
+  'WITH e AS (SELECT event_name, user_pseudo_id, event_timestamp,
+       (SELECT value.string_value FROM UNNEST(event_params) WHERE key="bi_cid") AS bi_cid,
+       (SELECT value.string_value FROM UNNEST(event_params) WHERE key="bi_ts") AS bi_ts
+     FROM `bullet-in-analytics.analytics_551139164.events_*` WHERE event_name LIKE "bi_%")
+   SELECT COUNT(*) AS total,
+          COUNT(DISTINCT FORMAT("%s|%s|%s", bi_cid, bi_ts, event_name)) AS uniq_cid_ts,
+          COUNT(DISTINCT FORMAT("%s|%d|%s", user_pseudo_id, event_timestamp, event_name)) AS uniq_pseudo_ts
+   FROM e'
+```
+
+겹친 행들은 클라이언트 · 클라이언트 시각 · 페이지가 모두 같고 GA4 의 수집 시각만 다르다.
+같은 행동이 두 번 도착한 것이다.
+
+**그래서 `user_pseudo_id` 와 수집 시각은 중복 판정에 쓸 수 없다.**
+같은 행동이 서로 다른 시각으로 오므로 겹침을 못 잡는다.
+우리가 심은 `bi_cid` 와 `bi_ts` 가 자연키 노릇을 하고, `bi_cid` 는 4,007건 전량에 있다.
+
+### 5.11. 나가는 데이터의 양과 요금을 재는 법
+
+BigQuery 에서 GCP 밖으로 행을 읽어 오면 이그레스 요금이 붙는다.
+**응답이 압축되므로 압축 전후를 둘 다 재야 실제 과금 대상을 안다.**
+
+```bash
+TOKEN=$(gcloud auth print-access-token)
+BASE=https://bigquery.googleapis.com/bigquery/v2/projects/bullet-in-analytics
+TBL=datasets/analytics_551139164/tables/events_20260901/data
+
+curl -s -o /dev/null -w '%{size_download}\n' -H "Authorization: Bearer $TOKEN" "$BASE/$TBL?maxResults=100000"
+curl -s -o /dev/null --compressed -w '%{size_download}\n' -H "Authorization: Bearer $TOKEN" "$BASE/$TBL?maxResults=100000"
+```
+
+2026-09-02 에 하루치 821행으로 재니 비압축 11,815,192 바이트 · gzip 228,728 바이트였다.
+**51배로 줄어든다** — GA4 의 JSON 은 빈 칸이 끝없이 반복되는 구조라 그렇다.
+
+읽는 라이브러리 (`google-cloud-bigquery`) 는 gzip 을 기본으로 요청하므로 실제로 나가는 것은 압축된 쪽이다.
+단가는 `within Asia` 기준 165.99 KRW/GiB 이고 무료 구간이 없어서 월 6.7 MiB 면 약 1.1원이다.
+단가를 다시 뽑는 절차는 `docs/runbook/2026-09-02-reading-gcp-prices-from-the-billing-catalog.md` 에 있다.
+
+### 5.12. 파이썬으로 읽을 때는 자격 증명이 따로다
+
+`bq` 명령이 되는 것과 파이썬 라이브러리가 되는 것은 다른 자격 증명을 본다.
+`bq` 는 gcloud 로그인을 쓰고 라이브러리는 Application Default Credentials 를 본다.
+
+```bash
+gcloud auth application-default login     # 브라우저가 한 번 열린다
+```
+
+이것 없이 `bigquery.Client()` 를 만들면 `DefaultCredentialsError` 가 난다.
+운영에서는 서비스 계정 키를 쓰는데, 그 계정은 `bullet-in-lakehouse` 프로젝트에 속해 있어 `bullet-in-analytics` 를 읽을 권한을 따로 붙여야 한다 (`roles/bigquery.dataViewer` 와 `roles/bigquery.jobUser`).
+
+중첩 구조를 그대로 받는 것은 확인했다.
+
+```python
+from google.cloud import bigquery
+tbl = bigquery.Client(project="bullet-in-analytics").list_rows(
+    "bullet-in-analytics.analytics_551139164.events_20260901").to_arrow()
+# 821행 · 31컬럼 · 1.0초 · event_params 배열 보존
+```
+
+**`google-cloud-bigquery-storage` 는 필요 없다.**
+없으면 REST 경로로 받는다는 경고가 뜨지만 중첩까지 정상으로 온다.
 
 ## 6. 예산 알림 — 상한선이 아니라 조기 경보
 

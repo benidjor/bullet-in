@@ -113,7 +113,48 @@ for s in d["skus"]:
    조회 결과가 곧 청구서는 아니다.
    첫 달에는 결제 보고서를 **서비스와 프로젝트 두 기준으로 각각** 보고 대조한다 (`CLAUDE.md` 의 Gemini 비용 절차와 같은 규율).
 
-## 7. 관련 문서
+## 7. 두 번째 적용 — BigQuery 이그레스 (2026-09-03 추가)
+
+행동 기록을 BigQuery 에서 읽어 오는 경로의 요금을 같은 절차로 쟀다.
+서비스 ID 가 다르므로 2절부터 다시 시작한다.
+
+```python
+for s in json.load(open("services.json"))["services"]:
+    if "BigQuery" in s["displayName"]:
+        print(s["serviceId"], s["displayName"])
+```
+
+일곱이 나오고 우리가 쓰는 것은 `24E6-581D-38E5` (`BigQuery`) 다.
+이름에 BigQuery 가 들어간 다른 여섯은 예약 · BI 엔진 · 전송 서비스 등 별개 제품이므로 고르면 안 된다.
+
+SKU 532개에서 이그레스만 추리려면 `resourceGroup` 으로 거른다.
+
+```python
+for s in json.load(open("bq-skus.json"))["skus"]:
+    if "InternetEgress" not in s["category"]["resourceGroup"]:
+        continue
+    regs = s.get("serviceRegions", [])
+    if "asia-northeast3" not in regs and "global" not in regs:
+        continue
+    print(s["description"])
+```
+
+여덟이 남고 우리 경우는 `BigQuery: Network Data Transfer Out Internet Premium within Asia` 다.
+데이터셋이 `asia-northeast3` 이고 읽는 VM 도 서울에 있기 때문이다.
+
+| SKU | 무료 구간 | 단가 |
+| --- | --- | --- |
+| `BigQuery: Network Data Transfer Out Internet Premium within Asia` | **없음** | 165.99 KRW/GiB |
+
+**여기서 앞의 사례와 갈린다.**
+2026-09-02 에 본 Lakehouse · GCS SKU 들은 무료 구간이 `tieredRates` 의 첫 구간 (단가 0) 으로 박혀 있었는데, 이 SKU 는 첫 구간이 0 GiB 부터 165.99 원이다.
+**무료 구간이 있는지는 SKU 마다 확인해야 하고 다른 SKU 에서 본 모양을 옮겨 쓰면 안 된다.**
+
+단가를 알아도 요금은 안 나온다.
+실제로 나가는 바이트를 따로 재야 하고 그 방법은 `docs/runbook/2026-08-24-wiring-analytics-and-proving-it-arrives.md` §5.11 에 있다.
+2026-09-02 실측으로 하루 228,728 바이트 (gzip) 였고 월 6.7 MiB, 약 1.1원이다.
+
+## 8. 관련 문서
 
 - 이 절차로 세운 설계 = `docs/superpowers/specs/2026-09-02-history-lakehouse-design.md` 2절
 - 백업 축의 GCS 사용 = `docs/runbook/2026-09-01-backup-and-restore.md`
