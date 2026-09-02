@@ -52,6 +52,7 @@ document.addEventListener('click', (e) => {
   if (!card) return;
   track('bi_card_click', {
     card_hash: card.dataset.hash || '',
+    card_slug: card.dataset.slug || '',      // 선수 카드는 기사 해시가 없다 — 선수로 잇는다
     card_stage: card.dataset.stage || '',
     card_tier: card.dataset.tier || '',
     card_outlet: card.dataset.outlet || '',

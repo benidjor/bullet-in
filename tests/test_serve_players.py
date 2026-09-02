@@ -961,3 +961,15 @@ def test_timeline_title_carries_the_article_hash_for_click_tracking():
     [e] = build_player_entries(arts, players)
     html = render_player(e, SOURCES, NOW)
     assert re.search(r'class="tltitle"[^>]*data-hash="tlh1"', html)
+
+
+def test_player_card_carries_the_slug_for_click_tracking():
+    """선수 카드에도 선수 식별자를 싣는다 (2026-09-03).
+
+    선수 카드에는 기사 해시가 없어 클릭 48건이 어느 선수인지 모르는 채로 쌓였다.
+    주소에는 이미 slug 가 들어 있어 값을 새로 만들 필요가 없다."""
+    arts = [_art("ph1", 1, "rumour", "스톤스, 아스날 관심")]
+    players = [_player(1, "Stones", "스톤스", "other_club",
+                       [{"content_hash": "ph1", "stage": "rumour"}])]
+    html = render_players(build_player_entries(arts, players), NOW)
+    assert re.search(r'class="pcard[^"]*"[^>]*data-slug="stones"', html)

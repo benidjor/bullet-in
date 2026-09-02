@@ -13,7 +13,7 @@
   <div class="playerlist">
   {% for e in g.members %}
     <a class="pcard{{ ' hasphoto' if e._photo }}" href="player/{{ e.slug }}.html"
-       data-last="{{ e._lastkey }}" data-name="{{ e._namekey }}">
+       data-last="{{ e._lastkey }}" data-name="{{ e._namekey }}" data-slug="{{ e.slug }}">
       {# 실패하면 사진 칸을 통째로 걷어낸다 — 안 걷으면 빈 회색 상자가 남는다.
          기사 썸네일 (_cards.html.j2) 과 같은 규약이다. #}
       {% if e._photo %}<span class="pphoto"><img src="{{ e._photo }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.pcard').classList.remove('hasphoto');this.closest('.pphoto').remove()"></span>{% endif %}
