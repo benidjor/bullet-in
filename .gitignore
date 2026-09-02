@@ -1,4 +1,7 @@
-.env
+# 비밀값 — 이름 하나만 막으면 백업 · 변형이 샌다 (2026-09-02 · VM 에 .env.bak.20260823 실물).
+# 이력에 커밋된 .env 계열은 .env.example 템플릿 하나뿐이라 그것만 되돌려 남긴다.
+.env*
+!.env.example
 __pycache__/
 *.pyc
 .venv/
