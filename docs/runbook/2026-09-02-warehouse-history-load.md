@@ -38,6 +38,66 @@ systemd 가 `EnvironmentFile=` 을 나중에 읽어 `Environment=` 로 지정한
 줄 순서를 바꿔도 결과가 같아서 `ExecStart=` 를 `/usr/bin/env` 로 감쌌다.
 이것을 모르고 `Environment=` 로 적었다가 유닛이 백업 계정으로 붙어 403 `USER_PROJECT_DENIED` 가 났다.
 
+## 자원을 처음부터 다시 만들 때
+
+카탈로그를 만드는 명령이 헷갈리는 자리라 적어 둔다.
+
+**REST API 로는 못 만든다.**
+`https://biglake.googleapis.com/v1/projects/.../catalogs` 에 POST 하면 400 이 온다.
+그 v1 API 는 Hive 계열 메타스토어라 Iceberg 카탈로그를 만드는 메서드가 없다.
+
+전용 `gcloud` 명령을 쓴다.
+
+```bash
+gcloud projects create bullet-in-lakehouse --name="bullet-in lakehouse"
+gcloud billing projects link bullet-in-lakehouse --billing-account=01E3C1-098D9D-58E612
+gcloud services enable biglake.googleapis.com storage.googleapis.com --project=bullet-in-lakehouse
+
+gcloud storage buckets create gs://bullet-in-lakehouse-prod \
+  --project=bullet-in-lakehouse --location=us-central1 --uniform-bucket-level-access
+
+gcloud biglake iceberg catalogs create bullet-in-lakehouse-prod \
+  --catalog-type=gcs-bucket --project=bullet-in-lakehouse
+```
+
+**카탈로그 종류가 `warehouse` 값의 형태를 정한다.**
+
+| 종류 | `ICEBERG_WAREHOUSE` |
+| --- | --- |
+| `gcs-bucket` | `gs://<버킷 이름>` · 카탈로그 이름이 곧 버킷 이름이다 |
+| `biglake` (= `lakehouse`) | `bl://projects/<프로젝트>/catalogs/<카탈로그>` |
+
+우리는 `gcs-bucket` 을 쓴다.
+버킷 하나만 쓰므로 다중 버킷 매핑의 이점이 없고, `warehouse.py` 가 `gs://` 를 그대로 받는다.
+
+권한은 이렇게 준다.
+
+```bash
+gcloud iam service-accounts create bullet-in-lakehouse \
+  --project=bullet-in-lakehouse --display-name="bullet-in lakehouse writer"
+
+gcloud projects add-iam-policy-binding bullet-in-lakehouse \
+  --member="serviceAccount:bullet-in-lakehouse@bullet-in-lakehouse.iam.gserviceaccount.com" \
+  --role="roles/biglake.editor"
+
+gcloud storage buckets add-iam-policy-binding gs://bullet-in-lakehouse-prod \
+  --member="serviceAccount:bullet-in-lakehouse@bullet-in-lakehouse.iam.gserviceaccount.com" \
+  --role="roles/storage.objectUser"
+```
+
+공식 문서는 테이블 생성에 `roles/biglake.admin` 이 필요하다고 적었으나 `roles/biglake.editor` 로 충분하다.
+그 역할의 권한 목록에 `tables.create` 와 `namespaces.create` 가 들어 있다 (`gcloud iam roles describe roles/biglake.editor` 로 확인).
+
+**키는 저장소 밖에 둔다.**
+백업 키와 같은 관례로 `/home/ubuntu/.bullet-in-lakehouse.json` 에 놓고 `chmod 600` 을 건다.
+
+접속만 확인하려면 다음이 `prefix` 를 돌려주면 된다.
+
+```bash
+curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  "https://biglake.googleapis.com/iceberg/v1/restcatalog/v1/config?warehouse=gs://bullet-in-lakehouse-prod"
+```
+
 ## 손으로 돌리고 쌓인 것을 보는 법
 
 타이머를 기다리지 않고 한 번 돌리려면 다음을 부른다.
