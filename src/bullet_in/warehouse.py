@@ -404,6 +404,92 @@ def load_ops(engine, catalog, now: datetime) -> int:
 
 # --- 유지보수 (부수효과) ----------------------------------------------------
 
+# --- 행동 기록 (BigQuery -> bronze) ----------------------------------------
+
+GA4_TABLE = "ga4_events"
+
+
+def with_load_columns(table: pa.Table, loaded_at: datetime) -> pa.Table:
+    """중첩을 그대로 둔 채 적재 시각 두 컬럼만 덧붙인다.
+
+    `to_arrow()` 를 쓰지 않는다 — 그쪽은 행 딕셔너리에서 세우는 길이라
+    `event_params` 배열과 `device` 레코드가 뭉개진다.
+    """
+    n = table.num_rows
+    ts = pa.timestamp("us", tz="UTC")
+    return (table
+            .append_column(pa.field(LOADED_AT, ts),
+                           pa.array([loaded_at] * n, type=ts))
+            .append_column(pa.field(LOADED_DATE, pa.string()),
+                           pa.array([loaded_at.date().isoformat()] * n,
+                                    type=pa.string())))
+
+
+def loaded_event_dates(table) -> set[str]:
+    """이미 실린 날짜. 비어 있으면 빈 집합이다."""
+    scan = table.scan(selected_fields=("event_date",)).to_arrow()
+    if scan.num_rows == 0:
+        return set()
+    return set(scan.column("event_date").to_pylist())
+
+
+def _bq_client():
+    """읽기 전용 BigQuery 클라이언트.
+
+    자격은 `GOOGLE_APPLICATION_CREDENTIALS` 가 가리키는 서비스 계정이고,
+    그 계정은 `bullet-in-analytics` 에 `bigquery.dataViewer` 를 받아 두었다.
+    """
+    from google.cloud import bigquery
+    return bigquery.Client(project=os.environ.get("GA4_BILLING_PROJECT")
+                           or "bullet-in-lakehouse")
+
+
+def _bq_table_ids(dataset: str) -> list[str]:
+    return [t.table_id for t in _bq_client().list_tables(dataset)]
+
+
+def _bq_read_day(dataset: str, table_id: str) -> pa.Table:
+    return _bq_client().list_rows(f"{dataset}.{table_id}").to_arrow()
+
+
+def load_ga4_events(catalog, now: datetime) -> int:
+    """아직 안 실은 날짜를 오래된 것부터 원본 그대로 넣는다.
+
+    `GA4_DATASET` 이 없으면 아무것도 안 한다 — 개발 환경에는 이 설정이 없고,
+    없다는 것이 고장은 아니다.
+    """
+    dataset = os.environ.get("GA4_DATASET")
+    if not dataset:
+        log.info("%s — GA4_DATASET 이 없어 넘어간다", GA4_TABLE)
+        return 0
+
+    from pyiceberg.exceptions import NoSuchTableError
+
+    # 자기 표를 담을 자리는 자기가 챙긴다 — 부르는 쪽 순서에 기대면 이 함수만
+    # 따로 돌릴 수 없다.
+    ensure_namespace(catalog, BEHAVIOR_NS)
+    try:
+        loaded = loaded_event_dates(
+            catalog.load_table(f"{BEHAVIOR_NS}.{GA4_TABLE}"))
+    except NoSuchTableError:
+        loaded = set()
+
+    days = dates_to_load(event_dates_of(_bq_table_ids(dataset)), loaded)
+    if not days:
+        log.info("%s — 새로 실을 날짜가 없다 (실린 날 %d일)", GA4_TABLE, len(loaded))
+        return 0
+
+    total = 0
+    for day in days:
+        arrow = with_load_columns(_bq_read_day(dataset, f"events_{day}"), now)
+        table = ensure_table(catalog, GA4_TABLE, arrow.schema,
+                             namespace=BEHAVIOR_NS)
+        table.append(arrow)
+        log.info("%s — %s %d행 적재", GA4_TABLE, day, arrow.num_rows)
+        total += arrow.num_rows
+    return total
+
+
 def compact(table) -> dict:
     """조각난 데이터 파일을 한 파일로 다시 쓴다.
 
@@ -518,6 +604,13 @@ def run_load(now: datetime | None = None) -> None:
             load_snapshot(engine, catalog, plan, now)
         else:
             load_ops(engine, catalog, now)
+
+    # 행동 기록은 출처가 다르고 하루 늦게 도착한다. 여기서 실패해도 위의 적재는
+    # 이미 끝났으므로 회차를 통째로 죽이지 않는다.
+    try:
+        load_ga4_events(catalog, now)
+    except Exception:
+        log.warning("행동 기록 적재 실패 — 마트 이력 적재는 끝났다", exc_info=True)
 
 
 def run_show() -> None:
