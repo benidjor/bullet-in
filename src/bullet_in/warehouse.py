@@ -22,6 +22,8 @@ from sqlalchemy import text
 log = logging.getLogger(__name__)
 
 NAMESPACE = "mart_history"
+# 행동 기록은 성격이 달라 같은 이름 아래 두면 이름과 내용이 어긋난다 (설계 §3.1).
+BEHAVIOR_NS = "behavior"
 
 # 스냅샷을 며칠까지 매일 남기나. 이후는 주 1회만 남긴다 (설계 §3.4).
 SNAPSHOT_DAILY_DAYS = 90
@@ -238,24 +240,25 @@ def load_catalog():
     })
 
 
-def ensure_namespace(catalog) -> None:
+def ensure_namespace(catalog, namespace: str = NAMESPACE) -> None:
     """네임스페이스를 멱등하게 만든다."""
     from pyiceberg.exceptions import NamespaceAlreadyExistsError
     try:
-        catalog.create_namespace(NAMESPACE)
+        catalog.create_namespace(namespace)
     except NamespaceAlreadyExistsError:
         pass
 
 
-def ensure_table(catalog, name: str, schema):
+def ensure_table(catalog, name: str, schema, namespace: str = NAMESPACE):
     """테이블을 멱등하게 만들고 돌려준다.
 
-    원본에 컬럼이 늘어나는 저장소라 (`schema.sql` 이 ALTER 를 계속 더한다)
-    있는 테이블에는 union_by_name 으로 새 컬럼을 붙인다.
+    원본에 컬럼이 늘어나는 저장소라 (`schema.sql` 이 ALTER 를 계속 더하고,
+    행동 기록은 계측이 새 키를 심는다) 있는 테이블에는 union_by_name 으로
+    새 컬럼을 붙인다.
     """
     from pyiceberg.exceptions import NoSuchTableError
 
-    ident = f"{NAMESPACE}.{name}"
+    ident = f"{namespace}.{name}"
     try:
         table = catalog.load_table(ident)
     except NoSuchTableError:
@@ -442,7 +445,7 @@ def drop_old_snapshot_dates(table, today: date) -> int:
     return len(drop)
 
 
-def _existing_tables(catalog) -> list[str]:
+def _existing_tables(catalog, namespace: str = NAMESPACE) -> list[str]:
     """네임스페이스 안의 테이블 이름. 아직 아무것도 없으면 빈 목록이다.
 
     네임스페이스가 없는 것은 고장이 아니라 「아직 한 번도 안 실었다」 는 뜻이다.
@@ -452,7 +455,7 @@ def _existing_tables(catalog) -> list[str]:
     from pyiceberg.exceptions import NoSuchNamespaceError
 
     try:
-        return [t[-1] for t in catalog.list_tables(NAMESPACE)]
+        return [t[-1] for t in catalog.list_tables(namespace)]
     except NoSuchNamespaceError:
         return []
 
@@ -463,17 +466,19 @@ def run_maintenance(now: datetime | None = None) -> None:
 
     now = now or datetime.now(timezone.utc)
     catalog = load_catalog()
-    for name in _existing_tables(catalog):
-        try:
-            table = catalog.load_table(f"{NAMESPACE}.{name}")
-        except NoSuchTableError:
-            continue
-        if name.endswith("_snapshot"):
-            drop_old_snapshot_dates(table, now.date())
-        compact(table)
-        expire(table, now)
-        # 남은 스냅샷 수를 남긴다 — 1 MB 한도까지 얼마나 남았는지 보는 눈이다.
-        log.info("%s — 남은 스냅샷 %d개", name, len(table.metadata.snapshots))
+    for ns in (NAMESPACE, BEHAVIOR_NS):
+        for name in _existing_tables(catalog, ns):
+            try:
+                table = catalog.load_table(f"{ns}.{name}")
+            except NoSuchTableError:
+                continue
+            if name.endswith("_snapshot"):
+                drop_old_snapshot_dates(table, now.date())
+            compact(table)
+            expire(table, now)
+            # 남은 스냅샷 수를 남긴다 — 1 MB 한도까지 얼마나 남았는지 보는 눈이다.
+            log.info("%s.%s — 남은 스냅샷 %d개", ns, name,
+                     len(table.metadata.snapshots))
 
 
 def run_load(now: datetime | None = None) -> None:
@@ -501,13 +506,14 @@ def run_show() -> None:
     뒤는 만료가 도는지를 말해 준다.
     """
     catalog = load_catalog()
-    for name in sorted(_existing_tables(catalog)):
-        t = catalog.load_table(f"{NAMESPACE}.{name}")
-        files = list(t.scan().plan_files())
-        size = sum(f.file.file_size_in_bytes for f in files)
-        print(f"{name:28} {t.scan().to_arrow().num_rows:>8,}행  "
-              f"파일 {len(files):>3}개  {size:>12,}B  "
-              f"스냅샷 {len(t.metadata.snapshots):>3}개")
+    for ns in (NAMESPACE, BEHAVIOR_NS):
+        for name in sorted(_existing_tables(catalog, ns)):
+            t = catalog.load_table(f"{ns}.{name}")
+            files = list(t.scan().plan_files())
+            size = sum(f.file.file_size_in_bytes for f in files)
+            print(f"{ns}.{name:28} {t.scan().to_arrow().num_rows:>8,}행  "
+                  f"파일 {len(files):>3}개  {size:>12,}B  "
+                  f"스냅샷 {len(t.metadata.snapshots):>3}개")
 
 
 if __name__ == "__main__":

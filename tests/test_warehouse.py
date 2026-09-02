@@ -251,6 +251,25 @@ def test_메타데이터_정리_속성이_붙는다(local_catalog):
     assert int(t.properties["write.metadata.previous-versions-max"]) >= 1
 
 
+def test_다른_네임스페이스에_같은_이름의_표를_따로_만든다(local_catalog):
+    # mart_history 와 behavior 가 이름이 겹쳐도 서로를 덮지 않아야 한다.
+    warehouse.ensure_namespace(local_catalog, warehouse.BEHAVIOR_NS)
+    a = warehouse.ensure_table(local_catalog, "t", _schema())
+    b = warehouse.ensure_table(local_catalog, "t", _schema(),
+                               namespace=warehouse.BEHAVIOR_NS)
+    assert a.name() != b.name()
+
+
+def test_표_목록은_네임스페이스마다_따로_센다(local_catalog):
+    warehouse.ensure_namespace(local_catalog, warehouse.BEHAVIOR_NS)
+    warehouse.ensure_table(local_catalog, "only_mart", _schema())
+    warehouse.ensure_table(local_catalog, "only_behavior", _schema(),
+                           namespace=warehouse.BEHAVIOR_NS)
+    assert warehouse._existing_tables(local_catalog) == ["only_mart"]
+    assert warehouse._existing_tables(
+        local_catalog, warehouse.BEHAVIOR_NS) == ["only_behavior"]
+
+
 # --- 적재 -------------------------------------------------------------------
 
 @pytest.fixture
