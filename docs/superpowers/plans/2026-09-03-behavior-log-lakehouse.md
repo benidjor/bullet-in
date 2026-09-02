@@ -698,6 +698,10 @@ def load_ga4_events(catalog, now: datetime) -> int:
         return 0
 
     from pyiceberg.exceptions import NoSuchTableError
+
+    # 자기 표를 담을 자리는 자기가 챙긴다 — 부르는 쪽 순서에 기대면 이 함수만
+    # 따로 돌릴 수 없다.
+    ensure_namespace(catalog, BEHAVIOR_NS)
     try:
         loaded = loaded_event_dates(
             catalog.load_table(f"{BEHAVIOR_NS}.{GA4_TABLE}"))
@@ -745,7 +749,6 @@ def run_load(now: datetime | None = None) -> None:
     # 행동 기록은 출처가 다르고 하루 늦게 도착한다. 여기서 실패해도 위의 적재는
     # 이미 끝났으므로 회차를 통째로 죽이지 않는다.
     try:
-        ensure_namespace(catalog, BEHAVIOR_NS)
         load_ga4_events(catalog, now)
     except Exception:
         log.warning("행동 기록 적재 실패 — 마트 이력 적재는 끝났다", exc_info=True)
@@ -1354,7 +1357,6 @@ def build_gold(catalog, now: datetime) -> int:
 
 ```python
     try:
-        ensure_namespace(catalog, BEHAVIOR_NS)
         load_ga4_events(catalog, now)
         build_gold(catalog, now)
     except Exception:
@@ -1571,7 +1573,6 @@ def write_metrics(catalog, now: datetime) -> dict:
 
 ```python
     try:
-        ensure_namespace(catalog, BEHAVIOR_NS)
         load_ga4_events(catalog, now)
         build_gold(catalog, now)
         write_metrics(catalog, now)
@@ -1982,6 +1983,16 @@ git push
 ```
 
 ---
+
+## 실행하면서 바꾼 것
+
+계획서를 쓸 때와 다르게 간 자리를 여기 남긴다.
+
+| 무엇 | 계획서 | 실제 | 왜 |
+| --- | --- | --- | --- |
+| 네임스페이스 확보 | `run_load` 가 만든다 | `load_ga4_events` 가 스스로 만든다 | 부르는 쪽 순서에 기대면 이 갈래만 따로 못 돌린다 · 테스트가 바로 걸렸다 |
+| `.env.example` 과 VM 설정 | Task 10 | 회차 1 | bronze 만 배포해도 자료가 그날부터 쌓이고 실물 경로가 두 회차 먼저 검증된다 |
+| 워크트리의 파이썬 | 적지 않았다 | `uv venv --python 3.11` 로 고정 | `uv` 가 3.14 를 골라 메인 · VM · CI (전부 3.11.15) 와 다른 것을 재고 있었다 |
 
 ## 자기 점검
 
