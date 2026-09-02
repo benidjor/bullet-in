@@ -640,18 +640,52 @@ def load_ga4_events(catalog, now: datetime) -> int:
         table = ensure_table(catalog, GA4_TABLE, arrow.schema,
                              namespace=BEHAVIOR_NS)
         table.append(arrow)
+        log.info("%s — %s %d행 적재", GA4_TABLE, day, arrow.num_rows)
+        total += arrow.num_rows
+    return total
 
-        # 평탄화본은 원본에서 파생한다. 모양이 마음에 안 들면 통째로 지우고
-        # 원본에서 다시 만들 수 있다 (설계 §3.3).
+
+def load_ga4_flat(catalog, now: datetime) -> int:
+    """원본에 있으나 평탄화본에 없는 날짜를 편다.
+
+    워터마크를 자기 표에서 읽는다 — 앞 층이 새로 실은 날짜에 얹으면 이미 원본에
+    들어와 있던 날은 영원히 안 펴진다. 운영에 붙이고 나서야 그 상태가 드러났고,
+    로그가 「새로 실을 날짜가 없다」 로 정상처럼 읽혀 조용히 지나갔다.
+
+    이 갈래가 따로 있어야 설계 §3.3 이 약속한 성질 — 평탄화본을 통째로 지우고
+    원본에서 다시 만들 수 있다 — 이 실제로 성립한다.
+    """
+    from pyiceberg.exceptions import NoSuchTableError
+    from pyiceberg.expressions import EqualTo
+
+    try:
+        source = catalog.load_table(f"{BEHAVIOR_NS}.{GA4_TABLE}")
+    except NoSuchTableError:
+        log.info("%s — 원본이 아직 없다", GA4_FLAT_TABLE)
+        return 0
+
+    try:
+        done = loaded_event_dates(
+            catalog.load_table(f"{BEHAVIOR_NS}.{GA4_FLAT_TABLE}"))
+    except NoSuchTableError:
+        done = set()
+
+    days = dates_to_load(sorted(loaded_event_dates(source)), done)
+    if not days:
+        log.info("%s — 펼 날짜가 없다 (편 날 %d일)", GA4_FLAT_TABLE, len(done))
+        return 0
+
+    total = 0
+    for day in days:
+        raw = source.scan(row_filter=EqualTo("event_date", day)).to_arrow()
         flat = flatten_day(raw)
         schema = flat_schema(flat)
-        flat_table = ensure_table(catalog, GA4_FLAT_TABLE, schema,
-                                  namespace=BEHAVIOR_NS)
-        flat_table.append(to_arrow(flat, schema, loaded_at=now))
-
-        log.info("%s — %s 원본 %d행 · 평탄화 %d행 적재",
-                 GA4_TABLE, day, arrow.num_rows, len(flat))
-        total += arrow.num_rows
+        table = ensure_table(catalog, GA4_FLAT_TABLE, schema,
+                             namespace=BEHAVIOR_NS)
+        table.append(to_arrow(flat, schema, loaded_at=now))
+        log.info("%s — %s 원본 %d행 → 평탄화 %d행",
+                 GA4_FLAT_TABLE, day, raw.num_rows, len(flat))
+        total += len(flat)
     return total
 
 
@@ -820,6 +854,7 @@ def run_load(now: datetime | None = None) -> None:
     # 이미 끝났으므로 회차를 통째로 죽이지 않는다.
     try:
         load_ga4_events(catalog, now)
+        load_ga4_flat(catalog, now)
         build_gold(catalog, now)
     except Exception:
         log.warning("행동 기록 적재 실패 — 마트 이력 적재는 끝났다", exc_info=True)
