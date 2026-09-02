@@ -9,5 +9,9 @@ Type=oneshot
 User=ubuntu
 WorkingDirectory=/home/ubuntu/bullet-in
 EnvironmentFile=/home/ubuntu/bullet-in/.env
+# .env 의 GOOGLE_APPLICATION_CREDENTIALS 는 백업 계정을 가리킨다.
+# 백업 계정에는 객체 삭제 권한이 없는데 변경 이력 유지보수는 파일을 지워야 해서,
+# 변경 이력 유닛에서만 변경 이력 전용 계정으로 덮어쓴다.
+Environment=GOOGLE_APPLICATION_CREDENTIALS=/home/ubuntu/.bullet-in-lakehouse.json
 ExecStart=/home/ubuntu/.local/bin/uv run python -m bullet_in.warehouse load
 TimeoutStartSec=1800
