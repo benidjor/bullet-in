@@ -224,12 +224,31 @@ def dim_date_rows(dates) -> list[dict]:
 # 화면이 읽는 집계. 축 이름은 팩트의 컬럼 이름이고, 짝은 마트에서 같은 축을 세는
 # 컬럼이다 — 클릭 수만으로는 「등급이 높을수록 더 눌리는가」 에 답할 수 없어서
 # 기사 수로 나눈 값을 함께 낸다.
-METRIC_AXES = (("card_outlet", "source_id"),
+# 짝이 `None` 인 축은 기사 수를 안 붙인다.
+# `card_outlet` 은 카드에 찍힌 표시 이름인데, 렌더가 「원문 매체」 와 소스 이름 두 값에서
+# 만들어 낸다 (마트의 `source_id` 는 슬러그이고 `outlet` 은 3분의 2가 비어 있다).
+# 그 파생을 여기서 다시 짜면 층이 서로 묶이므로 클릭 수만 낸다.
+METRIC_AXES = (("card_outlet", None),
                ("card_stage", "transfer_stage"),
-               ("card_tier", "journalist_tier"),
+               ("card_tier", "tier"),
                ("card_surface", None))
 
 EMPTY_LABEL = "(없음)"
+
+
+def _axis_key(value) -> str:
+    """축 값을 두 층이 견줄 수 있는 꼴로 만든다.
+
+    등급은 클릭이 `4` 로, 마트가 `4.0` 으로 온다 — 문자열 그대로 맞대면 한 건도
+    안 붙는다. 숫자로 읽히면 숫자로 접고 아니면 그대로 둔다.
+    """
+    if value is None or value == "":
+        return EMPTY_LABEL
+    text = str(value)
+    try:
+        return f"{float(text):g}"
+    except ValueError:
+        return text
 
 
 def aggregate(facts: list[dict], articles: list[dict]) -> dict:
@@ -243,12 +262,14 @@ def aggregate(facts: list[dict], articles: list[dict]) -> dict:
 
     axes = {}
     for axis, article_column in METRIC_AXES:
-        clicks = Counter(f.get(axis) or EMPTY_LABEL for f in counted)
-        denom = (Counter(str(a.get(article_column) or EMPTY_LABEL) for a in articles)
+        clicks = Counter(_axis_key(f.get(axis)) for f in counted)
+        denom = (Counter(_axis_key(a.get(article_column)) for a in articles)
                  if article_column else Counter())
         rows = []
         for value, n in clicks.most_common():
-            n_articles = denom.get(value, 0)
+            # 빈 칸은 두 층에서 뜻이 다르다 — 「단계가 없는 클릭」 과 「단계가 없는
+            # 기사」 를 나누면 거짓이 된다 (실측에서 26.0 이라는 값이 나왔다).
+            n_articles = 0 if value == EMPTY_LABEL else denom.get(value, 0)
             rows.append({"value": value, "n_clicks": n, "n_articles": n_articles,
                          "per_article": round(n / n_articles, 2) if n_articles
                          else None})

@@ -771,11 +771,11 @@ def test_축별로_클릭을_세고_표본_수를_함께_낸다():
 
 
 def test_기사_수로_나눈_값을_함께_낸다():
-    articles = [{"source_id": "The Athletic", "transfer_stage": "rumour",
-                 "journalist_tier": "1"}] * 4
+    # 분모가 실제로 붙는 축은 단계와 등급 둘이다 (매체는 아래 별도 테스트 참조).
+    articles = [{"transfer_stage": "rumour", "tier": 1.0}] * 4
     got = warehouse.aggregate([_fact(), _fact()], articles)
-    assert got["axes"]["card_outlet"][0]["n_articles"] == 4
-    assert got["axes"]["card_outlet"][0]["per_article"] == 0.5
+    assert got["axes"]["card_stage"][0]["n_articles"] == 4
+    assert got["axes"]["card_stage"][0]["per_article"] == 0.5
 
 
 def test_값이_빈_축은_이름을_붙여_센다():
@@ -815,3 +815,30 @@ def test_팩트가_없으면_집계_파일을_안_만든다(local_catalog, tmp_p
     monkeypatch.setattr(warehouse, "METRICS_PATH", tmp_path / "s" / "m.json")
     assert warehouse.write_metrics(local_catalog, _t(2026, 9, 2, 3)) == {}
     assert not warehouse.METRICS_PATH.exists()
+
+
+def test_등급은_숫자_표기가_달라도_붙는다():
+    # 클릭은 `4` 로, 마트는 `4.0` 으로 온다. 문자열 그대로는 한 건도 안 붙는다.
+    facts = [_fact(card_tier="4"), _fact(card_tier="4")]
+    articles = [{"tier": 4.0}, {"tier": 4.0}, {"tier": 4.0}, {"tier": 1.0}]
+    got = {r["value"]: r for r in warehouse.aggregate(facts, articles)["axes"]["card_tier"]}
+    assert got["4"]["n_articles"] == 3
+    assert got["4"]["per_article"] == round(2 / 3, 2)
+
+
+def test_없음_칸은_기사당_값을_안_낸다():
+    # 「단계가 없는 클릭」 과 「단계가 없는 기사」 는 뜻이 다르므로 나누면 거짓이 된다.
+    facts = [_fact(card_stage=None) for _ in range(52)]
+    articles = [{"transfer_stage": None}, {"transfer_stage": None}]
+    row = warehouse.aggregate(facts, articles)["axes"]["card_stage"][0]
+    assert row["value"] == "(없음)"
+    assert row["n_articles"] == 0
+    assert row["per_article"] is None
+
+
+def test_매체_축은_기사_수를_안_붙인다():
+    # 카드의 매체 이름은 렌더가 두 값에서 만들어 마트 컬럼 하나와 안 맞물린다.
+    articles = [{"outlet": "The Athletic"}] * 5
+    row = warehouse.aggregate([_fact()], articles)["axes"]["card_outlet"][0]
+    assert row["n_articles"] == 0
+    assert row["per_article"] is None
