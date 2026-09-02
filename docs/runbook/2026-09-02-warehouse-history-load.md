@@ -1,0 +1,133 @@
+# 변경 이력 적재 운영 절차 (2026-09-02)
+
+운영 마트의 `articles` · `players` · `article_players` 는 덮어쓰기로 갱신되어 이전 값이 사라진다.
+그 값을 GCS 위의 Iceberg 테이블로 옮겨 두는 타이머가 둘 있다.
+여기서는 그 둘을 어떻게 보고 어떻게 고치는지 적는다.
+설계는 `docs/superpowers/specs/2026-09-02-history-lakehouse-design.md` 에 있다.
+
+## 무엇이 언제 도는가
+
+| 유닛 | 시각 | 하는 일 |
+| --- | --- | --- |
+| `bullet-in-warehouse.timer` | 3시간 간격 · KST 00 · 03 · 06 · 09 · 12 · 15 · 18 · 21시 20분 | 변경분 적재 · 하루 첫 회차에 전량 스냅샷 |
+| `bullet-in-warehouse-maint.timer` | 하루 1회 · KST 11시 40분 | 컴팩션 · 스냅샷 만료 · 오래된 파티션 솎기 |
+
+적재는 회차보다 18분 뒤에 돈다.
+회차가 마트를 다 쓴 뒤에 읽으려고 그렇게 뒀다.
+회차의 임계 경로 밖이라 여기서 실패해도 배포는 막히지 않는다.
+
+유지보수를 11시 40분에 둔 것은 그 시각이 백업과 회차 사이의 빈 자리이기 때문이다.
+
+## 자원과 자격
+
+| 항목 | 값 |
+| --- | --- |
+| GCP 프로젝트 | `bullet-in-lakehouse` |
+| 버킷 | `gs://bullet-in-lakehouse-prod` · `us-central1` |
+| 카탈로그 | `bullet-in-lakehouse-prod` · `gcs-bucket` 형 |
+| 서비스 계정 | `bullet-in-lakehouse@bullet-in-lakehouse.iam.gserviceaccount.com` |
+| 키 | `/home/ubuntu/.bullet-in-lakehouse.json` |
+
+`.env` 의 `GOOGLE_APPLICATION_CREDENTIALS` 는 백업 계정을 가리킨다.
+백업 계정에는 객체를 지울 권한이 없다.
+유지보수는 파일을 지워야 하므로 변경 이력 유닛 둘만 `Environment=` 로 자기 계정을 덮어쓴다.
+자격을 옮길 일이 생기면 `.env` 가 아니라 그 두 줄을 고친다.
+
+## 손으로 돌리고 쌓인 것을 보는 법
+
+타이머를 기다리지 않고 한 번 돌리려면 다음을 부른다.
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  "sudo systemctl start bullet-in-warehouse.service"
+```
+
+쌓인 내용을 보려면 다음을 부른다.
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  "set -a; . /home/ubuntu/bullet-in/.env; set +a; \
+   GOOGLE_APPLICATION_CREDENTIALS=/home/ubuntu/.bullet-in-lakehouse.json \
+   /home/ubuntu/.local/bin/uv run --project /home/ubuntu/bullet-in \
+   python -m bullet_in.warehouse show"
+```
+
+표마다 행 수 · 데이터 파일 수 · 부피 · 남은 Iceberg 스냅샷 수가 한 줄로 나온다.
+
+## 적재가 실패했을 때 보는 순서
+
+셋을 순서대로 본다.
+앞의 것이 멀쩡한데 뒤에서 죽는 경우가 대부분이라 순서를 지키는 편이 빠르다.
+
+1. **유닛 상태** — `systemctl status bullet-in-warehouse.service --no-pager -l` 로 종료 코드와 마지막 로그를 본다.
+2. **인증** — 로그에 `Using Google Default Application Credentials` 가 안 보이면 키 경로가 틀렸다.
+   유닛의 `Environment=` 줄과 `/home/ubuntu/.bullet-in-lakehouse.json` 의 존재를 확인한다.
+3. **카탈로그 접속** — 다음이 `prefix` 를 돌려주면 주소와 권한은 살아 있다.
+
+```bash
+curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  "https://biglake.googleapis.com/iceberg/v1/restcatalog/v1/config?warehouse=gs://bullet-in-lakehouse-prod"
+```
+
+적재가 한 회차 빠져도 다음 회차가 받아 준다.
+워터마크는 실제로 가져온 행에서만 앞으로 가므로 실패한 구간은 다음번에 함께 딸려 온다.
+
+## 비용을 어떻게 확인하는가
+
+**가격표 웹페이지를 보지 않는다.**
+카탈로그 항목은 거기 아예 없고 `cloud.google.com/biglake/pricing` 은 404 다.
+조회 절차의 정본은 `docs/runbook/2026-09-02-reading-gcp-prices-from-the-billing-catalog.md` 다.
+
+실제 청구는 GCP 결제 보고서에서 두 기준으로 각각 본다.
+
+- **서비스 기준** — `Cloud Storage` 와 `BigLake` 가 따로 잡힌다.
+  Class A 무료 5,000회가 둘에 각각 붙으므로 하나로 합쳐 세면 안 된다.
+- **프로젝트 기준** — `bullet-in-lakehouse` 만 떼어 본다.
+  Gemini 축 (안건 ξ) 과 섞이지 않게 프로젝트를 새로 판 이유가 이것이다.
+
+**`BigLake Table Management` SKU 가 0인지 반드시 확인한다.**
+`us-central1` 에서 시간당 165.99 KRW 라 한 달 상시면 12만원이 넘는다.
+관리형 Iceberg 테이블을 만들지 않는 한 붙지 않으므로 0이 아니면 누군가 관리형 테이블을 만든 것이다.
+
+## 남은 스냅샷 수가 늘기만 할 때
+
+`show` 의 스냅샷 수가 회차마다 늘고 줄지 않으면 유지보수가 안 돈다.
+
+Iceberg 스냅샷 하나가 `metadata.json` 에 약 1,015 바이트를 더하는데 Lakehouse 카탈로그가 그 파일을 1 MB 로 막아 둔다.
+하루 8회 커밋이면 약 124일에 커밋 자체가 실패한다.
+부피 문제가 아니라 가동이 멈추는 문제라 미루면 안 된다.
+
+먼저 `systemctl list-timers` 로 `bullet-in-warehouse-maint.timer` 의 `LAST` 를 확인한다.
+
+데이터 파일 수가 표마다 계속 늘 때는 컴팩션이 안 걸린 것이다.
+조각난 채로 두면 행당 부피가 6.15배가 된다.
+
+## 첫 적재에서 실제로 나온 값 (2026-09-02 16:50 KST)
+
+| 표 | 행 | 파일 | 부피 |
+| --- | --- | --- | --- |
+| `articles_changes` | 1,010 | 1 | 3,046,702 B |
+| `articles_snapshot` | 1,010 | 1 | 3,046,702 B |
+| `players_snapshot` | 564 | 1 | 46,621 B |
+| `article_players_snapshot` | 3,647 | 1 | 51,556 B |
+| `ops_pipeline_runs` | 355 | 1 | 29,549 B |
+| `ops_source_freshness` | 2,759 | 1 | 44,849 B |
+
+행 수는 여섯 다 MariaDB 실제 값과 일치했다.
+버킷 전체는 객체 36개 · 6,362,434 바이트였다.
+
+같은 명령을 한 번 더 돌려 봤지만 행은 늘지 않았다.
+변경분은 워터마크가 막고 전량 스냅샷은 하루 1회 게이트가 막는다.
+
+로그에 `UserWarning: Delete operation did not match any records` 가 그날 첫 스냅샷마다 한 번 나오는데 고장이 아니다.
+그날 파티션을 덮어쓰려고 지우기를 먼저 부르는데 아직 그 파티션이 없어서 나오는 경고다.
+
+## 첫 결제 대조 일정
+
+커밋당 GCS 연산 수는 로컬 파일시스템에서 잰 하한선이라 실제 청구가 더 나올 수 있다.
+GCS 에서만 나는 호출은 그 측정에 안 잡혔다.
+
+- **2026-09-09** — 첫 주 대조 · Class A 회수가 무료 5,000회 대비 어디쯤인지 본다
+- **2026-10-02** — 첫 달 대조 · `BigLake Table Management` 가 0인지 함께 본다
+
+두 날짜는 잔여 안건 메모리에도 남겼다.
