@@ -14,6 +14,7 @@ dbt/logs/
 dbt/dbt_packages/
 dbt/.user.yml
 site/
+state/
 .worktrees/
 .claude/worktrees/
 _workspace/
