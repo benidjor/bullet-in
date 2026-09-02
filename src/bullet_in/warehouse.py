@@ -531,6 +531,7 @@ def load_ops(engine, catalog, now: datetime) -> int:
 # --- 행동 기록 (BigQuery -> bronze) ----------------------------------------
 
 GA4_TABLE = "ga4_events"
+GA4_FLAT_TABLE = "ga4_events_flat"
 
 
 def with_load_columns(table: pa.Table, loaded_at: datetime) -> pa.Table:
@@ -547,6 +548,11 @@ def with_load_columns(table: pa.Table, loaded_at: datetime) -> pa.Table:
             .append_column(pa.field(LOADED_DATE, pa.string()),
                            pa.array([loaded_at.date().isoformat()] * n,
                                     type=pa.string())))
+
+
+def flatten_day(arrow: pa.Table) -> list[dict]:
+    """하루치 원본에서 평탄화 · 겹침 접기까지 끝낸 행을 만든다."""
+    return dedupe_events(flatten_rows(arrow.to_pylist()))
 
 
 def loaded_event_dates(table) -> set[str]:
@@ -605,11 +611,22 @@ def load_ga4_events(catalog, now: datetime) -> int:
 
     total = 0
     for day in days:
-        arrow = with_load_columns(_bq_read_day(dataset, f"events_{day}"), now)
+        raw = _bq_read_day(dataset, f"events_{day}")
+        arrow = with_load_columns(raw, now)
         table = ensure_table(catalog, GA4_TABLE, arrow.schema,
                              namespace=BEHAVIOR_NS)
         table.append(arrow)
-        log.info("%s — %s %d행 적재", GA4_TABLE, day, arrow.num_rows)
+
+        # 평탄화본은 원본에서 파생한다. 모양이 마음에 안 들면 통째로 지우고
+        # 원본에서 다시 만들 수 있다 (설계 §3.3).
+        flat = flatten_day(raw)
+        schema = flat_schema(flat)
+        flat_table = ensure_table(catalog, GA4_FLAT_TABLE, schema,
+                                  namespace=BEHAVIOR_NS)
+        flat_table.append(to_arrow(flat, schema, loaded_at=now))
+
+        log.info("%s — %s 원본 %d행 · 평탄화 %d행 적재",
+                 GA4_TABLE, day, arrow.num_rows, len(flat))
         total += arrow.num_rows
     return total
 

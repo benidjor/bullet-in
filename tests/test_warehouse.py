@@ -607,8 +607,23 @@ def fake_ga4(monkeypatch):
     def _read(dataset, table_id):
         day = table_id.removeprefix("events_")
         n = state["days"][day]
+        params = pa.array(
+            [[{"key": "bi_cid", "value": {"string_value": f"c{i}",
+                                          "int_value": None,
+                                          "float_value": None,
+                                          "double_value": None}}]
+             for i in range(n)],
+            type=pa.list_(pa.struct([
+                ("key", pa.string()),
+                ("value", pa.struct([("string_value", pa.string()),
+                                     ("int_value", pa.int64()),
+                                     ("float_value", pa.float64()),
+                                     ("double_value", pa.float64())]))])))
         return pa.table({"event_date": pa.array([day] * n),
-                         "event_name": pa.array(["bi_card_click"] * n)})
+                         "event_timestamp": pa.array([1_787_536_000_000_000] * n,
+                                                     type=pa.int64()),
+                         "event_name": pa.array(["bi_card_click"] * n),
+                         "event_params": params})
 
     monkeypatch.setattr(warehouse, "_bq_table_ids", _list)
     monkeypatch.setattr(warehouse, "_bq_read_day", _read)
@@ -636,3 +651,22 @@ def test_같은_날을_두_번_실어도_행이_안_는다(local_catalog, fake_g
 def test_설정이_없으면_조용히_넘어간다(local_catalog, fake_ga4, monkeypatch):
     monkeypatch.delenv("GA4_DATASET")
     assert warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3)) == 0
+
+
+def test_평탄화본이_원본과_같은_날_함께_실린다(local_catalog, fake_ga4):
+    fake_ga4["days"] = {"20260901": 3}
+    warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3))
+    flat = local_catalog.load_table(
+        f"{warehouse.BEHAVIOR_NS}.{warehouse.GA4_FLAT_TABLE}").scan().to_arrow()
+    assert flat.num_rows == 3
+    assert "bi_cid" in flat.schema.names
+    assert "event_params" not in flat.schema.names
+
+
+def test_평탄화본도_같은_날을_두_번_안_넣는다(local_catalog, fake_ga4):
+    fake_ga4["days"] = {"20260901": 3}
+    warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3))
+    warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 12))
+    flat = local_catalog.load_table(
+        f"{warehouse.BEHAVIOR_NS}.{warehouse.GA4_FLAT_TABLE}").scan().to_arrow()
+    assert flat.num_rows == 3
