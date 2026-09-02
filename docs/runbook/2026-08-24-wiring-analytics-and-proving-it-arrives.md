@@ -173,6 +173,52 @@ ORDER BY n DESC
 
 **링크를 지웠다 다시 만든 날은 그날 분이 온전히 담길지 장담할 수 없다** — 테이블을 열어 봐야 갈린다.
 
+### 5.5. 쌓인 원본을 조회하는 법 (2026-09-02 추가)
+
+내보내기는 **행 하나가 이벤트 하나인 로그**다.
+집계된 형태가 아니고 매개변수는 컬럼이 아니라 `event_params` 라는 키 · 값 배열에 들어 있다.
+
+```bash
+# 날짜별 이벤트 수와 방문자 수
+bq query --project_id=bullet-in-analytics --use_legacy_sql=false \
+  'SELECT _TABLE_SUFFIX AS d, COUNT(*) AS events, COUNT(DISTINCT user_pseudo_id) AS users
+   FROM `bullet-in-analytics.analytics_551139164.events_*` GROUP BY d ORDER BY d'
+
+# 한 이벤트가 싣고 있는 매개변수 목록
+bq query --project_id=bullet-in-analytics --use_legacy_sql=false \
+  'SELECT p.key, COUNT(*) AS n
+   FROM `bullet-in-analytics.analytics_551139164.events_*`, UNNEST(event_params) p
+   WHERE event_name = "bi_card_click" GROUP BY p.key ORDER BY n DESC'
+```
+
+데이터셋은 `analytics_551139164` 이고 위치는 `asia-northeast3` 다.
+
+### 5.6. 기사와 잇는 열쇠는 `card_hash` 다
+
+`bi_card_click` 과 `bi_origin_exit` 이 싣는 `card_hash` 가 마트의 `articles.content_hash` 다.
+2026-09-02 에 표본 5건을 뽑아 운영 DB 와 대조했고 5건 모두 붙었다.
+
+함께 실리는 축이 `card_stage` · `card_tier` · `card_outlet` · `card_surface` 라, 우리 마트의 같은 컬럼과 대조까지 된다.
+
+**조인할 때 알아야 할 것 셋이 있다.**
+
+- **`card_hash` 가 클릭 전체에 있지는 않다** — 2026-09-02 기준 587건 중 432건이다. 그냥 조인하면 4분의 1이 조용히 사라진다.
+- **표본이 한쪽으로 쏠려 있다** — 6일치 13,035건 중 공개일 (2026-08-29) 하루가 58%다.
+- **하루 늦게 도착한다** — 일별 내보내기라 3시간 회차 주기와 안 맞는다.
+
+### 5.7. 파이프라인으로 가져올 때 리전을 맞출 필요는 없다
+
+내보내기는 `asia-northeast3` 에 있고 변경 이력 레이크하우스는 `us-central1` 에 있다.
+
+**리전이 같아야 한다는 요구는 BigQuery 가 자기 일로 파일을 옮길 때 걸린다** (`EXPORT DATA` · 로드 작업).
+클라이언트가 행을 읽어 우리가 다른 곳에 쓰는 경로에는 안 걸린다.
+
+`src/bullet_in/warehouse.py` 가 이미 그 모양이다.
+MariaDB 에서 읽어 pyarrow 로 바꾸고 `us-central1` 의 Iceberg 에 쓴다.
+출처를 BigQuery 로 하나 더 늘리면 되고, 그래서 버킷 리전을 옮길 이유가 없다.
+
+**아직 안 잰 것** — BigQuery 에서 GCP 밖으로 나가는 이그레스 요금이다. 월 66 MiB 규모라 작을 것으로 보이지만 과금 원장으로 확인해야 한다 (`docs/runbook/2026-09-02-reading-gcp-prices-from-the-billing-catalog.md`).
+
 ## 6. 예산 알림 — 상한선이 아니라 조기 경보
 
 결제 → 예산 및 알림 (또는 개요 화면의 빠른 카드) 에서 결제 계정 전체에 월 예산을 건다.
