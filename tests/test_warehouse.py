@@ -653,9 +653,10 @@ def test_설정이_없으면_조용히_넘어간다(local_catalog, fake_ga4, mon
     assert warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3)) == 0
 
 
-def test_평탄화본이_원본과_같은_날_함께_실린다(local_catalog, fake_ga4):
+def test_평탄화본이_원본에서_파생된다(local_catalog, fake_ga4):
     fake_ga4["days"] = {"20260901": 3}
     warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3))
+    warehouse.load_ga4_flat(local_catalog, _t(2026, 9, 2, 3))
     flat = local_catalog.load_table(
         f"{warehouse.BEHAVIOR_NS}.{warehouse.GA4_FLAT_TABLE}").scan().to_arrow()
     assert flat.num_rows == 3
@@ -666,7 +667,9 @@ def test_평탄화본이_원본과_같은_날_함께_실린다(local_catalog, fa
 def test_평탄화본도_같은_날을_두_번_안_넣는다(local_catalog, fake_ga4):
     fake_ga4["days"] = {"20260901": 3}
     warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3))
+    warehouse.load_ga4_flat(local_catalog, _t(2026, 9, 2, 3))
     warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 12))
+    warehouse.load_ga4_flat(local_catalog, _t(2026, 9, 2, 12))
     flat = local_catalog.load_table(
         f"{warehouse.BEHAVIOR_NS}.{warehouse.GA4_FLAT_TABLE}").scan().to_arrow()
     assert flat.num_rows == 3
@@ -706,9 +709,38 @@ def test_날짜_디멘션은_같은_날을_한_번만_담는다():
 def test_gold_는_평탄화본에서_다시_세운다(local_catalog, fake_ga4):
     fake_ga4["days"] = {"20260901": 3}
     warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3))
+    warehouse.load_ga4_flat(local_catalog, _t(2026, 9, 2, 3))
     assert warehouse.build_gold(local_catalog, _t(2026, 9, 2, 3)) == 3
     # 두 번 돌려도 갈아 끼우므로 행이 안 는다.
     assert warehouse.build_gold(local_catalog, _t(2026, 9, 2, 4)) == 3
     fact = local_catalog.load_table(
         f"{warehouse.BEHAVIOR_NS}.{warehouse.FACT_TABLE}").scan().to_arrow()
     assert fact.num_rows == 3
+
+
+def test_bronze_에만_있는_날도_평탄화된다(local_catalog, fake_ga4):
+    """운영에서 드러난 결함 — 평탄화가 앞 층의 진행에 얹혀 있으면 안 된다.
+
+    bronze 를 먼저 채운 뒤 평탄화본을 지우면, BigQuery 에는 새 날짜가 없으므로
+    적재 루프가 아무것도 안 돈다. 그래도 평탄화본은 원본에서 다시 서야 한다.
+    """
+    fake_ga4["days"] = {"20260901": 3}
+    warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3))
+
+    # BigQuery 쪽은 새로 실을 것이 없다.
+    assert warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 12)) == 0
+    # 그래도 평탄화본은 원본에서 채워진다.
+    assert warehouse.load_ga4_flat(local_catalog, _t(2026, 9, 2, 12)) == 3
+    flat = local_catalog.load_table(
+        f"{warehouse.BEHAVIOR_NS}.{warehouse.GA4_FLAT_TABLE}").scan().to_arrow()
+    assert flat.num_rows == 3
+
+
+def test_평탄화본은_자기_워터마크로_같은_날을_두_번_안_넣는다(local_catalog, fake_ga4):
+    fake_ga4["days"] = {"20260901": 3}
+    warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3))
+    warehouse.load_ga4_flat(local_catalog, _t(2026, 9, 2, 3))
+    assert warehouse.load_ga4_flat(local_catalog, _t(2026, 9, 2, 12)) == 0
+    flat = local_catalog.load_table(
+        f"{warehouse.BEHAVIOR_NS}.{warehouse.GA4_FLAT_TABLE}").scan().to_arrow()
+    assert flat.num_rows == 3
