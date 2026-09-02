@@ -744,3 +744,101 @@ def test_평탄화본은_자기_워터마크로_같은_날을_두_번_안_넣는
     flat = local_catalog.load_table(
         f"{warehouse.BEHAVIOR_NS}.{warehouse.GA4_FLAT_TABLE}").scan().to_arrow()
     assert flat.num_rows == 3
+
+
+# --- 행동 기록 · 집계 -------------------------------------------------------
+
+def _fact(outlet="The Athletic", day="2026-08-30", **extra):
+    row = {c: None for c in warehouse.FACT_COLUMNS}
+    row.update({"card_outlet": outlet, "event_date_kst": day,
+                "card_hash": "h", "card_stage": "rumour", "card_tier": "1",
+                "card_surface": "item"})
+    row.update(extra)
+    return row
+
+
+def test_공개일_클릭은_집계에서_뺀다():
+    got = warehouse.aggregate([_fact(day="2026-08-29"), _fact(day="2026-08-30")], [])
+    assert got["totals"] == {"all": 2, "launch_day": 1, "counted": 1}
+
+
+def test_축별로_클릭을_세고_표본_수를_함께_낸다():
+    got = warehouse.aggregate([_fact(), _fact(), _fact(outlet="BBC")], [])
+    outlets = got["axes"]["card_outlet"]
+    assert outlets[0] == {"value": "The Athletic", "n_clicks": 2,
+                          "n_articles": 0, "per_article": None}
+    assert [o["value"] for o in outlets] == ["The Athletic", "BBC"]
+
+
+def test_기사_수로_나눈_값을_함께_낸다():
+    # 분모가 실제로 붙는 축은 단계와 등급 둘이다 (매체는 아래 별도 테스트 참조).
+    articles = [{"transfer_stage": "rumour", "tier": 1.0}] * 4
+    got = warehouse.aggregate([_fact(), _fact()], articles)
+    assert got["axes"]["card_stage"][0]["n_articles"] == 4
+    assert got["axes"]["card_stage"][0]["per_article"] == 0.5
+
+
+def test_값이_빈_축은_이름을_붙여_센다():
+    got = warehouse.aggregate([_fact(outlet=None)], [])
+    assert got["axes"]["card_outlet"][0]["value"] == "(없음)"
+
+
+def test_클릭이_하나도_없으면_빈_집계가_나온다():
+    got = warehouse.aggregate([], [])
+    assert got["totals"] == {"all": 0, "launch_day": 0, "counted": 0}
+    assert got["axes"]["card_outlet"] == []
+
+
+def test_집계는_클릭이_있는_날의_범위를_적는다():
+    got = warehouse.aggregate([_fact(day="2026-08-30"), _fact(day="2026-09-01")], [])
+    assert got["dates"] == {"from": "2026-08-30", "to": "2026-09-01"}
+
+
+def test_집계를_파일로_떨어뜨린다(local_catalog, fake_ga4, tmp_path, monkeypatch):
+    import json as _json
+
+    monkeypatch.setattr(warehouse, "METRICS_PATH", tmp_path / "s" / "m.json")
+    fake_ga4["days"] = {"20260901": 3}
+    warehouse.load_ga4_events(local_catalog, _t(2026, 9, 2, 3))
+    warehouse.load_ga4_flat(local_catalog, _t(2026, 9, 2, 3))
+    warehouse.build_gold(local_catalog, _t(2026, 9, 2, 3))
+
+    got = warehouse.write_metrics(local_catalog, _t(2026, 9, 2, 3))
+    assert got["totals"]["all"] == 3
+    # 없던 디렉터리도 만들어야 한다 — 첫 회차에는 state/ 가 없다.
+    written = _json.loads(warehouse.METRICS_PATH.read_text(encoding="utf-8"))
+    assert written["totals"] == got["totals"]
+    assert written["generated_at"] == "2026-09-02T03:00:00+00:00"
+
+
+def test_팩트가_없으면_집계_파일을_안_만든다(local_catalog, tmp_path, monkeypatch):
+    monkeypatch.setattr(warehouse, "METRICS_PATH", tmp_path / "s" / "m.json")
+    assert warehouse.write_metrics(local_catalog, _t(2026, 9, 2, 3)) == {}
+    assert not warehouse.METRICS_PATH.exists()
+
+
+def test_등급은_숫자_표기가_달라도_붙는다():
+    # 클릭은 `4` 로, 마트는 `4.0` 으로 온다. 문자열 그대로는 한 건도 안 붙는다.
+    facts = [_fact(card_tier="4"), _fact(card_tier="4")]
+    articles = [{"tier": 4.0}, {"tier": 4.0}, {"tier": 4.0}, {"tier": 1.0}]
+    got = {r["value"]: r for r in warehouse.aggregate(facts, articles)["axes"]["card_tier"]}
+    assert got["4"]["n_articles"] == 3
+    assert got["4"]["per_article"] == round(2 / 3, 2)
+
+
+def test_없음_칸은_기사당_값을_안_낸다():
+    # 「단계가 없는 클릭」 과 「단계가 없는 기사」 는 뜻이 다르므로 나누면 거짓이 된다.
+    facts = [_fact(card_stage=None) for _ in range(52)]
+    articles = [{"transfer_stage": None}, {"transfer_stage": None}]
+    row = warehouse.aggregate(facts, articles)["axes"]["card_stage"][0]
+    assert row["value"] == "(없음)"
+    assert row["n_articles"] == 0
+    assert row["per_article"] is None
+
+
+def test_매체_축은_기사_수를_안_붙인다():
+    # 카드의 매체 이름은 렌더가 두 값에서 만들어 마트 컬럼 하나와 안 맞물린다.
+    articles = [{"outlet": "The Athletic"}] * 5
+    row = warehouse.aggregate([_fact()], articles)["axes"]["card_outlet"][0]
+    assert row["n_articles"] == 0
+    assert row["per_article"] is None

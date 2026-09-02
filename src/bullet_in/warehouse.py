@@ -9,10 +9,12 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -217,6 +219,69 @@ def dim_date_rows(dates) -> list[dict]:
                     "days_since_launch": (day - LAUNCH_DATE).days,
                     "is_launch_day": day == LAUNCH_DATE})
     return out
+
+
+# 화면이 읽는 집계. 축 이름은 팩트의 컬럼 이름이고, 짝은 마트에서 같은 축을 세는
+# 컬럼이다 — 클릭 수만으로는 「등급이 높을수록 더 눌리는가」 에 답할 수 없어서
+# 기사 수로 나눈 값을 함께 낸다.
+# 짝이 `None` 인 축은 기사 수를 안 붙인다.
+# `card_outlet` 은 카드에 찍힌 표시 이름인데, 렌더가 「원문 매체」 와 소스 이름 두 값에서
+# 만들어 낸다 (마트의 `source_id` 는 슬러그이고 `outlet` 은 3분의 2가 비어 있다).
+# 그 파생을 여기서 다시 짜면 층이 서로 묶이므로 클릭 수만 낸다.
+METRIC_AXES = (("card_outlet", None),
+               ("card_stage", "transfer_stage"),
+               ("card_tier", "tier"),
+               ("card_surface", None))
+
+EMPTY_LABEL = "(없음)"
+
+
+def _axis_key(value) -> str:
+    """축 값을 두 층이 견줄 수 있는 꼴로 만든다.
+
+    등급은 클릭이 `4` 로, 마트가 `4.0` 으로 온다 — 문자열 그대로 맞대면 한 건도
+    안 붙는다. 숫자로 읽히면 숫자로 접고 아니면 그대로 둔다.
+    """
+    if value is None or value == "":
+        return EMPTY_LABEL
+    text = str(value)
+    try:
+        return f"{float(text):g}"
+    except ValueError:
+        return text
+
+
+def aggregate(facts: list[dict], articles: list[dict]) -> dict:
+    """축별 클릭 수 · 기사 수 · 기사당 클릭.
+
+    공개일 (2026-08-29) 을 뺀다 — 그 하루가 표본의 58% 라 평균을 왜곡한다.
+    뺀 사실과 뺀 양을 `totals` 에 함께 실어 화면이 그대로 적을 수 있게 한다.
+    """
+    launch = LAUNCH_DATE.isoformat()
+    counted = [f for f in facts if f.get("event_date_kst") != launch]
+
+    axes = {}
+    for axis, article_column in METRIC_AXES:
+        clicks = Counter(_axis_key(f.get(axis)) for f in counted)
+        denom = (Counter(_axis_key(a.get(article_column)) for a in articles)
+                 if article_column else Counter())
+        rows = []
+        for value, n in clicks.most_common():
+            # 빈 칸은 두 층에서 뜻이 다르다 — 「단계가 없는 클릭」 과 「단계가 없는
+            # 기사」 를 나누면 거짓이 된다 (실측에서 26.0 이라는 값이 나왔다).
+            n_articles = 0 if value == EMPTY_LABEL else denom.get(value, 0)
+            rows.append({"value": value, "n_clicks": n, "n_articles": n_articles,
+                         "per_article": round(n / n_articles, 2) if n_articles
+                         else None})
+        axes[axis] = rows
+
+    days = sorted({f.get("event_date_kst") for f in facts if f.get("event_date_kst")})
+    return {"totals": {"all": len(facts),
+                       "launch_day": len(facts) - len(counted),
+                       "counted": len(counted)},
+            "dates": {"from": days[0] if days else None,
+                      "to": days[-1] if days else None},
+            "axes": axes}
 
 
 # 일별 내보내기 표만 고른다. `events_intraday_*` 는 그날이 끝나면 사라지고 완결된
@@ -735,6 +800,52 @@ def build_gold(catalog, now: datetime) -> int:
     return len(facts)
 
 
+# 화면이 읽는 자리. 회차의 렌더가 Iceberg 를 직접 읽으면 게이트 앞에 인증과
+# 네트워크가 붙으므로 (모듈 첫 주석) 파일 하나를 사이에 둔다.
+METRICS_PATH = Path("state/behavior_metrics.json")
+
+
+def _latest_articles(catalog) -> list[dict]:
+    """가장 최근에 뜬 기사 스냅샷. 없으면 빈 목록이다.
+
+    디멘션을 새로 만들지 않고 `mart_history` 의 것을 참조한다 (설계 §3.5).
+    """
+    from pyiceberg.exceptions import NoSuchTableError
+    from pyiceberg.expressions import EqualTo
+
+    try:
+        snap = catalog.load_table(f"{NAMESPACE}.articles_snapshot")
+    except NoSuchTableError:
+        return []
+    latest = _max_of(snap, LOADED_AT)
+    if latest is None:
+        return []
+    return snap.scan(row_filter=EqualTo(
+        LOADED_DATE, latest.date().isoformat())).to_arrow().to_pylist()
+
+
+def write_metrics(catalog, now: datetime) -> dict:
+    """팩트와 마트 스냅샷에서 집계를 내어 JSON 으로 떨어뜨린다."""
+    from pyiceberg.exceptions import NoSuchTableError
+
+    try:
+        facts = catalog.load_table(
+            f"{BEHAVIOR_NS}.{FACT_TABLE}").scan().to_arrow().to_pylist()
+    except NoSuchTableError:
+        log.info("%s — 팩트가 아직 없다", METRICS_PATH)
+        return {}
+
+    metrics = aggregate(facts, _latest_articles(catalog))
+    metrics["generated_at"] = now.isoformat()
+    METRICS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    METRICS_PATH.write_text(json.dumps(metrics, ensure_ascii=False, indent=1),
+                            encoding="utf-8")
+    log.info("%s — 클릭 %d건 (공개일 %d건 제외) 기준 집계",
+             METRICS_PATH, metrics["totals"]["counted"],
+             metrics["totals"]["launch_day"])
+    return metrics
+
+
 def compact(table) -> dict:
     """조각난 데이터 파일을 한 파일로 다시 쓴다.
 
@@ -856,6 +967,7 @@ def run_load(now: datetime | None = None) -> None:
         load_ga4_events(catalog, now)
         load_ga4_flat(catalog, now)
         build_gold(catalog, now)
+        write_metrics(catalog, now)
     except Exception:
         log.warning("행동 기록 적재 실패 — 마트 이력 적재는 끝났다", exc_info=True)
 
