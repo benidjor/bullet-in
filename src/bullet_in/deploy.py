@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import sys
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -51,8 +51,10 @@ class DeployState:
 
 def load_state(path: Path = STATE_PATH) -> DeployState:
     try:
-        return DeployState(**json.loads(Path(path).read_text()))
-    except (OSError, ValueError, TypeError):
+        data = json.loads(Path(path).read_text())
+        known = {f.name for f in fields(DeployState)}
+        return DeployState(**{k: v for k, v in data.items() if k in known})
+    except (OSError, ValueError, TypeError, AttributeError):
         return DeployState()
 
 
@@ -75,6 +77,8 @@ def decide(state: DeployState, service_result: str, exit_status: str) -> Verdict
     """
     if not state.pending:
         return Verdict("none", "판정 대기 없음")
+    if not service_result:
+        return Verdict("none", "SERVICE_RESULT 없음 — systemd 밖에서 부른 것 같다 · 아무것도 안 한다")
     if service_result == "success":
         return Verdict("confirm", "회차 · 게이트 · 배포 통과")
     if service_result == "exit-code" and exit_status == str(GATE_CRASH_EXIT):
@@ -158,7 +162,9 @@ def run_preflight_subprocess() -> list[str]:
                           capture_output=True, text=True, timeout=600)
     if proc.returncode == 0:
         return []
-    tail = (proc.stdout + proc.stderr).strip().splitlines()[-8:]
+    # uv 가 새 잠금 파일을 동기화하면 stderr 에 패키지 목록이 길게 남는다 — 사유는 stdout 에 있다.
+    out = proc.stdout.strip().splitlines()
+    tail = out[-8:] if out else proc.stderr.strip().splitlines()[-8:]
     return tail or [f"preflight 종료 코드 {proc.returncode}"]
 
 
@@ -188,7 +194,9 @@ def advance(repo: Repo, state: DeployState, *,
                    "고친 커밋이 main 에 오면 다시 전진한다",
                    incident=True, fields=[{"name": "사유", "value": "\n".join(f"- {p}" for p in problems)[:1024]}])
             return "사전 점검 실패 — 되돌림"
-        state.previous, state.current, state.pending = head, target, True
+        # 보류 (pending) 중에 또 전진하면 previous 는 마지막으로 확인된 커밋을 지킨다 — 미판정 커밋으로 되돌리지 않는다.
+        state.previous = state.previous if state.pending else head
+        state.current, state.pending = target, True
         state.advanced_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         return f"전진 {_short(head)} → {_short(target)} · 회차 끝에 판정"
     except Exception as e:  # noqa: BLE001 — 전진 실패로 회차를 잃지 않는다
@@ -223,35 +231,44 @@ def unblock(state: DeployState, sha_prefix: str) -> int:
     return before - len(state.blocked)
 
 
-def fetch_build(url: str = BUILD_URL) -> dict | None:
-    """라이브의 build.json. 비 200 · 0바이트 · JSON 아님은 전부 None 이다 (스펙 §6.1)."""
+def fetch_build(url: str = BUILD_URL) -> tuple[dict | None, str]:
+    """라이브의 build.json 과 「무엇을 받았나」 한 줄.
+
+    비 200 · 0바이트 · JSON 아님은 전부 (None, 사유) 다 (스펙 §6.1) — 알림이 상태 코드와
+    바이트 수를 실어야 캐시인지 장애인지 사람이 가른다 (스펙 §10).
+    """
     try:
         r = httpx.get(url, follow_redirects=True, timeout=20)
     except httpx.HTTPError as e:
         log.warning("build.json 수신 실패: %s", e)
-        return None
+        return None, f"수신 실패 {type(e).__name__}"
+    detail = f"status {r.status_code} · {len(r.content)} bytes"
     if r.status_code != 200 or not r.content:
-        return None
+        return None, detail
     try:
         data = r.json()
     except ValueError:
-        return None
-    return data if isinstance(data, dict) else None
+        return None, f"{detail} · JSON 아님"
+    if not isinstance(data, dict):
+        return None, f"{detail} · JSON 이 객체가 아님"
+    return data, detail
 
 
 def build_matches(sha: str, *, fetch=fetch_build, tries: int = 3,
                   wait: float = 20.0) -> tuple[bool, str]:
     """최상위 도메인이 배포 직후 잠깐 옛 것을 돌려주므로 몇 번 다시 받는다."""
-    detail = "비정상 응답"
+    got, fetch_detail = None, ""
     for i in range(tries):
-        data = fetch()
-        got = (data or {}).get("commit") if data else None
+        data, fetch_detail = fetch()
+        got = data.get("commit") if data else None
         if got == sha:
-            return True, _short(sha)
-        detail = _short(got) if isinstance(got, str) and got else "비정상 응답"
+            run_id = str(data.get("run_id") or "?")
+            return True, f"{_short(sha)} · run {run_id[:8]}"
         if i < tries - 1:
             time.sleep(wait)
-    return False, detail
+    if isinstance(got, str) and got:
+        return False, f"commit {_short(got)} · {fetch_detail}"
+    return False, fetch_detail or "비정상 응답"
 
 
 def judge(repo: Repo, state: DeployState, *, service_result: str, exit_status: str,

@@ -13,11 +13,13 @@ from bullet_in.deploy import (
     advance,
     build_matches,
     decide,
+    fetch_build,
     judge,
     load_state,
     main,
     preflight,
     rollback,
+    run_preflight_subprocess,
     save_state,
     unblock,
     write_build_marker,
@@ -34,6 +36,19 @@ def test_state_roundtrip_and_defaults(tmp_path):
     assert json.loads(p.read_text())["pending"] is True
 
 
+def test_load_state_ignores_unknown_keys(tmp_path):
+    p = tmp_path / "deploy.json"
+    p.write_text(json.dumps({"current": "n" * 40, "previous": "p" * 40, "pending": True,
+                             "blocked": ["b" * 40], "advanced_at": "2026-09-04T00:03:12+00:00",
+                             "future_key": 1}))
+    s = load_state(p)
+    assert s.current == "n" * 40
+    assert s.previous == "p" * 40
+    assert s.pending is True
+    assert s.blocked == ["b" * 40]
+    assert s.advanced_at == "2026-09-04T00:03:12+00:00"
+
+
 def test_decide_does_nothing_without_pending():
     assert decide(DeployState(pending=False), "exit-code", "1").action == "none"
 
@@ -44,6 +59,7 @@ def test_decide_does_nothing_without_pending():
     ("exit-code", "1", "rollback"),    # 예외 · 게이트 위반 · dbt 자체 실패
     ("timeout", "", "rollback"),
     ("signal", "9", "rollback"),
+    ("", "", "none"),                  # SERVICE_RESULT 없음 — systemd 밖에서 부른 것 같다
 ])
 def test_decide_follows_the_spec_table(service_result, exit_status, action):
     v = decide(DeployState(pending=True), service_result, exit_status)
@@ -168,6 +184,23 @@ def test_preflight_passes_with_everything(monkeypatch):
     assert preflight({k: "x" for k in REQUIRED_ENV}) == []
 
 
+def test_run_preflight_subprocess_prefers_stdout_over_uv_sync_noise(monkeypatch):
+    class _Proc:
+        def __init__(self, stdout, stderr):
+            self.returncode = 1
+            self.stdout = stdout
+            self.stderr = stderr
+
+    stderr = "Installed 20 packages\n" + "\n".join(f" + pkg{i}==1.0" for i in range(20))
+    monkeypatch.setattr("bullet_in.deploy.subprocess.run",
+                        lambda *a, **k: _Proc("필수 키 없음: GA4_DATASET\n", stderr))
+    assert run_preflight_subprocess() == ["필수 키 없음: GA4_DATASET"]
+
+    monkeypatch.setattr("bullet_in.deploy.subprocess.run",
+                        lambda *a, **k: _Proc("", stderr))
+    assert run_preflight_subprocess() == stderr.strip().splitlines()[-8:]
+
+
 def _advanced(repos):
     """c1 에서 c2 로 전진해 pending 인 상태를 만든다."""
     upstream, vm = repos
@@ -176,6 +209,16 @@ def _advanced(repos):
     state = DeployState()
     advance(Repo(vm), state, run_preflight=lambda: [])
     return vm, state, old, new
+
+
+def test_advance_keeps_confirmed_previous_when_still_pending(repos, quiet_alerts):
+    upstream, _ = repos
+    vm, state, old, new = _advanced(repos)
+    assert state.pending is True
+    c3 = _commit(upstream, "c3")
+    advance(Repo(vm), state, run_preflight=lambda: [])
+    assert state.previous == old
+    assert state.current == c3
 
 
 def test_rollback_resets_blocks_and_alerts(repos, quiet_alerts):
@@ -198,18 +241,65 @@ def test_unblock_removes_by_prefix():
 
 
 def test_build_matches_retries_then_matches():
-    answers = iter([None, {"commit": "other"}, {"commit": "n" * 40}])
+    answers = iter([(None, "status 500 · 0 bytes"),
+                    ({"commit": "other"}, "status 200 · 20 bytes"),
+                    ({"commit": "n" * 40, "run_id": "r" * 40}, "status 200 · 60 bytes")])
     ok, detail = build_matches("n" * 40, fetch=lambda: next(answers), tries=3, wait=0)
     assert ok is True
 
 
 def test_build_matches_fails_on_empty_and_mismatch():
-    ok, detail = build_matches("n" * 40, fetch=lambda: None, tries=2, wait=0)
+    ok, detail = build_matches("n" * 40, fetch=lambda: (None, "status 200 · 0 bytes"),
+                               tries=2, wait=0)
     assert ok is False
-    assert "비정상 응답" in detail
-    ok, detail = build_matches("n" * 40, fetch=lambda: {"commit": "o" * 40}, tries=1, wait=0)
+    assert "status 200 · 0 bytes" in detail
+    ok, detail = build_matches("n" * 40, fetch=lambda: ({"commit": "o" * 40}, "status 200 · 40 bytes"),
+                               tries=1, wait=0)
     assert ok is False
     assert "ooooooo" in detail
+
+
+class _FakeResp:
+    def __init__(self, status_code, content, json_data=None, json_error=False):
+        self.status_code = status_code
+        self.content = content
+        self._json_data = json_data
+        self._json_error = json_error
+
+    def json(self):
+        if self._json_error:
+            raise ValueError("not json")
+        return self._json_data
+
+
+def test_fetch_build_reports_status_and_bytes_on_every_failure(monkeypatch):
+    monkeypatch.setattr("bullet_in.deploy.httpx.get",
+                        lambda *a, **k: _FakeResp(500, b"error"))
+    data, detail = fetch_build()
+    assert data is None
+    assert detail == "status 500 · 5 bytes"
+
+    monkeypatch.setattr("bullet_in.deploy.httpx.get",
+                        lambda *a, **k: _FakeResp(200, b""))
+    data, detail = fetch_build()
+    assert data is None
+    assert detail == "status 200 · 0 bytes"
+
+    monkeypatch.setattr("bullet_in.deploy.httpx.get",
+                        lambda *a, **k: _FakeResp(200, b"[1]", json_data=[1]))
+    data, detail = fetch_build()
+    assert data is None
+    assert "객체가 아님" in detail
+
+
+def test_fetch_build_returns_dict_and_detail(monkeypatch):
+    payload = {"commit": "n" * 40, "run_id": "r" * 40}
+    content = json.dumps(payload).encode()
+    monkeypatch.setattr("bullet_in.deploy.httpx.get",
+                        lambda *a, **k: _FakeResp(200, content, json_data=payload))
+    data, detail = fetch_build()
+    assert data == payload
+    assert detail == f"status 200 · {len(content)} bytes"
 
 
 def test_judge_confirms_when_build_matches(repos, quiet_alerts):
