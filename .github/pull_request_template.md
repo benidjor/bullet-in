@@ -44,6 +44,7 @@ SoT: docs/conventions/2026-06-11-commit-pr-convention.md (§2.1 PR 본문 구조
 - [ ] tests + lint — 통과
 - [ ] SoT 일관 — 코드·문서·컨벤션 정합
 - [ ] commit 컨벤션 — type(scope)·트레일러(소유자 noreply) 준수
+- [ ] 설정 키 — 새 환경변수가 있으면 REQUIRED_ENV 에 올리고 머지 전에 VM .env 에 넣음 (없으면 「해당 없음」)
 - [ ] PR 크기 — 순수 코드 LOC 기준(이상 ≤200, 초과 시 사유)
 
 ## 7. 레퍼런스

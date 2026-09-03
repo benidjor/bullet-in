@@ -8,7 +8,7 @@ import json
 import logging
 import os
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -18,6 +18,10 @@ log = logging.getLogger(__name__)
 
 # dbt 가 내는 테스트 상태 — fail 은 error_if 를 넘긴 것 · warn 은 warn_if 만 넘긴 것.
 _BLOCKING = {"fail", "error"}
+
+# 게이트가 못 돈 것 중 dbt 가 신호로 죽은 경우 (세그폴트 · 강제 종료) 의 종료 코드.
+# 판정기 (deploy.judge) 가 $EXIT_STATUS 하나로 「급사」 와 나머지를 가른다 (스펙 §8).
+GATE_CRASH_EXIT = 3
 
 
 @dataclass(frozen=True)
@@ -32,6 +36,7 @@ class GateResult:
     warned: list[TestOutcome] = field(default_factory=list)
     ran: bool = True
     error: str | None = None
+    dbt_returncode: int | None = None
 
 
 def _short(unique_id: str) -> str:
@@ -125,13 +130,15 @@ def run_gate(project_dir: Path, mariadb_url: str) -> GateResult:
         # 결과 파일이 없다 = dbt 가 판정을 안 남겼다는 뜻이지 "시작도 못 했다" 는 뜻이 아니다.
         # 2026-08-31 21:05 에는 노드 29개 중 22개를 통과시키고 중간에 끊겼다.
         # 어느 쪽인지는 종료 코드와 dbt.log 로만 갈린다 — 그래서 둘 다 가리킨다.
-        return GateResult(ran=False, error=f"{result.error} · {diag}")
+        return GateResult(ran=False, error=f"{result.error} · {diag}",
+                          dbt_returncode=proc.returncode)
     if proc.returncode != 0 and not result.blocked:
         # 종료 코드는 실패인데 파싱된 결과에 차단 항목이 없다 — 그 결과 파일은
         # 이번 회차를 설명하지 못한다는 뜻이라 통과로 볼 수 없다.
         return GateResult(ran=False,
-                          error=f"결과 파일엔 차단 항목이 없는데 dbt 가 실패로 끝났다 · {diag}")
-    return result
+                          error=f"결과 파일엔 차단 항목이 없는데 dbt 가 실패로 끝났다 · {diag}",
+                          dbt_returncode=proc.returncode)
+    return replace(result, dbt_returncode=proc.returncode)
 
 
 def enforce_gate(result: GateResult, *, run_id: str) -> None:
@@ -149,4 +156,6 @@ def enforce_gate(result: GateResult, *, run_id: str) -> None:
     log.error("dbt 게이트가 배포를 세웠다 — %s",
               result.error or " · ".join(f"{t.name} {t.failures}행"
                                          for t in result.blocked))
-    raise SystemExit(1)
+    # 신호로 죽은 것 (음수) 만 3 — 코드 탓이 아닌 유일한 실패라 판정기가 되돌리지 않는다.
+    crashed = not result.ran and (result.dbt_returncode or 0) < 0
+    raise SystemExit(GATE_CRASH_EXIT if crashed else 1)

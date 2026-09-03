@@ -5,6 +5,7 @@ MongoDB (raw · bronze) → MariaDB (mart · silver, content_hash · URL UNIQUE 
 dbt 품질 게이트 (DuckDB · gold) → 정적 HTML 서빙.
 스케줄은 VM 의 systemd 타이머다 — 회차 `bullet-in.timer` 가 3시간 간격 하루 8회,
 워치리스트 `bullet-in-watchlist.timer` 가 하루 4회.
+머지된 코드는 회차 유닛이 시작에서 내려받고 끝에서 판정한다 (`bullet_in.deploy` · 스펙 `docs/superpowers/specs/2026-09-03-deploy-automation-design.md`) — 세션이 VM 에서 `git pull` 을 하지 않는다.
 `airflow/dags/bullet_in_daily.py` 는 확장용 보존 자산이고 운영에서 돌지 않는다.
 
 스택: Python 3.11, uv, pydantic v2, httpx+BeautifulSoup, Playwright, google-genai, SQLAlchemy.

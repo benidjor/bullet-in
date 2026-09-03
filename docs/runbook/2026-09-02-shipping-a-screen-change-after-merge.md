@@ -32,14 +32,23 @@ ssh -i ~/.ssh/<키> <운영> 'ps aux | grep -E "[b]ullet_in|[b]ackfill" | grep -
 `grep -v "bash -c"` 는 이 점검이 자기 자신을 잡지 않게 막는다.
 이 점검을 `ssh <호스트> '<명령 모음>'` 으로 실행하면 감싼 bash 의 명령줄에 "bullet_in" 문자열이 들어 있어 그 bash 자신이 걸린다.
 
-## 2. 코드 반영
+## 2. 코드 반영 — 손으로 하지 않는다 (2026-09-04 부터)
+
+머지된 코드는 다음 회차가 시작할 때 스스로 내려받는다 (`bullet-in.service` 의 `ExecStartPre` · `bullet_in.deploy advance`).
+회차 끝에 첫 회차를 판정하고 디스코드 리뷰 채널에 「✅ 코드 반영 완료」 가 온다.
+그 알림이 오면 이 문서의 §3 이하를 할 필요가 없다.
+
+급하면 회차를 손으로 한 번 시작한다.
 
 ```bash
-ssh -i ~/.ssh/<키> <운영> 'cd ~/bullet-in && git pull --ff-only && git log --oneline -1'
+ssh -i ~/.ssh/<키> <운영> 'sudo systemctl start --no-block bullet-in.service'
 ```
 
-**머지 커밋 해시를 눈으로 대조한다.**
-squash merge 라 로컬 브랜치의 커밋 해시와 다르다.
+**`git pull` 을 손으로 치지 않는다.**
+쳐도 되지만 상태 파일 (`state/deploy.json`) 이 「전진」 을 못 보고 지나가 첫 회차 판정과 롤백이 안 붙는다.
+
+아래 §3 에서 §6 은 회차를 기다리지 않고 재렌더 · 배포만 앞당길 때 쓴다.
+그때도 코드 반영은 위 명령으로 회차를 시작하는 편이 안전하다.
 
 ## 3. 재렌더 — 스니펫을 옮겨 적지 않는다
 

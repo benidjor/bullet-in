@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from bullet_in.dbt_gate import GateResult, TestOutcome, dbt_env, enforce_gate, parse_results, run_gate
+from bullet_in.dbt_gate import (GATE_CRASH_EXIT, GateResult, TestOutcome, dbt_env,
+                                enforce_gate, parse_results, run_gate)
 
 
 def _write(tmp_path: Path, results: list[dict]) -> Path:
@@ -204,3 +205,34 @@ def test_run_gate_reports_exit_code_when_results_lack_blocking_rows(tmp_path, mo
     assert r.ran is False
     assert "could not attach maria" in r.error
     assert "2" in r.error
+
+
+def test_run_gate_records_dbt_returncode(tmp_path, monkeypatch):
+    # 판정기는 저널을 안 읽는다 — 종료 코드가 결과에 실려 있어야 급사를 가른다.
+    def fake_run(*args, **kwargs):
+        return _FakeProc(-11, stdout="23 of 29 START ...")   # run_results.json 을 안 쓴다
+
+    monkeypatch.setattr("bullet_in.dbt_gate.subprocess.run", fake_run)
+    r = run_gate(tmp_path, "mysql+pymysql://root@localhost:3306/bulletin")
+    assert r.ran is False
+    assert r.dbt_returncode == -11
+
+
+def test_enforce_gate_exits_3_when_dbt_died_by_signal(monkeypatch):
+    # 2026-08-31 · 2026-09-03 세그폴트 (안건 2ν): 코드 탓이 아니라 롤백하면 안 된다.
+    sent = {}
+    monkeypatch.setattr("bullet_in.notify.send_alert", lambda **kw: sent.update(kw))
+    result = GateResult(ran=False, error="종료코드 -11", dbt_returncode=-11)
+    with pytest.raises(SystemExit) as e:
+        enforce_gate(result, run_id="r1")
+    assert e.value.code == GATE_CRASH_EXIT == 3
+    assert sent   # 게이트 알림은 그대로 나간다
+
+
+def test_enforce_gate_keeps_exit_1_when_dbt_failed_with_its_own_code(monkeypatch):
+    # profile 오류 · 접속 실패 (종료 코드 1 · 2) 는 코드 의심이라 1 에 남는다.
+    monkeypatch.setattr("bullet_in.notify.send_alert", lambda **kw: None)
+    result = GateResult(ran=False, error="종료코드 2", dbt_returncode=2)
+    with pytest.raises(SystemExit) as e:
+        enforce_gate(result, run_id="r1")
+    assert e.value.code == 1
