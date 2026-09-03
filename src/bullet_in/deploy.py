@@ -11,6 +11,7 @@ import importlib
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -117,19 +118,90 @@ class Repo:
     def status_short(self) -> str:
         return self._git("status", "--short", "--branch", check=False).stdout.strip()[:800]
 
+    def subjects(self, a: str, b: str, *, limit: int = 5) -> list[str]:
+        """a 뒤 b 까지의 커밋을 「해시 7자리 제목」 으로 (최신 먼저 · 상한 limit)."""
+        out = self._git("log", f"--max-count={limit}", "--format=%h %s", f"{a}..{b}",
+                        check=False).stdout
+        return [line for line in out.splitlines() if line.strip()]
+
+    def shortstat(self, a: str, b: str) -> str:
+        return self._git("diff", "--shortstat", f"{a}..{b}", check=False).stdout.strip()
+
+    def remote_url(self) -> str:
+        return self._git("remote", "get-url", "origin", check=False).stdout.strip()
+
 
 # ── 알림 ──────────────────────────────────────────────────────────────────────
 
 def _alert(title: str, description: str, *, incident: bool,
-           fields: list[dict] | None = None) -> None:
+           fields: list[dict] | None = None, url: str | None = None) -> None:
     notify.send_alert(title=title, description=description,
                       color=notify.COLOR_FAILURE if incident else notify.COLOR_CANDIDATE,
-                      fields=fields, footer="bullet-in deploy",
+                      fields=fields, url=url, footer="bullet-in deploy",
                       channel=notify.CHANNEL_INCIDENT if incident else notify.CHANNEL_REVIEW)
 
 
 def _short(sha: str) -> str:
     return sha[:7]
+
+
+_GITHUB_REMOTE = re.compile(r"^(?:https://github\.com/|git@github\.com:)([^/\s]+/[^/\s]+?)(?:\.git)?/?$")
+
+
+def compare_url(remote: str, a: str, b: str) -> str | None:
+    """GitHub 원격이면 두 커밋의 compare 링크 · 아니면 None (테스트의 로컬 원격 등)."""
+    m = _GITHUB_REMOTE.match(remote.strip())
+    return f"https://github.com/{m.group(1)}/compare/{_short(a)}...{_short(b)}" if m else None
+
+
+def _change_fields(repo: Repo, a: str, b: str, *, label: str) -> tuple[str, list[dict], str | None]:
+    """a 에서 b 로 바뀐 것의 제목 한 줄 · 필드 둘 (커밋 목록 · 변경 규모) · compare 링크.
+
+    알림에 「무엇이 나갔나 · 되돌려졌나」 를 싣는 자리다 (2026-09-04). git 이 무엇으로 실패해도
+    알림 자체는 나가야 하므로 그때는 빈 값으로 돌려준다.
+    """
+    if not a or not b:
+        return "", [], None
+    try:
+        subjects = repo.subjects(a, b)
+        stat = repo.shortstat(a, b)
+        url = compare_url(repo.remote_url(), a, b)
+    except (OSError, subprocess.SubprocessError) as e:  # 알림은 나가야 한다
+        log.warning("변경 내역을 못 읽었다: %s", e)
+        return "", [], None
+    title = subjects[0].split(" ", 1)[1][:120] if subjects and " " in subjects[0] else ""
+    fields = [{"name": label, "value": "\n".join(f"- {s}" for s in subjects)[:1024] or "-",
+               "inline": False},
+              {"name": "변경 규모", "value": stat or "-", "inline": True}]
+    return title, fields, url
+
+
+def read_local_build(path: Path = Path("site/build.json")) -> dict | None:
+    """이 회차가 렌더한 표지 (run.py 가 썼다). 라이브 표지는 전파 전이면 옛 것일 수 있어
+    「이 회차의 run_id」 는 여기서 읽는다 (2026-09-03 실측 · 같은 커밋 재배포에서 드러났다)."""
+    try:
+        data = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _hhmm(iso: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(iso).astimezone()
+    except ValueError:
+        return None
+
+
+def _time_field(advanced_at: str) -> dict:
+    now = datetime.now(timezone.utc).astimezone()
+    then = _hhmm(advanced_at)
+    if then is None:
+        return {"name": "시간", "value": f"판정 {now:%H:%M}", "inline": True}
+    secs = int((now - then).total_seconds())
+    return {"name": "시간",
+            "value": f"전진 {then:%H:%M} → 판정 {now:%H:%M} ({secs // 60}분 {secs % 60}초)",
+            "inline": True}
 
 
 # ── 사전 점검 · 전진 ───────────────────────────────────────────────────────────
@@ -214,14 +286,16 @@ def rollback(repo: Repo, state: DeployState, *, reason: str) -> str:
     if bad and bad not in state.blocked:
         state.blocked.append(bad)
     state.pending = False
-    _alert("⏪ 코드 롤백 — 직전 커밋으로 되돌렸다",
+    subject, fields, url = _change_fields(repo, good, bad, label="되돌린 커밋")
+    _alert(f"⏪ 코드 롤백 — {subject}" if subject else "⏪ 코드 롤백 — 직전 커밋으로 되돌렸다",
            f"{_short(bad)} → {_short(good)} · 사유: {reason}\n"
            "**코드 탓이 아닐 수 있다** — DB 다운 · 데이터 부채로 실패한 회차도 같은 모양이다 · "
            "새 커밋이 main 에 오면 다시 전진한다 · 같은 커밋을 다시 보려면 "
            f"`uv run python -m bullet_in.deploy unblock {_short(bad)}`",
-           incident=True,
-           fields=[{"name": "저널", "value": "`journalctl -u bullet-in.service -n 200 --no-pager`",
-                    "inline": False}])
+           incident=True, url=url,
+           fields=fields + [{"name": "저널",
+                             "value": "`journalctl -u bullet-in.service -n 200 --no-pager`",
+                             "inline": False}])
     return f"롤백 {_short(bad)} → {_short(good)}"
 
 
@@ -286,9 +360,15 @@ def judge(repo: Repo, state: DeployState, *, service_result: str, exit_status: s
     ok, detail = matches(state.current)
     state.pending = False
     if ok:
-        _alert("✅ 코드 반영 완료",
-               f"{_short(state.previous)} → {_short(state.current)} · 첫 회차 통과 · 라이브 표지 일치 ({detail})",
-               incident=False)
+        subject, fields, url = _change_fields(repo, state.previous, state.current, label="반영된 커밋")
+        local_run = str((read_local_build() or {}).get("run_id") or "?")[:8]
+        live_run = detail.rsplit("run ", 1)[1] if "run " in detail else "?"
+        fields += [_time_field(state.advanced_at),
+                   {"name": "회차", "value": f"run {local_run} · 라이브 표지 run {live_run}",
+                    "inline": True}]
+        _alert(f"✅ 코드 반영 완료 — {subject}" if subject else "✅ 코드 반영 완료",
+               f"{_short(state.previous)} → {_short(state.current)} · 첫 회차 통과 · 라이브 표지 일치",
+               incident=False, fields=fields, url=url)
         return "반영 완료"
     _alert("🚧 배포는 나갔는데 라이브 표지가 다르다",
            f"기대 {_short(state.current)} · 받은 것 {detail} · 코드는 되돌리지 않는다 (F7) · "

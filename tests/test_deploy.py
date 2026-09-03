@@ -12,12 +12,14 @@ from bullet_in.deploy import (
     Verdict,
     advance,
     build_matches,
+    compare_url,
     decide,
     fetch_build,
     judge,
     load_state,
     main,
     preflight,
+    read_local_build,
     rollback,
     run_preflight_subprocess,
     save_state,
@@ -393,3 +395,60 @@ def test_cli_judge_exits_zero_even_when_it_blows_up(repos, tmp_path, quiet_alert
     monkeypatch.setenv("SERVICE_RESULT", "success")
     assert main(["judge"]) == 0
     assert len(quiet_alerts) == 1
+
+
+# ── 알림 상세 (2026-09-04 · 반영 완료 · 롤백에 커밋 제목 · 목록 · 규모 · 시간 · 회차) ──
+
+def test_repo_subjects_and_shortstat(repos):
+    vm, state, old, new = _advanced(repos)
+    subjects = Repo(vm).subjects(old, new)
+    assert subjects == [f"{new[:7]} c2"]
+    assert "1 file changed" in Repo(vm).shortstat(old, new)
+    assert Repo(vm).subjects(new, new) == []        # 같은 커밋이면 비어 있다
+
+
+@pytest.mark.parametrize("remote,expected", [
+    ("https://github.com/benidjor/bullet-in.git", "https://github.com/benidjor/bullet-in/compare/aaaaaaa...bbbbbbb"),
+    ("https://github.com/benidjor/bullet-in", "https://github.com/benidjor/bullet-in/compare/aaaaaaa...bbbbbbb"),
+    ("git@github.com:benidjor/bullet-in.git", "https://github.com/benidjor/bullet-in/compare/aaaaaaa...bbbbbbb"),
+    ("/tmp/upstream", None),                       # 테스트의 로컬 원격 · 링크 없음
+])
+def test_compare_url_reads_github_remotes_only(remote, expected):
+    assert compare_url(remote, "a" * 40, "b" * 40) == expected
+
+
+def test_read_local_build_returns_none_when_missing(tmp_path):
+    assert read_local_build(tmp_path / "site" / "build.json") is None
+    (tmp_path / "site").mkdir()
+    (tmp_path / "site" / "build.json").write_text('{"commit": "x", "run_id": "localrun-1"}')
+    assert read_local_build(tmp_path / "site" / "build.json")["run_id"] == "localrun-1"
+
+
+def test_judge_confirm_alert_carries_commit_detail(repos, quiet_alerts, monkeypatch):
+    vm, state, old, new = _advanced(repos)
+    (vm / "site").mkdir()
+    (vm / "site" / "build.json").write_text(json.dumps({"commit": new, "run_id": "localrun-1"}))
+    monkeypatch.chdir(vm)
+    judge(Repo(vm), state, service_result="success", exit_status="0",
+          matches=lambda sha: (True, f"{sha[:7]} · run liverun1"))
+    alert = quiet_alerts[0]
+    assert alert["title"].startswith("✅ 코드 반영 완료 — c2")          # 무엇이 나갔나가 제목에
+    names = [f["name"] for f in alert["fields"]]
+    assert names == ["반영된 커밋", "변경 규모", "시간", "회차"]
+    values = {f["name"]: f["value"] for f in alert["fields"]}
+    assert f"{new[:7]} c2" in values["반영된 커밋"]
+    assert "1 file changed" in values["변경 규모"]
+    assert "전진" in values["시간"] and "판정" in values["시간"]
+    assert "run localrun" in values["회차"] and "liverun1" in values["회차"]   # 이 회차 · 라이브 표지
+    assert alert.get("url") is None                                       # 로컬 원격은 링크 없음
+
+
+def test_rollback_alert_carries_commit_detail(repos, quiet_alerts):
+    vm, state, old, new = _advanced(repos)
+    rollback(Repo(vm), state, reason="시험")
+    alert = quiet_alerts[0]
+    assert alert["title"].startswith("⏪ 코드 롤백 — c2")
+    values = {f["name"]: f["value"] for f in alert["fields"]}
+    assert f"{new[:7]} c2" in values["되돌린 커밋"]
+    assert "1 file changed" in values["변경 규모"]
+    assert "저널" in values                                                # 종전 필드는 그대로
