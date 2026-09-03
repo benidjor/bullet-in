@@ -109,6 +109,10 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
 ```
 
 `|/usr/lib/systemd/systemd-coredump ...` 가 나오면 됐다.
+**받는 쪽은 2026-09-03 17:08 KST 에 준비됐다.**
+설치 뒤 시험 세그폴트가 `coredumpctl list` 에 `SIGSEGV · present · 829 KB` 로 잡혔고 apport 는 `inactive` 다.
+설치 출력에 커널 업그레이드 대기 (재부팅 권고) 와 docker 재시작 보류가 떠 있었는데, 둘 다 회차 사이에 재부팅하면 풀린다.
+
 받는 쪽이 제대로 붙었는지는 일부러 죽여 본다 (운영 DB 를 안 건드린다).
 
 ```bash
