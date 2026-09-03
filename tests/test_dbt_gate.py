@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -236,3 +237,52 @@ def test_enforce_gate_keeps_exit_1_when_dbt_failed_with_its_own_code(monkeypatch
     with pytest.raises(SystemExit) as e:
         enforce_gate(result, run_id="r1")
     assert e.value.code == 1
+
+
+def _completed(rc, stdout="", stderr=""):
+    return subprocess.CompletedProcess(["dbt", "build"], rc, stdout, stderr)
+
+
+def _write_pass(tmp_path):
+    (tmp_path / "target").mkdir(exist_ok=True)
+    (tmp_path / "target" / "run_results.json").write_text(json.dumps(
+        {"results": [{"unique_id": "test.bullet_in.ok.x", "status": "pass", "failures": 0}]}))
+
+
+def test_run_gate_retries_once_after_a_signal_death_and_passes(tmp_path, monkeypatch):
+    calls = []
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        if len(calls) == 1:
+            return _completed(-11)
+        _write_pass(tmp_path)
+        return _completed(0)
+    monkeypatch.setattr("bullet_in.dbt_gate.subprocess.run", fake_run)
+    r = run_gate(tmp_path, "mysql+pymysql://root@localhost:3306/bulletin")
+    assert len(calls) == 2
+    assert r.ran and not r.blocked and r.dbt_returncode == 0
+
+
+def test_run_gate_gives_up_after_two_signal_deaths(tmp_path, monkeypatch):
+    calls = []
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        return _completed(-11)
+    monkeypatch.setattr("bullet_in.dbt_gate.subprocess.run", fake_run)
+    r = run_gate(tmp_path, "mysql+pymysql://root@localhost:3306/bulletin")
+    assert len(calls) == 2
+    assert not r.ran and r.dbt_returncode == -11
+
+
+def test_run_gate_does_not_retry_a_violation(tmp_path, monkeypatch):
+    calls = []
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        (tmp_path / "target").mkdir(exist_ok=True)
+        (tmp_path / "target" / "run_results.json").write_text(json.dumps(
+            {"results": [{"unique_id": "test.bullet_in.bad.x", "status": "fail", "failures": 3}]}))
+        return _completed(1)
+    monkeypatch.setattr("bullet_in.dbt_gate.subprocess.run", fake_run)
+    r = run_gate(tmp_path, "mysql+pymysql://root@localhost:3306/bulletin")
+    assert len(calls) == 1
+    assert r.ran and r.blocked and r.dbt_returncode == 1

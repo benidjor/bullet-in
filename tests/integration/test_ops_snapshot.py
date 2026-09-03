@@ -88,3 +88,30 @@ def test_ops_snapshot_includes_fetch_duration_with_nulls(engine):
     # 최신순: run-002 (i=2, NULL) · run-001 (i=1, 4.0+1=5.0) · run-000 (NULL) — 손 재계산
     assert snap["runs"][0]["fetch_duration_sec"] is None
     assert snap["runs"][1]["fetch_duration_sec"] == 5.0
+
+
+def test_ops_snapshot_excludes_unfinished_runs(engine):
+    """마감되지 않은 회차(finished_at IS NULL)는 스냅샷에서 제외된다."""
+    with engine.begin() as c:
+        # 마감된 회차 삽입
+        c.execute(text(
+            "INSERT INTO pipeline_runs (run_id,dag_run_id,started_at,finished_at,"
+            "duration_sec,fetch_duration_sec,source_counts,new_count,dup_count,"
+            "error_count,success_rate) "
+            "VALUES (:rid,'test',:t,:t,:dur,:fetch,:counts,:new,:dup,:err,:sr)"),
+            [{"rid": "run-finished", "t": datetime(2026, 7, 1, 0, 0),
+              "dur": 60.0, "fetch": 5.0, "counts": json.dumps({}),
+              "new": 1, "dup": 2, "err": 0, "sr": 0.9}])
+        # 마감되지 않은 회차 삽입 (finished_at=NULL, duration_sec=NULL)
+        c.execute(text(
+            "INSERT INTO pipeline_runs (run_id,dag_run_id,started_at,"
+            "fetch_duration_sec,source_counts,new_count,dup_count,"
+            "error_count,success_rate) "
+            "VALUES (:rid,'test',:t,:fetch,:counts,:new,:dup,:err,:sr)"),
+            [{"rid": "run-unfinished", "t": datetime(2026, 7, 1, 6, 0),
+              "fetch": 5.0, "counts": json.dumps({}),
+              "new": 1, "dup": 2, "err": 0, "sr": 0.9}])
+    snap = MartStore(engine).ops_snapshot()
+    run_ids = [r["run_id"] for r in snap["runs"]]
+    assert "run-finished" in run_ids
+    assert "run-unfinished" not in run_ids

@@ -43,6 +43,13 @@ def test_스냅샷_대상_셋과_ops_하나():
     assert [p.source for p in plans if p.mode == "append"] == ["ops"]
 
 
+def test_pipeline_runs_ops_워터마크는_finished_at_이다():
+    """started_at 이면 회차 도중 (collect 뒤 · publish 전) 웨어하우스 타이머가 지나갈 때
+    마감 전 행 (finished_at NULL) 이 그 모습 그대로 영영 실린다 — finished_at 은 회차가
+    끝나야 채워지므로 그 값을 워터마크로 잡아야 미완결 행을 다음 실행이 다시 본다."""
+    assert dict(warehouse.OPS_SOURCES)["pipeline_runs"] == "finished_at"
+
+
 # --- Arrow 스키마 도출 -----------------------------------------------------
 
 def test_문자열_계열은_전부_string():

@@ -1,6 +1,7 @@
 from __future__ import annotations
 import argparse, asyncio, json, logging, os, time, uuid, yaml
 from collections import Counter
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 from pymongo import MongoClient
@@ -45,18 +46,38 @@ SERVING_SELECT_SQL = (
     "published_precision,fetched_at "
     "FROM articles")
 
+# 회차 행은 두 단계로 적는다 (스펙 2026-09-04 §5.3) — collect 가 수집 값을 넣고 publish 가 마감한다.
 # started_at 은 Python UTC 바인딩 · finished_at 은 UTC_TIMESTAMP() — 세션 TZ 무관 (spec §5)
+# 같은 run_id 로 collect 가 재시도돼도 안전하다 (ON DUPLICATE KEY UPDATE) — 원본 저장은
+# content_hash 로 dedup, 마트는 upsert, 이제 회차 행도 upsert 라 collect 전체가 멱등이다.
+# finished_at · duration_sec 은 이 upsert 가 안 건드린다 — publish 의 마감 몫이다.
 RUN_INSERT_SQL = (
-    "INSERT INTO pipeline_runs (run_id,dag_run_id,started_at,finished_at,"
-    "duration_sec,fetch_duration_sec,source_counts,candidate_counts,new_count,"
-    "dup_count,blocked_count,error_count,success_rate) "
-    "VALUES (:rid,:drid,:started,UTC_TIMESTAMP(),:dur,:fetch,:counts,:cands,"
-    ":new,:dup,:blocked,:err,:sr)")
+    "INSERT INTO pipeline_runs (run_id,dag_run_id,started_at,fetch_duration_sec,"
+    "source_counts,candidate_counts,new_count,dup_count,blocked_count,error_count,"
+    "success_rate,fetch_detail) "
+    "VALUES (:rid,:drid,:started,:fetch,:counts,:cands,:new,:dup,:blocked,:err,:sr,:detail) "
+    "ON DUPLICATE KEY UPDATE "
+    "dag_run_id=VALUES(dag_run_id),started_at=VALUES(started_at),"
+    "fetch_duration_sec=VALUES(fetch_duration_sec),source_counts=VALUES(source_counts),"
+    "candidate_counts=VALUES(candidate_counts),new_count=VALUES(new_count),"
+    "dup_count=VALUES(dup_count),blocked_count=VALUES(blocked_count),"
+    "error_count=VALUES(error_count),success_rate=VALUES(success_rate),"
+    "fetch_detail=VALUES(fetch_detail)")
+RUN_FINISH_SQL = ("UPDATE pipeline_runs SET finished_at=UTC_TIMESTAMP(), duration_sec=:dur "
+                  "WHERE run_id=:rid")
+RUN_SELECT_SQL = (
+    "SELECT run_id,started_at,fetch_duration_sec,source_counts,candidate_counts,new_count,"
+    "dup_count,blocked_count,error_count,success_rate,fetch_detail "
+    "FROM pipeline_runs WHERE run_id=:rid")
+# SLO-6 이력 — 이번 행이 이미 들어가 있으므로 자기 run_id 를 뺀다.
+VOLUME_HISTORY_SQL = ("SELECT source_counts FROM pipeline_runs WHERE run_id <> :rid "
+                      "ORDER BY started_at DESC LIMIT 12")
 
 # 후보 절벽 판정 재료 (차단 알림 스펙 §3.1): [0] 이 직전 회차 · 나머지는 알림 표시용.
 # 이번 회차 행은 파이프라인 마지막에 적재되므로 이 시점의 최신 행이 곧 직전 회차다.
+# 회차 행이 upsert 라 재시도 시 자기 행을 직전 회차로 읽을 수 있어 run_id 를 뺀다 (VOLUME_HISTORY_SQL 과 같은 이유).
 CANDIDATE_HISTORY_SQL = ("SELECT candidate_counts FROM pipeline_runs "
-                         "ORDER BY started_at DESC LIMIT 5")
+                         "WHERE run_id <> :rid ORDER BY started_at DESC LIMIT 5")
 
 
 # 서빙 제외 판정에 쓰는 확정 선수 연결 — 추출이 붙인 기사만 남는다.
@@ -117,6 +138,51 @@ SURNAME_MIN_LEN = 3
 # 목록에서 빠지면 상세 페이지도 함께 정리되고, 선수 페이지도 같은 rows 로
 # 만들어지므로 과거 글이 그쪽에서도 빠진다 (2026-08-27 사용자 확정).
 FMKOREA_SERVING_SINCE = date(2026, 6, 1)
+
+
+@dataclass
+class FetchSummary:
+    """수집 단계가 남기고 publish 가 되읽는 값 여덟 (스펙 2026-09-04 §1.2 · §5.3).
+
+    메모리로 넘기지 않고 회차 행에 적는 이유는 단계 함수가 Airflow 없이도 같은 길로
+    값을 받게 하기 위해서다 (§3.4)."""
+    run_id: str
+    started_at_utc: datetime
+    fetch_sec: float
+    source_counts: dict
+    candidate_counts: dict
+    new_count: int
+    dup_count: int
+    blocked_count: int
+    errors: dict[str, str]
+    funnels: dict
+    success_rate: float
+
+    def to_params(self, *, dag_run_id: str) -> dict:
+        return {"rid": self.run_id, "drid": dag_run_id, "started": self.started_at_utc,
+                "fetch": self.fetch_sec,
+                "counts": json.dumps(self.source_counts),
+                "cands": json.dumps(self.candidate_counts),
+                "new": self.new_count, "dup": self.dup_count, "blocked": self.blocked_count,
+                "err": len(self.errors), "sr": self.success_rate,
+                "detail": json.dumps({"errors": self.errors, "funnels": self.funnels},
+                                     ensure_ascii=False)}
+
+    @classmethod
+    def from_row(cls, row) -> "FetchSummary":
+        def _j(v):
+            return json.loads(v) if isinstance(v, (str, bytes)) else (v or {})
+        detail = _j(row.get("fetch_detail"))
+        return cls(run_id=row["run_id"], started_at_utc=row["started_at"],
+                   fetch_sec=float(row["fetch_duration_sec"] or 0.0),
+                   source_counts=_j(row.get("source_counts")),
+                   candidate_counts=_j(row.get("candidate_counts")),
+                   new_count=int(row.get("new_count") or 0),
+                   dup_count=int(row.get("dup_count") or 0),
+                   blocked_count=int(row.get("blocked_count") or 0),
+                   errors=dict(detail.get("errors") or {}),
+                   funnels=dict(detail.get("funnels") or {}),
+                   success_rate=float(row.get("success_rate") or 0.0))
 
 
 def _published_before(row: dict, since: date | None) -> bool:
@@ -230,16 +296,21 @@ def cliff_alert_payload(candidate_counts: dict, history: list[dict], *,
         funnels=adapter_funnels(adapters))
 
 
-async def main(concurrency: int):
-    run_id = str(uuid.uuid4())
+def _materials():
+    """단계마다 자기 재료를 만든다 (스펙 §5.1). 지금 main 의 첫 아홉 줄과 같다."""
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
     sources = load_sources("config/sources.yaml")
     registry = load_registry("config/credibility.yaml")
-
     engine = create_engine(os.environ["MARIADB_URL"])
     mart = MartStore(engine)
     mart.ensure_schema()
     pstore = PlayerStore(engine)
+    return cfg, sources, registry, engine, mart, pstore
+
+
+async def collect(run_id: str, concurrency: int) -> FetchSummary:
+    """수집 · 원본 저장 · 마트 upsert · 회차 행 삽입 (§3.2 표의 첫 행)."""
+    cfg, sources, registry, engine, mart, pstore = _materials()
     # fmkorea 무관 글 필터 인정 집합 주입 (워치리스트 스펙 §3.2) — 배치와 동일 집합
     adapters = build_adapters(cfg, fmkorea_player_names=pstore.confirmed_ko_names())
 
@@ -259,7 +330,7 @@ async def main(concurrency: int):
     try:
         with engine.connect() as c:
             cand_hist = [json.loads(s) for s in
-                         c.execute(text(CANDIDATE_HISTORY_SQL)).scalars().all() if s]
+                         c.execute(text(CANDIDATE_HISTORY_SQL), {"rid": run_id}).scalars().all() if s]
         payload = cliff_alert_payload(
             candidate_counts, cand_hist, adapters=adapters, sources=sources,
             success_rate=success_rate(len(adapters), len(errors)), run_id=run_id)
@@ -295,7 +366,7 @@ async def main(concurrency: int):
             canonical_url(it.url))
 
     mongo = MongoClient(os.environ["MONGO_URI"])[os.environ.get("MONGO_DB", "bulletin")]
-    rawstore = RawStore(mongo)   # 아래 신선도 판정이 원본 워터마크를 읽으므로 잡아 둔다
+    rawstore = RawStore(mongo)   # 원본 저장 · 신선도 판정은 publish 가 자기 RawStore 로 한다
     rawstore.insert_many(raw)
 
     arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
@@ -304,7 +375,22 @@ async def main(concurrency: int):
         stats["dup_count"], stats["blocked_count"], stats["women_count"],
         stats["author_drop_count"])
     mart.upsert(arts)
+    summary = FetchSummary(
+        run_id=run_id, started_at_utc=started_at_utc, fetch_sec=fetch_sec,
+        source_counts=stats["source_counts"], candidate_counts=candidate_counts,
+        new_count=len(arts), dup_count=stats["dup_count"],
+        blocked_count=stats["blocked_count"], errors=errors,
+        funnels=adapter_funnels(adapters),
+        success_rate=success_rate(len(adapters), len(errors)))
+    with engine.begin() as c:
+        c.execute(text(RUN_INSERT_SQL),
+                  summary.to_params(dag_run_id=os.environ.get("AIRFLOW_CTX_DAG_RUN_ID", "manual")))
+    return summary
 
+
+def enrich(run_id: str) -> None:
+    """번역 · 재작성 게이트 · 선수 추출 · 관측 · 분류 · 말투 백필 (§3.2 표의 둘째 행)."""
+    cfg, sources, registry, engine, mart, pstore = _materials()
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     from bullet_in.enrich import (partition_by_body_level, partition_generatable,
                                   partition_bodyless_tweets, retry_notes,
@@ -464,6 +550,16 @@ async def main(concurrency: int):
         logging.getLogger(__name__).info(
             "말투 백필: 대상 %d건 중 %d건 재생성", len(tone_rows), len(fixed))
 
+
+def publish(run_id: str) -> None:
+    """서빙 렌더 · SLO 관측 · 회차 행 마감 · 운영 화면 · 표지 (§3.2 표의 셋째 행)."""
+    cfg, sources, registry, engine, mart, pstore = _materials()
+    adapters = build_adapters(cfg, fmkorea_player_names=pstore.confirmed_ko_names())
+    mongo = MongoClient(os.environ["MONGO_URI"])[os.environ.get("MONGO_DB", "bulletin")]
+    rawstore = RawStore(mongo)
+    with engine.connect() as c:
+        row = c.execute(text(RUN_SELECT_SQL), {"rid": run_id}).mappings().one()
+    fetched = FetchSummary.from_row(row)
     with engine.connect() as c:
         rows = [dict(r) for r in c.execute(text(SERVING_SELECT_SQL)).mappings().all()]
     # 수집 필터 도입 전 적재된 fmkorea 무관 글을 서빙에서만 제외 (DB 는 보존).
@@ -488,14 +584,13 @@ async def main(concurrency: int):
 
     # 수집량 이상탐지 (SLO-6): 지난 12회 source_counts 대비 소스별 드롭 · 스파이크 알림
     with engine.connect() as c:
-        hist = [json.loads(s) for s in c.execute(text(
-            "SELECT source_counts FROM pipeline_runs "
-            "ORDER BY started_at DESC LIMIT 12")).scalars().all() if s]
-    anomalies = volume_anomalies(stats["source_counts"], hist)
+        hist = [json.loads(s) for s in c.execute(
+            text(VOLUME_HISTORY_SQL), {"rid": run_id}).scalars().all() if s]
+    anomalies = volume_anomalies(fetched.source_counts, hist)
     if anomalies:
         notify.send_alert(**notify.build_anomaly_alert(
             anomalies, len(hist), hist=hist, sources=sources, run_id=run_id,
-            candidates=candidate_counts))
+            candidates=fetched.candidate_counts))
 
     # 신선도 워터마크 감시 (SLO-5): 소스별 MAX(fetched_at) 경과가 임계 초과면 알림.
     # 판정 기준은 Mongo 원본 수집이다 — 기사 표를 보면 다른 행으로 흡수되는 소스가
@@ -517,8 +612,8 @@ async def main(concurrency: int):
     if fresh_targets:
         notify.send_alert(**notify.build_freshness_alert(
             records, default_hours, targets=fresh_targets, sources=sources,
-            run_id=run_id, checked_at=checked_at, candidates=candidate_counts,
-            fetch_errors=errors, funnels=adapter_funnels(adapters)))
+            run_id=run_id, checked_at=checked_at, candidates=fetched.candidate_counts,
+            fetch_errors=fetched.errors, funnels=fetched.funnels))
     # 안 보낸 이유를 남긴다 — 종전에는 대상이 비면 아무 기록 없이 넘어가 "왜 알림이
     # 안 나갔는가" 를 저널로 답할 수 없었다 (스펙 2026-08-14 §5.4).
     logging.getLogger(__name__).info(
@@ -537,20 +632,12 @@ async def main(concurrency: int):
             "원본 워터마크 유실 %d소스 — 판정에서 빠집니다 (raw_items 보존 정책 확인): %s",
             len(lost), " · ".join(lost))
 
-    summary = {"new_or_changed": len(arts), "errors": errors,
-               "success_rate": success_rate(len(adapters), len(errors)),
-               "elapsed_sec": round(time.perf_counter() - t0, 2)}
+    summary = {"new_or_changed": fetched.new_count, "errors": fetched.errors,
+               "success_rate": fetched.success_rate,
+               "elapsed_sec": round((datetime.now(timezone.utc).replace(tzinfo=None)
+                                     - fetched.started_at_utc).total_seconds(), 2)}
     with engine.begin() as c:
-        c.execute(text(RUN_INSERT_SQL),
-            {"rid": run_id,
-             "drid": os.environ.get("AIRFLOW_CTX_DAG_RUN_ID", "manual"),
-             "started": started_at_utc, "dur": summary["elapsed_sec"],
-             "fetch": fetch_sec,
-             "counts": json.dumps(stats["source_counts"]),
-             "cands": json.dumps(candidate_counts),
-             "new": len(arts), "dup": stats["dup_count"],
-             "blocked": stats["blocked_count"],
-             "err": len(errors), "sr": summary["success_rate"]})
+        c.execute(text(RUN_FINISH_SQL), {"rid": run_id, "dur": summary["elapsed_sec"]})
 
     # 운영 뷰 (ops.html): pipeline_runs 기록 후 DB 한 경로로 집계 · 렌더.
     # 실패해도 파이프라인은 계속 (spec §4 실패 격리).
@@ -572,17 +659,56 @@ async def main(concurrency: int):
 
     # 배포본 표지 (스펙 2026-09-03 §4.4): 판정기가 라이브의 build.json 으로 반영을 확인한다.
     write_build_marker("site", run_id=run_id)
+    print(summary)
 
-    # dbt 품질 게이트 (설계 2026-08-31): 마트가 이번 회차 행을 담은 뒤에 돌린다.
-    # 차단 사유가 있으면 여기서 회차가 실패로 끝나고, systemd 가 ExecStartPost
-    # (배포) 를 안 돌린다 — site/ 는 만들어져 있지만 올라가지 않는다.
+
+def gate(run_id: str) -> None:
+    """dbt 품질 게이트 (§3.2 표의 넷째 행). 차단이면 SystemExit — 셸 종료 코드가 판정 재료다."""
     dbt_gate.enforce_gate(
         dbt_gate.run_gate(Path("dbt"), os.environ["MARIADB_URL"]), run_id=run_id)
 
-    print(summary)
+
+async def main(concurrency: int):
+    """넷을 차례로 — 로컬 · 테스트 · systemd 되돌림이 쓰는 한 프로세스 경로."""
+    run_id = str(uuid.uuid4())
+    await collect(run_id, concurrency)
+    enrich(run_id)
+    publish(run_id)
+    gate(run_id)
+
+
+STAGES = ("collect", "enrich", "publish", "gate")
+
+
+def run_stage(stage: str, run_id: str, concurrency: int) -> None:
+    if stage not in STAGES:
+        raise ValueError(f"모르는 단계 {stage!r} — {STAGES}")
+    if stage == "collect":
+        asyncio.run(collect(run_id, concurrency))
+    elif stage == "enrich":
+        enrich(run_id)
+    elif stage == "publish":
+        publish(run_id)
+    else:
+        gate(run_id)
+
+
+def parse_args(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--concurrency", type=int, default=8)
+    ap.add_argument("--stage", choices=STAGES,
+                    help="하나만 돌린다 (Airflow 태스크) · 없으면 넷을 차례로")
+    ap.add_argument("--run-id", help="--stage 와 함께 · 회차 행의 run_id")
+    ns = ap.parse_args(argv)
+    if ns.stage and not ns.run_id:
+        ap.error("--stage 는 --run-id 와 함께 준다")
+    return ns
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--concurrency", type=int, default=8)
-    asyncio.run(main(ap.parse_args().concurrency))
+    ns = parse_args()
+    if ns.stage:
+        run_stage(ns.stage, ns.run_id, ns.concurrency)
+    else:
+        asyncio.run(main(ns.concurrency))

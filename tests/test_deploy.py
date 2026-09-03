@@ -11,6 +11,7 @@ from bullet_in.deploy import (
     Repo,
     Verdict,
     advance,
+    airflow_inputs,
     build_matches,
     compare_url,
     decide,
@@ -18,6 +19,7 @@ from bullet_in.deploy import (
     judge,
     load_state,
     main,
+    parse_task_states,
     preflight,
     read_local_build,
     rollback,
@@ -452,3 +454,60 @@ def test_rollback_alert_carries_commit_detail(repos, quiet_alerts):
     assert f"{new[:7]} c2" in values["되돌린 커밋"]
     assert "1 file changed" in values["변경 규모"]
     assert "저널" in values                                                # 종전 필드는 그대로
+
+
+# ── Airflow 입력 (스펙 2026-09-04 §6.3) — 태스크 상태 일곱을 decide 의 두 값으로 ──
+
+def _states(**over):
+    base = {t: "success" for t in ("advance", "collect", "enrich", "publish", "gate", "deploy_site")}
+    base["judge"] = "running"
+    base["warehouse_load"] = "success"
+    base.update(over)
+    return base
+
+
+def test_airflow_inputs_success_when_pipeline_tasks_all_succeed():
+    assert airflow_inputs(_states()) == ("success", "0")
+
+
+def test_airflow_inputs_holds_when_gate_was_skipped():
+    s = _states(gate="skipped", deploy_site="skipped")
+    assert airflow_inputs(s) == ("exit-code", "3")
+    assert decide(DeployState(pending=True), *airflow_inputs(s)).action == "hold"
+
+
+def test_airflow_inputs_rolls_back_naming_the_first_failed_task():
+    s = _states(enrich="failed", publish="upstream_failed", gate="upstream_failed",
+                deploy_site="upstream_failed")
+    assert airflow_inputs(s) == ("exit-code", "enrich")
+    assert decide(DeployState(pending=True), *airflow_inputs(s)).action == "rollback"
+
+
+def test_airflow_inputs_ignores_warehouse_load_and_judge():
+    assert airflow_inputs(_states(warehouse_load="failed", judge="running")) == ("success", "0")
+
+
+def test_airflow_inputs_treats_missing_task_as_failure():
+    s = _states()
+    del s["deploy_site"]
+    assert airflow_inputs(s) == ("exit-code", "deploy_site")
+
+
+def test_parse_task_states_accepts_cli_list_and_plain_dict():
+    cli = json.dumps([{"dag_id": "bullet_in_cycle", "run_id": "r", "task_id": "gate", "state": "skipped"},
+                      {"dag_id": "bullet_in_cycle", "run_id": "r", "task_id": "collect", "state": "success"}])
+    assert parse_task_states(cli) == {"gate": "skipped", "collect": "success"}
+    assert parse_task_states(json.dumps({"gate": "success"})) == {"gate": "success"}
+
+
+def test_cli_judge_from_airflow_reads_states_file(repos, tmp_path, quiet_alerts, monkeypatch):
+    vm, state, old, new = _advanced(repos)
+    state_path = tmp_path / "deploy.json"
+    save_state(state, state_path)
+    monkeypatch.setattr("bullet_in.deploy.STATE_PATH", state_path)
+    monkeypatch.chdir(vm)
+    states = tmp_path / "states.json"
+    states.write_text(json.dumps(_states(gate="failed", deploy_site="upstream_failed")))
+    assert main(["judge", "--from-airflow", str(states)]) == 0
+    assert _git(vm, "rev-parse", "HEAD") == old          # 롤백됐다
+    assert load_state(state_path).blocked == [new]

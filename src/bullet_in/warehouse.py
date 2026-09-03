@@ -604,7 +604,9 @@ def load_snapshot(engine, catalog, plan: LoadPlan, now: datetime) -> int:
 # 운영 기록 둘. 삽입만 일어나 원본에 이미 시점별 기록이 남으므로 하루 1회로 묶었다
 # (무료 구간 유지 조건 · 설계 §3.1). 계획 이름은 `ops_daily` 하나이고
 # 실제 테이블은 원본마다 하나씩 둘이다.
-OPS_SOURCES = (("pipeline_runs", "started_at"), ("source_freshness", "checked_at"))
+# pipeline_runs 는 finished_at 으로 워터마크를 잡는다 — 마감 전 행은 그 시각이 채워질
+# 때까지 다음 실행이 다시 보고, 끝내 안 끝나는 회차는 이전과 같이 아예 안 실린다.
+OPS_SOURCES = (("pipeline_runs", "finished_at"), ("source_freshness", "checked_at"))
 
 
 def load_ops(engine, catalog, now: datetime) -> int:

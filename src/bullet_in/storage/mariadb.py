@@ -242,10 +242,12 @@ class MartStore:
         """운영 뷰 (ops.html) 집계 스냅샷. 지표 정의는 spec §5 표가 기준.
         pending 은 rows_missing_translation/stage 와 동일 술어로 카운트."""
         with self.engine.connect() as c:
+            # 회차 행이 두 단계로 적혀 finished_at 이 빈 행이 생길 수 있다 (collect · publish 스펙 2026-09-04 §5.3).
+            # render.py 가 duration_sec 을 합산하는데 빈 행은 오류가 된다.
             runs = [dict(r) for r in c.execute(text(
                 "SELECT run_id,started_at,duration_sec,fetch_duration_sec,"
                 "source_counts,new_count,dup_count,error_count,success_rate "
-                "FROM pipeline_runs ORDER BY started_at DESC LIMIT :n"),
+                "FROM pipeline_runs WHERE finished_at IS NOT NULL ORDER BY started_at DESC LIMIT :n"),
                 {"n": chart_runs}).mappings().all()]
             freshness = [dict(r) for r in c.execute(text(
                 "SELECT run_id,checked_at,source_id,last_fetched_at,"

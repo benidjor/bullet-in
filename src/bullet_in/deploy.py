@@ -345,6 +345,30 @@ def build_matches(sha: str, *, fetch=fetch_build, tries: int = 3,
     return False, fetch_detail or "비정상 응답"
 
 
+# Airflow 에서 부를 때의 입력 (스펙 2026-09-04 §6.3). judge 의 재료 두 값은 그대로다 —
+# 상태 일곱을 그 두 값으로 옮기는 얇은 층만 새로 둔다. warehouse_load 는 회차 결과와
+# 무관하게 도는 것이라 판정 재료가 아니고 judge 자신은 아직 running 이다.
+PIPELINE_TASKS = ("advance", "collect", "enrich", "publish", "gate", "deploy_site")
+
+
+def parse_task_states(text: str) -> dict[str, str]:
+    """`airflow tasks states-for-dag-run … -o json` 의 목록이나 {task_id: state} 사전을 받는다."""
+    data = json.loads(text)
+    if isinstance(data, dict):
+        return {str(k): str(v) for k, v in data.items()}
+    return {str(r["task_id"]): str(r.get("state")) for r in data if "task_id" in r}
+
+
+def airflow_inputs(states: dict[str, str]) -> tuple[str, str]:
+    """상태 일곱 → (service_result, exit_status). 스펙 §6.3 표의 세 갈래."""
+    if states.get("gate") == "skipped":
+        return "exit-code", str(GATE_CRASH_EXIT)
+    for task in PIPELINE_TASKS:
+        if states.get(task) != "success":
+            return "exit-code", task
+    return "success", "0"
+
+
 def judge(repo: Repo, state: DeployState, *, service_result: str, exit_status: str,
           matches=None) -> str:
     """회차 끝에 systemd 가 준 결과로 판정한다 (스펙 §6 표)."""
@@ -397,7 +421,10 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="머지된 코드의 자동 반영 · 판정 · 롤백")
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("advance", help="회차 시작 — origin/main 을 내려받는다 (ExecStartPre)")
-    sub.add_parser("judge", help="회차 끝 — $SERVICE_RESULT · $EXIT_STATUS 로 판정 (ExecStopPost)")
+    jd = sub.add_parser("judge", help="회차 끝 — $SERVICE_RESULT · $EXIT_STATUS 로 판정 (ExecStopPost) "
+                                      "· --from-airflow 면 태스크 상태 JSON 으로")
+    jd.add_argument("--from-airflow", metavar="PATH",
+                    help="airflow tasks states-for-dag-run -o json 의 출력 파일 (- 는 stdin)")
     sub.add_parser("preflight", help="새 코드가 돌 수 있는지 (advance 가 새 uv run 으로 부른다)")
     sub.add_parser("rollback", help="사람이 — 직전 커밋으로 되돌리고 현재 커밋을 차단")
     ub = sub.add_parser("unblock", help="사람이 — 차단 목록에서 뺀다")
@@ -416,8 +443,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "advance":
             out = advance(repo, state)
         elif args.command == "judge":
-            out = judge(repo, state, service_result=os.environ.get("SERVICE_RESULT", ""),
-                        exit_status=os.environ.get("EXIT_STATUS", ""))
+            if args.from_airflow:
+                raw = sys.stdin.read() if args.from_airflow == "-" else Path(args.from_airflow).read_text()
+                service_result, exit_status = airflow_inputs(parse_task_states(raw))
+            else:
+                service_result = os.environ.get("SERVICE_RESULT", "")
+                exit_status = os.environ.get("EXIT_STATUS", "")
+            out = judge(repo, state, service_result=service_result, exit_status=exit_status)
         elif args.command == "rollback":
             out = rollback(repo, state, reason="수동 (사람이 rollback 을 쳤다)")
         else:

@@ -102,28 +102,36 @@ def _diagnosis(proc, project_dir: Path) -> str:
     return " · ".join(parts)
 
 
-def run_gate(project_dir: Path, mariadb_url: str) -> GateResult:
+def run_gate(project_dir: Path, mariadb_url: str, *, crash_retries: int = 1) -> GateResult:
     """`dbt build` 를 돌리고 결과 파일을 읽어 판정한다.
 
     dbt 자체가 못 돌면 데이터 결함이 아니라 게이트 고장이다 — 그것도 차단으로 낸다.
     조용히 통과시키면 게이트가 있다는 착각만 남는다.
+
+    신호로 죽은 것 (세그폴트 · 안건 2ν · 비결정적) 만 crash_retries 번 더 돌린다.
+    위반 · 설정 오류는 다시 돌려도 같은 답이라 한 번에 끝낸다 (스펙 2026-09-04 §6.2).
+    Airflow 의 태스크 재시도로는 이 구분을 못 한다 — 건너뜀은 재시도되지 않고
+    retries 는 실패 전부에 붙는다.
     """
     results_path = Path(project_dir) / "target" / "run_results.json"
-    # 2026-08-31 실측: profile 파싱 오류 · MariaDB 접속 실패 · extension 로드 실패처럼
-    # dbt 가 무엇 하나 돌기도 전에 죽으면 run_results.json 을 새로 안 쓴다.
-    # 지우지 않고 두면 운영 VM 에서는 지난 회차의 "전부 통과" 파일이 그대로 남아 있어서,
-    # 두 번째 회차부터는 게이트가 매번 그 옛 파일을 읽고 통과로 보고한다 —
-    # 죽은 포트로 dbt 를 겨눴을 때 종료 코드 2 가 나면서도 남은 파일 때문에 통과가 났다.
-    try:
-        results_path.unlink(missing_ok=True)
-    except OSError as e:
-        return GateResult(ran=False, error=f"이전 결과 파일을 못 지웠다: {e}")
     env = {**os.environ, **dbt_env(mariadb_url), "DBT_PROFILES_DIR": "."}
-    try:
-        proc = subprocess.run(["dbt", "build"], cwd=project_dir, env=env,
-                              capture_output=True, text=True, timeout=600)
-    except (OSError, subprocess.SubprocessError) as e:
-        return GateResult(ran=False, error=f"dbt 를 못 돌렸다: {e}")
+    proc = None
+    for attempt in range(1 + crash_retries):
+        # 2026-08-31 실측: dbt 가 시작도 못 하면 run_results.json 을 새로 안 쓴다 —
+        # 지난 회차의 "전부 통과" 파일이 남아 통과로 읽힌다. 시도마다 지운다.
+        try:
+            results_path.unlink(missing_ok=True)
+        except OSError as e:
+            return GateResult(ran=False, error=f"이전 결과 파일을 못 지웠다: {e}")
+        try:
+            proc = subprocess.run(["dbt", "build"], cwd=project_dir, env=env,
+                                  capture_output=True, text=True, timeout=600)
+        except (OSError, subprocess.SubprocessError) as e:
+            return GateResult(ran=False, error=f"dbt 를 못 돌렸다: {e}")
+        if proc.returncode >= 0:
+            break
+        log.warning("dbt 가 신호로 죽었다 (종료코드 %d · 시도 %d/%d)",
+                    proc.returncode, attempt + 1, 1 + crash_retries)
     result = parse_results(results_path)
     diag = _diagnosis(proc, Path(project_dir))
     if not result.ran:
