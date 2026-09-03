@@ -260,9 +260,23 @@ def aggregate(facts: list[dict], articles: list[dict]) -> dict:
     launch = LAUNCH_DATE.isoformat()
     counted = [f for f in facts if f.get("event_date_kst") != launch]
 
+    # 주요 소식 · 타임라인 제목은 2026-09-03 까지 카드에 해시만 실어서 단계 · 등급이
+    # 비어 왔다 (실측 — 「(없음)」 52 = mitem 24 + pcard 26 + tltitle 2). 기사 해시가
+    # 있으면 마트 스냅샷에서 채운다. 선수 카드는 기사가 아니라 그대로 남는다.
+    # 마트 값은 지금 값이라 클릭 시점의 카드 표기와 다를 수 있다.
+    by_hash = {a.get("content_hash"): a for a in articles if a.get("content_hash")}
+
+    def value_of(fact, axis, article_column):
+        value = fact.get(axis)
+        if (value is None or value == "") and article_column:
+            article = by_hash.get(fact.get("card_hash"))
+            if article:
+                value = article.get(article_column)
+        return _axis_key(value)
+
     axes = {}
     for axis, article_column in METRIC_AXES:
-        clicks = Counter(_axis_key(f.get(axis)) for f in counted)
+        clicks = Counter(value_of(f, axis, article_column) for f in counted)
         denom = (Counter(_axis_key(a.get(article_column)) for a in articles)
                  if article_column else Counter())
         rows = []
@@ -961,8 +975,9 @@ def run_load(now: datetime | None = None) -> None:
         else:
             load_ops(engine, catalog, now)
 
-    # 행동 기록은 출처가 다르고 하루 늦게 도착한다. 여기서 실패해도 위의 적재는
-    # 이미 끝났으므로 회차를 통째로 죽이지 않는다.
+    # 행동 기록은 출처가 다르고 하루 늦게 도착한다. 위의 적재는 이미 끝났으므로
+    # 여기서 실패해도 그쪽은 잃지 않는다. 다만 삼키면 유닛이 0 으로 끝나 `OnFailure=`
+    # 알림이 안 뜨고 집계 파일이 조용히 낡으므로, 적어 두고 다시 던진다.
     try:
         load_ga4_events(catalog, now)
         load_ga4_flat(catalog, now)
@@ -970,6 +985,7 @@ def run_load(now: datetime | None = None) -> None:
         write_metrics(catalog, now)
     except Exception:
         log.warning("행동 기록 적재 실패 — 마트 이력 적재는 끝났다", exc_info=True)
+        raise
 
 
 def run_show() -> None:

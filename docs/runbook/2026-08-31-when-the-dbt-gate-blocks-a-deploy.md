@@ -89,6 +89,43 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
   dbt 는 같은 파일명을 덮어써서 디렉터리 mtime 이 안 바뀐다.
   2026-08-31 에 이 시각을 보고 「컴파일도 못 했다」 고 잘못 판단한 적이 있다.
 
+### 3.2. 종료 코드가 -11 이면 코어 덤프를 연다
+
+같은 자리 (`gold_slo_rollup` · 29개 중 23번째) 에서 세그폴트로 죽은 것이 2026-08-31 21:05 와 2026-09-03 03:06 두 번이다.
+트레이스백이 없어 어느 라이브러리인지는 코어 덤프로만 짚을 수 있다.
+
+**유닛은 코어를 남기게 되어 있다.**
+`bullet-in.service` 의 `LimitCORE=infinity` 가 그 설정이다 (2026-09-03).
+소프트 한도가 0 이면 커널이 코어를 안 쓰므로 이 줄이 없으면 아래가 전부 헛일이다.
+
+**VM 에는 받는 쪽이 있어야 한다.**
+Ubuntu 기본은 apport 가 `kernel.core_pattern` 을 쥐고 있고, 패키지가 아닌 실행 파일 (uv 가 만든 venv 의 python) 의 코어는 다루지 않는다.
+한 번만 이렇게 바꾼다.
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  'sudo apt-get install -y systemd-coredump && sudo systemctl disable --now apport &&
+   sudo sysctl -p /usr/lib/sysctl.d/50-coredump.conf && cat /proc/sys/kernel/core_pattern'
+```
+
+`|/usr/lib/systemd/systemd-coredump ...` 가 나오면 됐다.
+받는 쪽이 제대로 붙었는지는 일부러 죽여 본다 (운영 DB 를 안 건드린다).
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  'bash -c "ulimit -c unlimited; python3 -c \"import ctypes; ctypes.string_at(0)\""; coredumpctl list | tail -2'
+```
+
+**다음에 게이트가 -11 로 죽으면 이렇게 본다.**
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  'coredumpctl list | tail -5; coredumpctl info -1 | head -40'
+```
+
+`info` 의 스택 위쪽에 `duckdb` · `mysql_scanner` 같은 이름이 보이면 그것이 후보다.
+코어 파일 자체는 `/var/lib/systemd/coredump/` 에 남고 기본 상한이 프로세스당 2 GB 라 디스크 (여유 22 GB · 2026-09-03) 를 함께 본다.
+
 ## 4. 고아 귀속이 늘었을 때
 
 기사 신원 (`content_hash`) 이 갈릴 때 선수 귀속이 따라가지 못하면 고아가 된다.
@@ -166,7 +203,7 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
 ## 7. 이 게이트가 안 보는 것
 
 - **CI 의 dbt 는 빈 표를 본다** — 값 이탈과 고아 귀속은 운영 회차에서만 드러난다.
-- **차단이 실제로 배포를 막은 적은 운영에서 아직 없다** (2026-08-31 기준).
-  로컬에서 종료 코드 1 까지는 확인했다.
-  첫 진짜 차단이 났을 때 `ExecStartPost` 가 안 돌았는지 함께 확인한다.
+- **차단이 배포를 막은 것은 운영에서 두 번이다** (2026-08-31 21:05 · 2026-09-03 03:06 · 둘 다 §3.2 의 세그폴트).
+  둘 다 `ExecStartPost` 가 안 돌아 직전 화면이 남았고, 다음 회차 (자동 · 수동) 가 통과해 풀렸다.
+  두 번째는 배포 뒤 저널을 `--since '10 min ago'` 로만 봐서 50분 전의 실패를 못 봤다 — 회차 목록 (`Starting` · `Finished` · `Failed`) 을 하루치로 먼저 본다.
 

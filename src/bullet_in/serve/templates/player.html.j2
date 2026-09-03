@@ -16,7 +16,7 @@
   <div class="tlnode{{ ' tlend' if n.end }}">
     <span class="tldate">{{ n.a._kdate }}</span>
     {% if n.badge %}<span class="stage {{ n.badge.tone }}{{ ' filled' if n.badge.filled }}">{{ n.badge.label }}</span>{% endif %}
-    <a class="tltitle" href="{{ root }}article/{{ n.a.content_hash }}.html" data-hash="{{ n.a.content_hash }}">{{ n.a._title }}</a>
+    <a class="tltitle" href="{{ root }}article/{{ n.a.content_hash }}.html" data-hash="{{ n.a.content_hash }}" data-stage="{{ n.a._stage }}" data-tier="{{ n.a._tier_key }}" data-outlet="{{ n.a._outlet }}">{{ n.a._title }}</a>
     <span class="tlsrc">{{ n.a._outlet }}{% if n.a._reader_tier %} · {{ n.a._reader_tier }}{% endif %}</span>
     {% if n.count > 1 %}<span class="tlmore">같은 단계 {{ n.count }}건</span>{% endif %}
   </div>
