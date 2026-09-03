@@ -34,6 +34,7 @@ log = logging.getLogger(__name__)
 # 오류가 아니라 빈 결과가 와서 조용히 빈 백업이 된다 (2026-09-01 실물).
 MARIADB_CONTAINER = "bullet-in-mariadb-1"
 MONGO_CONTAINER = "bullet-in-mongo-1"
+AIRFLOW_DB_CONTAINER = "bullet-in-airflow-db-1"
 MONGO_DB = "bulletin"
 MONGO_COLLECTION = "raw_items"
 
@@ -226,6 +227,23 @@ def dump_mongo(dest: Path) -> int:
     return mongodump_document_count(proc.stderr.decode(errors="replace"))
 
 
+def dump_airflow_db(dest: Path) -> None:
+    """Airflow 메타데이터 (DAG 실행 · 태스크 상태) — 되살리면 실행 이력이 돌아온다.
+
+    마트 · 원본과 달리 잃어도 서비스는 안 멈추지만 (다음 회차가 새로 쌓는다),
+    「언제 무엇이 실패했나」 가 사라진다. 한 파일이라 같은 세대 규칙으로 함께 올린다.
+
+    _docker 는 자식 프로세스의 stdout 을 파일 디스크립터로 잇는다 — gzip 파일 객체를
+    바로 주면 압축을 건너뛰고 평문이 .gz 이름으로 남는다. 그래서 dump_mariadb 와
+    같이 평문으로 받은 뒤 압축한다."""
+    plain = dest.with_suffix("")                      # airflow.sql.gz → airflow.sql
+    with plain.open("wb") as f:
+        _docker(AIRFLOW_DB_CONTAINER, "pg_dump", "-U", "airflow", "airflow", stdout=f)
+    with plain.open("rb") as src, gzip.open(dest, "wb", compresslevel=9) as dst:
+        shutil.copyfileobj(src, dst)
+    plain.unlink()
+
+
 def mongodump_document_count(stderr: str) -> int:
     """mongodump 이 찍는 마무리 줄에서 건수를 뽑는다.
 
@@ -307,6 +325,8 @@ def run_backup(workdir: Path) -> None:
     log.info("덤프 시작 — %s", ts.isoformat())
     dump_mariadb(sql)
     docs = dump_mongo(archive)
+    airflow_gz = workdir / "airflow.sql.gz"
+    dump_airflow_db(airflow_gz)
 
     problems = dump_problems(sql, archive)
     if problems:
@@ -328,7 +348,7 @@ def run_backup(workdir: Path) -> None:
     token = _token()
     for generation in generations_for(ts.date()):
         prefix = backup_prefix(generation, ts)
-        for path in (sql_gz, archive, manifest_path):
+        for path in (sql_gz, archive, airflow_gz, manifest_path):
             upload(bucket, f"{prefix}/{path.name}", path, token)
     # 올린 뒤 남기지 않는다 — 운영 데이터 사본이 VM 의 /tmp 에 계속 누워 있을 이유가 없다.
     shutil.rmtree(workdir, ignore_errors=True)
