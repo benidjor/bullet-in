@@ -543,6 +543,49 @@ def test_컴팩션이_행을_잃지_않는다(local_catalog, fake_mart):
     assert t.scan().to_arrow().num_rows == before
 
 
+def _data_files(t):
+    """표 위치 아래 실제로 놓인 parquet — 목록이 아니라 디렉터리를 센다."""
+    import pathlib
+    root = pathlib.Path(t.location().removeprefix("file://")) / "data"
+    return sorted(root.rglob("*.parquet"))
+
+
+def test_고아_청소가_참조_없는_옛_파일만_지운다(local_catalog, fake_mart):
+    # 운영 카탈로그가 옛 스냅샷을 즉시 걷어내 컴팩션이 덮어쓴 파일이 참조 없이 남는다
+    # (실측 — 표는 1개를 가리키는데 GCS 에 9개). 로컬도 같은 모양이 난다.
+    t = _many_commits(local_catalog, fake_mart, 3)
+    warehouse.compact(t)
+    t.refresh()
+    assert len(_data_files(t)) == 4
+    rows = t.scan().to_arrow().num_rows
+    result = warehouse.sweep_orphans(t, _t(2026, 9, 10))     # 문턱 (3일) 을 넘긴 시점
+    assert result == {"listed": 4, "live": 1, "young": 0, "deleted": 3}
+    assert len(_data_files(t)) == 1
+    t.refresh()
+    assert t.scan().to_arrow().num_rows == rows
+
+
+def test_고아_청소가_3일_안_된_파일은_남긴다(local_catalog, fake_mart):
+    # 「목록에 없다」 는 「버려도 된다」 가 아니다 — 방금 쓰고 아직 커밋 전일 수 있다.
+    t = _many_commits(local_catalog, fake_mart, 3)
+    warehouse.compact(t)
+    t.refresh()
+    result = warehouse.sweep_orphans(t, warehouse.datetime.now(warehouse.timezone.utc))
+    assert result["deleted"] == 0 and result["young"] == 3
+    assert len(_data_files(t)) == 4
+
+
+def test_고아_청소가_metadata_는_건드리지_않는다(local_catalog, fake_mart):
+    import pathlib
+    t = _many_commits(local_catalog, fake_mart, 3)
+    warehouse.compact(t)
+    t.refresh()
+    meta = pathlib.Path(t.location().removeprefix("file://")) / "metadata"
+    before = sorted(p.name for p in meta.iterdir())
+    warehouse.sweep_orphans(t, _t(2026, 9, 10))
+    assert sorted(p.name for p in meta.iterdir()) == before
+
+
 def test_합칠_것이_없으면_커밋하지_않는다(local_catalog, fake_mart):
     t = _many_commits(local_catalog, fake_mart, 1)
     snapshots_before = len(t.metadata.snapshots)
