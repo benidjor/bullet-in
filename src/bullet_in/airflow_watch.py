@@ -36,7 +36,7 @@ def evaluate(heartbeat_ok: bool, last_success_age_hours: float | None, *,
 
 
 def latest_success_age(list_runs_json: str, now: datetime) -> float | None:
-    """`airflow dags list-runs -d bullet_in_cycle -o json` 의 목록에서 최신 성공까지의 시간."""
+    """`airflow dags list-runs bullet_in_cycle -o json` 의 목록에서 최신 성공까지의 시간."""
     ends = []
     for r in json.loads(list_runs_json or "[]"):
         if r.get("state") == "success" and r.get("end_date"):
@@ -65,7 +65,11 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     now = datetime.now(timezone.utc)
     hb = _cli("jobs", "check", "--job-type", "SchedulerJob", "--allow-multiple")
-    runs = _cli("dags", "list-runs", "-d", DAG_ID, "-o", "json")
+    if hb.returncode != 0:
+        log.warning("%s 실패 (rc=%d) — %s", "jobs check", hb.returncode, hb.stderr[:300])
+    runs = _cli("dags", "list-runs", DAG_ID, "-o", "json")
+    if runs.returncode != 0:
+        log.warning("%s 실패 (rc=%d) — %s", "dags list-runs", runs.returncode, runs.stderr[:300])
     age = latest_success_age(runs.stdout, now) if runs.returncode == 0 else None
     problems = evaluate(hb.returncode == 0, age)
     state = {}
@@ -79,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
     if send:
         notify.send_alert("🚨 Airflow 가 회차를 안 돌리고 있다",
                           "\n".join(f"- {p}" for p in problems) + "\n"
-                          "`systemctl status airflow-scheduler airflow-dag-processor` · "
+                          "`systemctl status airflow-scheduler airflow-dag-processor airflow-api-server` · "
                           "`airflow dags state bullet_in_cycle` · 되돌리려면 런북 (Airflow 아래에서 회차 돌리기) §5",
                           color=notify.COLOR_FAILURE, channel=notify.CHANNEL_INCIDENT)
     log.info("airflow watch — 심박 %s · 마지막 성공 %s시간 전 · 문제 %d · 발송 %s",

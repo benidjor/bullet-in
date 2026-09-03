@@ -68,3 +68,18 @@ def test_deploy_site_command_does_not_end_in_sh():
     # `.sh` 로 끝나면 BashOperator 가 bash_command 를 Jinja 템플릿 파일 경로로 읽으려
     # 든다 (template_ext) — 끝에 공백을 하나 남겨 피한다.
     assert _dag().get_task("deploy_site").bash_command.endswith(" ")
+
+
+def test_judge_restores_the_metadata_db_connection_before_calling_the_cli():
+    # Task SDK 가 태스크 프로세스의 접속 문자열을 `airflow-db-not-allowed:///` 로
+    # 덮어써서, CLI 를 부르기 전에 airflow.env 를 다시 읽어야 한다 (최종 리뷰 Fix 1).
+    cmd = _dag().get_task("judge").bash_command
+    marker = ". /home/ubuntu/airflow/airflow.env"
+    assert marker in cmd
+    assert cmd.index(marker) < cmd.index("tasks states-for-dag-run")
+
+
+def test_dag_has_its_own_failure_callback_for_timeouts():
+    # `dagrun_timeout` 만료는 태스크를 건너뜀으로 바꿔 태스크 콜백이 안 불린다
+    # (최종 리뷰 Fix 3) — DAG 레벨 콜백이 그 자리를 잇는다.
+    assert _dag().on_failure_callback
