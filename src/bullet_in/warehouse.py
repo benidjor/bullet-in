@@ -890,8 +890,9 @@ def compact(table) -> dict:
 def expire(table, now: datetime) -> int:
     """오래된 Iceberg 스냅샷을 만료한다.
 
-    부피가 아니라 `metadata.json` 1 MB 한도 때문에 한다.
-    스냅샷 하나가 약 1,015 바이트를 더하므로 그냥 두면 약 124일에 커밋이 실패한다.
+    처음에는 `metadata.json` 1 MB 한도 (스냅샷당 약 1,015 바이트 · 약 124일) 를 막으려고
+    두었는데, 운영 카탈로그 (Lakehouse) 는 이전 스냅샷을 커밋 즉시 걷어내 늘 「1개에서
+    1개로」 다 (2026-09-03 실측). 로컬 카탈로그와 카탈로그가 바뀔 때를 위해 남긴다.
 
     호출 경로가 `table.maintenance` 아래다 — `table.expire_snapshots()` 는
     PyIceberg 0.11.1 에 없다. 인자도 밀리초가 아니라 datetime 이다.
@@ -902,6 +903,59 @@ def expire(table, now: datetime) -> int:
     after = len(table.metadata.snapshots)
     log.info("스냅샷 만료 — %d개에서 %d개로", before, after)
     return before - after
+
+
+# 고아로 본 지 이만큼 지나야 지운다. Iceberg 는 데이터 파일을 먼저 쓰고 목록을
+# 나중에 갱신하므로 「목록에 없다」 가 「버려도 된다」 와 같은 말이 아니다.
+# Apache Iceberg 의 `remove_orphan_files` 기본값과 같은 3일이다.
+ORPHAN_MIN_AGE = timedelta(days=3)
+
+
+def _plain_path(uri: str) -> str:
+    """`gs://bucket/x` → `bucket/x` · `file:///x` → `/x`. 매니페스트의 경로와
+    pyarrow 파일시스템이 돌려주는 경로를 같은 꼴로 맞춘다."""
+    return re.sub(r"^[a-z]+://", "", uri)
+
+
+def sweep_orphans(table, now: datetime) -> dict:
+    """현재 스냅샷이 가리키지 않는 옛 데이터 파일을 지운다.
+
+    운영 카탈로그 (Lakehouse) 가 이전 스냅샷을 커밋 즉시 걷어내서, 표준 Iceberg 라면
+    스냅샷 만료가 함께 지웠을 파일이 아무 참조 없이 GCS 에 남는다 (실측 — 첫 컴팩션
+    뒤 표는 1개를 가리키는데 `data/` 에 9개). PyIceberg 0.11.1 에는 고아 정리가 없다.
+
+    살아 있는 집합을 먼저 받고 나열은 그 뒤에 한다 — 순서를 바꾸면 그 사이에
+    커밋된 새 파일이 고아로 보인다. `metadata/` 는 범위 밖이다.
+    """
+    from pyarrow import fs as pafs
+
+    live = {_plain_path(f.file.file_path) for f in table.scan().plan_files()}
+    data_uri = table.location().rstrip("/") + "/data"
+    if data_uri.startswith("file://"):
+        # from_uri 는 ASCII 밖 문자가 든 경로를 못 읽는다 (테스트의 임시 경로).
+        filesystem, root = pafs.LocalFileSystem(), _plain_path(data_uri)
+    else:
+        filesystem, root = pafs.FileSystem.from_uri(data_uri)
+    try:
+        infos = [i for i in filesystem.get_file_info(pafs.FileSelector(root, recursive=True))
+                 if i.is_file]
+    except FileNotFoundError:
+        infos = []
+
+    young = deleted = 0
+    for info in infos:
+        if info.path in live:
+            continue
+        mtime = info.mtime if info.mtime.tzinfo else info.mtime.replace(tzinfo=timezone.utc)
+        if now - mtime < ORPHAN_MIN_AGE:
+            young += 1
+            continue
+        filesystem.delete_file(info.path)
+        deleted += 1
+    log.info("고아 청소 — data/ 객체 %d개 · 살아 있는 것 %d · 3일 안 된 것 %d · 지움 %d",
+             len(infos), len(infos) - young - deleted, young, deleted)
+    return {"listed": len(infos), "live": len(infos) - young - deleted,
+            "young": young, "deleted": deleted}
 
 
 def drop_old_snapshot_dates(table, today: date) -> int:
@@ -953,7 +1007,9 @@ def run_maintenance(now: datetime | None = None) -> None:
                 drop_old_snapshot_dates(table, now.date())
             compact(table)
             expire(table, now)
-            # 남은 스냅샷 수를 남긴다 — 1 MB 한도까지 얼마나 남았는지 보는 눈이다.
+            sweep_orphans(table, now)
+            # 남은 스냅샷 수를 남긴다 — 운영 카탈로그는 늘 1 이고, 그보다 크면
+            # 카탈로그의 동작이 바뀐 것이다.
             log.info("%s.%s — 남은 스냅샷 %d개", ns, name,
                      len(table.metadata.snapshots))
 
