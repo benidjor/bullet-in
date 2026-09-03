@@ -181,8 +181,8 @@ def advance(repo: Repo, state: DeployState, *,
             return "ff 거부 — 현재 코드로 계속"
         problems = run_preflight()
         if problems:
-            repo.reset_hard(head)
             state.blocked.append(target)
+            repo.reset_hard(head)
             _alert("🚧 코드 전진 거부 — 사전 점검 실패",
                    f"{_short(target)} 을 내려받았다가 {_short(head)} 로 되돌렸다 · 이번 회차는 직전 코드로 돈다 · "
                    "고친 커밋이 main 에 오면 다시 전진한다",
