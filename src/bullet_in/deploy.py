@@ -195,3 +195,86 @@ def advance(repo: Repo, state: DeployState, *,
         log.exception("advance 예외")
         _alert("🚧 코드 전진 — 예외", f"{type(e).__name__}: {e}"[:1000], incident=True)
         return f"예외 — 현재 코드로 계속 ({type(e).__name__})"
+
+
+# ── 롤백 · 표지 · 판정 ─────────────────────────────────────────────────────────
+
+def rollback(repo: Repo, state: DeployState, *, reason: str) -> str:
+    """직전 커밋으로 되돌리고 현재 커밋을 차단한다. 자동 · 수동이 같은 함수다 (스펙 §7)."""
+    bad, good = state.current, state.previous
+    repo.reset_hard(good)
+    if bad and bad not in state.blocked:
+        state.blocked.append(bad)
+    state.pending = False
+    _alert("⏪ 코드 롤백 — 직전 커밋으로 되돌렸다",
+           f"{_short(bad)} → {_short(good)} · 사유: {reason}\n"
+           "**코드 탓이 아닐 수 있다** — DB 다운 · 데이터 부채로 실패한 회차도 같은 모양이다 · "
+           "새 커밋이 main 에 오면 다시 전진한다 · 같은 커밋을 다시 보려면 "
+           f"`uv run python -m bullet_in.deploy unblock {_short(bad)}`",
+           incident=True,
+           fields=[{"name": "저널", "value": "`journalctl -u bullet-in.service -n 200 --no-pager`",
+                    "inline": False}])
+    return f"롤백 {_short(bad)} → {_short(good)}"
+
+
+def unblock(state: DeployState, sha_prefix: str) -> int:
+    before = len(state.blocked)
+    state.blocked = [s for s in state.blocked if not s.startswith(sha_prefix)]
+    return before - len(state.blocked)
+
+
+def fetch_build(url: str = BUILD_URL) -> dict | None:
+    """라이브의 build.json. 비 200 · 0바이트 · JSON 아님은 전부 None 이다 (스펙 §6.1)."""
+    try:
+        r = httpx.get(url, follow_redirects=True, timeout=20)
+    except httpx.HTTPError as e:
+        log.warning("build.json 수신 실패: %s", e)
+        return None
+    if r.status_code != 200 or not r.content:
+        return None
+    try:
+        data = r.json()
+    except ValueError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def build_matches(sha: str, *, fetch=fetch_build, tries: int = 3,
+                  wait: float = 20.0) -> tuple[bool, str]:
+    """최상위 도메인이 배포 직후 잠깐 옛 것을 돌려주므로 몇 번 다시 받는다."""
+    detail = "비정상 응답"
+    for i in range(tries):
+        data = fetch()
+        got = (data or {}).get("commit") if data else None
+        if got == sha:
+            return True, _short(sha)
+        detail = _short(got) if isinstance(got, str) and got else "비정상 응답"
+        if i < tries - 1:
+            time.sleep(wait)
+    return False, detail
+
+
+def judge(repo: Repo, state: DeployState, *, service_result: str, exit_status: str,
+          matches=None) -> str:
+    """회차 끝에 systemd 가 준 결과로 판정한다 (스펙 §6 표)."""
+    matches = matches or build_matches
+    v = decide(state, service_result, exit_status)
+    if v.action == "none":
+        return v.reason
+    if v.action == "rollback":
+        return rollback(repo, state, reason=v.reason)
+    if v.action == "hold":
+        _alert("⏸ 코드 반영 판정 보류", f"{_short(state.current)} · {v.reason}", incident=False)
+        return "판정 보류"
+    ok, detail = matches(state.current)
+    state.pending = False
+    if ok:
+        _alert("✅ 코드 반영 완료",
+               f"{_short(state.previous)} → {_short(state.current)} · 첫 회차 통과 · 라이브 표지 일치 ({detail})",
+               incident=False)
+        return "반영 완료"
+    _alert("🚧 배포는 나갔는데 라이브 표지가 다르다",
+           f"기대 {_short(state.current)} · 받은 것 {detail} · 코드는 되돌리지 않는다 (F7) · "
+           "몇 분 뒤 `curl -sL https://bullet-in.pages.dev/build.json` 으로 다시 본다",
+           incident=True)
+    return "표지 불일치"

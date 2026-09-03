@@ -11,10 +11,14 @@ from bullet_in.deploy import (
     Repo,
     Verdict,
     advance,
+    build_matches,
     decide,
+    judge,
     load_state,
     preflight,
+    rollback,
     save_state,
+    unblock,
 )
 
 
@@ -160,3 +164,89 @@ def test_preflight_passes_with_everything(monkeypatch):
     monkeypatch.setattr("bullet_in.deploy.importlib.import_module", lambda name: None)
     from bullet_in.deploy import REQUIRED_ENV
     assert preflight({k: "x" for k in REQUIRED_ENV}) == []
+
+
+def _advanced(repos):
+    """c1 에서 c2 로 전진해 pending 인 상태를 만든다."""
+    upstream, vm = repos
+    old = _git(vm, "rev-parse", "HEAD")
+    new = _commit(upstream, "c2")
+    state = DeployState()
+    advance(Repo(vm), state, run_preflight=lambda: [])
+    return vm, state, old, new
+
+
+def test_rollback_resets_blocks_and_alerts(repos, quiet_alerts):
+    vm, state, old, new = _advanced(repos)
+    rollback(Repo(vm), state, reason="시험")
+    assert _git(vm, "rev-parse", "HEAD") == old
+    assert state.blocked == [new]
+    assert state.pending is False
+    assert len(quiet_alerts) == 1
+    text = json.dumps(quiet_alerts[0], ensure_ascii=False)
+    assert "코드 탓이 아닐 수 있다" in text          # 넓게 되돌리는 대가 (스펙 §3.2)
+    assert "unblock" in text
+
+
+def test_unblock_removes_by_prefix():
+    state = DeployState(blocked=["a" * 40, "b" * 40])
+    assert unblock(state, "aaaaaaa") == 1
+    assert state.blocked == ["b" * 40]
+    assert unblock(state, "zzz") == 0
+
+
+def test_build_matches_retries_then_matches():
+    answers = iter([None, {"commit": "other"}, {"commit": "n" * 40}])
+    ok, detail = build_matches("n" * 40, fetch=lambda: next(answers), tries=3, wait=0)
+    assert ok is True
+
+
+def test_build_matches_fails_on_empty_and_mismatch():
+    ok, detail = build_matches("n" * 40, fetch=lambda: None, tries=2, wait=0)
+    assert ok is False
+    assert "비정상 응답" in detail
+    ok, detail = build_matches("n" * 40, fetch=lambda: {"commit": "o" * 40}, tries=1, wait=0)
+    assert ok is False
+    assert "ooooooo" in detail
+
+
+def test_judge_confirms_when_build_matches(repos, quiet_alerts):
+    vm, state, old, new = _advanced(repos)
+    out = judge(Repo(vm), state, service_result="success", exit_status="0",
+                matches=lambda sha: (True, sha[:7]))
+    assert "반영 완료" in out
+    assert state.pending is False
+    assert len(quiet_alerts) == 1
+    assert quiet_alerts[0]["channel"] == "review"
+
+
+def test_judge_alerts_but_keeps_code_when_build_mismatches(repos, quiet_alerts):
+    vm, state, old, new = _advanced(repos)
+    judge(Repo(vm), state, service_result="success", exit_status="0",
+          matches=lambda sha: (False, "비정상 응답"))
+    assert _git(vm, "rev-parse", "HEAD") == new       # F7 은 코드 탓이 아니다
+    assert state.pending is False
+    assert quiet_alerts[0]["channel"] == "incident"
+
+
+def test_judge_holds_on_gate_crash(repos, quiet_alerts):
+    vm, state, old, new = _advanced(repos)
+    judge(Repo(vm), state, service_result="exit-code", exit_status="3")
+    assert _git(vm, "rev-parse", "HEAD") == new
+    assert state.pending is True                       # 다음 회차에 다시 판정
+    assert quiet_alerts[0]["channel"] == "review"
+
+
+def test_judge_rolls_back_on_any_other_failure(repos, quiet_alerts):
+    vm, state, old, new = _advanced(repos)
+    judge(Repo(vm), state, service_result="exit-code", exit_status="1")
+    assert _git(vm, "rev-parse", "HEAD") == old
+    assert state.blocked == [new]
+    assert quiet_alerts[0]["channel"] == "incident"
+
+
+def test_judge_does_nothing_when_not_pending(repos, quiet_alerts):
+    upstream, vm = repos
+    out = judge(Repo(vm), DeployState(), service_result="exit-code", exit_status="1")
+    assert "대기 없음" in out
+    assert quiet_alerts == []
