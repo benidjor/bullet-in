@@ -28,6 +28,25 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 'cat ~/bullet-in/state/deplo
 회차는 그대로 돌고 코드는 안 바뀐다.
 저널의 스택 트레이스를 보고 고친 PR 을 머지한다.
 
+### 1.1. 반영 완료 · 롤백 알림이 싣는 것 (2026-09-04 · PR #456)
+
+제목에 반영된 (되돌린) 최신 커밋의 제목이 붙는다.
+squash 머지라 제목에 PR 번호가 있고, 제목을 누르면 두 커밋의 GitHub compare 로 간다.
+
+| 필드 | 값 | 어디서 읽나 |
+| --- | --- | --- |
+| 반영된 커밋 (되돌린 커밋) | `해시 제목` 한 줄씩 · 최신 먼저 · 상한 5 | `git log previous..current` |
+| 변경 규모 | `N files changed, +a, -b` | `git diff --shortstat` |
+| 시간 | 전진 시각 → 판정 시각 (걸린 시간) | 상태 파일의 `advanced_at` |
+| 회차 | `run <이 회차> · 라이브 표지 run <라이브>` | 로컬 `site/build.json` · 라이브 `build.json` |
+
+「회차」 의 두 값이 다르면 라이브가 아직 전파 전이라는 뜻이다.
+판정은 커밋만 대조하므로 그 자체는 실패가 아니다 (`docs/troubleshooting/2026-09-04-a-stale-live-marker-passes-for-the-same-commit.md`).
+git 이력을 못 읽으면 필드는 `-` 로 나가고 알림은 그대로 온다.
+
+같은 커밋을 되돌렸다가 다시 올리면 (롤백 → `unblock` → 재전진) 「✅」 가 한 번 더 온다.
+전진 한 번에 알림 한 번이 원칙이라 그렇다.
+
 ## 2. 롤백 알림을 받았을 때
 
 되돌린 것은 VM 의 코드뿐이다.
