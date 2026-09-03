@@ -842,3 +842,43 @@ def test_매체_축은_기사_수를_안_붙인다():
     row = warehouse.aggregate([_fact()], articles)["axes"]["card_outlet"][0]
     assert row["n_articles"] == 0
     assert row["per_article"] is None
+
+
+def test_해시가_있는_클릭은_마트에서_단계와_등급을_채운다():
+    # 주요 소식 · 타임라인 제목은 카드에 해시만 실어 단계 · 등급이 비어 온다 (실측 26건).
+    facts = [_fact(card_stage=None, card_tier=None, card_hash="h1"),
+             _fact(card_stage="", card_tier="", card_hash="h1")]
+    articles = [{"content_hash": "h1", "transfer_stage": "agreed", "tier": 2.0}]
+    got = warehouse.aggregate(facts, articles)
+    stage = {r["value"]: r["n_clicks"] for r in got["axes"]["card_stage"]}
+    tier = {r["value"]: r["n_clicks"] for r in got["axes"]["card_tier"]}
+    assert stage == {"agreed": 2}
+    assert tier == {"2": 2}
+
+
+def test_마트에_없는_해시와_선수_카드는_없음으로_남는다():
+    facts = [_fact(card_stage=None, card_hash="unknown"),
+             _fact(card_stage=None, card_hash=None, card_slug="saka", card_surface="pcard")]
+    articles = [{"content_hash": "h1", "transfer_stage": "agreed", "tier": 2.0}]
+    rows = warehouse.aggregate(facts, articles)["axes"]["card_stage"]
+    assert rows == [{"value": "(없음)", "n_clicks": 2, "n_articles": 0, "per_article": None}]
+
+
+def test_클릭이_실어_온_값은_마트_값보다_앞선다():
+    facts = [_fact(card_stage="rumour", card_hash="h1")]
+    articles = [{"content_hash": "h1", "transfer_stage": "agreed", "tier": 1.0}]
+    rows = warehouse.aggregate(facts, articles)["axes"]["card_stage"]
+    assert rows[0]["value"] == "rumour"
+
+
+def test_행동_갈래가_실패하면_마트_적재_뒤에_다시_던진다(local_catalog, monkeypatch):
+    # 삼키면 유닛이 0 으로 끝나 OnFailure= 알림이 안 뜬다.
+    monkeypatch.setenv("MARIADB_URL", "sqlite://")
+    monkeypatch.setattr(warehouse, "plans_for", lambda now, last: [])
+    monkeypatch.setattr(warehouse, "load_catalog", lambda: local_catalog)
+
+    def boom(catalog, now):
+        raise RuntimeError("BigQuery 403")
+    monkeypatch.setattr(warehouse, "load_ga4_events", boom)
+    with pytest.raises(RuntimeError, match="BigQuery 403"):
+        warehouse.run_load(_t(2026, 9, 3, 3))

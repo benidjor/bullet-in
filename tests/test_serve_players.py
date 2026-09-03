@@ -963,6 +963,21 @@ def test_timeline_title_carries_the_article_hash_for_click_tracking():
     assert re.search(r'class="tltitle"[^>]*data-hash="tlh1"', html)
 
 
+def test_timeline_title_carries_stage_tier_and_outlet_for_click_tracking():
+    """타임라인 제목에 단계 · 등급 · 매체도 싣는다 (2026-09-03).
+
+    해시만 있으면 행동 지표의 세 축에서 이 자리의 클릭이 「(없음)」 으로 갔다."""
+    arts = [_art("tlh1", 1, "interest", "스톤스, 아스날 관심")]
+    players = [_player(1, "Stones", "스톤스", "incoming",
+                       [{"content_hash": "tlh1", "stage": "interest"}])]
+    [e] = build_player_entries(arts, players)
+    html = render_player(e, SOURCES, NOW)
+    tag = re.search(r'<a class="tltitle"[^>]*>', html).group(0)
+    assert 'data-stage="interest"' in tag
+    assert 'data-tier="2"' in tag
+    assert 'data-outlet="BBC Sport"' in tag
+
+
 def test_player_card_carries_the_slug_for_click_tracking():
     """선수 카드에도 선수 식별자를 싣는다 (2026-09-03).
 

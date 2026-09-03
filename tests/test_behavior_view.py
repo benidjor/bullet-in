@@ -44,6 +44,12 @@ def test_공개일을_뺐다는_사실을_적는다():
     assert "306" in html and "271" in html
 
 
+def test_없음_칸이_무엇인지_적는다():
+    # 실측 52 = 주요 소식 24 + 선수 카드 26 + 타임라인 제목 2 — 등급 없는 기사가 아니다.
+    html = render_behavior(METRICS)
+    assert "「(없음)」 은" in html and "선수 카드" in html and "주요 소식" in html
+
+
 def test_기사_수가_0이면_기사당_값을_안_적는다():
     # 매체 축은 분모가 없다. 0으로 나눈 값을 지어내면 안 된다.
     html = render_behavior(METRICS)

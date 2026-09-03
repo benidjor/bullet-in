@@ -1246,3 +1246,19 @@ def test_main_item_carries_the_article_hash_for_click_tracking():
     html = render_index(rows, SOURCES, NOW)
     # 같은 해시가 최신 뉴스 카드에도 실리므로 mitem 태그 안에서 찾아야 한다.
     assert re.search(r'class="mitem"[^>]*data-hash="main1"', html)
+
+
+def test_main_item_carries_stage_tier_and_outlet_for_click_tracking():
+    """주요 소식 항목에 단계 · 등급 · 매체도 싣는다 (2026-09-03).
+
+    해시만 있으면 행동 지표의 세 축에서 이 자리의 클릭이 전부 「(없음)」 으로 갔다
+    (실측 24건)."""
+    # 단계가 히어로 선정 순위에 들어가므로 둘에 같은 단계를 준다 — 그래야 main1 이 주요 소식에 남는다.
+    rows = [_row(content_hash="lead1", tier=1.0, transfer_stage="agreed", title_ko="아스날, 첫 소식"),
+            _row(content_hash="main1", tier=1.0, transfer_stage="agreed",
+                 title_ko="아스날, 다른 소식", published_at=datetime(2026, 6, 29, 9, 0, 0))]
+    html = render_index(rows, SOURCES, NOW)
+    tag = re.search(r'<a class="mitem"[^>]*data-hash="main1"[^>]*>', html).group(0)
+    assert 'data-stage="agreed"' in tag
+    assert 'data-tier="1"' in tag
+    assert 'data-outlet="BBC Sport"' in tag
