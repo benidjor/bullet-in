@@ -308,10 +308,17 @@ DAG 는 Airflow 의 `run_id` 를 넘기고, 회차 행의 `dag_run_id` 열에는
   `finished_at` · `duration_sec` 은 비워 둔다.
 - `publish` 가 `run_id` 로 그 행을 읽어 SLO-6 · 신선도 알림 · 운영 화면에 쓰고, 끝에서 `finished_at` · `duration_sec` 을 갱신한다.
 
-따라 고치는 것 둘이다.
+따라 고치는 것 넷이다 (원안은 둘이었고 나머지 둘은 PR #461 리뷰가 잡았다 · `docs/troubleshooting/2026-09-04-a-row-written-twice-and-the-readers-nobody-counted.md`).
 
-- 절벽 판정은 지금처럼 행 삽입 앞에 두므로 「최신 행 = 직전 회차」 전제가 그대로다.
+- 절벽 판정은 지금처럼 행 삽입 앞에 두지만, 삽입이 upsert 라 재실행이 자기 행을 직전 회차로 읽지 않도록 자기 `run_id` 를 제외한다.
 - SLO-6 의 이력 조회 (`ORDER BY started_at DESC LIMIT 12`) 는 이번 행이 이미 들어가 있으므로 자기 `run_id` 를 제외하는 조건 한 줄을 더한다.
+- 운영 화면 집계 (`ops_snapshot`) 는 `finished_at IS NOT NULL` 인 행만 읽는다.
+  중간에 죽은 회차가 남긴 미완 행을 렌더가 합산하면 `TypeError` 로 화면이 멈춘다.
+- 웨어하우스 적재 (`load_ops`) 의 `pipeline_runs` 워터마크는 `started_at` 이 아니라 `finished_at` 이다.
+  적재 타이머가 회차 도중에 들어와도 미완 행을 복사하지 않는다.
+
+회차 행 삽입은 `INSERT … ON DUPLICATE KEY UPDATE` 다.
+원본 저장과 마트 upsert 는 이미 멱등이라 같은 `run_id` 로 `collect` 를 다시 돌려도 이 한 줄이 마지막 문장에서 죽지 않는다.
 
 XCom 을 쓰지 않는 이유는 §3.4 의 세 번째 항목이다.
 값이 회차 행에 있으면 단계 함수가 Airflow 없이도 같은 길로 값을 받는다.
