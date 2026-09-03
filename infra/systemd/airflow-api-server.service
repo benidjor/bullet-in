@@ -1,0 +1,16 @@
+[Unit]
+Description=Airflow api-server (bullet-in · 127.0.0.1:8080 · SSH 터널로 본다)
+Wants=docker.service network-online.target
+After=docker.service network-online.target
+OnFailure=bullet-in-fail-notify@%n.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/airflow
+EnvironmentFile=/home/ubuntu/airflow/airflow.env
+ExecStart=/home/ubuntu/airflow-venv/bin/airflow api-server --host 127.0.0.1 --port 8080
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

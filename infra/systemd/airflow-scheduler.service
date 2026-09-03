@@ -1,0 +1,19 @@
+[Unit]
+Description=Airflow scheduler (bullet-in 회차 DAG)
+Wants=docker.service network-online.target
+After=docker.service network-online.target
+OnFailure=bullet-in-fail-notify@%n.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/airflow
+EnvironmentFile=/home/ubuntu/airflow/airflow.env
+ExecStartPre=/usr/bin/docker compose -f /home/ubuntu/bullet-in/docker-compose.yml up -d --wait airflow-db
+ExecStart=/home/ubuntu/airflow-venv/bin/airflow scheduler
+Restart=on-failure
+RestartSec=10
+# dbt 게이트 세그폴트 (안건 2ν) 의 코어 덤프 — 게이트는 이 프로세스의 자식 (LocalExecutor) 이다.
+LimitCORE=infinity
+
+[Install]
+WantedBy=multi-user.target
