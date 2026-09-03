@@ -48,11 +48,21 @@ SERVING_SELECT_SQL = (
 
 # 회차 행은 두 단계로 적는다 (스펙 2026-09-04 §5.3) — collect 가 수집 값을 넣고 publish 가 마감한다.
 # started_at 은 Python UTC 바인딩 · finished_at 은 UTC_TIMESTAMP() — 세션 TZ 무관 (spec §5)
+# 같은 run_id 로 collect 가 재시도돼도 안전하다 (ON DUPLICATE KEY UPDATE) — 원본 저장은
+# content_hash 로 dedup, 마트는 upsert, 이제 회차 행도 upsert 라 collect 전체가 멱등이다.
+# finished_at · duration_sec 은 이 upsert 가 안 건드린다 — publish 의 마감 몫이다.
 RUN_INSERT_SQL = (
     "INSERT INTO pipeline_runs (run_id,dag_run_id,started_at,fetch_duration_sec,"
     "source_counts,candidate_counts,new_count,dup_count,blocked_count,error_count,"
     "success_rate,fetch_detail) "
-    "VALUES (:rid,:drid,:started,:fetch,:counts,:cands,:new,:dup,:blocked,:err,:sr,:detail)")
+    "VALUES (:rid,:drid,:started,:fetch,:counts,:cands,:new,:dup,:blocked,:err,:sr,:detail) "
+    "ON DUPLICATE KEY UPDATE "
+    "dag_run_id=VALUES(dag_run_id),started_at=VALUES(started_at),"
+    "fetch_duration_sec=VALUES(fetch_duration_sec),source_counts=VALUES(source_counts),"
+    "candidate_counts=VALUES(candidate_counts),new_count=VALUES(new_count),"
+    "dup_count=VALUES(dup_count),blocked_count=VALUES(blocked_count),"
+    "error_count=VALUES(error_count),success_rate=VALUES(success_rate),"
+    "fetch_detail=VALUES(fetch_detail)")
 RUN_FINISH_SQL = ("UPDATE pipeline_runs SET finished_at=UTC_TIMESTAMP(), duration_sec=:dur "
                   "WHERE run_id=:rid")
 RUN_SELECT_SQL = (

@@ -27,6 +27,20 @@ def test_insert_leaves_finish_columns_empty_and_records_fetch(engine):
     assert row["finished_at"] is None and row["duration_sec"] is None
 
 
+def test_rerun_upserts_the_same_run_id(engine):
+    # collect 재시도가 같은 run_id 를 다시 넣으면 PRIMARY KEY 위반이 아니라 갱신이어야
+    # 한다 — 새 값이 이기고 행은 하나만 남으며 마감 열은 그대로 비어 있다.
+    with engine.begin() as c:
+        c.execute(text(RUN_INSERT_SQL), _params(rid="bench-rerun", blocked=0))
+        c.execute(text(RUN_INSERT_SQL), _params(rid="bench-rerun", blocked=15))
+        rows = c.execute(text(
+            "SELECT blocked_count, finished_at FROM pipeline_runs "
+            "WHERE run_id='bench-rerun'")).mappings().all()
+    assert len(rows) == 1
+    assert rows[0]["blocked_count"] == 15
+    assert rows[0]["finished_at"] is None
+
+
 def test_finish_sets_utc_finished_at_and_duration(engine):
     with engine.begin() as c:
         c.execute(text(RUN_INSERT_SQL), _params(rid="bench-finish"))
