@@ -1,7 +1,7 @@
 from __future__ import annotations
 import argparse, asyncio, json, logging, os, time, uuid, yaml
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 from pymongo import MongoClient
@@ -75,8 +75,9 @@ VOLUME_HISTORY_SQL = ("SELECT source_counts FROM pipeline_runs WHERE run_id <> :
 
 # 후보 절벽 판정 재료 (차단 알림 스펙 §3.1): [0] 이 직전 회차 · 나머지는 알림 표시용.
 # 이번 회차 행은 파이프라인 마지막에 적재되므로 이 시점의 최신 행이 곧 직전 회차다.
+# 회차 행이 upsert 라 재시도 시 자기 행을 직전 회차로 읽을 수 있어 run_id 를 뺀다 (VOLUME_HISTORY_SQL 과 같은 이유).
 CANDIDATE_HISTORY_SQL = ("SELECT candidate_counts FROM pipeline_runs "
-                         "ORDER BY started_at DESC LIMIT 5")
+                         "WHERE run_id <> :rid ORDER BY started_at DESC LIMIT 5")
 
 
 # 서빙 제외 판정에 쓰는 확정 선수 연결 — 추출이 붙인 기사만 남는다.
@@ -329,7 +330,7 @@ async def collect(run_id: str, concurrency: int) -> FetchSummary:
     try:
         with engine.connect() as c:
             cand_hist = [json.loads(s) for s in
-                         c.execute(text(CANDIDATE_HISTORY_SQL)).scalars().all() if s]
+                         c.execute(text(CANDIDATE_HISTORY_SQL), {"rid": run_id}).scalars().all() if s]
         payload = cliff_alert_payload(
             candidate_counts, cand_hist, adapters=adapters, sources=sources,
             success_rate=success_rate(len(adapters), len(errors)), run_id=run_id)
@@ -365,7 +366,7 @@ async def collect(run_id: str, concurrency: int) -> FetchSummary:
             canonical_url(it.url))
 
     mongo = MongoClient(os.environ["MONGO_URI"])[os.environ.get("MONGO_DB", "bulletin")]
-    rawstore = RawStore(mongo)   # 아래 신선도 판정이 원본 워터마크를 읽으므로 잡아 둔다
+    rawstore = RawStore(mongo)   # 원본 저장 · 신선도 판정은 publish 가 자기 RawStore 로 한다
     rawstore.insert_many(raw)
 
     arts, stats = to_articles(raw, sources, seen=mart.seen_map(), registry=registry)
@@ -559,7 +560,6 @@ def publish(run_id: str) -> None:
     with engine.connect() as c:
         row = c.execute(text(RUN_SELECT_SQL), {"rid": run_id}).mappings().one()
     fetched = FetchSummary.from_row(row)
-    t0 = time.perf_counter()
     with engine.connect() as c:
         rows = [dict(r) for r in c.execute(text(SERVING_SELECT_SQL)).mappings().all()]
     # 수집 필터 도입 전 적재된 fmkorea 무관 글을 서빙에서만 제외 (DB 는 보존).
