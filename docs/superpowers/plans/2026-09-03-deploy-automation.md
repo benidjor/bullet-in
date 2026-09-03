@@ -1264,7 +1264,8 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
   'cd ~/bullet-in/infra/systemd && ./install-units.sh && systemctl cat bullet-in.service | grep -E "ExecStartPre|ExecStopPost"'
 ```
 
-Expected: `advance` 줄에 `-` 가 있고 `judge` 줄이 있다.
+Expected: `advance` 줄과 `judge` 줄에 `-` 가 있고 `TimeoutStopSec=300` 이 있다.
+`systemctl show bullet-in.service -p TimeoutStopUSec -p TimeoutStartUSec` 로 5min · 30min 을 실측한다.
 `sudo` 가 분류기에 막히면 사용자에게 명령을 드린다.
 
 - [ ] **Step 3: 사전 점검이 VM 에서 통과하는지 본다**
@@ -1278,18 +1279,35 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
 Expected: 출력 없음 · `exit=0`.
 키가 빠졌다고 나오면 `.env` 를 채운 뒤 다시 (여기서 걸리면 첫 자동 전진이 거부된다).
 
-- [ ] **Step 4: 상태 파일을 손으로 씨앗 넣는다**
+- [ ] **Step 4: 상태 파일을 손으로 씨앗 넣는다 — `previous` 도 머지 커밋이다**
 
 첫 회차는 「전진」 이 아니라 손 pull 로 왔으므로 상태 파일이 없다.
-리허설을 위해 직전 커밋을 `previous` 로 둔다.
+`previous` 를 `HEAD~1` 로 두면 안 된다.
+그 커밋에는 `bullet_in.deploy` 가 없어서 `rollback` 한 순간 `unblock` · `advance` · `judge` 가 전부 「모듈 없음」 으로 죽는다 (`docs/troubleshooting/2026-09-04-a-rollback-that-deletes-the-rollback-tool.md`).
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
-  'cd ~/bullet-in && P=$(git rev-parse HEAD~1) && C=$(git rev-parse HEAD) &&
-   mkdir -p state && printf "{\"current\": \"%s\", \"previous\": \"%s\", \"pending\": false, \"blocked\": [], \"advanced_at\": \"\"}\n" "$C" "$P" > state/deploy.json && cat state/deploy.json'
+  'cd ~/bullet-in && M=$(git rev-parse HEAD) &&
+   mkdir -p state && printf "{\"current\": \"%s\", \"previous\": \"%s\", \"pending\": false, \"blocked\": [], \"advanced_at\": \"\"}\n" "$M" "$M" > state/deploy.json && cat state/deploy.json'
 ```
 
-- [ ] **Step 5: 수동 롤백 리허설**
+- [ ] **Step 5: 후속 문서 PR 을 하나 머지하고 첫 자동 전진을 본다**
+
+리허설의 롤백은 도구를 가진 커밋으로 되돌아가야 하므로, 먼저 머지 커밋 위에 후속 커밋 `M2` 가 하나 올라가야 한다.
+이 계획서의 Step 4에서 6 을 고친 문서 PR 이 그 커밋이다.
+머지한 뒤 다음 정기 회차를 기다리거나 (20분 안쪽이면 기다린다) 회차를 손으로 시작한다.
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 'sudo systemctl start --no-block bullet-in.service'
+```
+
+정기 회차와 겹치지 않는 시각에 한다 (`list-timers` 로 다음 회차까지 40분 이상 남았을 때).
+회차가 끝나면 Step 7 의 확인을 한다.
+Expected: 저널에 「전진 M → M2 · 회차 끝에 판정」 과 「반영 완료」 · 리뷰 채널에 「✅ 코드 반영 완료」 (본문에 `run …`) · `state/deploy.json` 이 `previous: M · current: M2 · pending: false`.
+
+- [ ] **Step 6: 수동 롤백 리허설 · 차단 해제 · 회차 손 시작**
+
+이제 `previous` 가 `M` 이고 `M` 에는 도구가 있다.
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
@@ -1297,10 +1315,8 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
    /home/ubuntu/.local/bin/uv run python -m bullet_in.deploy rollback && git log --oneline -1 && cat state/deploy.json'
 ```
 
-Expected: HEAD 가 직전 커밋 · `blocked` 에 머지 커밋 · 사고 채널에 「⏪ 코드 롤백」 · 알림 본문에 「코드 탓이 아닐 수 있다」 와 `unblock` 명령.
+Expected: HEAD 가 `M` · `blocked` 에 `M2` · 사고 채널에 「⏪ 코드 롤백」 · 알림 본문에 「코드 탓이 아닐 수 있다」 와 `unblock` 명령.
 디스코드에서 서식이 뭉개지지 않았는지 눈으로 본다.
-
-- [ ] **Step 6: 차단을 풀고 회차를 손으로 시작한다**
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
@@ -1309,7 +1325,7 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 'sudo systemctl start --no-block bullet-in.service'
 ```
 
-정기 회차와 겹치지 않는 시각에 한다 (`list-timers` 로 다음 회차까지 40분 이상 남았을 때).
+Expected: `blocked: []` · 회차가 다시 `M` 에서 `M2` 로 전진하고 Step 7 의 확인이 한 번 더 통과한다.
 
 - [ ] **Step 7: 회차가 끝날 때까지 기다리고 판정을 본다**
 
