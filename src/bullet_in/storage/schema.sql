@@ -55,6 +55,7 @@ ALTER TABLE source_freshness ADD COLUMN IF NOT EXISTS stored_fetched_at DATETIME
 ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS fetch_duration_sec FLOAT;
 ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS blocked_count INT;
 ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS candidate_counts JSON;
+ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS fetch_detail JSON;
 CREATE TABLE IF NOT EXISTS players (
   id INT AUTO_INCREMENT PRIMARY KEY,
   full_name VARCHAR(100) NOT NULL UNIQUE,
