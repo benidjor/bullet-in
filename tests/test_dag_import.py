@@ -62,3 +62,9 @@ def test_run_parameters_mirror_the_systemd_timer():
 def test_every_task_has_the_failure_callback():
     for t in _dag().tasks:
         assert t.on_failure_callback
+
+
+def test_deploy_site_command_does_not_end_in_sh():
+    # `.sh` 로 끝나면 BashOperator 가 bash_command 를 Jinja 템플릿 파일 경로로 읽으려
+    # 든다 (template_ext) — 끝에 공백을 하나 남겨 피한다.
+    assert _dag().get_task("deploy_site").bash_command.endswith(" ")

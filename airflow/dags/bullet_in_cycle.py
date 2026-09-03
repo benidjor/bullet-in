@@ -59,8 +59,9 @@ with DAG(
     # 급사 (종료 코드 3) 는 실패가 아니라 건너뜀 — 뒤의 deploy_site 가 기본 규칙으로 함께 건너뛰고
     # judge 가 「보류」 를 낸다. 급사 재시도는 게이트 안에서 이미 한 번 했다 (dbt_gate.run_gate).
     gate = BashOperator(task_id="gate", bash_command=_stage("gate"), skip_on_exit_code=3)
+    # 끝 공백 — `.sh` 로 끝나면 BashOperator 가 Jinja 템플릿 파일로 읽으려 든다
     deploy_site = BashOperator(task_id="deploy_site",
-                               bash_command=f"{PRELUDE}infra/deploy-site.sh", retries=1)
+                               bash_command=f"{PRELUDE}infra/deploy-site.sh ", retries=1)
     # 앞이 어떻게 끝났든 돈다 (ExecStopPost 대응) — 상태를 CLI 로 받아 판정기에 넘긴다.
     judge = BashOperator(
         task_id="judge", trigger_rule="all_done",
