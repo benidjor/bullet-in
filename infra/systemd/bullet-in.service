@@ -17,9 +17,11 @@ ExecStartPre=-/home/ubuntu/.local/bin/uv run python -m bullet_in.deploy advance
 ExecStart=/home/ubuntu/.local/bin/uv run python -m bullet_in.run --concurrency 8
 ExecStartPost=/home/ubuntu/bullet-in/infra/deploy-site.sh
 # 회차 끝 판정 — ExecStart 가 실패해도 돌고 $SERVICE_RESULT · $EXIT_STATUS 를 받는다.
-# 전진 직후 회차면 성공은 라이브 표지 대조 · 실패는 직전 커밋으로 롤백 (종료 코드 3 은 보류).
-ExecStopPost=/home/ubuntu/.local/bin/uv run python -m bullet_in.deploy judge
+# 전진 직후 회차면 성공은 라이브 표지 대조 · 실패는 직전 커밋으로 롤백 (종료 코드 3 은 보류) · 앞의 - 는 판정기 자체가 못 떠도 유닛 결과를 안 바꾼다.
+ExecStopPost=-/home/ubuntu/.local/bin/uv run python -m bullet_in.deploy judge
 TimeoutStartSec=1800
+# 판정기 (ExecStopPost) 의 최악 경로 = 표지 대조 20초 × 3 + 대기 20초 × 2. 기본 90초면 systemd 가 판정기를 죽인다.
+TimeoutStopSec=300
 # dbt 게이트가 세그폴트로 죽는 일이 VM 에서 두 번 났다 (2026-08-31 · 2026-09-03 · 종료코드 -11).
 # 소프트 한도가 0 이면 코어가 안 남는다. systemd-coredump 가 받아 coredumpctl 로 본다.
 LimitCORE=infinity
