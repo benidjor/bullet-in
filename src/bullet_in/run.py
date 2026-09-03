@@ -31,6 +31,7 @@ from bullet_in.quality import (success_rate, volume_anomalies, evaluate_freshnes
                                missing_club_candidates, club_head)
 from bullet_in import notify
 from bullet_in import dbt_gate
+from bullet_in.deploy import write_build_marker
 
 GEMINI_MODEL = "gemini-3.1-flash-lite"
 
@@ -568,6 +569,9 @@ async def main(concurrency: int):
     except Exception:
         logging.getLogger(__name__).warning(
             "행동 지표 뷰 생성 실패 — 파이프라인은 계속 진행", exc_info=True)
+
+    # 배포본 표지 (스펙 2026-09-03 §4.4): 판정기가 라이브의 build.json 으로 반영을 확인한다.
+    write_build_marker("site", run_id=run_id)
 
     # dbt 품질 게이트 (설계 2026-08-31): 마트가 이번 회차 행을 담은 뒤에 돌린다.
     # 차단 사유가 있으면 여기서 회차가 실패로 끝나고, systemd 가 ExecStartPost

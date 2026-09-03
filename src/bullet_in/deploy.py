@@ -278,3 +278,64 @@ def judge(repo: Repo, state: DeployState, *, service_result: str, exit_status: s
            "몇 분 뒤 `curl -sL https://bullet-in.pages.dev/build.json` 으로 다시 본다",
            incident=True)
     return "표지 불일치"
+
+
+# ── 표지 · CLI ────────────────────────────────────────────────────────────────
+
+def write_build_marker(site_dir: str | Path, *, run_id: str,
+                       repo_root: Path = Path(".")) -> Path:
+    """배포본에 커밋 표지를 싣는다 (스펙 §4.4). 판정기가 라이브에서 이것을 읽는다."""
+    try:
+        sha = Repo(repo_root).head()
+    except (OSError, subprocess.SubprocessError):
+        sha = "unknown"
+    p = Path(site_dir) / "build.json"
+    p.write_text(json.dumps({"commit": sha, "run_id": run_id,
+                             "rendered_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}))
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    ap = argparse.ArgumentParser(description="머지된 코드의 자동 반영 · 판정 · 롤백")
+    sub = ap.add_subparsers(dest="command", required=True)
+    sub.add_parser("advance", help="회차 시작 — origin/main 을 내려받는다 (ExecStartPre)")
+    sub.add_parser("judge", help="회차 끝 — $SERVICE_RESULT · $EXIT_STATUS 로 판정 (ExecStopPost)")
+    sub.add_parser("preflight", help="새 코드가 돌 수 있는지 (advance 가 새 uv run 으로 부른다)")
+    sub.add_parser("rollback", help="사람이 — 직전 커밋으로 되돌리고 현재 커밋을 차단")
+    ub = sub.add_parser("unblock", help="사람이 — 차단 목록에서 뺀다")
+    ub.add_argument("sha")
+    args = ap.parse_args(argv)
+
+    if args.command == "preflight":
+        problems = preflight()
+        for p in problems:
+            print(p)
+        return 1 if problems else 0
+
+    state = load_state(STATE_PATH)
+    repo = Repo(Path("."))
+    try:
+        if args.command == "advance":
+            out = advance(repo, state)
+        elif args.command == "judge":
+            out = judge(repo, state, service_result=os.environ.get("SERVICE_RESULT", ""),
+                        exit_status=os.environ.get("EXIT_STATUS", ""))
+        elif args.command == "rollback":
+            out = rollback(repo, state, reason="수동 (사람이 rollback 을 쳤다)")
+        else:
+            n = unblock(state, args.sha)
+            out = f"차단 해제 {n}건"
+    except Exception as e:  # noqa: BLE001 — 판정기 · 전진기가 유닛 결과를 바꾸면 안 된다
+        log.exception("%s 예외", args.command)
+        _alert(f"🚧 deploy {args.command} — 예외", f"{type(e).__name__}: {e}"[:1000], incident=True)
+        out = f"예외 ({type(e).__name__})"
+    save_state(state, STATE_PATH)
+    log.info("deploy %s — %s", args.command, out)
+    print(out)
+    return 0
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    sys.exit(main())

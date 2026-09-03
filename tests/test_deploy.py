@@ -15,10 +15,12 @@ from bullet_in.deploy import (
     decide,
     judge,
     load_state,
+    main,
     preflight,
     rollback,
     save_state,
     unblock,
+    write_build_marker,
 )
 
 
@@ -250,3 +252,54 @@ def test_judge_does_nothing_when_not_pending(repos, quiet_alerts):
     out = judge(Repo(vm), DeployState(), service_result="exit-code", exit_status="1")
     assert "대기 없음" in out
     assert quiet_alerts == []
+
+
+def test_write_build_marker_records_head(repos, tmp_path):
+    upstream, vm = repos
+    site = tmp_path / "site"
+    site.mkdir()
+    p = write_build_marker(site, run_id="abc", repo_root=vm)
+    data = json.loads(p.read_text())
+    assert data["commit"] == _git(vm, "rev-parse", "HEAD")
+    assert data["run_id"] == "abc"
+    assert data["rendered_at"].endswith("+00:00")
+
+
+def test_cli_unblock_and_rollback_use_the_state_file(repos, tmp_path, quiet_alerts, monkeypatch):
+    vm, state, old, new = _advanced(repos)
+    state_path = tmp_path / "deploy.json"
+    save_state(state, state_path)
+    monkeypatch.setattr("bullet_in.deploy.STATE_PATH", state_path)
+    monkeypatch.chdir(vm)
+    assert main(["rollback"]) == 0
+    assert _git(vm, "rev-parse", "HEAD") == old
+    assert load_state(state_path).blocked == [new]
+    assert main(["unblock", new[:7]]) == 0
+    assert load_state(state_path).blocked == []
+
+
+def test_cli_judge_reads_systemd_variables(repos, tmp_path, quiet_alerts, monkeypatch):
+    vm, state, old, new = _advanced(repos)
+    state_path = tmp_path / "deploy.json"
+    save_state(state, state_path)
+    monkeypatch.setattr("bullet_in.deploy.STATE_PATH", state_path)
+    monkeypatch.setattr("bullet_in.deploy.build_matches", lambda sha: (True, sha[:7]))
+    monkeypatch.setenv("SERVICE_RESULT", "success")
+    monkeypatch.setenv("EXIT_STATUS", "0")
+    monkeypatch.chdir(vm)
+    assert main(["judge"]) == 0
+    assert load_state(state_path).pending is False
+
+
+def test_cli_judge_exits_zero_even_when_it_blows_up(repos, tmp_path, quiet_alerts, monkeypatch):
+    # 판정기가 유닛 결과를 바꾸면 안 된다 (스펙 §6.2).
+    vm, state, old, new = _advanced(repos)
+    state_path = tmp_path / "deploy.json"
+    save_state(state, state_path)
+    monkeypatch.setattr("bullet_in.deploy.STATE_PATH", state_path)
+    def boom(*a, **k):
+        raise RuntimeError("git 이 사라졌다")
+    monkeypatch.setattr("bullet_in.deploy.judge", boom)
+    monkeypatch.setenv("SERVICE_RESULT", "success")
+    assert main(["judge"]) == 0
+    assert len(quiet_alerts) == 1
