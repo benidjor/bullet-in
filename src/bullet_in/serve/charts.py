@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import html
 import math
-from datetime import date, timedelta
+from datetime import timedelta
 
 E = html.escape
 
@@ -81,6 +81,8 @@ def axes_frame(L, T, pw, ph, ticks, Y, labels, X, step=None) -> str:
 def line_chart(labels, series, *, w=520, h=190, unit="", annotate=(), events=(),
                area=True, ref=None, fails=(), band=None) -> str:
     """series 원소 = (이름, 값 목록). band = (하한 목록, 상한 목록). fails = (index, 라벨)."""
+    if not labels or not series or not any(v for _, v in series):
+        return svg(w, h, "")
     L, R, T, B = 44, 14, 16, 30
     pw, ph = w - L - R, h - T - B
     n = len(labels)
@@ -138,6 +140,8 @@ def line_chart(labels, series, *, w=520, h=190, unit="", annotate=(), events=(),
 
 def stacked_columns(labels, series, *, w=520, h=200, unit="", pct=False, step=None) -> str:
     """series 원소 = (이름, 값 목록, css 클래스). 조각 사이 2px · 막대 폭 24px 이하."""
+    if not labels:
+        return svg(w, h, "")
     L, R, T, B = 44, 14, 12, 30
     pw, ph = w - L - R, h - T - B
     n = len(labels)
@@ -178,6 +182,8 @@ def hbars(rows, *, value, label, w=440, unit="", note=None, dim_label=None,
     """rows 는 dict 목록. value · label 은 그 키. 행에 `cls` 키가 있으면 그 색을 쓴다."""
     L, R, T = 150, right, 6
     bh, gap = 16, 8
+    if not rows:
+        return svg(w, T + 4, "")
     h = T + len(rows) * (bh + gap) + 4
     mx = max((r[value] or 0) for r in rows) or 1
     pw = w - L - R
@@ -270,6 +276,8 @@ def heatmap(rows, cols, cells, *, w=640, cell=None, unit="명", marks=(),
             scale_exclude_col=None) -> str:
     """cells = {(row, col): 값 | None}. None 은 「아직 없는 칸」 이라 따로 그린다."""
     L, T, R = 96, 22, 8
+    if not rows or not cols:
+        return svg(w, T, "")
     cw = cell or (w - L - R) / len(cols)
     ch = 20 if not show_text else 24
     h = T + len(rows) * (ch + 2) + (30 if marks else 8)

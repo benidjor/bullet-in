@@ -103,3 +103,12 @@ def test_선_차트는_밴드와_실패_표시를_그린다():
                        fails=[(1, "에러 회차 1회")])
     assert 'class="band s1"' in svg and 'class="fail"' in svg
     assert "p10 0 · p90 2" in svg
+
+
+def test_빈_입력이면_빈_svg_를_돌려주고_예외를_안_낸다():
+    for svg in (C.hbars([], value="n", label="lab"),
+                C.stacked_columns([], []),
+                C.line_chart([], []),
+                C.heatmap(["a"], [], {})):
+        assert svg.startswith('<svg class="chart"')
+        assert "<rect" not in svg and "<path" not in svg and "<polyline" not in svg
