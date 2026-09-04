@@ -13,6 +13,7 @@ from bullet_in.deploy import (
     advance,
     airflow_inputs,
     build_matches,
+    cli_json,
     compare_url,
     decide,
     fetch_build,
@@ -498,6 +499,20 @@ def test_parse_task_states_accepts_cli_list_and_plain_dict():
                       {"dag_id": "bullet_in_cycle", "run_id": "r", "task_id": "collect", "state": "success"}])
     assert parse_task_states(cli) == {"gate": "skipped", "collect": "success"}
     assert parse_task_states(json.dumps({"gate": "success"})) == {"gate": "success"}
+
+
+def test_parse_task_states_skips_leading_structlog_warning_lines():
+    warning = (
+        '2026-09-04T06:24:26.841666Z [warning  ] Could not import graphviz. '
+        'Rendering graph to the graphical format will not be possible. \n'
+    )
+    cli = json.dumps([{"dag_id": "bullet_in_cycle", "run_id": "r", "task_id": "gate", "state": "success"}])
+    assert parse_task_states(warning + cli) == {"gate": "success"}
+
+
+def test_cli_json_raises_on_empty_input():
+    with pytest.raises(ValueError):
+        cli_json("")
 
 
 def test_cli_judge_from_airflow_reads_states_file(repos, tmp_path, quiet_alerts, monkeypatch):
