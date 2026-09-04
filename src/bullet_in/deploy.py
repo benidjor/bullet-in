@@ -293,8 +293,9 @@ def rollback(repo: Repo, state: DeployState, *, reason: str) -> str:
            "새 커밋이 main 에 오면 다시 전진한다 · 같은 커밋을 다시 보려면 "
            f"`uv run python -m bullet_in.deploy unblock {_short(bad)}`",
            incident=True, url=url,
-           fields=fields + [{"name": "저널",
-                             "value": "`journalctl -u bullet-in.service -n 200 --no-pager`",
+           fields=fields + [{"name": "태스크 로그",
+                             "value": "`ls -t ~/airflow/logs/dag_id=bullet_in_cycle | head -1` 로 최근 run · "
+                                      "그 아래 `task_id=<task>/attempt=1.log` (런북 §1)",
                              "inline": False}])
     return f"롤백 {_short(bad)} → {_short(good)}"
 
