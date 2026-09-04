@@ -1211,3 +1211,17 @@ def test_집계_파일에_새_키_전부가_실린다(local_catalog, fake_ga4, t
         assert key in saved, key
     assert set(saved["heat"]) == {"excl", "incl"}
     assert got["window"]["end"] is None or len(got["window"]["end"]) == 10
+
+
+def test_일별_집계의_유입은_상위_10_으로_안_자른다():
+    sessions = [_ss("u", "2026-08-30", hour=i, traffic_source=f"s{i}.fmkorea.com")
+                for i in range(12)]
+    got = warehouse.agg_daily([], sessions, [])
+    assert len(got["traffic"]) == 12
+
+
+def test_히트맵_창은_공개일부터고_그_전_세션은_안_센다():
+    sessions = [_ss("u0", "2026-08-20", hour=10, wd=4), _ss("u1", "2026-08-30", hour=10, wd=7)]
+    cells = {(c["wd"], c["h"]): c["v"]
+             for c in warehouse.agg_heatmap(sessions, start="2026-08-29")}
+    assert cells[(4, 10)] == 0 and cells[(7, 10)] == 1

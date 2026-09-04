@@ -561,7 +561,7 @@ def agg_daily(user_daily: list[dict], sessions: list[dict], facts: list[dict], *
                              key=lambda x: -x["users"]),
             "traffic": sorted([{"source": s, "medium": m, "users": len(v)}
                                for (s, m), v in by_traffic.items()],
-                              key=lambda x: -x["users"])[:10]}
+                              key=lambda x: -x["users"])}
 
 
 def agg_funnel(user_daily: list[dict], *, start: str | None = None,
@@ -1225,8 +1225,9 @@ def _latest_articles(catalog) -> list[dict]:
 def _scan_rows(catalog, name: str, columns: tuple | None = None) -> list[dict] | None:
     """behavior 표 하나를 dict 목록으로. 없으면 None (빈 표와 구분한다).
 
-    없는 컬럼을 고르면 pyiceberg 가 ValueError 를 낸다 — 픽스처의 silver 에는
-    page_location 이 없다. `columns` 를 표 스키마에 실제로 있는 이름으로 좁혀서 피한다.
+    silver 의 스키마는 날마다 관측된 파라미터에서 만들어져 (`flat_schema`) 어떤
+    컬럼이 아직 없을 수 있다. 없는 컬럼을 고르면 pyiceberg 가 ValueError 를 내므로
+    `columns` 를 표 스키마에 실제로 있는 이름으로 좁혀서 피한다.
     """
     from pyiceberg.exceptions import NoSuchTableError
 
@@ -1236,6 +1237,9 @@ def _scan_rows(catalog, name: str, columns: tuple | None = None) -> list[dict] |
         return None
     if columns:
         present = set(table.schema().column_names)
+        missing = [c for c in columns if c not in present]
+        if missing:
+            log.warning("%s — 없는 컬럼을 건너뜀: %s", name, ", ".join(missing))
         columns = tuple(c for c in columns if c in present)
     scan = table.scan(selected_fields=columns) if columns else table.scan()
     return scan.to_arrow().to_pylist()
@@ -1266,8 +1270,9 @@ def build_metrics(catalog, now: datetime, *, start: str | None = None,
     metrics["weekly"] = agg_daily(user_daily, sessions, facts,
                                   start=max(week, first) if week and first else week, end=last)
     metrics["funnel"] = agg_funnel(user_daily, start=first, end=last)
-    metrics["heat"] = {"excl": agg_heatmap(sessions, end=last),
-                       "incl": agg_heatmap(sessions, end=last, exclude_launch=False)}
+    metrics["heat"] = {"excl": agg_heatmap(sessions, start=LAUNCH_DATE.isoformat(), end=last),
+                       "incl": agg_heatmap(sessions, start=LAUNCH_DATE.isoformat(), end=last,
+                                          exclude_launch=False)}
     metrics["retention"] = agg_retention(users, user_daily, end=last)
     metrics["pages"] = agg_pages(page_views, sessions, facts, start=first, end=last)
     metrics["generated_at"] = now.isoformat()
