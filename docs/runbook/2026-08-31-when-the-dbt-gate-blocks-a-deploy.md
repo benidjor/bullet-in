@@ -191,10 +191,15 @@ uv run python -m bullet_in.migrate_url_identity --apply --purge-orphans
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
-  'sudo systemctl start --no-block bullet-in.service'
+  'set -a; . ~/airflow/airflow.env; set +a; PYTHONWARNINGS=ignore ~/airflow-venv/bin/airflow dags trigger bullet_in_cycle'
 ```
 
-**회차가 끝났는지는 `ActiveState` 로 잰다.**
+회차가 끝났는지는 화면 (그래프 뷰) 이나 `airflow dags state bullet_in_cycle` 로 본다 (`docs/runbook/2026-09-04-running-the-cycle-under-airflow.md` §3).
+
+`bullet-in.service` 는 되돌림용으로만 남아 있다.
+Airflow 를 되돌리고 그 유닛으로 돌리는 경우에만 아래 `ActiveState` 확인이 필요하다.
+
+**회차가 끝났는지는 `ActiveState` 로 잰다 (systemd 로 되돌린 경우).**
 `systemctl is-active --quiet` 는 쓰면 안 된다 — `Type=oneshot` 유닛은 도는 동안 `activating` 이라 그 검사가 즉시 통과하고 직전 회차의 결과를 이번 회차 것으로 읽는다.
 
 ```bash

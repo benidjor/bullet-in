@@ -43,7 +43,7 @@ PR B 의 고침이 두 겹이었다.
    ```
    `jobs check` 실패에도 같은 자리를 뒀다.
    이 자체는 판정 값을 안 바꾼다 — `age` 는 여전히 `None` 이고 문제 목록도 똑같다.
-   달라지는 것은 사람이 로그를 보면 "성공 실행이 없다" 와 "CLI 가 죽었다" 를 더는 헷갈리지 않는다는 것이다.
+   로그를 보면 사람이 "성공 실행이 없다" 와 "CLI 가 죽었다" 를 더는 헷갈리지 않는다.
 2. **로그가 실제로 다음 결함을 드러냈다.**
    태스크 8 리허설 4 (15:23) 에서 감시를 처음 실제로 돌리자 `bullet-in-airflow-watch.service` 가 Traceback 으로 죽었다.
    경고 로그 (`dags list-runs 실패 (rc=1) — … --allow-multiple …`) 가 원인을 바로 보여줬고, 그 자리에서 `--allow-multiple` 이 3.3.1 에서 `--limit` 을 요구한다는 것을 알았다.
@@ -52,7 +52,7 @@ PR B 의 고침이 두 겹이었다.
 같은 리허설에서 두 번째 결함도 났다.
 `dags list-runs -o json` 의 stdout 앞줄에 structlog 경고 (`Could not import graphviz …`) 가 섞여 `json.loads` 가 「Extra data」 로 죽었다.
 이 자리는 최종 리뷰가 이미 본 자리였다 — "stdout 이 지저분할 수 있다" 는 지적을 「can-wait」 로 다음으로 미뤄 뒀었다.
-미뤄 둔 사이 라이브에서 그대로 Traceback 이 됐고, 고침은 `deploy.cli_json` 과 감시 양쪽에서 첫 `[` 또는 `{` 로 시작하는 줄부터 읽고 `PYTHONWARNINGS=ignore` 를 셸 환경에 더하는 것이었다.
+미뤄 둔 사이 라이브에서 그대로 Traceback 이 됐고, `deploy.cli_json` 과 감시 양쪽에서 첫 `[` 또는 `{` 로 시작하는 줄부터 읽게 하고 `PYTHONWARNINGS=ignore` 를 셸 환경에 더해 고쳤다.
 
 ## 4. 예방
 

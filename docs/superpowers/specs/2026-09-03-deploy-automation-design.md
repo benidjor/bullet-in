@@ -112,6 +112,7 @@ VM 은 밖으로 fetch 만 하고 새 자격 증명이 생기지 않는다.
 배치 서비스에서는 둘이 다르고 뒤의 것만 통증이다.
 급하면 지금 런북대로 `sudo systemctl start --no-block bullet-in.service` 를 한 번 치면 전진 · 판정 · 배포가 그 자리에서 돈다.
 새 장치가 필요 없다.
+2026-09-04 부터 손 시작은 `airflow dags trigger bullet_in_cycle` 이다 (런북 `docs/runbook/2026-09-04-running-the-cycle-under-airflow.md` §3).
 
 ### 3.2. 롤백은 넓게 발동한다
 
