@@ -652,7 +652,8 @@ def publish(run_id: str) -> None:
     # 행동 지표 (behavior.html): 웨어하우스 타이머가 떨어뜨린 집계를 읽어 그린다.
     # 그 타이머는 회차와 따로 도므로 파일이 없을 수 있고, 없으면 안 그리고 넘어간다.
     try:
-        write_behavior("state/behavior_metrics.json", "site")
+        write_behavior("state/behavior_metrics.json", "site",
+                       players=pstore.page_players(), articles=rows, sources=sources)
     except Exception:
         logging.getLogger(__name__).warning(
             "행동 지표 뷰 생성 실패 — 파이프라인은 계속 진행", exc_info=True)

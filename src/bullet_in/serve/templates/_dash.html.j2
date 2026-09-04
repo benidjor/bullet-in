@@ -11,6 +11,7 @@
 <title>{% block title %}bullet-in 대시보드{% endblock %}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;600&display=swap">
 <style>
+{% raw %}
 :root{color-scheme:light;
  --blue:#1D5FA8;--red:#DA020E;--green:#1D7A42;--yellow:#A8710A;
  --s1:#1D5FA8;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--neg:#DA020E;
@@ -115,6 +116,7 @@ figcaption{font-size:12.5px;color:var(--mut);margin-bottom:4px}
 [hidden]{display:none!important}
 @media (max-width:760px){.tiles{grid-template-columns:repeat(2,1fr)}.two,.two-sec{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){#tip{transition:none}}
+{% endraw %}
 </style>
 </head>
 <body>
