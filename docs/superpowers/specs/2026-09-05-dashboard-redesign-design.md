@@ -57,14 +57,15 @@
 | 표 | 알갱이 | 컬럼 |
 | --- | --- | --- |
 | `fact_session` | 사용자 × GA4 세션 | `user_pseudo_id` · `ga_session_id` · `session_date_kst` · `started_at` · `start_hour_kst` · `weekday_kst` · `engaged` · `device_category` · `traffic_source` · `traffic_medium` · `n_page_views` · `n_card_clicks` · `n_filter_applies` · `n_origin_exits` · `engagement_msec` |
-| `fact_user_daily` | 사용자 × 날짜 (KST) | `user_pseudo_id` · `date_kst` · `is_new` · `n_sessions` · `n_card_clicks` · `n_article_views` · `n_player_views` · `used_filter` · `device_category` |
-| `dim_user` | 사용자 | `user_pseudo_id` · `first_date_kst` · `first_device` · `first_source` · `n_active_days` · `n_card_clicks` |
+| `fact_user_daily` | 사용자 × 날짜 (KST) | `user_pseudo_id` · `date_kst` · `is_new` · `n_sessions` · `n_entries` · `n_card_clicks` · `n_article_views` · `n_player_views` · `n_origin_exits` · `used_trust_filter` · `device_category` |
+| `dim_user` | 사용자 | `user_pseudo_id` · `first_date_kst` · `first_device` · `first_source` · `first_medium` · `n_active_days` · `n_card_clicks` |
 
 - 셋 다 `build_gold` 와 같은 방식이다.
   silver 에서 통째로 다시 만들고 덮어쓴다.
   사람을 세는 키는 `user_pseudo_id` 하나이고 `bi_cid` 는 어디에도 안 쓴다.
 - `is_new` 는 `dim_user.first_date_kst` 와 같은 날이다.
   `n_article_views` 와 `n_player_views` 는 `page_view` 의 `page_location` 경로가 `/article/` · `/player/` 로 시작하는 수다.
+  `used_trust_filter` 는 그날 `bi_filter_apply` 가운데 `n_tier` 나 `n_journalist` 가 0 이 아닌 것이 있는지다 (런북 §9 의 「신뢰도 · 기자 필터 사용자」 가 이 정의다).
 - `fact_card_click` 과 `dim_date` 는 그대로 둔다.
   Engagement by Dimension 절은 지금 `aggregate` 가 만드는 `axes` 를 그대로 쓴다.
 
@@ -73,12 +74,13 @@
 | 함수 | 입력 | 결과 키 | 창 |
 | --- | --- | --- | --- |
 | `agg_daily` | `fact_user_daily` · `fact_session` | `daily` (날짜별 DAU · 신규 · 재방문 · 세션 · 참여 세션 · 카드 클릭 · 기기별 사용자 · 화면별 클릭) | 최근 28일 |
-| `agg_funnel` | `dim_user` · `fact_user_daily` | `funnel` (진입 · 카드 클릭 · 2건 이상 · 2일 이상 방문) 과 곁가지 둘 (필터 사용 · 원문 이동) | 최근 28일 |
+| `agg_funnel` | `fact_user_daily` | `funnel` (진입 · 카드 클릭 · 2건 이상 · 2일 이상 방문) 과 곁가지 둘 (필터 사용 · 원문 이동) | 최근 28일 |
 | `agg_heatmap` | `fact_session` | `heat` (요일 × 시각 고유 사용자) · `excl` 과 `incl` 두 벌 | 공개 뒤 전체 |
 | `agg_retention` | `dim_user` · `fact_user_daily` | `retention` (코호트 × D+0 에서 D+6) | 최근 14 코호트 |
 | `agg_pages` | `fact_session` · silver `page_view` | `pages` (경로별 뷰 · 체류 구간 · 선수 슬러그별 뷰 · 상위 기사 해시 12) | 최근 28일 |
 
-- 타일 여섯은 `daily` 의 마지막 7일에서 만든다.
+- 타일 여섯은 `agg_daily` 를 마지막 7일 창으로 한 번 더 돌린 `weekly` 에서 만든다.
+  고유 사용자 수는 날짜별 값을 더해서 못 얻기 때문이다.
 - 함수마다 `start` · `end` 를 받는다.
   기본값은 위 창이고, 검증은 08-28 에서 09-03 을 넣어 §9 를 재현한다 (§5).
 - 공개일 규칙은 트러블슈팅 `2026-09-04-two-keys-double-the-visitor-count.md` §5 그대로다.
@@ -101,7 +103,9 @@
 ### 3.3. 템플릿은 두 페이지 · 공통 조각 하나 · 작은 JS
 
 - `behavior.html.j2` 와 `ops.html.j2` 를 목업대로 다시 쓴다.
-  상단 (제목 · 두 화면 링크 · 목차) · 스타일 · JS 는 `_dash.html.j2` 한 조각에 두고 둘이 include 한다.
+  상단 (제목 · 두 화면 링크 · 목차) · 스타일 · JS 는 `_dash.html.j2` 한 조각에 두고 둘이 그것을 상속한다 (`extends`).
+- 행동 화면의 뷰모델은 새 모듈 `serve/behavior_view.py` 에 둔다.
+  `render.py` 가 2,200줄이라 더 얹지 않는다.
 - 목업의 탭은 페이지 하나 안의 전환이었지만 실제는 페이지 둘이다.
   탭 자리는 두 페이지로 가는 링크이고 현재 페이지가 선택된 모양이다.
 - JS 는 셋뿐이다.
@@ -165,6 +169,7 @@
   그래서 순서를 바꿀 수 없다.
 - 마감 (09-09) 이 빠듯하면 PR 2 를 마감 뒤로 미룬다.
   그때 README 개편 (`2χ`) 과 슬라이드는 새 행동 화면과 지금의 수집 현황 화면을 캡처한다.
+- 2026-09-05 결정 (사용자) = PR 1 을 먼저 하고, PR 2 를 마감 안에 넣을지는 09-06 저녁에 PR 1 의 진행을 보고 정한다.
 
 ## 4. 첫 회차의 빈 구간
 
