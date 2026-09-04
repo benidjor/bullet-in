@@ -10,6 +10,15 @@ services:
       MARIADB_DATABASE: bulletin
     ports: ["3306:3306"]
     volumes: ["maria_data:/var/lib/mysql"]
+  airflow-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports: ["127.0.0.1:5433:5432"]      # 호스트 5432 는 동거 프로젝트가 쓴다 · 밖으로 열지 않는다
+    volumes: ["airflow_db_data:/var/lib/postgresql/data"]
 volumes:
   mongo_data:
   maria_data:
+  airflow_db_data:

@@ -1634,6 +1634,7 @@ cd ~/bullet-in
 bash infra/airflow/install-airflow.sh
 sudo systemd-analyze verify infra/systemd/airflow-*.service infra/systemd/bullet-in-airflow-watch.* || true
 bash infra/systemd/install-units.sh
+sudo systemctl stop bullet-in-airflow-watch.timer   # 전환 전 일시정지 구간의 🚨 오탐을 막는다 · 4단계에서 켠다
 sleep 90
 set -a; . ~/airflow/airflow.env; set +a
 ~/airflow-venv/bin/airflow dags list
@@ -1656,8 +1657,8 @@ set -a; . ~/airflow/airflow.env; set +a
 ~/airflow-venv/bin/airflow dags unpause bullet_in_cycle
 ~/airflow-venv/bin/airflow dags trigger bullet_in_cycle
 sleep 600
-~/airflow-venv/bin/airflow dags list-runs -d bullet_in_cycle -o table | head -5
-~/airflow-venv/bin/airflow tasks states-for-dag-run bullet_in_cycle "$(~/airflow-venv/bin/airflow dags list-runs -d bullet_in_cycle -o json | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["run_id"])')" -o table
+~/airflow-venv/bin/airflow dags list-runs bullet_in_cycle -o table | head -5
+~/airflow-venv/bin/airflow tasks states-for-dag-run bullet_in_cycle "$(~/airflow-venv/bin/airflow dags list-runs bullet_in_cycle -o json | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["run_id"])')" -o table
 ~/airflow-venv/bin/airflow dags pause bullet_in_cycle
 EOF
 ```
@@ -1675,6 +1676,7 @@ EOF
 | 배포 표지 | `curl -sL https://bullet-in.pages.dev/build.json` | `run_id` 가 새 회차 |
 | 반영 알림 | 리뷰 채널 | 「판정 대기 없음」 (전진 없는 회차) — `judge` 로그에서 |
 | 웨어하우스 | `warehouse_load` 로그 | 적재 행 수 로그 · 오류 없음 |
+| judge 로그 | 화면 · 태스크 로그 | `airflow-db-not-allowed` 문자열 없음 (CLI 가 메타데이터 DB 에 붙었다) |
 
 - [ ] **Step 3: 리허설 넷 (스펙 §9.4)**
 
@@ -1692,6 +1694,7 @@ sudo systemctl disable --now bullet-in.timer bullet-in-warehouse.timer
 systemctl list-timers 'bullet-in*' --no-pager
 set -a; . ~/airflow/airflow.env; set +a
 ~/airflow-venv/bin/airflow dags unpause bullet_in_cycle
+sudo systemctl start bullet-in-airflow-watch.timer
 date
 EOF
 ```

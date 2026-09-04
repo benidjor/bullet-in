@@ -1,0 +1,9 @@
+[Unit]
+Description=bullet-in 오케스트레이터 생존 감시 매시
+
+[Timer]
+OnCalendar=*-*-* *:37:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

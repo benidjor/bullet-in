@@ -1,5 +1,7 @@
 """백업 · 복구의 판정 부분 테스트 — 세대 선택 · 산출물 검사 · 복구 대조."""
+import gzip
 import json
+import subprocess
 from datetime import date, datetime, timezone
 
 import pytest
@@ -172,3 +174,21 @@ def test_백틱_없는_출력도_읽는다():
 def test_몽고_건수가_안_찍히면_세운다():
     with pytest.raises(SystemExit):
         backup.mongodump_document_count("2026-09-01T05:30:00 오류로 아무것도 안 남겼다\n")
+
+
+# --- Airflow 덤프 ----------------------------------------------------------
+
+def test_dump_airflow_db_dumps_plain_then_gzips(tmp_path, monkeypatch):
+    seen = {}
+    def fake_docker(container, *args, stdout=None, **kw):
+        seen["container"], seen["args"] = container, args
+        stdout.write(b"-- PostgreSQL database dump\nCREATE TABLE dag_run ();\n")
+        return subprocess.CompletedProcess([], 0, b"", b"")
+    monkeypatch.setattr(backup, "_docker", fake_docker)
+    dest = tmp_path / "airflow.sql.gz"
+    backup.dump_airflow_db(dest)
+    assert seen["container"] == backup.AIRFLOW_DB_CONTAINER
+    assert seen["args"][:3] == ("pg_dump", "-U", "airflow")
+    assert not (tmp_path / "airflow.sql").exists()          # 평문은 압축 뒤 지운다
+    with gzip.open(dest, "rb") as f:
+        assert b"CREATE TABLE dag_run" in f.read()

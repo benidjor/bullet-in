@@ -1,5 +1,5 @@
 from __future__ import annotations
-import logging, os, re
+import json, logging, os, re
 import httpx
 from datetime import datetime, timezone
 
@@ -273,24 +273,37 @@ def build_freshness_alert(records, default_hours: float, *,
             "footer": "bullet-in", "channel": CHANNEL_TREND}
 
 
-def build_failure_alert(context) -> dict:
-    ti = context["task_instance"]
-    exc = context.get("exception")
-    dur = getattr(ti, "duration", None)
+def build_task_failure_alert(payload: dict) -> dict:
+    """Airflow 태스크 실패 — DAG 콜백이 JSON 으로 건넨 값으로 만든다 (스펙 2026-09-04 §7).
+
+    DAG 파일은 프로젝트를 import 하지 않으므로 (Airflow venv 가 따로다) 컨텍스트에서
+    뽑은 값 여덟만 stdin 으로 받는다."""
+    dur = payload.get("duration")
+    log_url = payload.get("log_url")
+    task = payload.get("task_id", "?")
     fields = [
-        {"name": "DAG / Task", "value": f"{ti.dag_id} / {ti.task_id}", "inline": True},
-        {"name": "Run", "value": str(context.get("run_id", "-")), "inline": True},
-        {"name": "Try", "value": str(ti.try_number), "inline": True},
-        {"name": "Duration",
-         "value": f"{dur:.0f}s" if dur is not None else "-", "inline": True},
-        {"name": "Host", "value": str(getattr(ti, "hostname", "-") or "-"),
-         "inline": True},
-        {"name": "로그", "value": f"[열기]({ti.log_url})", "inline": True},
+        {"name": "DAG / Task", "value": f"{payload.get('dag_id', '?')} / {task}", "inline": True},
+        {"name": "Run", "value": str(payload.get("run_id") or "-"), "inline": True},
+        {"name": "Try", "value": str(payload.get("try_number") or "-"), "inline": True},
+        {"name": "Duration", "value": f"{dur:.0f}s" if dur is not None else "-", "inline": True},
+        {"name": "Host", "value": str(payload.get("hostname") or "-"), "inline": True},
+        {"name": "로그", "value": f"[열기]({log_url})" if log_url else "-", "inline": True},
     ]
-    return {"title": "❌ 파이프라인 실패 — run_pipeline",
-            "description": f"수집 파이프라인이 예외로 중단되었습니다.\n```\n{str(exc)[:400]}\n```",
+    exc = payload.get("exception")
+    return {"title": f"❌ 파이프라인 실패 — {task}",
+            "description": f"회차 태스크가 예외로 중단되었습니다.\n```\n{str(exc)[:400] if exc else '-'}\n```",
             "color": COLOR_FAILURE, "fields": fields,
             "channel": CHANNEL_INCIDENT}
+
+
+def build_failure_alert(context) -> dict:
+    """구 DAG (bullet_in_daily) 의 콜백 서명 — 컨텍스트에서 페이로드를 뽑아 위 함수로."""
+    ti = context["task_instance"]
+    return build_task_failure_alert({
+        "dag_id": ti.dag_id, "task_id": ti.task_id, "run_id": context.get("run_id"),
+        "try_number": ti.try_number, "duration": getattr(ti, "duration", None),
+        "hostname": getattr(ti, "hostname", None), "log_url": getattr(ti, "log_url", None),
+        "exception": context.get("exception")})
 
 
 COVERAGE_BREACH_FIELDS = {
@@ -607,3 +620,19 @@ def build_dbt_gate_alert(result, *, run_id: str) -> dict:
             "description": "회차는 끝났지만 배포가 나가지 않았다 · 화면은 직전 산출물 그대로다",
             "color": COLOR_FAILURE, "fields": fields,
             "channel": CHANNEL_INCIDENT}
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    import sys
+    ap = argparse.ArgumentParser(description="알림 CLI — Airflow DAG 콜백이 쓴다")
+    sub = ap.add_subparsers(dest="command", required=True)
+    sub.add_parser("task-failure", help="stdin 의 JSON 페이로드로 태스크 실패 알림")
+    args = ap.parse_args(argv)
+    if args.command == "task-failure":
+        send_alert(**build_task_failure_alert(json.loads(sys.stdin.read())))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
