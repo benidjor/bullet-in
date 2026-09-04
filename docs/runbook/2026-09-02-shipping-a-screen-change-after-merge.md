@@ -34,14 +34,15 @@ ssh -i ~/.ssh/<키> <운영> 'ps aux | grep -E "[b]ullet_in|[b]ackfill" | grep -
 
 ## 2. 코드 반영 — 손으로 하지 않는다 (2026-09-04 부터)
 
-머지된 코드는 다음 회차가 시작할 때 스스로 내려받는다 (`bullet-in.service` 의 `ExecStartPre` · `bullet_in.deploy advance`).
+머지된 코드는 다음 회차가 시작할 때 스스로 내려받는다 (DAG `bullet_in_cycle` 의 첫 태스크 `advance` · `bullet_in.deploy advance`).
 회차 끝에 첫 회차를 판정하고 디스코드 리뷰 채널에 「✅ 코드 반영 완료」 가 온다.
 그 알림이 오면 이 문서의 §3 이하를 할 필요가 없다.
 
 급하면 회차를 손으로 한 번 시작한다.
 
 ```bash
-ssh -i ~/.ssh/<키> <운영> 'sudo systemctl start --no-block bullet-in.service'
+ssh -i ~/.ssh/<키> <운영> \
+  'set -a; . ~/airflow/airflow.env; set +a; ~/airflow-venv/bin/airflow dags trigger bullet_in_cycle'
 ```
 
 **`git pull` 을 손으로 치지 않는다.**

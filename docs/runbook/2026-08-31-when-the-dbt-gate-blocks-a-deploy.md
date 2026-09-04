@@ -44,6 +44,13 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
 
 ## 3. 게이트가 못 돈 경우
 
+Airflow 로 옮긴 뒤 (2026-09-04) 신호 종료가 뜨는 자리가 바뀌었다.
+`gate` 태스크는 신호 종료를 만나면 게이트 안에서 한 번 더 돌려 보고, 두 번째도 신호 종료면 그때 종료 코드 `3` 을 낸다.
+그러니 여기서 보는 신호 종료는 이미 한 번 더 돈 뒤의 결과다.
+Airflow 화면에는 `gate` 가 실패가 아니라 건너뜀 (skipped) 으로 보이고 `deploy_site` 도 함께 건너뛴다.
+판정은 「보류」 다.
+자세한 대응은 `docs/runbook/2026-09-04-running-the-cycle-under-airflow.md` §4 를 본다.
+
 VM 에서 직접 불러 본다.
 
 ```bash
@@ -184,10 +191,15 @@ uv run python -m bullet_in.migrate_url_identity --apply --purge-orphans
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
-  'sudo systemctl start --no-block bullet-in.service'
+  'set -a; . ~/airflow/airflow.env; set +a; PYTHONWARNINGS=ignore ~/airflow-venv/bin/airflow dags trigger bullet_in_cycle'
 ```
 
-**회차가 끝났는지는 `ActiveState` 로 잰다.**
+회차가 끝났는지는 화면 (그래프 뷰) 이나 `airflow dags state bullet_in_cycle` 로 본다 (`docs/runbook/2026-09-04-running-the-cycle-under-airflow.md` §3).
+
+`bullet-in.service` 는 되돌림용으로만 남아 있다.
+Airflow 를 되돌리고 그 유닛으로 돌리는 경우에만 아래 `ActiveState` 확인이 필요하다.
+
+**회차가 끝났는지는 `ActiveState` 로 잰다 (systemd 로 되돌린 경우).**
 `systemctl is-active --quiet` 는 쓰면 안 된다 — `Type=oneshot` 유닛은 도는 동안 `activating` 이라 그 검사가 즉시 통과하고 직전 회차의 결과를 이번 회차 것으로 읽는다.
 
 ```bash

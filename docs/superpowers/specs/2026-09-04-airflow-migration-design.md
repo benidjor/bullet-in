@@ -359,8 +359,11 @@ Airflow 의 상태 어휘 (성공 · 실패 · 건너뜀) 가 스펙 2026-09-03 
 | `advance` 부터 `deploy_site` 까지 전부 성공 | `success` | | 표지 대조 · 반영 완료 |
 | `gate` 건너뜀 (그래서 `deploy_site` 도 건너뜀) | `exit-code` | `3` | 보류 |
 | 그 밖에 하나라도 실패 | `exit-code` | 실패한 태스크 이름 | 롤백 |
+| `dagrun_timeout` (30분) 초과 | (판정 자체가 안 돈다) | | 판정 없음 |
 
-`warehouse_load` 는 대응에서 뺀다.
+시간 초과는 판정기의 입력이 아니라 판정기가 못 도는 경우다.
+`judge` 를 포함한 미완 태스크가 전부 `SKIPPED` 로 바뀌고 `judge` 자신도 돌지 못하므로 DAG 수준 `on_failure_callback` (§7) 이 알림만 보낸다.
+전진 여부에 따라 `pending` 이 참인 채로 다음 회차로 넘어가고, 다음 회차의 `judge` 가 그 `pending` 을 이어 판정한다.
 회차 결과와 무관하게 도는 것이라 판정 재료가 아니다.
 `decide` · `rollback` · 표지 대조 · 알림 서식은 한 줄도 안 바뀐다.
 2β 가 남긴 판정 테스트가 그대로 살고, 새로 검증할 것은 이 대응표 하나다.
@@ -420,6 +423,9 @@ DAG 구조를 바꾸는 PR 은 회차 사이에 머지한다는 규율을 런북
 - 판정 태스크가 같은 실행의 앞 태스크 상태를 읽는 컨텍스트 메서드 (`ti.get_task_states`) 가 있는가.
   없으면 CLI 로 대신한다 (§6.3).
 - 실패 콜백 컨텍스트에 `build_failure_alert` 가 쓰는 키 (`task_instance` · `exception` · `run_id` · `log_url`) 가 3.x 에도 있는가.
+
+SQLite 로 띄운 확인은 이 넷을 답해도 Postgres 드라이버 구멍은 보여 주지 않는다.
+`db migrate` 가 만드는 비동기 엔진은 메타데이터 DB 가 Postgres 일 때만 켜지므로, 그 구멍은 실물 설치 (태스크 8) 에서야 드러났다 (`docs/troubleshooting/2026-09-04-what-only-showed-up-when-airflow-actually-ran.md`).
 
 ### 9.2. 단위 테스트
 

@@ -7,8 +7,9 @@ HOME_DIR=/home/ubuntu/airflow
 UV=/home/ubuntu/.local/bin/uv
 cd "$(dirname "$0")"
 [ -d "$VENV" ] || $UV venv --python 3.11 "$VENV"
+# [postgres] 엑스트라 — db migrate 가 Postgres 접속에 비동기 엔진(asyncpg)도 만들어 psycopg2-binary 만으로는 부족하다.
 $UV pip install --python "$VENV/bin/python" \
-  "apache-airflow==$VERSION" "apache-airflow-providers-standard" "psycopg2-binary" \
+  "apache-airflow[postgres]==$VERSION" "apache-airflow-providers-standard" \
   --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-$VERSION/constraints-3.11.txt"
 mkdir -p "$HOME_DIR"
 cp airflow.env "$HOME_DIR/airflow.env"

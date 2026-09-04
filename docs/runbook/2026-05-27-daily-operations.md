@@ -14,9 +14,10 @@ docker compose ps           # 두 컨테이너 running 확인
 
 ## 3. 파이프라인 실행
 - 수동: `uv run python -m bullet_in.run --concurrency 8`
-- 스케줄: VM 의 systemd 타이머 `bullet-in.timer` 가 3시간 간격으로 하루 8회 실행한다.
-  회차 유닛은 `bullet-in.service` 이고 회차가 성공하면 `ExecStartPost` 가 배포까지 이어 간다.
-  `airflow/dags/bullet_in_daily.py` 는 확장용 보존 자산이라 운영에서 돌지 않는다.
+- 스케줄: VM 의 Airflow DAG `bullet_in_cycle` 이 3시간 간격으로 하루 8회 실행한다.
+  태스크는 `advance → collect → enrich → publish → gate → deploy_site → judge` 순으로 돌고, `publish` 뒤에 `warehouse_load` 가 붙는다.
+  최근 실행 이력은 `airflow dags list-runs bullet_in_cycle` 로 본다.
+  자세한 절차는 `docs/runbook/2026-09-04-running-the-cycle-under-airflow.md` 를 본다.
 
 ## 4. 수집 현황 점검 (이상 점검)
 실행 요약 (stdout dict)에서 다음을 확인:
