@@ -18,6 +18,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pyarrow as pa
 from sqlalchemy import text
@@ -219,6 +220,196 @@ def dim_date_rows(dates) -> list[dict]:
                     "days_since_launch": (day - LAUNCH_DATE).days,
                     "is_launch_day": day == LAUNCH_DATE})
     return out
+
+
+# --- 행동 기록 · gold 표 셋 (스펙 2026-09-05 §3.1) --------------------------------
+#
+# 사람을 세는 키는 `user_pseudo_id` 하나다. `bi_cid` 는 자동 수집 이벤트에 없어서
+# 둘을 섞으면 한 사람이 두 사람으로 센다 (트러블슈팅 2026-09-04 두 키).
+
+SESSION_TABLE = "fact_session"
+USER_DAILY_TABLE = "fact_user_daily"
+DIM_USER_TABLE = "dim_user"
+
+SESSION_COLUMNS = ("user_pseudo_id", "ga_session_id", "session_date_kst", "started_at",
+                   "start_hour_kst", "weekday_kst", "engaged", "device_category",
+                   "traffic_source", "traffic_medium", "n_page_views", "n_card_clicks",
+                   "n_filter_applies", "n_origin_exits", "engagement_msec")
+_SESSION_TYPES = {"started_at": pa.timestamp("us", tz="UTC"),
+                  "start_hour_kst": pa.int32(), "weekday_kst": pa.int32(),
+                  "engaged": pa.bool_(), "n_page_views": pa.int32(),
+                  "n_card_clicks": pa.int32(), "n_filter_applies": pa.int32(),
+                  "n_origin_exits": pa.int32(), "engagement_msec": pa.int64()}
+
+USER_DAILY_COLUMNS = ("user_pseudo_id", "date_kst", "is_new", "n_sessions", "n_entries",
+                      "n_card_clicks", "n_article_views", "n_player_views",
+                      "n_origin_exits", "used_trust_filter", "device_category")
+_USER_DAILY_TYPES = {"is_new": pa.bool_(), "n_sessions": pa.int32(), "n_entries": pa.int32(),
+                     "n_card_clicks": pa.int32(), "n_article_views": pa.int32(),
+                     "n_player_views": pa.int32(), "n_origin_exits": pa.int32(),
+                     "used_trust_filter": pa.bool_()}
+
+DIM_USER_COLUMNS = ("user_pseudo_id", "first_date_kst", "first_device", "first_source",
+                    "first_medium", "n_active_days", "n_card_clicks")
+_DIM_USER_TYPES = {"n_active_days": pa.int32(), "n_card_clicks": pa.int32()}
+
+
+def path_of(location: str | None) -> str:
+    """주소에서 경로만. 호스트 · 질의문자열이 달라도 같은 경로면 같은 페이지다."""
+    if not location:
+        return ""
+    return urlsplit(location).path or "/"
+
+
+def _truthy(value) -> bool:
+    return value in (1, "1", True, "true")
+
+
+def _int(value) -> int:
+    """파라미터는 문자열로 온다 (`_param_value`). 비었거나 숫자가 아니면 0."""
+    if value in (None, ""):
+        return 0
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _event_at(row: dict) -> datetime | None:
+    at = row.get("event_at")
+    if at is None and row.get("event_timestamp"):
+        at = datetime.fromtimestamp(int(row["event_timestamp"]) / 1_000_000,
+                                    tz=timezone.utc)
+    if at is not None and at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
+    return at
+
+
+def session_rows(flat: list[dict]) -> list[dict]:
+    """(사용자, GA4 세션 id) 마다 한 행. 시작 시각은 가장 이른 이벤트다.
+
+    `ga_session_id` 만으로 묶지 않는다 — 사용자가 달라도 같은 값이 겹칠 수 있다 (런북 §3).
+    """
+    groups: dict[tuple, dict] = {}
+    for r in flat:
+        user, sid = r.get("user_pseudo_id"), r.get("ga_session_id")
+        if not user or not sid:
+            continue
+        g = groups.setdefault((user, sid), {
+            "user_pseudo_id": user, "ga_session_id": sid, "started_at": None,
+            "engaged": False, "device_category": None, "traffic_source": None,
+            "traffic_medium": None, "n_page_views": 0, "n_card_clicks": 0,
+            "n_filter_applies": 0, "n_origin_exits": 0, "engagement_msec": 0})
+        at = _event_at(r)
+        if at is not None and (g["started_at"] is None or at < g["started_at"]):
+            g["started_at"] = at
+            g["device_category"] = r.get("device_category")
+            g["traffic_source"] = r.get("traffic_source")
+            g["traffic_medium"] = r.get("traffic_medium")
+        if _truthy(r.get("session_engaged")):
+            g["engaged"] = True
+        name = r.get("event_name")
+        if name == "page_view":
+            g["n_page_views"] += 1
+        elif name == "bi_card_click":
+            g["n_card_clicks"] += 1
+        elif name == "bi_filter_apply":
+            g["n_filter_applies"] += 1
+        elif name == "bi_origin_exit":
+            g["n_origin_exits"] += 1
+        g["engagement_msec"] += _int(r.get("engagement_time_msec"))
+    out = []
+    for g in groups.values():
+        if g["started_at"] is None:
+            continue
+        k = g["started_at"].astimezone(KST)
+        g["session_date_kst"] = k.date().isoformat()
+        g["start_hour_kst"] = k.hour
+        g["weekday_kst"] = k.isoweekday()
+        out.append({c: g.get(c) for c in SESSION_COLUMNS})
+    return sorted(out, key=lambda x: (x["started_at"], x["user_pseudo_id"]))
+
+
+def _first_dates(flat: list[dict]) -> dict[str, str]:
+    first: dict[str, str] = {}
+    for r in flat:
+        user, day = r.get("user_pseudo_id"), r.get("event_date_kst")
+        if user and day and (user not in first or day < first[user]):
+            first[user] = day
+    return first
+
+
+def user_daily_rows(flat: list[dict]) -> list[dict]:
+    """(사용자, KST 날짜) 마다 한 행. 첫 방문일은 평탄화본 전량에서 정한다."""
+    first = _first_dates(flat)
+    groups: dict[tuple, dict] = {}
+    for r in flat:
+        user, day = r.get("user_pseudo_id"), r.get("event_date_kst")
+        if not user or not day:
+            continue
+        g = groups.setdefault((user, day), {
+            "sessions": set(), "n_entries": 0, "n_card_clicks": 0, "n_article_views": 0,
+            "n_player_views": 0, "n_origin_exits": 0, "used_trust_filter": False,
+            "devices": Counter()})
+        if r.get("ga_session_id"):
+            g["sessions"].add(r["ga_session_id"])
+        name = r.get("event_name")
+        if name == "bi_entry":
+            g["n_entries"] += 1
+        elif name == "bi_card_click":
+            g["n_card_clicks"] += 1
+        elif name == "bi_origin_exit":
+            g["n_origin_exits"] += 1
+        elif name == "page_view":
+            path = path_of(r.get("page_location"))
+            if path.startswith("/article/"):
+                g["n_article_views"] += 1
+            elif path.startswith("/player/"):
+                g["n_player_views"] += 1
+        elif name == "bi_filter_apply" and (_int(r.get("n_tier")) or _int(r.get("n_journalist"))):
+            g["used_trust_filter"] = True
+        if r.get("device_category"):
+            g["devices"][r["device_category"]] += 1
+    out = []
+    for (user, day), g in sorted(groups.items()):
+        out.append({"user_pseudo_id": user, "date_kst": day, "is_new": first[user] == day,
+                    "n_sessions": len(g["sessions"]), "n_entries": g["n_entries"],
+                    "n_card_clicks": g["n_card_clicks"],
+                    "n_article_views": g["n_article_views"],
+                    "n_player_views": g["n_player_views"],
+                    "n_origin_exits": g["n_origin_exits"],
+                    "used_trust_filter": g["used_trust_filter"],
+                    "device_category": (g["devices"].most_common(1)[0][0]
+                                        if g["devices"] else None)})
+    return out
+
+
+def dim_user_rows(flat: list[dict]) -> list[dict]:
+    """사용자마다 한 행. 첫 방문의 기기 · 유입은 가장 이른 이벤트의 것이다."""
+    users: dict[str, dict] = {}
+    for r in flat:
+        user, day = r.get("user_pseudo_id"), r.get("event_date_kst")
+        if not user or not day:
+            continue
+        g = users.setdefault(user, {"first_date_kst": day, "first_at": None,
+                                    "first_device": None, "first_source": None,
+                                    "first_medium": None, "days": set(), "n_card_clicks": 0})
+        g["days"].add(day)
+        if day < g["first_date_kst"]:
+            g["first_date_kst"] = day
+        at = _event_at(r)
+        if at is not None and (g["first_at"] is None or at < g["first_at"]):
+            g["first_at"] = at
+            g["first_device"] = r.get("device_category")
+            g["first_source"] = r.get("traffic_source")
+            g["first_medium"] = r.get("traffic_medium")
+        if r.get("event_name") == "bi_card_click":
+            g["n_card_clicks"] += 1
+    return [{"user_pseudo_id": user, "first_date_kst": g["first_date_kst"],
+             "first_device": g["first_device"], "first_source": g["first_source"],
+             "first_medium": g["first_medium"], "n_active_days": len(g["days"]),
+             "n_card_clicks": g["n_card_clicks"]}
+            for user, g in sorted(users.items())]
 
 
 # 화면이 읽는 집계. 축 이름은 팩트의 컬럼 이름이고, 짝은 마트에서 같은 축을 세는
@@ -786,7 +977,7 @@ def _typed_schema(names, types: dict) -> pa.Schema:
 
 
 def build_gold(catalog, now: datetime) -> int:
-    """평탄화본 전량에서 팩트와 날짜 디멘션을 다시 세운다.
+    """평탄화본 전량에서 팩트 · 날짜 · 세션 · 사용자 × 날짜 · 사용자 표 다섯을 다시 세운다.
 
     덧붙이지 않고 갈아 끼운다 — 원본이 남아 있어 언제든 다시 만들 수 있고,
     그래야 겹침 접기 규칙을 고쳤을 때 옛 결과가 안 남는다.
@@ -805,10 +996,16 @@ def build_gold(catalog, now: datetime) -> int:
     flat = flat_table.scan().to_arrow().to_pylist()
     facts = fact_rows(flat)
     dims = dim_date_rows(r.get("event_date_kst") for r in flat)
+    sessions = session_rows(flat)
+    user_days = user_daily_rows(flat)
+    users = dim_user_rows(flat)
 
     for name, rows, names, types in (
             (FACT_TABLE, facts, FACT_COLUMNS, _FACT_TYPES),
-            (DIM_DATE_TABLE, dims, tuple(_DIM_DATE_TYPES), _DIM_DATE_TYPES)):
+            (DIM_DATE_TABLE, dims, tuple(_DIM_DATE_TYPES), _DIM_DATE_TYPES),
+            (SESSION_TABLE, sessions, SESSION_COLUMNS, _SESSION_TYPES),
+            (USER_DAILY_TABLE, user_days, USER_DAILY_COLUMNS, _USER_DAILY_TYPES),
+            (DIM_USER_TABLE, users, DIM_USER_COLUMNS, _DIM_USER_TYPES)):
         schema = _typed_schema(names, types)
         table = ensure_table(catalog, name, schema, namespace=BEHAVIOR_NS)
         table.overwrite(to_arrow(rows, schema, loaded_at=now))
