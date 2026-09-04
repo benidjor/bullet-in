@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
+from datetime import datetime
 
 from markupsafe import Markup
 
@@ -123,7 +123,7 @@ def _dau(daily: dict | None):
     last = days[-1]
     ins.append((f"{_md(last['date'])} 은 {C.fmt(last['dau'])}명이고 그 가운데 재방문이 {C.fmt(last['ret'])}명이다.", []))
     mobile = next((x["users"] for x in daily["device"] if x["k"] == "mobile"), 0)
-    ins.append((f"모바일이 {_pct(mobile, daily['users'])}% 라 모바일 화면이 곧 기본 화면이다.", []))
+    ins.append((f"모바일이 {_pct(mobile, daily['users'])}% 다.", []))
     return _section("sec-dau", title, sub, q, body, ins)
 
 
@@ -140,8 +140,8 @@ def _funnel(funnel: dict | None):
     ins = [("마지막 단계를 「다시 와서 읽는 사용자」 로 두었다.", ["이 서비스의 목표가 매일 들르는 습관이기 때문이다."]),
            (f"진입한 {C.fmt(n[0])}명 가운데 {C.fmt(n[1])}명이 카드를 눌렀고 {C.fmt(n[2])}명이 두 건 이상 눌렀으며 "
             f"카드를 누른 사람 가운데 {C.fmt(n[3])}명이 이틀 이상 왔다.", []),
-           (f"신뢰도 · 기자 필터를 쓴 {C.fmt(sides[0][1])}명은 이 서비스의 차별점을 실제로 써 본 사람이다.", []),
-           (f"원문으로 나간 사람은 {C.fmt(sides[1][1])}명이다.", ["요약과 번역이 원문을 대신한다는 뜻이다."])]
+           (f"신뢰도 · 기자 필터를 쓴 사람은 {C.fmt(sides[0][1])}명이다.", []),
+           (f"원문으로 나간 사람은 {C.fmt(sides[1][1])}명이다.", [])]
     ap = funnel.get("article_page_users", 0)
     if ap > n[1]:
         ins.append((f"기사 상세 페이지를 본 사용자는 {C.fmt(ap)}명으로 카드를 누른 {C.fmt(n[1])}명보다 많다.",
@@ -172,8 +172,7 @@ def _heatmap(heat: dict | None):
     ins = [("공개일 (08-29) 을 뺀 값이다.", ["그 하루를 넣으면 그 한 칸이 눈금을 다 차지한다."]),
            (f"가장 몰린 칸은 {wd} {h:02d}시 {C.fmt(v)}명이다.", [])]
     wd2, h2, v2 = peak(heat["incl"])
-    ins2 = [(f"공개일을 넣으면 {wd2} {h2:02d}시 한 칸 ({C.fmt(v2)}명) 이 눈금을 다 차지한다.",
-             ["그래서 이 화면은 기본값을 제외로 둔다."])]
+    ins2 = [(f"공개일을 넣으면 {wd2} {h2:02d}시 한 칸 ({C.fmt(v2)}명) 이 눈금을 다 차지한다.", [])]
     return _section("sec-activity-heatmap", title, sub, q, draw(heat["excl"]), ins, toggle=True,
                     body_incl=draw(heat["incl"]), insights_incl=ins2)
 
@@ -197,6 +196,10 @@ def _index_rows(axis_rows, order, ko):
 def _outlet_rows(axis_rows):
     return [{"lab": NO_OUTLET if r["value"] == EMPTY else r["value"], "n": r["n_clicks"]}
             for r in axis_rows][:12]
+
+
+def _empty_outlet_clicks(ax):
+    return next((r["n_clicks"] for r in ax.get("card_outlet", []) if r["value"] == EMPTY), None)
 
 
 def _traffic_rows(daily):
@@ -243,9 +246,12 @@ def _dimension(axes: dict | None, axes_incl: dict | None, daily: dict | None, to
         fm = sum(r["users"] for r in daily["traffic"] if "fmkorea" in (r["source"] or ""))
         ins.append((f"유입은 fmkorea 참조가 {_pct(fm, daily['users'])}% 다.", []))
     body_incl, _ = draw(axes_incl or {}, "공개일 포함", all_)
+    a, b = _empty_outlet_clicks(axes), _empty_outlet_clicks(axes_incl or {})
+    ins_incl = ([(f"공개일을 넣으면 「표시 없음」 이 {C.fmt(a)}건에서 {C.fmt(b)}건으로 는다.", [])]
+                if a is not None and b is not None and b > a else [])
     return _section("sec-engagement-by-dimension", title, sub, q, body, ins, toggle=True,
                     body_incl=body_incl if axes_incl else None,
-                    insights_incl=[("공개일을 넣으면 홈 상단의 주요 소식 카드가 많이 눌려 「표시 없음」 이 커진다.", [])])
+                    insights_incl=ins_incl)
 
 
 def _retention(ret: list | None):
@@ -263,8 +269,7 @@ def _retention(ret: list | None):
                      show_text=True, scale_exclude_col=0)
     first = ret[0]
     d1 = cells.get((first["first"], 1))
-    ins = [(f"{_md(first['first'])} 코호트 ({C.fmt(first['n'])}명) 는 D+1 이 {d1 if d1 is not None else '-'}% 다.", []),
-           ("재방문을 붙잡는 장치 (알림 · 구독) 가 없다는 것이 지금의 한계다.", [])]
+    ins = [(f"{_md(first['first'])} 코호트 ({C.fmt(first['n'])}명) 는 D+1 이 {d1 if d1 is not None else '-'}% 다.", [])]
     return _section("sec-retention", title, sub, q, body, ins)
 
 

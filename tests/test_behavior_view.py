@@ -156,6 +156,21 @@ def test_인사이트의_숫자는_값에서_온다():
     assert any("모바일이 66%" in main for main, _ in dau)
 
 
+def test_인사이트에_값_없는_해석_문장이_없다():
+    secs = {s["id"]: s for s in _flat_sections(_view())}
+    banned = ("기본 화면이다", "차별점", "원문을 대신한다", "기본값을 제외로 둔다", "지금의 한계다")
+    for s in secs.values():
+        for items in (s["insights"], s["insights_incl"]):
+            for main, subs in items:
+                for b in banned:
+                    assert b not in main
+                    for sub in subs:
+                        assert b not in sub
+    dim_incl = secs["sec-engagement-by-dimension"]["insights_incl"]
+    if dim_incl:
+        assert any("52건에서 144건으로" in main for main, _ in dim_incl)
+
+
 def test_설명문은_문장마다_줄을_가른다():
     html = _html()
     assert html.count('<span class="l">') >= 16  # 절 아홉의 설명문 문장 합
