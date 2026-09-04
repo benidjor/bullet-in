@@ -351,9 +351,19 @@ def build_matches(sha: str, *, fetch=fetch_build, tries: int = 3,
 PIPELINE_TASKS = ("advance", "collect", "enrich", "publish", "gate", "deploy_site")
 
 
+def cli_json(text: str):
+    """Airflow CLI 의 `-o json` 은 structlog 경고를 stdout 에 먼저 찍을 수 있어,
+    첫 `[` 또는 `{` 로 시작하는 줄부터 읽는다."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if line.lstrip()[:1] in ("[", "{"):
+            return json.loads("\n".join(lines[i:]))
+    return json.loads(text)
+
+
 def parse_task_states(text: str) -> dict[str, str]:
     """`airflow tasks states-for-dag-run … -o json` 의 목록이나 {task_id: state} 사전을 받는다."""
-    data = json.loads(text)
+    data = cli_json(text)
     if isinstance(data, dict):
         return {str(k): str(v) for k, v in data.items()}
     return {str(r["task_id"]): str(r.get("state")) for r in data if "task_id" in r}

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from bullet_in import notify
+from bullet_in.deploy import cli_json
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def evaluate(heartbeat_ok: bool, last_success_age_hours: float | None, *,
 def latest_success_age(list_runs_json: str, now: datetime) -> float | None:
     """`airflow dags list-runs bullet_in_cycle -o json` 의 목록에서 최신 성공까지의 시간."""
     ends = []
-    for r in json.loads(list_runs_json or "[]"):
+    for r in cli_json(list_runs_json or "[]"):
         if r.get("state") == "success" and r.get("end_date"):
             ends.append(datetime.fromisoformat(str(r["end_date"]).replace("Z", "+00:00")))
     if not ends:
@@ -58,13 +59,15 @@ def should_alert(problems: list[str], state: dict, now: datetime, *,
 
 
 def _cli(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([AIRFLOW_BIN, *args], capture_output=True, text=True, timeout=120)
+    # structlog 경고가 stdout 에 섞이지 않도록 안전장치를 하나 더 둔다 (파서도 앞줄을 건너뛴다).
+    env = {**os.environ, "PYTHONWARNINGS": "ignore"}
+    return subprocess.run([AIRFLOW_BIN, *args], capture_output=True, text=True, timeout=120, env=env)
 
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     now = datetime.now(timezone.utc)
-    hb = _cli("jobs", "check", "--job-type", "SchedulerJob", "--allow-multiple")
+    hb = _cli("jobs", "check", "--job-type", "SchedulerJob")
     if hb.returncode != 0:
         log.warning("%s 실패 (rc=%d) — %s", "jobs check", hb.returncode, hb.stderr[:300])
     runs = _cli("dags", "list-runs", DAG_ID, "-o", "json")

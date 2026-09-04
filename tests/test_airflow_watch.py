@@ -33,6 +33,20 @@ def test_latest_success_age_reads_the_cli_list_and_picks_the_newest():
     assert latest_success_age("[]", NOW) is None
 
 
+def test_latest_success_age_skips_leading_structlog_warning_lines():
+    warning = (
+        '2026-09-04T06:24:26.841666Z [warning  ] Could not import graphviz. '
+        'Rendering graph to the graphical format will not be possible. \n'
+        '2026-09-04T06:24:26.841666Z [warning  ] Could not import graphviz. '
+        'Rendering graph to the graphical format will not be possible. \n'
+        '2026-09-04T06:24:26.841666Z [warning  ] Could not import graphviz. '
+        'Rendering graph to the graphical format will not be possible. \n'
+    )
+    runs = [{"dag_id": "bullet_in_cycle", "state": "success", "end_date": "2026-09-06T03:07:02+00:00"}]
+    age = latest_success_age(warning + json.dumps(runs), NOW)
+    assert round(age, 2) == round((NOW - datetime(2026, 9, 6, 3, 7, 2, tzinfo=timezone.utc)).total_seconds() / 3600, 2)
+
+
 def test_should_alert_sends_once_then_waits_four_hours():
     ok, st = should_alert(["x"], {}, NOW)
     assert ok and st["last_alert_at"] == NOW.isoformat()
@@ -68,7 +82,7 @@ def test_main_calls_the_positional_dag_id_and_stays_quiet_when_healthy(monkeypat
 
     assert airflow_watch.main() == 0
     assert calls == [
-        ("jobs", "check", "--job-type", "SchedulerJob", "--allow-multiple"),
+        ("jobs", "check", "--job-type", "SchedulerJob"),
         ("dags", "list-runs", "bullet_in_cycle", "-o", "json"),
     ]
     assert sent == []
