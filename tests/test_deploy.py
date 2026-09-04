@@ -454,7 +454,9 @@ def test_rollback_alert_carries_commit_detail(repos, quiet_alerts):
     values = {f["name"]: f["value"] for f in alert["fields"]}
     assert f"{new[:7]} c2" in values["되돌린 커밋"]
     assert "1 file changed" in values["변경 규모"]
-    assert "저널" in values                                                # 종전 필드는 그대로
+    assert "태스크 로그" in values                                          # 회차가 Airflow 로 옮겨 저널 대신 태스크 로그
+    assert "dag_id=bullet_in_cycle" in values["태스크 로그"]
+    assert "journalctl" not in values["태스크 로그"]
 
 
 # ── Airflow 입력 (스펙 2026-09-04 §6.3) — 태스크 상태 일곱을 decide 의 두 값으로 ──
