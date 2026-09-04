@@ -2696,3 +2696,25 @@ gh pr create --base main --head worktree-dashboard --title "<위 제목>" --body
 - 스펙 §4 빈 구간 → 태스크 4 의 `_missing` 과 테스트 「집계에_없는_절」.
 - 스펙 §5 §9 재현 명령 · 구조 단언 · 실제 컬럼 이름 픽스처 → 태스크 3 (`show --from --to`) · 1 · 2.
 - 스펙 §3.4 · §3.5 (수집 현황 · README §4) 는 PR 2 의 몫이라 이 계획에 없다.
+
+## 실행 중 정정 (2026-09-05)
+
+계획서의 코드를 그대로 옮기다가 실물 (pyiceberg · Jinja · 테스트 수) 과 어긋난 자리를 고쳤다.
+그 자리를 여기에 적는다.
+코드 블록 자체는 고치지 않았으므로 아래가 우선한다.
+
+| 태스크 | 계획서 | 실제 (고친 것) | 이유 |
+| --- | --- | --- | --- |
+| 0 | 워크트리 `dashboard` · 브랜치 `worktree-dashboard` | 워크트리 `dashboard-pr1` · 브랜치 `worktree-dashboard-pr1` (태스크 6 의 push · clone · PR head 도 같은 이름) | 사용자 지시 (스펙 PR 의 워크트리는 이미 정리됐다) |
+| 1 | RED 기대 `ModuleNotFoundError` | 실제는 `ImportError` | `serve/__init__.py` 가 이미 있어 하위 모듈 부재는 `ImportError` 로 난다 |
+| 1 | 차트 함수가 빈 입력에서 `max()` 예외 | `hbars` · `stacked_columns` · `line_chart` · `heatmap` 이 빈 입력이면 빈 `<svg>` 를 돌려준다 · 테스트 1 추가 (17) · `date` import 제거 | 리뷰 지적 · PR 2 가 빈 목록을 넘길 수 있다 |
+| 3 | `_scan_rows` 가 요청 컬럼을 그대로 `selected_fields` 로 | 표 스키마에 있는 컬럼으로 좁히고 없는 컬럼은 경고 로그 | pyiceberg 0.11.1 은 없는 컬럼을 고르면 `ValueError` · 픽스처의 silver 에는 `page_location` 이 없다 |
+| 3 | `agg_daily` 의 `traffic` 을 상위 10 으로 자름 | 자르지 않는다 (표시 자르기는 뷰모델 `_traffic_rows` 의 7) | 기준값 7행과 인사이트가 fmkorea 호스트 전부를 더하므로 잘린 목록이면 조용히 빠진다 |
+| 3 | 히트맵 두 벌에 `start` 없음 | `start=LAUNCH_DATE.isoformat()` | 스펙 §3.1 의 창은 「공개 뒤 전체」 · 공개 전 시험 트래픽을 막는다 · 테스트 2 추가 (13) |
+| 4 | `_dash.html.j2` 의 `<style>` 을 그대로 | `{% raw %}` 로 감쌌다 | CSS 의 `){#tip{…}}` 에서 `{#` 을 Jinja 가 주석 시작으로 읽어 렌더가 깨진다 |
+| 4 | `_overview` 의 「기간」 · 「갱신」 항목이 2-튜플 | 셋째 원소 `[]` 를 붙였다 | 템플릿이 `for lab, txt, subs` 로 셋을 푼다 |
+| 4 | `test_설명문…` 이 `>= 18` | `>= 16` | 절 아홉의 설명문 문장 합이 16 이다 |
+| 4 | 인사이트 문장 여섯이 값과 무관한 해석 | 값이 실리는 절반만 남기거나 값에서 계산 (`(없음)` 클릭 수 비교) · 테스트 1 추가 (17) | 스펙 §3.3 (해석 문장은 화면에 안 싣는다) 이 계획서보다 우선한다 |
+| 4 · 전체 | 테스트 17 · 전체 1,750 · `test_run_stages` 6 | 새 파일 17 (16 + 1) · 전체 1,753 (1,704 − 10 + 17 + 12 + 13 + 17) · `test_run_stages` 7 | 계획서의 세기가 틀렸다 |
+
+정정을 판정한 근거는 스펙이 계획서보다 우선한다는 규칙이고, 미뤄 둔 사소한 지적은 PR 본문 §5 에 있다.

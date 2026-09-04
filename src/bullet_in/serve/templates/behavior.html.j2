@@ -1,90 +1,28 @@
-<!doctype html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex,nofollow">
-<title>bullet-in 행동 지표</title>
-<style>
-  :root { --surface:#fcfcfb; --ink:#0b0b0b; --sec:#52514e; --mut:#898781;
-          --grid:#e1e0d9; --line:#c3c2b7; --blue:#2a78d6; }
-  @media (prefers-color-scheme: dark) {
-    :root { --surface:#1a1a19; --ink:#fff; --sec:#c3c2b7; --grid:#2c2c2a;
-            --line:#383835; --blue:#3987e5; }
-  }
-  body { margin:0 auto; max-width:860px; padding:24px 16px; background:var(--surface);
-         color:var(--ink); font:14px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
-  header { display:flex; justify-content:space-between; align-items:baseline; }
-  h1 { font-size:18px; margin:0; }
-  h2 { font-size:14px; margin:22px 0 2px; }
-  .mut { color:var(--mut); font-size:11px; }
-  .note { color:var(--sec); font-size:12px; margin:10px 0 0; }
-  .sub { color:var(--mut); font-size:11px; margin:0 0 6px; }
-  table { width:100%; border-collapse:collapse; margin:4px 0; }
-  th { text-align:left; font-weight:600; color:var(--mut); font-size:10px;
-       text-transform:uppercase; letter-spacing:.04em; padding:4px 8px;
-       border-bottom:1px solid var(--line); }
-  th.n, td.n { text-align:right; width:68px; }
-  td { padding:4px 8px; border-bottom:1px solid var(--grid);
-       font-variant-numeric:tabular-nums; }
-  td.bar { width:170px; }
-  .hbar { height:12px; background:var(--blue); border-radius:3px;
-          display:inline-block; vertical-align:middle; }
-  footer { margin-top:20px; border-top:1px solid var(--grid); padding-top:8px; }
-  footer a { color:var(--sec); }
-</style></head>
-<body>
-<header>
-  <h1>행동 지표</h1>
-  <span class="mut">{{ generated_at }}</span>
-</header>
-
-<p class="note">
-  {{ metrics.dates["from"] }}에서 {{ metrics.dates.to }}까지 모은 카드 클릭
-  {{ "{:,}".format(metrics.totals.all) }}건 가운데 공개일
-  {{ "{:,}".format(metrics.totals.launch_day) }}건을 뺀
-  <strong>{{ "{:,}".format(metrics.totals.counted) }}건</strong>으로 셌다.
-  공개일 하루가 표본의 절반을 넘어 평균을 끌어당기기 때문이다.
-  표본이 작으므로 한 자릿수 칸은 그대로 읽지 않는다.
-</p>
-<p class="note">
-  「기사당」 은 클릭을 그 축의 기사 수로 나눈 값이다.
-  기사 수가 다르면 클릭 수만으로는 더 읽혔는지 더 많이 보였는지 못 가른다.
-  다만 이 분모는 노출 수가 아니라 기사 수라, 같은 기사가 여러 번 보인 것은 반영하지 못한다.
-</p>
-<p class="note">
-  「(없음)」 은 단계 · 등급 · 매체를 안 실은 자리의 클릭이다.
-  선수 카드는 기사가 아니라 늘 여기에 들고, 주요 소식과 타임라인 제목은 2026-09-03 까지 해시만 실었다.
-  기사 해시가 있는 클릭은 마트에서 단계와 등급을 채워 세지만 매체는 못 채운다.
-</p>
-
-{% for axis, title, why in axes %}
-{% set rows = metrics.axes.get(axis, []) %}
-<h2>{{ title }}</h2>
-<p class="sub">{{ why }}</p>
-{% if rows %}
-{% set top = rows[0].n_clicks %}
-<table>
-  <tr>
-    <th>{{ title }}</th><th class="n">클릭</th><th class="n">기사</th>
-    <th class="n">기사당</th><th></th>
-  </tr>
-  {% for r in rows %}
-  <tr>
-    <td>{{ r.value }}</td>
-    <td class="n">{{ r.n_clicks }}</td>
-    <td class="n">{{ r.n_articles or "" }}</td>
-    <td class="n">{{ r.per_article if r.per_article is not none else "" }}</td>
-    <td class="bar"><span class="hbar"
-        style="width:{{ (r.n_clicks / top * 160) | round | int }}px"></span></td>
-  </tr>
-  {% endfor %}
-</table>
-{% else %}
-<p class="mut">아직 없다.</p>
-{% endif %}
+{#- 행동 지표 화면 — 뷰모델 (serve/behavior_view.build_behavior_view) 만 읽는다.
+    절 순서 · id 는 목업 v2.8 그대로이고 집계에 없는 절은 「다음 적재 뒤」 로 그린다 (스펙 §4). -#}
+{% extends "_dash.html.j2" %}
+{% import "_dash_macros.html.j2" as dash with context %}
+{% block title %}bullet-in 행동 지표{% endblock %}
+{% block page %}behavior{% endblock %}
+{% block meta %}{{ view.generated_at }} 집계 · 인라인 SVG · 사용자 수는 하한선{% endblock %}
+{% block content %}
+<div class="ov">
+{% for lab, txt, subs in view.overview %}
+  <div class="ov-item"><div class="ov-lab">{{ lab }}</div><div class="ov-txt">{{ txt }}</div>
+  {% if subs %}<ul class="ov-sub">{% for l, x in subs %}<li><b>{{ l }}</b>: {{ x }}</li>{% endfor %}</ul>{% endif %}</div>
 {% endfor %}
-
-<footer class="mut"><a href="ops.html">수집 현황</a></footer>
-</body>
-</html>
+</div>
+{% if view.tiles %}
+<div class="tiles">
+{% for t in view.tiles %}
+  <div class="tile"><div class="tl">{{ t.label }}</div><div class="tv">{{ t.value }}</div><div class="ts">{{ t.sub }}</div>{{ t.spark }}</div>
+{% endfor %}
+</div>
+{% else %}
+<p class="missing">{{ view.missing_note }}</p>
+{% endif %}
+{% for item in view.sections %}
+{% if item.pair %}<div class="two-sec">{% for s in item.pair %}{{ dash.section(s) }}{% endfor %}</div>
+{% else %}{{ dash.section(item) }}{% endif %}
+{% endfor %}
+{% endblock %}

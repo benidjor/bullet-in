@@ -932,3 +932,296 @@ def test_행동_갈래가_실패하면_마트_적재_뒤에_다시_던진다(loc
     monkeypatch.setattr(warehouse, "load_ga4_events", boom)
     with pytest.raises(RuntimeError, match="BigQuery 403"):
         warehouse.run_load(_t(2026, 9, 3, 3))
+
+
+# --- 행동 기록 · gold 표 셋 (세션 · 사용자 × 날짜 · 사용자) ----------------------
+
+# 2026-09-01 12:00 KST (03:00 UTC) 부터 1시간 간격. event_timestamp 는 마이크로초.
+_T0 = 1_788_231_600_000_000
+
+
+def _ev(name, user="u1", sid="s1", hours=0, page=None, params=(), **extra):
+    """gold 테스트용 평탄화 입력. 세션 · 참여 · 경로를 계측 이름 그대로 싣는다."""
+    ps = [_p("ga_session_id", string_value=sid)] + list(params)
+    if page:
+        ps.append(_p("page_location", string_value=f"https://bullet-in.pages.dev{page}"))
+    return _event(name=name, ts=_T0 + hours * 3_600_000_000, params=ps,
+                  user_pseudo_id=user, **extra)
+
+
+def _flat(*events):
+    return warehouse.flatten_rows(list(events))
+
+
+def test_세션은_사용자와_세션_id_쌍으로_하나다():
+    rows = warehouse.session_rows(_flat(
+        _ev("session_start"), _ev("page_view", page="/"), _ev("bi_card_click"),
+        _ev("session_start", user="u2", sid="s1")))         # 다른 사용자의 같은 id
+    assert len(rows) == 2
+    s = next(r for r in rows if r["user_pseudo_id"] == "u1")
+    assert s["ga_session_id"] == "s1"
+    assert s["n_page_views"] == 1 and s["n_card_clicks"] == 1
+
+
+def test_세션의_시작_시각은_가장_이른_이벤트이고_KST_로_요일과_시각을_적는다():
+    rows = warehouse.session_rows(_flat(
+        _ev("page_view", hours=2), _ev("session_start", hours=0)))
+    s = rows[0]
+    assert s["session_date_kst"] == "2026-09-01"
+    assert s["start_hour_kst"] == 12 and s["weekday_kst"] == 2     # 화요일 정오
+
+
+def test_세션의_참여_여부는_한_이벤트라도_참여면_참이다():
+    rows = warehouse.session_rows(_flat(
+        _ev("page_view"), _ev("user_engagement", params=[_p("session_engaged", string_value="1")])))
+    assert rows[0]["engaged"] is True
+
+
+def test_세션의_체류_시간은_밀리초_합이다():
+    rows = warehouse.session_rows(_flat(
+        _ev("user_engagement", params=[_p("engagement_time_msec", int_value=1500)]),
+        _ev("scroll", params=[_p("engagement_time_msec", int_value=500)])))
+    assert rows[0]["engagement_msec"] == 2000
+
+
+def test_세션_행은_정한_컬럼만_가진다():
+    rows = warehouse.session_rows(_flat(_ev("page_view")))
+    assert set(rows[0]) == set(warehouse.SESSION_COLUMNS)
+
+
+def test_사용자_날짜_행은_첫날을_신규로_표시한다():
+    rows = warehouse.user_daily_rows(_flat(
+        _ev("page_view", hours=0), _ev("page_view", hours=24)))
+    by = {r["date_kst"]: r for r in rows}
+    assert by["2026-09-01"]["is_new"] is True
+    assert by["2026-09-02"]["is_new"] is False
+
+
+def test_사용자_날짜_행은_기사와_선수_페이지뷰를_가른다():
+    rows = warehouse.user_daily_rows(_flat(
+        _ev("page_view", page="/article/abc"), _ev("page_view", page="/player/saka"),
+        _ev("page_view", page="/players"), _ev("bi_entry")))
+    r = rows[0]
+    assert r["n_article_views"] == 1 and r["n_player_views"] == 1
+    assert r["n_entries"] == 1
+
+
+def test_신뢰도_필터는_등급이나_기자_조건이_있을_때만_센다():
+    yes = warehouse.user_daily_rows(_flat(
+        _ev("bi_filter_apply", params=[_p("n_tier", int_value=1)])))
+    no = warehouse.user_daily_rows(_flat(
+        _ev("bi_filter_apply", params=[_p("n_stage", int_value=2), _p("n_tier", int_value=0)])))
+    assert yes[0]["used_trust_filter"] is True
+    assert no[0]["used_trust_filter"] is False
+
+
+def test_사용자_날짜_행의_기기는_그날_가장_많은_것이다():
+    rows = warehouse.user_daily_rows(_flat(
+        _ev("page_view", device={"category": "desktop"}),
+        _ev("page_view", device={"category": "mobile"}),
+        _ev("scroll", device={"category": "mobile"})))
+    assert rows[0]["device_category"] == "mobile"
+
+
+def test_사용자_행은_첫_방문의_기기와_유입을_적는다():
+    rows = warehouse.dim_user_rows(_flat(
+        _ev("page_view", hours=5, device={"category": "desktop"}),
+        _ev("session_start", hours=0, device={"category": "mobile"},
+            traffic_source={"source": "m.fmkorea.com", "medium": "referral", "name": "x"}),
+        _ev("bi_card_click", hours=30)))
+    u = rows[0]
+    assert u["first_date_kst"] == "2026-09-01"
+    assert u["first_device"] == "mobile" and u["first_source"] == "m.fmkorea.com"
+    assert u["n_active_days"] == 2 and u["n_card_clicks"] == 1
+
+
+def test_gold_표_셋도_평탄화본에서_다시_세운다(local_catalog, fake_ga4):
+    fake_ga4["days"] = {"20260901": 2}
+    now = _t(2026, 9, 2, 3)
+    warehouse.load_ga4_events(local_catalog, now)
+    warehouse.load_ga4_flat(local_catalog, now)
+    warehouse.build_gold(local_catalog, now)
+    for name in (warehouse.SESSION_TABLE, warehouse.USER_DAILY_TABLE, warehouse.DIM_USER_TABLE):
+        t = local_catalog.load_table(f"{warehouse.BEHAVIOR_NS}.{name}")
+        assert name in warehouse._existing_tables(local_catalog, warehouse.BEHAVIOR_NS)
+        assert t.scan().to_arrow().num_rows >= 0
+
+
+def test_경로만_남기고_호스트와_질의문자열은_버린다():
+    assert warehouse.path_of("https://bullet-in.pages.dev/?stage=official") == "/"
+    assert warehouse.path_of("https://x.test/player/saka?utm=1") == "/player/saka"
+    assert warehouse.path_of(None) == ""
+
+
+# --- 행동 기록 · 집계 다섯 ---------------------------------------------------------
+
+def _ud(user, day, **kw):
+    row = {"user_pseudo_id": user, "date_kst": day, "is_new": False, "n_sessions": 1,
+           "n_entries": 1, "n_card_clicks": 0, "n_article_views": 0, "n_player_views": 0,
+           "n_origin_exits": 0, "used_trust_filter": False, "device_category": "mobile"}
+    row.update(kw)
+    return row
+
+
+def _ss(user, day, hour=12, wd=2, **kw):
+    row = {"user_pseudo_id": user, "ga_session_id": f"{user}-{day}-{hour}",
+           "session_date_kst": day, "started_at": None, "start_hour_kst": hour,
+           "weekday_kst": wd, "engaged": False, "device_category": "mobile",
+           "traffic_source": "m.fmkorea.com", "traffic_medium": "referral",
+           "n_page_views": 1, "n_card_clicks": 0, "n_filter_applies": 0,
+           "n_origin_exits": 0, "engagement_msec": 5000}
+    row.update(kw)
+    return row
+
+
+def _du(user, first, **kw):
+    row = {"user_pseudo_id": user, "first_date_kst": first, "first_device": "mobile",
+           "first_source": "m.fmkorea.com", "first_medium": "referral",
+           "n_active_days": 1, "n_card_clicks": 0}
+    row.update(kw)
+    return row
+
+
+def test_일별_집계는_신규와_재방문을_가르고_기기별_사용자를_센다():
+    got = warehouse.agg_daily(
+        [_ud("u1", "2026-08-30", is_new=True, n_card_clicks=2),
+         _ud("u2", "2026-08-30", device_category="desktop"),
+         _ud("u1", "2026-08-31")],
+        [_ss("u1", "2026-08-30", engaged=True), _ss("u2", "2026-08-30"), _ss("u1", "2026-08-31")],
+        [_fact(day="2026-08-30", card_surface="item"), _fact(day="2026-08-30", card_surface="pcard")])
+    d0 = got["days"][0]
+    assert d0 == {"date": "2026-08-30", "dau": 2, "new": 1, "ret": 1, "sessions": 2,
+                  "engaged": 1, "clicks": 2, "dev": {"mobile": 1, "desktop": 1},
+                  "surf": {"item": 1, "pcard": 1}}
+    assert got["users"] == 2 and got["sessions"] == 3 and got["engaged"] == 1
+    assert got["clickers"] == 1
+    assert got["device"] == [{"k": "mobile", "users": 1}, {"k": "desktop", "users": 1}]
+    assert got["traffic"][0] == {"source": "m.fmkorea.com", "medium": "referral", "users": 2}
+
+
+def test_일별_집계는_창_밖의_날을_뺀다():
+    got = warehouse.agg_daily([_ud("u1", "2026-08-01"), _ud("u1", "2026-08-30")], [], [],
+                              start="2026-08-28", end="2026-09-03")
+    assert [d["date"] for d in got["days"]] == ["2026-08-30"]
+
+
+def test_퍼널은_앞_단계의_부분집합이고_재방문은_클릭한_사람만_센다():
+    rows = [_ud("a", "2026-08-30", n_card_clicks=2), _ud("a", "2026-08-31"),
+            _ud("b", "2026-08-30", n_card_clicks=1),
+            _ud("c", "2026-08-30"), _ud("c", "2026-08-31"),        # 다시 왔지만 안 눌렀다
+            _ud("d", "2026-08-30", n_entries=0, n_article_views=1)]  # 진입 없이 기사로 바로
+    got = warehouse.agg_funnel(rows)
+    assert [s["users"] for s in got["steps"]] == [3, 2, 1, 1]
+    assert [s["label"] for s in got["steps"]][0] == "진입"
+    assert got["article_page_users"] == 1 and got["all_users"] == 4
+
+
+def test_퍼널의_곁가지는_신뢰도_필터와_원문_이동이다():
+    rows = [_ud("a", "2026-08-30", used_trust_filter=True), _ud("b", "2026-08-30", n_origin_exits=2)]
+    got = warehouse.agg_funnel(rows)
+    assert [s["users"] for s in got["sides"]] == [1, 1]
+    assert got["sides"][1]["label"] == "원문 매체로 이동"
+
+
+def test_히트맵은_요일_시각마다_고유_사용자를_세고_공개일을_뺀다():
+    sessions = [_ss("u1", "2026-08-30", hour=21, wd=7), _ss("u1", "2026-08-30", hour=21, wd=7),
+                _ss("u2", "2026-08-30", hour=21, wd=7), _ss("u9", "2026-08-29", hour=0, wd=6)]
+    cells = {(c["wd"], c["h"]): c["v"] for c in warehouse.agg_heatmap(sessions)}
+    assert len(cells) == 168
+    assert cells[(7, 21)] == 2 and cells[(6, 0)] == 0
+    incl = {(c["wd"], c["h"]): c["v"] for c in warehouse.agg_heatmap(sessions, exclude_launch=False)}
+    assert incl[(6, 0)] == 1
+
+
+def test_리텐션은_코호트마다_n일_뒤에_온_수를_적고_아직_안_온_날은_None():
+    users = [_du("a", "2026-08-30"), _du("b", "2026-08-30"), _du("c", "2026-08-31")]
+    daily = [_ud("a", "2026-08-30"), _ud("b", "2026-08-30"), _ud("a", "2026-08-31"),
+             _ud("c", "2026-08-31"), _ud("a", "2026-09-01")]
+    got = warehouse.agg_retention(users, daily, end="2026-09-01")
+    assert got[0] == {"first": "2026-08-30", "n": 2, "ret": [2, 1, 1, None, None, None, None]}
+    assert got[1]["ret"][:2] == [1, 0]
+
+
+def test_리텐션은_최근_코호트_수만큼만_남긴다():
+    users = [_du(f"u{i}", f"2026-08-{10 + i:02d}") for i in range(20)]
+    daily = [_ud(f"u{i}", f"2026-08-{10 + i:02d}") for i in range(20)]
+    got = warehouse.agg_retention(users, daily, cohorts=14)
+    assert len(got) == 14 and got[0]["first"] == "2026-08-16"
+
+
+def test_페이지_집계는_경로를_이름으로_묶고_선수_슬러그를_센다():
+    pv = [{"user_pseudo_id": "a", "event_date_kst": "2026-08-30", "page_location": "https://bullet-in.pages.dev/"},
+          {"user_pseudo_id": "a", "event_date_kst": "2026-08-30", "page_location": "https://bullet-in.pages.dev/?stage=official"},
+          {"user_pseudo_id": "b", "event_date_kst": "2026-08-30", "page_location": "https://bullet-in.pages.dev/article/abc"},
+          {"user_pseudo_id": "b", "event_date_kst": "2026-08-30", "page_location": "https://bullet-in.pages.dev/player/alvarez"},
+          {"user_pseudo_id": "c", "event_date_kst": "2026-08-30", "page_location": "https://bullet-in.pages.dev/player/alvarez.html"},
+          {"user_pseudo_id": "c", "event_date_kst": "2026-08-30", "page_location": "https://bullet-in.pages.dev/players"}]
+    got = warehouse.agg_pages(pv, [_ss("a", "2026-08-30", engagement_msec=12000)],
+                              [_fact(day="2026-08-30", card_hash="h1"), _fact(day="2026-08-30", card_hash="h1")])
+    paths = {p["label"]: p["n"] for p in got["paths"]}
+    assert paths == {"홈": 2, "기사 상세": 1, "선수 페이지": 2, "선수 목록": 1}
+    assert got["players"] == [{"slug": "alvarez", "pv": 2, "users": 2}]
+    assert got["list"] == {"pv": 1, "users": 1}
+    assert got["top_hashes"] == [{"hash": "h1", "clicks": 2}]
+    assert got["engagement"][1] == {"bin": "10에서 30초", "n": 1} and got["engagement_p50"] == 12
+
+
+def test_축_집계는_공개일_포함_한_벌도_낼_수_있다():
+    facts = [_fact(day="2026-08-29"), _fact(day="2026-08-30")]
+    assert warehouse.aggregate(facts, [])["totals"]["counted"] == 1
+    assert warehouse.aggregate(facts, [], exclude_launch=False)["totals"]["counted"] == 2
+
+
+def test_기준값_일곱_줄은_런북_9절의_순서다():
+    metrics = {
+        "daily": {"days": [{"date": "2026-08-29", "dau": 688, "new": 666}], "users": 890,
+                  "sessions": 1502, "engaged": 918, "clickers": 221,
+                  "device": [{"k": "mobile", "users": 585}],
+                  "traffic": [{"source": "m.fmkorea.com", "medium": "referral", "users": 421},
+                              {"source": "fmkorea.com", "medium": "referral", "users": 205}]},
+        "funnel": {"steps": [{"label": "진입", "users": 863}, {"label": "카드 클릭", "users": 221},
+                             {"label": "2건 이상 클릭", "users": 97}, {"label": "재방문 (2일 이상 방문)", "users": 71}],
+                   "sides": [{"label": "신뢰도 · 기자 필터 사용", "users": 53}, {"label": "원문 매체로 이동", "users": 7}],
+                   "article_page_users": 254, "all_users": 890},
+        "pages": {"players": [{"slug": "alvarez", "pv": 108, "users": 50}], "list": {"pv": 71, "users": 32}}}
+    metrics["weekly"] = metrics["daily"]
+    lines = warehouse.baseline_lines(metrics)
+    assert lines[0] == "사용자 7일 · 세션 · 참여 세션 비율 | 890 · 1,502 · 61%"
+    assert lines[1] == "공개일 DAU · 신규 | 688 · 666"
+    assert lines[2] == "퍼널 | 863 → 221 → 97 → 71"
+    assert lines[3] == "신뢰도 · 기자 필터 사용자 · 원문 이동 | 53 · 7"
+    assert lines[4] == "기사 상세를 본 사용자 | 254"
+    assert lines[5] == "선수 페이지 뷰 · 목록 뷰 | 108 · 71"
+    assert lines[6] == "모바일 비율 · fmkorea 참조 비율 | 66% · 70%"
+
+
+def test_집계_파일에_새_키_전부가_실린다(local_catalog, fake_ga4, tmp_path, monkeypatch):
+    import json as _json
+
+    monkeypatch.setattr(warehouse, "METRICS_PATH", tmp_path / "m.json")
+    fake_ga4["days"] = {"20260901": 2}
+    now = _t(2026, 9, 2, 3)
+    warehouse.load_ga4_events(local_catalog, now)
+    warehouse.load_ga4_flat(local_catalog, now)
+    warehouse.build_gold(local_catalog, now)
+    got = warehouse.write_metrics(local_catalog, now)
+    saved = _json.loads((tmp_path / "m.json").read_text(encoding="utf-8"))
+    for key in ("totals", "axes", "axes_incl", "window", "daily", "weekly", "funnel", "heat",
+                "retention", "pages", "generated_at"):
+        assert key in saved, key
+    assert set(saved["heat"]) == {"excl", "incl"}
+    assert got["window"]["end"] is None or len(got["window"]["end"]) == 10
+
+
+def test_일별_집계의_유입은_상위_10_으로_안_자른다():
+    sessions = [_ss("u", "2026-08-30", hour=i, traffic_source=f"s{i}.fmkorea.com")
+                for i in range(12)]
+    got = warehouse.agg_daily([], sessions, [])
+    assert len(got["traffic"]) == 12
+
+
+def test_히트맵_창은_공개일부터고_그_전_세션은_안_센다():
+    sessions = [_ss("u0", "2026-08-20", hour=10, wd=4), _ss("u1", "2026-08-30", hour=10, wd=7)]
+    cells = {(c["wd"], c["h"]): c["v"]
+             for c in warehouse.agg_heatmap(sessions, start="2026-08-29")}
+    assert cells[(4, 10)] == 0 and cells[(7, 10)] == 1

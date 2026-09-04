@@ -18,6 +18,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pyarrow as pa
 from sqlalchemy import text
@@ -221,6 +222,196 @@ def dim_date_rows(dates) -> list[dict]:
     return out
 
 
+# --- 행동 기록 · gold 표 셋 (스펙 2026-09-05 §3.1) --------------------------------
+#
+# 사람을 세는 키는 `user_pseudo_id` 하나다. `bi_cid` 는 자동 수집 이벤트에 없어서
+# 둘을 섞으면 한 사람이 두 사람으로 센다 (트러블슈팅 2026-09-04 두 키).
+
+SESSION_TABLE = "fact_session"
+USER_DAILY_TABLE = "fact_user_daily"
+DIM_USER_TABLE = "dim_user"
+
+SESSION_COLUMNS = ("user_pseudo_id", "ga_session_id", "session_date_kst", "started_at",
+                   "start_hour_kst", "weekday_kst", "engaged", "device_category",
+                   "traffic_source", "traffic_medium", "n_page_views", "n_card_clicks",
+                   "n_filter_applies", "n_origin_exits", "engagement_msec")
+_SESSION_TYPES = {"started_at": pa.timestamp("us", tz="UTC"),
+                  "start_hour_kst": pa.int32(), "weekday_kst": pa.int32(),
+                  "engaged": pa.bool_(), "n_page_views": pa.int32(),
+                  "n_card_clicks": pa.int32(), "n_filter_applies": pa.int32(),
+                  "n_origin_exits": pa.int32(), "engagement_msec": pa.int64()}
+
+USER_DAILY_COLUMNS = ("user_pseudo_id", "date_kst", "is_new", "n_sessions", "n_entries",
+                      "n_card_clicks", "n_article_views", "n_player_views",
+                      "n_origin_exits", "used_trust_filter", "device_category")
+_USER_DAILY_TYPES = {"is_new": pa.bool_(), "n_sessions": pa.int32(), "n_entries": pa.int32(),
+                     "n_card_clicks": pa.int32(), "n_article_views": pa.int32(),
+                     "n_player_views": pa.int32(), "n_origin_exits": pa.int32(),
+                     "used_trust_filter": pa.bool_()}
+
+DIM_USER_COLUMNS = ("user_pseudo_id", "first_date_kst", "first_device", "first_source",
+                    "first_medium", "n_active_days", "n_card_clicks")
+_DIM_USER_TYPES = {"n_active_days": pa.int32(), "n_card_clicks": pa.int32()}
+
+
+def path_of(location: str | None) -> str:
+    """주소에서 경로만. 호스트 · 질의문자열이 달라도 같은 경로면 같은 페이지다."""
+    if not location:
+        return ""
+    return urlsplit(location).path or "/"
+
+
+def _truthy(value) -> bool:
+    return value in (1, "1", True, "true")
+
+
+def _int(value) -> int:
+    """파라미터는 문자열로 온다 (`_param_value`). 비었거나 숫자가 아니면 0."""
+    if value in (None, ""):
+        return 0
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _event_at(row: dict) -> datetime | None:
+    at = row.get("event_at")
+    if at is None and row.get("event_timestamp"):
+        at = datetime.fromtimestamp(int(row["event_timestamp"]) / 1_000_000,
+                                    tz=timezone.utc)
+    if at is not None and at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
+    return at
+
+
+def session_rows(flat: list[dict]) -> list[dict]:
+    """(사용자, GA4 세션 id) 마다 한 행. 시작 시각은 가장 이른 이벤트다.
+
+    `ga_session_id` 만으로 묶지 않는다 — 사용자가 달라도 같은 값이 겹칠 수 있다 (런북 §3).
+    """
+    groups: dict[tuple, dict] = {}
+    for r in flat:
+        user, sid = r.get("user_pseudo_id"), r.get("ga_session_id")
+        if not user or not sid:
+            continue
+        g = groups.setdefault((user, sid), {
+            "user_pseudo_id": user, "ga_session_id": sid, "started_at": None,
+            "engaged": False, "device_category": None, "traffic_source": None,
+            "traffic_medium": None, "n_page_views": 0, "n_card_clicks": 0,
+            "n_filter_applies": 0, "n_origin_exits": 0, "engagement_msec": 0})
+        at = _event_at(r)
+        if at is not None and (g["started_at"] is None or at < g["started_at"]):
+            g["started_at"] = at
+            g["device_category"] = r.get("device_category")
+            g["traffic_source"] = r.get("traffic_source")
+            g["traffic_medium"] = r.get("traffic_medium")
+        if _truthy(r.get("session_engaged")):
+            g["engaged"] = True
+        name = r.get("event_name")
+        if name == "page_view":
+            g["n_page_views"] += 1
+        elif name == "bi_card_click":
+            g["n_card_clicks"] += 1
+        elif name == "bi_filter_apply":
+            g["n_filter_applies"] += 1
+        elif name == "bi_origin_exit":
+            g["n_origin_exits"] += 1
+        g["engagement_msec"] += _int(r.get("engagement_time_msec"))
+    out = []
+    for g in groups.values():
+        if g["started_at"] is None:
+            continue
+        k = g["started_at"].astimezone(KST)
+        g["session_date_kst"] = k.date().isoformat()
+        g["start_hour_kst"] = k.hour
+        g["weekday_kst"] = k.isoweekday()
+        out.append({c: g.get(c) for c in SESSION_COLUMNS})
+    return sorted(out, key=lambda x: (x["started_at"], x["user_pseudo_id"]))
+
+
+def _first_dates(flat: list[dict]) -> dict[str, str]:
+    first: dict[str, str] = {}
+    for r in flat:
+        user, day = r.get("user_pseudo_id"), r.get("event_date_kst")
+        if user and day and (user not in first or day < first[user]):
+            first[user] = day
+    return first
+
+
+def user_daily_rows(flat: list[dict]) -> list[dict]:
+    """(사용자, KST 날짜) 마다 한 행. 첫 방문일은 평탄화본 전량에서 정한다."""
+    first = _first_dates(flat)
+    groups: dict[tuple, dict] = {}
+    for r in flat:
+        user, day = r.get("user_pseudo_id"), r.get("event_date_kst")
+        if not user or not day:
+            continue
+        g = groups.setdefault((user, day), {
+            "sessions": set(), "n_entries": 0, "n_card_clicks": 0, "n_article_views": 0,
+            "n_player_views": 0, "n_origin_exits": 0, "used_trust_filter": False,
+            "devices": Counter()})
+        if r.get("ga_session_id"):
+            g["sessions"].add(r["ga_session_id"])
+        name = r.get("event_name")
+        if name == "bi_entry":
+            g["n_entries"] += 1
+        elif name == "bi_card_click":
+            g["n_card_clicks"] += 1
+        elif name == "bi_origin_exit":
+            g["n_origin_exits"] += 1
+        elif name == "page_view":
+            path = path_of(r.get("page_location"))
+            if path.startswith("/article/"):
+                g["n_article_views"] += 1
+            elif path.startswith("/player/"):
+                g["n_player_views"] += 1
+        elif name == "bi_filter_apply" and (_int(r.get("n_tier")) or _int(r.get("n_journalist"))):
+            g["used_trust_filter"] = True
+        if r.get("device_category"):
+            g["devices"][r["device_category"]] += 1
+    out = []
+    for (user, day), g in sorted(groups.items()):
+        out.append({"user_pseudo_id": user, "date_kst": day, "is_new": first[user] == day,
+                    "n_sessions": len(g["sessions"]), "n_entries": g["n_entries"],
+                    "n_card_clicks": g["n_card_clicks"],
+                    "n_article_views": g["n_article_views"],
+                    "n_player_views": g["n_player_views"],
+                    "n_origin_exits": g["n_origin_exits"],
+                    "used_trust_filter": g["used_trust_filter"],
+                    "device_category": (g["devices"].most_common(1)[0][0]
+                                        if g["devices"] else None)})
+    return out
+
+
+def dim_user_rows(flat: list[dict]) -> list[dict]:
+    """사용자마다 한 행. 첫 방문의 기기 · 유입은 가장 이른 이벤트의 것이다."""
+    users: dict[str, dict] = {}
+    for r in flat:
+        user, day = r.get("user_pseudo_id"), r.get("event_date_kst")
+        if not user or not day:
+            continue
+        g = users.setdefault(user, {"first_date_kst": day, "first_at": None,
+                                    "first_device": None, "first_source": None,
+                                    "first_medium": None, "days": set(), "n_card_clicks": 0})
+        g["days"].add(day)
+        if day < g["first_date_kst"]:
+            g["first_date_kst"] = day
+        at = _event_at(r)
+        if at is not None and (g["first_at"] is None or at < g["first_at"]):
+            g["first_at"] = at
+            g["first_device"] = r.get("device_category")
+            g["first_source"] = r.get("traffic_source")
+            g["first_medium"] = r.get("traffic_medium")
+        if r.get("event_name") == "bi_card_click":
+            g["n_card_clicks"] += 1
+    return [{"user_pseudo_id": user, "first_date_kst": g["first_date_kst"],
+             "first_device": g["first_device"], "first_source": g["first_source"],
+             "first_medium": g["first_medium"], "n_active_days": len(g["days"]),
+             "n_card_clicks": g["n_card_clicks"]}
+            for user, g in sorted(users.items())]
+
+
 # 화면이 읽는 집계. 축 이름은 팩트의 컬럼 이름이고, 짝은 마트에서 같은 축을 세는
 # 컬럼이다 — 클릭 수만으로는 「등급이 높을수록 더 눌리는가」 에 답할 수 없어서
 # 기사 수로 나눈 값을 함께 낸다.
@@ -251,14 +442,15 @@ def _axis_key(value) -> str:
         return text
 
 
-def aggregate(facts: list[dict], articles: list[dict]) -> dict:
+def aggregate(facts: list[dict], articles: list[dict], *, exclude_launch: bool = True) -> dict:
     """축별 클릭 수 · 기사 수 · 기사당 클릭.
 
     공개일 (2026-08-29) 을 뺀다 — 그 하루가 표본의 58% 라 평균을 왜곡한다.
     뺀 사실과 뺀 양을 `totals` 에 함께 실어 화면이 그대로 적을 수 있게 한다.
+    화면의 「포함」 토글이 쓸 한 벌은 `exclude_launch=False` 로 낸다.
     """
     launch = LAUNCH_DATE.isoformat()
-    counted = [f for f in facts if f.get("event_date_kst") != launch]
+    counted = [f for f in facts if not exclude_launch or f.get("event_date_kst") != launch]
 
     # 주요 소식 · 타임라인 제목은 2026-09-03 까지 카드에 해시만 실어서 단계 · 등급이
     # 비어 왔다 (실측 — 「(없음)」 52 = mitem 24 + pcard 26 + tltitle 2). 기사 해시가
@@ -296,6 +488,190 @@ def aggregate(facts: list[dict], articles: list[dict]) -> dict:
             "dates": {"from": days[0] if days else None,
                       "to": days[-1] if days else None},
             "axes": axes}
+
+
+# --- 행동 기록 · 집계 다섯 (스펙 2026-09-05 §3.1) ---------------------------------
+#
+# 전부 dict 목록을 받는 순수 함수다. 창 (`start` · `end`) 은 KST 날짜 문자열이고
+# 둘 다 닫힌 구간이다. 검증은 08-28 에서 09-03 을 넣어 런북 §9 를 재현한다.
+
+EMPTY_DEVICE = "(없음)"
+FUNNEL_LABELS = ("진입", "카드 클릭", "2건 이상 클릭", "재방문 (2일 이상 방문)")
+FUNNEL_SIDES = ("신뢰도 · 기자 필터 사용", "원문 매체로 이동")
+ENGAGEMENT_BINS = (("0에서 10초", 0, 10), ("10에서 30초", 10, 30), ("30초에서 1분", 30, 60),
+                   ("1에서 3분", 60, 180), ("3분 넘게", 180, float("inf")))
+_PAGE_LABELS = {"/": "홈", "/all": "전체 기사", "/players": "선수 목록", "/about": "소개"}
+_PLAYER_PATH = re.compile(r"^/player/([^/]+?)(?:\.html)?$")
+
+
+def _in_window(day: str | None, start: str | None, end: str | None) -> bool:
+    return bool(day) and (start is None or day >= start) and (end is None or day <= end)
+
+
+def agg_daily(user_daily: list[dict], sessions: list[dict], facts: list[dict], *,
+              start: str | None = None, end: str | None = None) -> dict:
+    """날짜별 DAU · 신규 · 재방문 · 세션 · 참여 세션 · 클릭 · 기기 · 화면과 창 전체의 총량."""
+    days: dict[str, dict] = {}
+    users, clickers = set(), set()
+    by_device: dict[str, set] = {}
+    by_traffic: dict[tuple, set] = {}
+
+    def bucket(day):
+        return days.setdefault(day, {"date": day, "dau": 0, "new": 0, "ret": 0, "sessions": 0,
+                                     "engaged": 0, "clicks": 0, "dev": Counter(),
+                                     "surf": Counter()})
+
+    for r in user_daily:
+        if not _in_window(r["date_kst"], start, end):
+            continue
+        b = bucket(r["date_kst"])
+        b["dau"] += 1
+        b["new" if r["is_new"] else "ret"] += 1
+        b["clicks"] += r["n_card_clicks"]
+        device = r.get("device_category") or EMPTY_DEVICE
+        b["dev"][device] += 1
+        users.add(r["user_pseudo_id"])
+        by_device.setdefault(device, set()).add(r["user_pseudo_id"])
+        if r["n_card_clicks"] > 0:
+            clickers.add(r["user_pseudo_id"])
+    n_sessions = n_engaged = 0
+    for s in sessions:
+        if not _in_window(s["session_date_kst"], start, end):
+            continue
+        b = bucket(s["session_date_kst"])
+        b["sessions"] += 1
+        n_sessions += 1
+        if s["engaged"]:
+            b["engaged"] += 1
+            n_engaged += 1
+        key = (s.get("traffic_source") or "(direct)", s.get("traffic_medium") or "(none)")
+        by_traffic.setdefault(key, set()).add(s["user_pseudo_id"])
+    for f in facts:
+        day = f.get("event_date_kst")
+        if _in_window(day, start, end) and day in days:
+            days[day]["surf"][f.get("card_surface") or EMPTY_LABEL] += 1
+
+    rows = []
+    for day in sorted(days):
+        b = days[day]
+        rows.append({**b, "dev": dict(b["dev"]), "surf": dict(b["surf"])})
+    return {"days": rows, "users": len(users), "sessions": n_sessions, "engaged": n_engaged,
+            "clickers": len(clickers),
+            "device": sorted([{"k": k, "users": len(v)} for k, v in by_device.items()],
+                             key=lambda x: -x["users"]),
+            "traffic": sorted([{"source": s, "medium": m, "users": len(v)}
+                               for (s, m), v in by_traffic.items()],
+                              key=lambda x: -x["users"])}
+
+
+def agg_funnel(user_daily: list[dict], *, start: str | None = None,
+               end: str | None = None) -> dict:
+    """진입 → 카드 클릭 → 2건 이상 → 재방문. 곁가지는 신뢰도 필터 · 원문 이동 (런북 §4)."""
+    per: dict[str, dict] = {}
+    for r in user_daily:
+        if not _in_window(r["date_kst"], start, end):
+            continue
+        p = per.setdefault(r["user_pseudo_id"], {"entries": 0, "clicks": 0, "days": set(),
+                                                 "trust": False, "origin": 0, "article": 0})
+        p["entries"] += r["n_entries"]
+        p["clicks"] += r["n_card_clicks"]
+        p["days"].add(r["date_kst"])
+        p["trust"] = p["trust"] or bool(r["used_trust_filter"])
+        p["origin"] += r["n_origin_exits"]
+        p["article"] += r["n_article_views"]
+    entry = {u for u, p in per.items() if p["entries"] > 0}
+    click1 = {u for u, p in per.items() if p["clicks"] >= 1}
+    click2 = {u for u, p in per.items() if p["clicks"] >= 2}
+    returned = {u for u, p in per.items() if len(p["days"]) >= 2} & click1
+    counts = (len(entry), len(click1), len(click2), len(returned))
+    sides = (sum(1 for p in per.values() if p["trust"]),
+             sum(1 for p in per.values() if p["origin"] > 0))
+    return {"steps": [{"label": lab, "users": n} for lab, n in zip(FUNNEL_LABELS, counts)],
+            "sides": [{"label": lab, "users": n} for lab, n in zip(FUNNEL_SIDES, sides)],
+            "article_page_users": sum(1 for p in per.values() if p["article"] > 0),
+            "all_users": len(per)}
+
+
+def agg_heatmap(sessions: list[dict], *, start: str | None = None, end: str | None = None,
+                exclude_launch: bool = True) -> list[dict]:
+    """요일 (1 = 월) × 시각 (KST) 마다 세션을 시작한 고유 사용자 수. 168 칸 전부 낸다."""
+    launch = LAUNCH_DATE.isoformat()
+    cells: dict[tuple, set] = {}
+    for s in sessions:
+        day = s["session_date_kst"]
+        if not _in_window(day, start, end) or (exclude_launch and day == launch):
+            continue
+        cells.setdefault((s["weekday_kst"], s["start_hour_kst"]), set()).add(s["user_pseudo_id"])
+    return [{"wd": wd, "h": h, "v": len(cells.get((wd, h), ()))}
+            for wd in range(1, 8) for h in range(24)]
+
+
+def agg_retention(users: list[dict], user_daily: list[dict], *, end: str | None = None,
+                  cohorts: int = 14, horizon: int = 7) -> list[dict]:
+    """첫 방문일 코호트마다 k 일 뒤에 온 사람 수. 아직 안 온 날은 None 이다 (런북 §5)."""
+    active: dict[str, set] = {}
+    for r in user_daily:
+        active.setdefault(r["user_pseudo_id"], set()).add(r["date_kst"])
+    cohort: dict[str, set] = {}
+    for u in users:
+        cohort.setdefault(u["first_date_kst"], set()).add(u["user_pseudo_id"])
+    last = end or max((d for ds in active.values() for d in ds), default=None)
+    if last is None:
+        return []
+    out = []
+    for first in sorted(d for d in cohort if d <= last)[-cohorts:]:
+        base = cohort[first]
+        f = date.fromisoformat(first)
+        row = []
+        for k in range(horizon):
+            dk = (f + timedelta(k)).isoformat()
+            row.append(None if dk > last
+                       else sum(1 for u in base if dk in active.get(u, ())))
+        out.append({"first": first, "n": len(base), "ret": row})
+    return out
+
+
+def _page_label(path: str) -> str:
+    if path in _PAGE_LABELS:
+        return _PAGE_LABELS[path]
+    if path.startswith("/article/"):
+        return "기사 상세"
+    if path.startswith("/player/"):
+        return "선수 페이지"
+    return path or "(없음)"
+
+
+def agg_pages(page_views: list[dict], sessions: list[dict], facts: list[dict], *,
+              start: str | None = None, end: str | None = None) -> dict:
+    """경로별 뷰 · 세션 체류 구간 · 선수 슬러그별 뷰 · 상위 기사 해시."""
+    paths: Counter = Counter()
+    slug_pv: Counter = Counter()
+    slug_users: dict[str, set] = {}
+    list_pv, list_users = 0, set()
+    for r in page_views:
+        if not _in_window(r.get("event_date_kst"), start, end):
+            continue
+        path = path_of(r.get("page_location"))
+        paths[_page_label(path)] += 1
+        m = _PLAYER_PATH.match(path)
+        if m:
+            slug_pv[m.group(1)] += 1
+            slug_users.setdefault(m.group(1), set()).add(r["user_pseudo_id"])
+        elif path in ("/players", "/players.html"):
+            list_pv += 1
+            list_users.add(r["user_pseudo_id"])
+    secs = sorted((s["engagement_msec"] or 0) / 1000 for s in sessions
+                  if _in_window(s["session_date_kst"], start, end))
+    top = Counter(f["card_hash"] for f in facts
+                  if _in_window(f.get("event_date_kst"), start, end) and f.get("card_hash"))
+    return {"paths": [{"label": k, "n": n} for k, n in paths.most_common(8)],
+            "engagement": [{"bin": lab, "n": sum(1 for v in secs if lo <= v < hi)}
+                           for lab, lo, hi in ENGAGEMENT_BINS],
+            "engagement_p50": round(secs[len(secs) // 2]) if secs else 0,
+            "players": [{"slug": s, "pv": n, "users": len(slug_users[s])}
+                        for s, n in slug_pv.most_common()],
+            "list": {"pv": list_pv, "users": len(list_users)},
+            "top_hashes": [{"hash": h, "clicks": n} for h, n in top.most_common(12)]}
 
 
 # 일별 내보내기 표만 고른다. `events_intraday_*` 는 그날이 끝나면 사라지고 완결된
@@ -786,7 +1162,7 @@ def _typed_schema(names, types: dict) -> pa.Schema:
 
 
 def build_gold(catalog, now: datetime) -> int:
-    """평탄화본 전량에서 팩트와 날짜 디멘션을 다시 세운다.
+    """평탄화본 전량에서 팩트 · 날짜 · 세션 · 사용자 × 날짜 · 사용자 표 다섯을 다시 세운다.
 
     덧붙이지 않고 갈아 끼운다 — 원본이 남아 있어 언제든 다시 만들 수 있고,
     그래야 겹침 접기 규칙을 고쳤을 때 옛 결과가 안 남는다.
@@ -805,10 +1181,16 @@ def build_gold(catalog, now: datetime) -> int:
     flat = flat_table.scan().to_arrow().to_pylist()
     facts = fact_rows(flat)
     dims = dim_date_rows(r.get("event_date_kst") for r in flat)
+    sessions = session_rows(flat)
+    user_days = user_daily_rows(flat)
+    users = dim_user_rows(flat)
 
     for name, rows, names, types in (
             (FACT_TABLE, facts, FACT_COLUMNS, _FACT_TYPES),
-            (DIM_DATE_TABLE, dims, tuple(_DIM_DATE_TYPES), _DIM_DATE_TYPES)):
+            (DIM_DATE_TABLE, dims, tuple(_DIM_DATE_TYPES), _DIM_DATE_TYPES),
+            (SESSION_TABLE, sessions, SESSION_COLUMNS, _SESSION_TYPES),
+            (USER_DAILY_TABLE, user_days, USER_DAILY_COLUMNS, _USER_DAILY_TYPES),
+            (DIM_USER_TABLE, users, DIM_USER_COLUMNS, _DIM_USER_TYPES)):
         schema = _typed_schema(names, types)
         table = ensure_table(catalog, name, schema, namespace=BEHAVIOR_NS)
         table.overwrite(to_arrow(rows, schema, loaded_at=now))
@@ -840,26 +1222,100 @@ def _latest_articles(catalog) -> list[dict]:
         LOADED_DATE, latest.date().isoformat())).to_arrow().to_pylist()
 
 
-def write_metrics(catalog, now: datetime) -> dict:
-    """팩트와 마트 스냅샷에서 집계를 내어 JSON 으로 떨어뜨린다."""
+def _scan_rows(catalog, name: str, columns: tuple | None = None) -> list[dict] | None:
+    """behavior 표 하나를 dict 목록으로. 없으면 None (빈 표와 구분한다).
+
+    silver 의 스키마는 날마다 관측된 파라미터에서 만들어져 (`flat_schema`) 어떤
+    컬럼이 아직 없을 수 있다. 없는 컬럼을 고르면 pyiceberg 가 ValueError 를 내므로
+    `columns` 를 표 스키마에 실제로 있는 이름으로 좁혀서 피한다.
+    """
     from pyiceberg.exceptions import NoSuchTableError
 
     try:
-        facts = catalog.load_table(
-            f"{BEHAVIOR_NS}.{FACT_TABLE}").scan().to_arrow().to_pylist()
+        table = catalog.load_table(f"{BEHAVIOR_NS}.{name}")
     except NoSuchTableError:
+        return None
+    if columns:
+        present = set(table.schema().column_names)
+        missing = [c for c in columns if c not in present]
+        if missing:
+            log.warning("%s — 없는 컬럼을 건너뜀: %s", name, ", ".join(missing))
+        columns = tuple(c for c in columns if c in present)
+    scan = table.scan(selected_fields=columns) if columns else table.scan()
+    return scan.to_arrow().to_pylist()
+
+
+def build_metrics(catalog, now: datetime, *, start: str | None = None,
+                  end: str | None = None) -> dict:
+    """화면이 읽는 JSON 전체. 창을 안 주면 마지막 날짜까지 28일이다."""
+    facts = _scan_rows(catalog, FACT_TABLE)
+    if facts is None:
+        return {}
+    articles = _latest_articles(catalog)
+    users = _scan_rows(catalog, DIM_USER_TABLE) or []
+    user_daily = _scan_rows(catalog, USER_DAILY_TABLE) or []
+    sessions = _scan_rows(catalog, SESSION_TABLE) or []
+    flat = _scan_rows(catalog, GA4_FLAT_TABLE,
+                      ("event_name", "user_pseudo_id", "event_date_kst", "page_location")) or []
+    page_views = [r for r in flat if r.get("event_name") == "page_view"]
+
+    last = end or max((r["date_kst"] for r in user_daily), default=None)
+    first = start or ((date.fromisoformat(last) - timedelta(27)).isoformat() if last else None)
+
+    metrics = aggregate(facts, articles)
+    metrics["axes_incl"] = aggregate(facts, articles, exclude_launch=False)["axes"]
+    metrics["window"] = {"start": first, "end": last}
+    metrics["daily"] = agg_daily(user_daily, sessions, facts, start=first, end=last)
+    week = (date.fromisoformat(last) - timedelta(6)).isoformat() if last else None
+    metrics["weekly"] = agg_daily(user_daily, sessions, facts,
+                                  start=max(week, first) if week and first else week, end=last)
+    metrics["funnel"] = agg_funnel(user_daily, start=first, end=last)
+    metrics["heat"] = {"excl": agg_heatmap(sessions, start=LAUNCH_DATE.isoformat(), end=last),
+                       "incl": agg_heatmap(sessions, start=LAUNCH_DATE.isoformat(), end=last,
+                                          exclude_launch=False)}
+    metrics["retention"] = agg_retention(users, user_daily, end=last)
+    metrics["pages"] = agg_pages(page_views, sessions, facts, start=first, end=last)
+    metrics["generated_at"] = now.isoformat()
+    return metrics
+
+
+def write_metrics(catalog, now: datetime) -> dict:
+    """집계 JSON 을 파일로 떨어뜨린다. 팩트가 없으면 빈 dict 이고 파일도 안 쓴다."""
+    metrics = build_metrics(catalog, now)
+    if not metrics:
         log.info("%s — 팩트가 아직 없다", METRICS_PATH)
         return {}
-
-    metrics = aggregate(facts, _latest_articles(catalog))
-    metrics["generated_at"] = now.isoformat()
     METRICS_PATH.parent.mkdir(parents=True, exist_ok=True)
     METRICS_PATH.write_text(json.dumps(metrics, ensure_ascii=False, indent=1),
                             encoding="utf-8")
-    log.info("%s — 클릭 %d건 (공개일 %d건 제외) 기준 집계",
-             METRICS_PATH, metrics["totals"]["counted"],
-             metrics["totals"]["launch_day"])
+    log.info("%s — 클릭 %d건 (공개일 %d건 제외) · 사용자 %d명 기준 집계",
+             METRICS_PATH, metrics["totals"]["counted"], metrics["totals"]["launch_day"],
+             metrics["daily"]["users"])
     return metrics
+
+
+def baseline_lines(metrics: dict) -> list[str]:
+    """런북 2026-09-04 §9 표와 같은 순서 · 같은 꼴의 일곱 줄.
+
+    총량은 `weekly` (창의 마지막 7일) 에서, 공개일 한 줄은 `daily` 에서 읽는다.
+    검증 창 08-28 에서 09-03 은 7일이라 둘이 같다.
+    """
+    d, f, p = metrics["weekly"], metrics["funnel"], metrics["pages"]
+    launch = next((x for x in metrics["daily"]["days"]
+                   if x["date"] == LAUNCH_DATE.isoformat()), None)
+    users = d["users"] or 1
+    engaged = round(d["engaged"] / d["sessions"] * 100) if d["sessions"] else 0
+    mobile = next((x["users"] for x in d["device"] if x["k"] == "mobile"), 0)
+    fmkorea = sum(x["users"] for x in d["traffic"] if "fmkorea" in (x["source"] or ""))
+    return [
+        f"사용자 7일 · 세션 · 참여 세션 비율 | {d['users']:,} · {d['sessions']:,} · {engaged}%",
+        f"공개일 DAU · 신규 | {launch['dau'] if launch else '-'} · {launch['new'] if launch else '-'}",
+        "퍼널 | " + " → ".join(str(s["users"]) for s in f["steps"]),
+        f"신뢰도 · 기자 필터 사용자 · 원문 이동 | {f['sides'][0]['users']} · {f['sides'][1]['users']}",
+        f"기사 상세를 본 사용자 | {f['article_page_users']}",
+        f"선수 페이지 뷰 · 목록 뷰 | {sum(x['pv'] for x in p['players'])} · {p['list']['pv']}",
+        f"모바일 비율 · fmkorea 참조 비율 | {round(mobile / users * 100)}% · {round(fmkorea / users * 100)}%",
+    ]
 
 
 def compact(table) -> dict:
@@ -1046,13 +1502,21 @@ def run_load(now: datetime | None = None) -> None:
         raise
 
 
-def run_show() -> None:
+def run_show(start: str | None = None, end: str | None = None) -> None:
     """쌓인 테이블의 행 수 · 파일 수 · 남은 스냅샷 수를 보여 준다.
+
+    창을 주면 그 창의 기준값 일곱 줄 (런북 2026-09-04 §9) 을 대신 찍는다 —
+    코드 PR 이 런북 값을 그대로 재현하는지 보는 자리다.
 
     파일 수와 스냅샷 수가 함께 보이는 것이 요점이다 — 앞은 컴팩션이,
     뒤는 만료가 도는지를 말해 준다.
     """
     catalog = load_catalog()
+    if start or end:
+        metrics = build_metrics(catalog, datetime.now(timezone.utc), start=start, end=end)
+        for line in baseline_lines(metrics):
+            print(line)
+        return
     for ns in (NAMESPACE, BEHAVIOR_NS):
         for name in sorted(_existing_tables(catalog, ns)):
             t = catalog.load_table(f"{ns}.{name}")
@@ -1071,7 +1535,9 @@ if __name__ == "__main__":
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("load", help="변경분 · 스냅샷 적재")
     sub.add_parser("maint", help="컴팩션 · 만료 · 파티션 솎기")
-    sub.add_parser("show", help="쌓인 것 보기")
+    show = sub.add_parser("show", help="쌓인 것 보기 · --from --to 를 주면 기준값 일곱 줄")
+    show.add_argument("--from", dest="start", help="KST 날짜 · 닫힌 구간")
+    show.add_argument("--to", dest="end", help="KST 날짜 · 닫힌 구간")
 
     args = ap.parse_args()
     if args.command == "load":
@@ -1079,5 +1545,5 @@ if __name__ == "__main__":
     elif args.command == "maint":
         run_maintenance()
     else:
-        run_show()
+        run_show(args.start, args.end)
     sys.exit(0)

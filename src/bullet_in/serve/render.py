@@ -2152,43 +2152,21 @@ def render_ops(view: dict, unmatched: list[dict] | None = None) -> str:
     return _env().get_template("ops.html.j2").render(view=view, unmatched=unmatched)
 
 
-# 행동 지표 페이지의 축 · 제목 · 그 축을 왜 보는가.
-# 마지막 값은 화면에 그대로 실린다 — 표를 보는 사람이 무엇을 묻고 있는지 알아야
-# 클릭 수와 기사당 값을 헷갈리지 않는다.
-BEHAVIOR_AXES = (
-    ("card_outlet", "매체",
-     "어느 매체의 카드가 눌리나. 기사 수는 안 붙는다 — 카드에 찍히는 이름이 원문 매체와 소스 이름 두 값에서 만들어져 마트의 한 컬럼과 안 맞물린다."),
-    ("card_stage", "이적 단계",
-     "어느 단계의 소식이 읽히나. 단계마다 실린 기사 수가 크게 달라 기사당 값을 함께 본다."),
-    ("card_tier", "기자 등급",
-     "우리가 매긴 등급이 실제 관심과 맞나. 클릭 수만 보면 기사가 많은 등급이 이기므로 기사당 값이 답에 가깝다."),
-    ("card_surface", "화면",
-     "어느 자리에서 눌리나. 기사 수 개념이 없는 축이라 클릭 수만 낸다."),
-)
-
-
-def _behavior_generated_at(iso: str | None) -> str:
-    """집계 시각을 사람이 읽는 꼴로. 값이 이상하면 원문을 그대로 보여 준다."""
-    if not iso:
-        return ""
-    try:
-        dt = datetime.fromisoformat(iso)
-    except ValueError:
-        return iso
-    return to_kst(dt.replace(tzinfo=None)).strftime("%Y-%m-%d %H:%M KST")
-
-
-def render_behavior(metrics: dict) -> str:
+def render_behavior(metrics: dict, *, players=(), articles=(), sources=None) -> str:
+    """행동 지표 화면. 뷰모델은 serve/behavior_view 가 만들고 여기서는 템플릿만 부른다."""
+    from bullet_in.serve.behavior_view import build_behavior_view
+    view = build_behavior_view(metrics, players=players, articles=articles, sources=sources)
     return _env().get_template("behavior.html.j2").render(
-        metrics=metrics, axes=BEHAVIOR_AXES,
-        generated_at=_behavior_generated_at(metrics.get("generated_at")))
+        view=view, missing_note=view["missing_note"])
 
 
-def write_behavior(metrics_path: str | Path, out_dir: str | Path) -> bool:
+def write_behavior(metrics_path: str | Path, out_dir: str | Path, *,
+                   players=(), articles=(), sources=None) -> bool:
     """집계 파일이 있으면 site/behavior.html 을 그린다.
 
-    집계는 회차가 아니라 웨어하우스 타이머가 만든다. 파일이 없다는 것은 아직
+    집계는 회차가 아니라 `warehouse_load` 태스크가 만든다. 파일이 없다는 것은 아직
     한 번도 안 돌았거나 그쪽이 실패했다는 뜻이고, 둘 다 회차를 멈출 이유는 아니다.
+    선수 · 기사 · 소스는 화면이 슬러그 · 해시를 이름으로 바꾸는 데만 쓴다.
     """
     src = Path(metrics_path)
     if not src.exists():
@@ -2196,7 +2174,8 @@ def write_behavior(metrics_path: str | Path, out_dir: str | Path) -> bool:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "behavior.html").write_text(
-        render_behavior(json.loads(src.read_text(encoding="utf-8"))),
+        render_behavior(json.loads(src.read_text(encoding="utf-8")),
+                        players=players, articles=articles, sources=sources),
         encoding="utf-8")
     return True
 

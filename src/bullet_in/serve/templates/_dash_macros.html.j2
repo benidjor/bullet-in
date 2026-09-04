@@ -1,0 +1,25 @@
+{#- 대시보드 절 하나 · 인사이트 목록. 자식 템플릿이 `with context` 로 import 해 missing_note 를 본다. -#}
+{%- macro section(s) %}
+<section class="sec" id="{{ s.id }}">
+  <div class="sec-head">
+    <h2>{{ s.title }} <small>{{ s.sub }}</small></h2>
+    {% if s.toggle and s.body_incl is not none %}
+    <span class="vtoggle" role="group" aria-label="공개일 포함 여부"><span class="vt-lab">공개일 (08-29)</span>
+      <button type="button" data-var="excl" aria-pressed="true">제외</button>
+      <button type="button" data-var="incl" aria-pressed="false">포함</button></span>
+    {% endif %}
+  </div>
+  {% if s.question %}<p class="q">{% for l in s.question %}<span class="l">{{ l }}</span>{% endfor %}</p>{% endif %}
+  {% if s.missing %}
+  <p class="missing">{{ missing_note }}</p>
+  {% elif s.toggle and s.body_incl is not none %}
+  <div class="var excl">{{ s.body }}{{ insights(s.insights) }}</div>
+  <div class="var incl" hidden>{{ s.body_incl }}{{ insights(s.insights_incl) }}</div>
+  {% else %}
+  {{ s.body }}{{ insights(s.insights) }}
+  {% endif %}
+</section>
+{%- endmacro %}
+{%- macro insights(items) %}
+{% if items %}<ul class="ins">{% for main, subs in items %}<li>{{ main }}{% if subs %}<ul class="sub">{% for x in subs %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}</li>{% endfor %}</ul>{% endif %}
+{%- endmacro %}
