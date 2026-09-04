@@ -1,8 +1,8 @@
 # 런북 — 회차가 코드를 스스로 반영할 때 오는 알림 여섯과 각각 할 일
 
 머지된 코드는 사람이 내려받지 않는다.
-`bullet-in.service` 가 시작에서 `bullet_in.deploy advance` 로 `origin/main` 을 내려받고, 끝에서 `bullet_in.deploy judge` 로 첫 회차를 판정한다.
-설계는 `docs/superpowers/specs/2026-09-03-deploy-automation-design.md` 에 있다.
+DAG `bullet_in_cycle` 의 첫 태스크 `advance` 가 `bullet_in.deploy advance` 로 `origin/main` 을 내려받고, 끝 태스크 `judge` 가 `bullet_in.deploy judge --from-airflow` 로 첫 회차를 판정한다.
+설계는 `docs/superpowers/specs/2026-09-03-deploy-automation-design.md` (전진 · 판정 · 롤백의 원 설계) 와 `docs/superpowers/specs/2026-09-04-airflow-migration-design.md` §6 (Airflow 로 옮긴 판정 입력) 에 있다.
 
 상태는 VM 의 `~/bullet-in/state/deploy.json` 한 파일이다.
 
@@ -26,7 +26,7 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 'cat ~/bullet-in/state/deplo
 표 밖의 알림이 둘 더 있다.
 「🚧 코드 전진 — 예외」 와 「🚧 deploy <명령> — 예외」 는 전진기 · 판정기 자신이 예외로 죽었다는 뜻이다.
 회차는 그대로 돌고 코드는 안 바뀐다.
-저널의 스택 트레이스를 보고 고친 PR 을 머지한다.
+`advance` · `judge` 태스크 로그의 스택 트레이스를 보고 고친 PR 을 머지한다.
 
 ### 1.1. 반영 완료 · 롤백 알림이 싣는 것 (2026-09-04 · PR #456)
 
@@ -52,15 +52,23 @@ git 이력을 못 읽으면 필드는 `-` 로 나가고 알림은 그대로 온�
 되돌린 것은 VM 의 코드뿐이다.
 화면은 배포가 안 나갔으므로 직전 그대로이고, DB 에 그 회차가 쓴 행은 남는다.
 
-먼저 저널로 어디까지 갔는지 본다.
+먼저 어느 태스크가 실패했는지 본다.
+Airflow 화면 (그래프 뷰) 에서 빨간 태스크를 클릭하면 로그 링크가 있고, 태스크 로그는 파일로도 읽을 수 있다.
 
 ```bash
 ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
-  'journalctl -u bullet-in.service -n 200 --no-pager | grep -E "ERROR|게이트|deploy"'
+  'cat "~/airflow/logs/dag_id=bullet_in_cycle/run_id=<run_id>/task_id=<태스크>/attempt=1.log"'
 ```
 
-알림의 종료 코드가 `0` 이면 회차는 성공했는데 배포 스크립트 (`ExecStartPost`) 가 실패한 것이다.
-`?` 이면 주 프로세스가 돌기 전에 (`docker compose` 등 `ExecStartPre`) 실패한 것이다.
+일곱 태스크 전체의 상태를 한 번에 보려면 `judge` 태스크가 남긴 것을 읽는다.
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
+  'cat ~/bullet-in/state/airflow_states.json'
+```
+
+`gate` 가 건너뜀 (skipped) 이면 `docs/runbook/2026-08-31-when-the-dbt-gate-blocks-a-deploy.md` §3 의 신호 종료 (급사) 이지 롤백 알림이 아니다.
+`collect` · `enrich` · `publish` · `gate` (위반) · `deploy_site` 중 하나가 `failed` 이면 그 태스크가 원인이다.
 
 - **코드 탓이면** — 고친 PR 을 머지한다.
   새 커밋이 오면 다음 회차가 알아서 전진한다.

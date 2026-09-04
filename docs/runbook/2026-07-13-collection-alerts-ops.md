@@ -176,7 +176,7 @@ uv run pytest tests/test_quality.py -v          # 소스별 이상탐지 (volume
 DAG 콜백 배선은 airflow 미설치 환경에서 다음으로 구조 검증한다 (`test_dag_import` 는 skip) .
 
 ```bash
-uv run python -m py_compile airflow/dags/bullet_in_daily.py         # DAG 구문
+uv run python -m py_compile airflow/dags/bullet_in_cycle.py         # DAG 구문
 uv run python -c "from bullet_in import notify; assert callable(notify.build_failure_alert)"   # 앱 계약
 ```
 

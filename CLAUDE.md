@@ -3,10 +3,11 @@
 아스날 FC 뉴스 수집 파이프라인. 다중 소스 (RSS/HTML/Playwright/X)를 asyncio 병렬 수집 →
 MongoDB (raw · bronze) → MariaDB (mart · silver, content_hash · URL UNIQUE dedup) → Gemini 번역/요약 →
 dbt 품질 게이트 (DuckDB · gold) → 정적 HTML 서빙.
-스케줄은 VM 의 systemd 타이머다 — 회차 `bullet-in.timer` 가 3시간 간격 하루 8회,
-워치리스트 `bullet-in-watchlist.timer` 가 하루 4회.
-머지된 코드는 회차 유닛이 시작에서 내려받고 끝에서 판정한다 (`bullet_in.deploy` · 스펙 `docs/superpowers/specs/2026-09-03-deploy-automation-design.md`) — 세션이 VM 에서 `git pull` 을 하지 않는다.
-`airflow/dags/bullet_in_daily.py` 는 확장용 보존 자산이고 운영에서 돌지 않는다.
+스케줄은 둘이다 — 회차와 웨어하우스 적재는 VM 의 Airflow DAG `bullet_in_cycle` (3시간 간격 · 태스크 여덟 · 전진과 판정은 첫 · 끝 태스크) 로 돌고,
+워치리스트 · 백업 · 유지보수는 systemd 타이머로 돈다.
+전진 태스크가 `bullet_in.deploy advance` 로 `origin/main` 을 내려받고 판정 태스크가 `bullet_in.deploy judge --from-airflow` 로 판정한다 (스펙 `docs/superpowers/specs/2026-09-03-deploy-automation-design.md` · `docs/superpowers/specs/2026-09-04-airflow-migration-design.md`) — 세션이 VM 에서 `git pull` 을 하지 않는다.
+회차 유닛 `bullet-in.service` 와 타이머는 되돌림용으로 남아 있고 지금은 비활성이다.
+Airflow 화면 · 손 시작 · 되돌리기는 `docs/runbook/2026-09-04-running-the-cycle-under-airflow.md` 를 본다.
 
 스택: Python 3.11, uv, pydantic v2, httpx+BeautifulSoup, Playwright, google-genai, SQLAlchemy.
 

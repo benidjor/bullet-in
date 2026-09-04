@@ -1,5 +1,9 @@
 # Airflow 2.9 → 3.0 마이그레이션
 
+2026-09 부터 운영 버전은 3.3.1 이다.
+DAG 는 `airflow/dags/bullet_in_cycle.py` (구 `bullet_in_daily.py` 는 삭제) 이고, 검증은 `tests/test_dag_import.py` 다.
+DAG 를 회차 오케스트레이터로 실제로 세운 설계는 `docs/superpowers/specs/2026-09-04-airflow-migration-design.md` 를 본다.
+
 ## 적용한 변경
 - `PythonOperator`가 `airflow.providers.standard.operators.python`로 이동
   (3.0에서 코어 오퍼레이터가 `standard` provider로 분리됨).
@@ -12,7 +16,8 @@
   - 마이그레이션 직전 커밋의 DAG (2.9 import)를 2.9.3 환경에서 → PASS
   - 마이그레이션 후 DAG (3.0 import)를 3.0.0 환경에서 → PASS
 - 같은 코드가 두 버전에서 동시에 통과한다는 의미가 아님 — 마이그레이션은 코드를 3.0 전용 import 경로로 옮기는 작업이라, post-migration DAG는 2.9에서 의도적으로 실패 (=마이그레이션이 적용됐다는 증거).
-- 사후 재현 절차: `docs/runbook/2026-05-27-airflow-dag-verification.md`의 "마이그레이션 검증" 절 참고.
+- 사후 재현 절차는 지금은 못 돈다 — `docs/runbook/2026-05-27-airflow-dag-verification.md`의 "이력 — 2.9 → 3.0 마이그레이션 검증" 절 참고 (대상 파일이 2026-09-04 회차 전환에서 삭제됐다).
+  현재 DAG 검증은 같은 문서의 "절차 (3.3.1 · 격리 venv)" 절을 쓴다.
 
 ## 참고한 breaking-change 체크리스트
 - 오퍼레이터 provider 분리, 스케줄러/UI 재작성, Task Execution API

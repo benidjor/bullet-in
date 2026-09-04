@@ -389,6 +389,9 @@ GitHub Actions 연동 (대상이 늘거나 머지 빈도가 오르면 이 설계
 - 새 런북 하나
   — 알림 여섯 가지를 받았을 때 각각 무엇을 보고 무엇을 치는지 (`rollback` · `unblock` · 회차 손 시작).
 
+2026-09-04 스펙 (`docs/superpowers/specs/2026-09-04-airflow-migration-design.md`) 이 전진 · 판정을 systemd 유닛의 `ExecStartPre` · `ExecStopPost` 에서 DAG `bullet_in_cycle` 의 첫 · 끝 태스크로 옮겼다.
+입력만 바뀌고 (유닛 결과 · 종료 코드 → 앞 태스크 일곱의 상태) 판정 규칙 (`decide`) 은 그대로다.
+
 ## 13. 참조
 
 - 잔여 안건 표의 `2β` 행 · 트랙 메모리 `deploy-and-confirm-automation-track`.
