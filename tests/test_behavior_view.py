@@ -4,8 +4,6 @@
 """
 import json
 
-from markupsafe import Markup
-
 from bullet_in.serve.behavior_view import build_behavior_view
 from bullet_in.serve.render import render_behavior, write_behavior
 
@@ -134,6 +132,13 @@ def test_상위_기사는_실제_기사_링크이고_마트에_없는_해시는_
     assert "h404" not in html
 
 
+def test_등급이_없는_기사는_등급_칸이_비어_있다():
+    articles = [{**ARTICLES[0], "tier": None}]
+    html = render_behavior(METRICS, players=PLAYERS, articles=articles, sources=SOURCES)
+    assert ">None<" not in html
+    assert "마르티넬리" in html
+
+
 def test_선수_페이지는_슬러그를_명단에_붙여_이적_상태를_적는다():
     html = _html()
     assert "알바레스 · 영입 진행 중" in html and "제주스 · 방출 진행 중" in html
@@ -167,8 +172,7 @@ def test_인사이트에_값_없는_해석_문장이_없다():
                     for sub in subs:
                         assert b not in sub
     dim_incl = secs["sec-engagement-by-dimension"]["insights_incl"]
-    if dim_incl:
-        assert any("52건에서 144건으로" in main for main, _ in dim_incl)
+    assert any("52건에서 144건으로" in main for main, _ in dim_incl)
 
 
 def test_설명문은_문장마다_줄을_가른다():
@@ -196,7 +200,7 @@ def test_집계_파일이_있으면_페이지를_그린다(tmp_path):
     p.write_text(json.dumps(METRICS, ensure_ascii=False), encoding="utf-8")
     assert write_behavior(p, tmp_path, players=PLAYERS, articles=ARTICLES, sources=SOURCES) is True
     out = (tmp_path / "behavior.html").read_text(encoding="utf-8")
-    assert 'id="sec-dau"' in out and isinstance(Markup(""), str)
+    assert 'id="sec-dau"' in out
 
 
 def _flat_sections(view):

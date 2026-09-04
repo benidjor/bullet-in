@@ -304,6 +304,8 @@ def _pages(pages: dict | None):
 
 
 def _tier_key(t) -> str:
+    if t is None:
+        return ""
     s = str(t)
     return s[:-2] if s.endswith(".0") else s
 
