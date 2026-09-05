@@ -185,8 +185,8 @@ def _slo(rows, gate):
     bad = [r["slo_id"] for r in rows if r["status"] == "bad"]
     if bad:
         ins.append((f"미달은 {' · '.join(bad)} 이다.", []))
-    ins.append(("SLO-3 · 4 는 직전 회차 게이트의 값이다." if gate else "SLO-3 · 4 는 게이트 결과 파일이 생기면 채워진다.",
-                ["게이트가 막히면 두 행이 ✕ 로 바뀌고 배포가 멈춘다."]))
+    ins.append((f"SLO-3 · 4 는 직전 회차 게이트 ({_gate_at(gate.generated_at)}) 의 값이다." if gate
+                else "SLO-3 · 4 는 게이트 결과 파일이 생기면 채워진다.", []))
     return _section("sec-slo", "SLO", "여섯 지표 · 목표 · 현재", q, body, ins)
 
 
@@ -214,8 +214,8 @@ def _volume(runs_all, today: date, span_weeks: int):
     if by:
         top = max(new, key=new.get)
         ins.append((f"하루 최고는 {top[5:]} 의 {C.fmt(new[top])}건이다.", []))
-        short = sum(1 for d in days if d in by and len(by[d]) < EXPECTED_RUNS_PER_DAY)
-        ins.append((f"회차가 {EXPECTED_RUNS_PER_DAY}회에 못 미친 날은 {short}일이다.", []))
+        short = sum(1 for d in days if d in by and d != today and len(by[d]) < EXPECTED_RUNS_PER_DAY)
+        ins.append((f"회차가 있던 날 가운데 {EXPECTED_RUNS_PER_DAY}회에 못 미친 날은 {short}일이다 (오늘 제외).", []))
     return _section("sec-ingestion-volume", title, sub, q, body, ins)
 
 
@@ -280,14 +280,16 @@ def _duration(runs_all, today: date):
     def pq(d, q_):
         return _pctile([r["duration_sec"] for r in by.get(d, [])], q_)
 
-    p50 = [pq(d, .5) for d in days]
-    band = ([pq(d, .1) for d in days], [pq(d, .9) for d in days])
+    run_days = [d for d in days if d in by]
+    p50 = [pq(d, .5) for d in run_days]
+    band = ([pq(d, .1) for d in run_days], [pq(d, .9) for d in run_days])
     fails = []
-    for i, d in enumerate(days):
-        k = sum(1 for r in by.get(d, []) if r["error_count"] > 0)
+    for i, d in enumerate(run_days):
+        k = sum(1 for r in by[d] if r["error_count"] > 0)
         if k:
             fails.append((i, f"에러 회차 {k}회"))
-    events = [(days.index(date.fromisoformat(d)), lab) for d, lab in EVENTS if date.fromisoformat(d) in days]
+    events = [(run_days.index(date.fromisoformat(d)), lab) for d, lab in EVENTS
+              if date.fromisoformat(d) in run_days]
     weeks = _weeks(OPS_EPOCH, today)
     per = _by_week(runs_all)
 
@@ -298,7 +300,7 @@ def _duration(runs_all, today: date):
     fetch = [avg(w, lambda r: r.get("fetch_duration_sec") or 0) for w in weeks]        # NULL 이력은 0 (옛 13회)
     rest = [avg(w, lambda r: r["duration_sec"] - (r.get("fetch_duration_sec") or 0)) for w in weeks]
     body = _two(_fig("하루 p50 (초) · 밴드 p10 에서 p90 · ✕ 에러 회차",
-                     C.line_chart([_wl(d) for d in days], [("p50", p50)], unit="초", band=band, fails=fails,
+                     C.line_chart([_wl(d) for d in run_days], [("p50", p50)], unit="초", band=band, fails=fails,
                                   events=events, w=520, h=190)),
                 _fig("주별 회차당 평균 소요 구성 (초)",
                      C.stacked_columns([_wl(w) for w in weeks],
@@ -360,36 +362,42 @@ def _mix(weekly_mix, today: date):
     q = ("들어오는 기사의 공신력 등급 구성과 이적 단계 구성이 주마다 어떻게 바뀌는지 본다. "
          "칸의 숫자는 그 주 기사 가운데 그 등급 · 단계가 차지하는 비율이다.")
     weeks = _weeks(MIX_SINCE, today)
-    tot, byline = defaultdict(int), defaultdict(int)
+    tot, tier_tot, byline = defaultdict(int), defaultdict(int), defaultdict(int)
     tier, stage = defaultdict(int), defaultdict(int)
     for r in weekly_mix:
         w = _yw_monday(r["yw"])
         tot[w] += r["n"]
         byline[w] += r["n_byline"]
-        tier[(_tier_key(r["tier"]), w)] += r["n"]
+        key = _tier_key(r["tier"])
+        if key in TIER_ORDER:
+            tier[(key, w)] += r["n"]
+            tier_tot[w] += r["n"]
         grp = next((g for g, keys in STAGE_GROUPS if r["stage"] in keys), "기타")
         stage[(grp, w)] += r["n"]
 
-    def cells(keys, src):
-        return {(k, w): (_pct(src.get((k, w), 0), tot[w]) if tot.get(w) else None) for k in keys for w in weeks}
+    def cells(keys, src, denom):
+        return {(k, w): (_pct(src.get((k, w), 0), denom[w]) if denom.get(w) else None) for k in keys for w in weeks}
 
     groups = [g for g, _ in STAGE_GROUPS]
     labels = [_wl(w) for w in weeks]
     rate = [_pct(byline[w], tot[w]) if tot.get(w) else 0 for w in weeks]
     body = ('<div class="two">'
             + _fig("공신력 등급 (0 에서 4) · 주별 비율 %",
-                   C.heatmap(list(TIER_ORDER), weeks, cells(TIER_ORDER, tier), w=500, unit="%", show_text=True,
-                             rowlab=lambda t: TIER_KO[t], collab=_wl))
+                   C.heatmap(list(TIER_ORDER), weeks, cells(TIER_ORDER, tier, tier_tot), w=500, unit="%",
+                             show_text=True, rowlab=lambda t: TIER_KO[t], collab=_wl))
             + _fig("이적 단계 (루머 → 무산) · 주별 비율 %",
-                   C.heatmap(groups, weeks, cells(groups, stage), w=500, unit="%", show_text=True, collab=_wl))
+                   C.heatmap(groups, weeks, cells(groups, stage, tot), w=500, unit="%", show_text=True, collab=_wl))
             + _fig("기자 식별률 (바이라인이 잡힌 기사 비율 · %)",
                    C.line_chart(labels, [("식별률", rate)], unit="%", w=640, h=170,
                                 annotate=(0, len(labels) - 1) if labels else ()))
             + "</div>")
+    with_data = [w for w in weeks if tot.get(w)]
     ins = []
-    if tot:
-        w4 = max((w for w in weeks if tot.get(w)), key=lambda w: tier.get(("4", w), 0) / tot[w])
-        ins.append((f"등급 4 비중이 가장 높은 주는 {_wl(w4)} ({_pct(tier.get(('4', w4), 0), tot[w4])}%) 다.", []))
+    if with_data:
+        w4 = max((w for w in with_data if tier_tot.get(w)), key=lambda w: tier.get(("4", w), 0) / tier_tot[w],
+                 default=None)
+        if w4 is not None:
+            ins.append((f"등급 4 비중이 가장 높은 주는 {_wl(w4)} ({_pct(tier.get(('4', w4), 0), tier_tot[w4])}%) 다.", []))
         rs = [r for w, r in zip(weeks, rate) if tot.get(w)]
         ins.append((f"기자 식별률은 {min(rs)}% 에서 {max(rs)}% 사이다.", []))
     return _section("sec-credibility-mix-stage-mix", title, sub, q, body, ins)
@@ -426,7 +434,7 @@ def _freshness(fresh_rows, sources):
              + "".join(rows) + "</tbody></table>") if rows else '<p class="q">이력 없음.</p>')
     ins = []
     thr = [r["threshold_hours"] for r in latest.values()]
-    if thr:
+    if thr and min(thr) != max(thr):
         ins.append((f"임계는 소스마다 다르다 ({min(thr):.0f}h 에서 {max(thr):.0f}h).", []))
     stale = [_display(sources, s) for s, r in latest.items() if r["stale"]]
     if stale:

@@ -213,3 +213,28 @@ def test_개요는_기사_총수와_기간을_적는다():
 def test_설명문은_문장마다_줄을_가른다():
     for s in _flat(_view()):
         assert len(s["question"]) >= 1 and all(q.endswith(".") for q in s["question"])
+
+
+def test_회차_수_인사이트는_오늘을_빼고_회차가_있던_날만_센다():
+    snap = dict(SNAPSHOT, runs_all=RUNS + [_run("r4", datetime(2026, 9, 5, 0, 5), 1, 9)])   # 오늘 · 회차 1
+    s = _sec(build_ops_view(snap, SOURCES, 0, NOW, gate=GATE, unmatched=UNMATCHED), "sec-ingestion-volume")
+    assert s["insights"][1] == ("회차가 있던 날 가운데 8회에 못 미친 날은 3일이다 (오늘 제외).", [])  # 08-27 · 09-03 · 09-04
+
+
+def test_소요_선은_회차가_있던_날만_그린다():
+    body = str(_sec(_view(), "sec-run-duration")["body"])
+    line = body[:body.index("주별 회차당")]                    # 첫 figure (p50 선) 만
+    assert line.count('class="hit"') == 3                      # 08/27 · 09/03 · 09/04
+    assert "06/12" not in line
+
+
+def test_등급이_없는_행은_등급_비율의_분모에서_빠진다():
+    mix = [{"yw": 202636, "tier": 4.0, "stage": "rumour", "n": 6, "n_byline": 3},
+           {"yw": 202636, "tier": None, "stage": "other", "n": 4, "n_byline": 0}]
+    s = _sec(build_ops_view(dict(SNAPSHOT, weekly_mix=mix), SOURCES, 0, NOW, gate=GATE, unmatched=UNMATCHED),
+             "sec-credibility-mix-stage-mix")
+    body = str(s["body"])
+    assert "4 타블로이드 · 08/31\n100%" in body               # 등급 분모 6 (None 제외)
+    assert "기타 · 08/31\n40%" in body                        # 단계 분모 10 (전체)
+    assert "08/31\n30% · 식별률" in body                       # 3 / 10
+    assert s["insights"][0] == ("등급 4 비중이 가장 높은 주는 08/31 (100%) 다.", [])
