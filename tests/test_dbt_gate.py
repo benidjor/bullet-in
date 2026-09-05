@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from bullet_in.dbt_gate import (GATE_CRASH_EXIT, GateResult, TestOutcome, dbt_env,
-                                enforce_gate, parse_results, run_gate)
+from bullet_in.dbt_gate import (GATE_CRASH_EXIT, GateResult, GateTally, TestOutcome, dbt_env,
+                                enforce_gate, gate_tally, parse_results, run_gate)
 
 
 def _write(tmp_path: Path, results: list[dict]) -> Path:
@@ -286,3 +286,39 @@ def test_run_gate_does_not_retry_a_violation(tmp_path, monkeypatch):
     r = run_gate(tmp_path, "mysql+pymysql://root@localhost:3306/bulletin")
     assert len(calls) == 1
     assert r.ran and r.blocked and r.dbt_returncode == 1
+
+
+def test_gate_tally_counts_unique_and_not_null_and_keeps_failures(tmp_path):
+    path = tmp_path / "run_results.json"
+    path.write_text(json.dumps({
+        "metadata": {"generated_at": "2026-09-05T00:03:04.645664Z"},
+        "results": [
+            {"unique_id": "test.bullet_in.unique_stg_articles_url.a", "status": "pass", "failures": 0},
+            {"unique_id": "test.bullet_in.unique_stg_articles_content_hash.b", "status": "fail", "failures": 3},
+            {"unique_id": "test.bullet_in.not_null_stg_articles_url.c", "status": "pass", "failures": 0},
+            {"unique_id": "test.bullet_in.not_null_stg_articles_transfer_stage.d", "status": "warn", "failures": 2},
+            {"unique_id": "test.bullet_in.not_null_stg_players_id.e", "status": "pass", "failures": 0},
+        ]}))
+    t = gate_tally(path)
+    assert t.generated_at == "2026-09-05T00:03:04.645664Z"
+    assert t.unique_total == 2 and [x.name for x in t.unique_failed] == ["unique_stg_articles_content_hash"]
+    assert t.unique_failed[0].failures == 3
+    # warn 도 「전부 통과」 가 아니다 — 결측 행이 있다는 뜻이라 실패로 센다
+    assert t.not_null_total == 3 and [x.name for x in t.not_null_failed] == ["not_null_stg_articles_transfer_stage"]
+
+
+def test_gate_tally_returns_none_without_file(tmp_path):
+    assert gate_tally(tmp_path / "missing.json") is None
+    (tmp_path / "bad.json").write_text("{")
+    assert gate_tally(tmp_path / "bad.json") is None
+
+
+def test_gate_tally_ignores_other_tests_and_models(tmp_path):
+    path = _write(tmp_path, [
+        {"unique_id": "test.bullet_in.accepted_values_stg_articles_tier__0__1.x", "status": "pass", "failures": 0, "message": ""},
+        {"unique_id": "test.bullet_in.relationships_stg_article_players_player_id.y", "status": "pass", "failures": 0, "message": ""},
+        {"unique_id": "model.bullet_in.stg_articles", "status": "success", "failures": None, "message": ""},
+    ])
+    t = gate_tally(path)
+    assert t.unique_total == 0 and t.not_null_total == 0
+    assert t.generated_at == ""
