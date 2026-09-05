@@ -452,7 +452,7 @@ def _review(high, unmatched):
            + "".join(f'<tr><td><a class="alink" href="article/{r["content_hash"]}.html">{r["content_hash"][:8]}</a></td>'
                      f'<td>{C.E(r["outlet"] or "—")}</td><td class="num">{r["retention"]:.2f}</td></tr>' for r in high)
            + "</tbody></table>") if high else '<p class="q">임계값 초과 없음.</p>')
-    ut = (('<table class="fresh"><thead><tr><th>날짜</th><th>소스</th><th>제목</th></tr></thead><tbody>'
+    ut = (('<table class="fresh"><thead><tr><th>날짜 (KST)</th><th>소스</th><th>제목</th></tr></thead><tbody>'
            + "".join(f'<tr><td>{C.E(r["date"])}</td><td>{C.E(r["source"])}</td><td>{C.E(r["title"])}</td></tr>'
                      for r in unmatched)
            + "</tbody></table>") if unmatched else '<p class="q">없음.</p>')

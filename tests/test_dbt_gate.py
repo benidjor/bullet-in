@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from bullet_in.dbt_gate import (GATE_CRASH_EXIT, GateResult, GateTally, TestOutcome, dbt_env,
+from bullet_in.dbt_gate import (GATE_CRASH_EXIT, GateResult, TestOutcome, dbt_env,
                                 enforce_gate, gate_tally, parse_results, run_gate)
 
 

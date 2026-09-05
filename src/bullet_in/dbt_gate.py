@@ -92,6 +92,7 @@ def gate_tally(path: Path) -> GateTally | None:
     failed: dict[str, list[TestOutcome]] = {"unique": [], "not_null": []}
     for r in data.get("results", []):
         name = _short(r.get("unique_id", ""))
+        # 모델 테스트만 센다 — 소스 테스트는 이름이 source_unique_… · source_not_null_… 로 시작해 안 걸린다 (지금 프로젝트에는 없다)
         kind = next((k for k in total if name.startswith(k + "_")), None)
         if kind is None:
             continue

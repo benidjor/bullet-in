@@ -127,7 +127,6 @@ def test_소스_커버리지는_회차_기록의_소스별_건수를_주로_묶�
     assert "fmkorea · 08/31\n3건" in body                        # 1 + 2
     assert "BBC Sport · 08/24\n10건" in body
     assert "Dead · 08/31\n0건" in body                           # 설정에만 있는 소스도 행이 있다
-    cats = [c for c in ("BBC Sport", "fmkorea", "Dead") if f">{c}<" in body]
     assert body.index(">BBC Sport<") < body.index(">fmkorea<") < body.index(">Dead<")   # 합 내림차순
 
 
