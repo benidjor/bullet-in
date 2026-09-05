@@ -644,7 +644,8 @@ def publish(run_id: str) -> None:
     try:
         write_ops(mart.ops_snapshot(), sources, "site",
                   anomaly_count=len(anomalies), now=mart.db_now(),
-                  unmatched=unmatched_articles(rows, pstore.linked_hashes()))
+                  unmatched=unmatched_articles(rows, pstore.linked_hashes()),
+                  gate_path=Path("dbt") / "target" / "run_results.json")
     except Exception:
         logging.getLogger(__name__).warning(
             "ops 뷰 생성 실패 — 파이프라인은 계속 진행", exc_info=True)

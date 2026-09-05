@@ -826,143 +826,6 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
             "journalists": _facet_rows(j_ctr, j_labels, j_tier,
                                        initial_min=INITIAL_MIN_COUNT, extra=j_extra)}
 
-# ---- 운영 뷰 (ops.html) 뷰모델 ----
-# 지표 정의 · 데이터 계약: docs/superpowers/specs/2026-07-14-ops-monitoring-view-design.md §5 · §6
-
-TIER_BUCKETS = [(1.0, "Tier 1 — 공식 · 공신력 최상"),
-                (2.0, "Tier 2 — 공신력 중"),
-                (3.0, "Tier 3 — 공신력 하")]
-ETC_TIER_LABEL = "기타 (0 · 1.5 · 4)"
-
-
-def spark_points(values: list[float], width: int = 84, height: int = 18) -> str:
-    if not values:
-        return ""
-    vmin, vmax = min(values), max(values)
-    span = max(vmax - vmin, 1)                      # 전부 동일값 → 분모 1 (평평한 선)
-    n = len(values)
-    pts = []
-    for i, v in enumerate(values):
-        x = 0 if n == 1 else i * width / (n - 1)
-        y = (height - 2) - (v - vmin) / span * (height - 4)
-        pts.append(f"{x:.0f},{y:.0f}")
-    return " ".join(pts)
-
-
-def _kpi(runs: list[dict], stale_count: int | None, pending_total: int) -> dict:
-    if not runs:
-        return {"new": "—", "dup": "—", "err": "—", "success": "—",
-                "stale": "—", "pending": str(pending_total)}
-    top = runs[0]
-    return {"new": str(top["new_count"]), "dup": str(top["dup_count"]),
-            "err": str(top["error_count"]),
-            "success": f"{top['success_rate'] * 100:.0f}%",
-            "stale": "—" if stale_count is None else str(stale_count),
-            "pending": str(pending_total)}
-
-
-def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int,
-                   now: datetime) -> dict:
-    runs = snapshot["runs"]                          # 최신순
-    chrono = list(reversed(runs))                    # 차트는 과거 → 최신
-
-    max_new = max((r["new_count"] for r in chrono), default=0) or 1
-    runs_chart = [{
-        "h": round(r["new_count"] / max_new * 100),
-        "err": r["error_count"] > 0,
-        "label": (f"{r['started_at']:%m-%d %H:%M} UTC · 신규 {r['new_count']}"
-                  f" · 중복 {r['dup_count']} · 에러 {r['error_count']}"),
-    } for r in chrono]
-
-    fresh_rows = snapshot["freshness"]               # checked_at 오름차순
-    latest_run = fresh_rows[-1]["run_id"] if fresh_rows else None
-    latest = {r["source_id"]: r for r in fresh_rows if r["run_id"] == latest_run}
-    history: dict[str, list[float]] = {}
-    for r in fresh_rows:                              # 부재 회차 없음 = 진짜 결측 (§6.1)
-        if r["age_hours"] is not None:
-            history.setdefault(r["source_id"], []).append(float(r["age_hours"]))
-    freshness = []
-    for sid, row in sorted(latest.items()):
-        disp = sources.get(sid, {}).get("display_name") or sid
-        if row["age_hours"] is None:
-            freshness.append({"display": disp, "last": "이력 없음", "age": "—",
-                              "thr": f"{row['threshold_hours']:.0f}h",
-                              "points": "", "status": "none"})
-            continue
-        freshness.append({
-            "display": disp,
-            "last": f"{row['last_fetched_at']:%m-%d %H:%M}",
-            "age": f"{row['age_hours']:.1f}h",
-            "thr": f"{row['threshold_hours']:.0f}h",
-            "points": spark_points(history.get(sid, [])),
-            "status": "stale" if row["stale"] else "fresh",   # 저장값 그대로 (§6.2)
-        })
-    stale_count = (sum(1 for r in latest.values() if r["stale"])
-                   if latest else None)
-
-    trend = runs[:12]                                 # 신선도 추세와 같은 12회 창
-    totals = {sid: sum(r["source_counts"].get(sid, 0) for r in trend)  # 부재 = 0 (§6.1)
-              for sid in sources}
-    max_total = max(totals.values(), default=0) or 1
-    pending = snapshot["pending"]
-    volume = [{
-        "display": sources.get(sid, {}).get("display_name") or sid,
-        "total": total,
-        "bar_pct": round(total / max_total * 100),
-        "translate": pending.get(sid, {}).get("translate", 0),
-        "stage": pending.get(sid, {}).get("stage", 0),
-    } for sid, total in sorted(totals.items(), key=lambda kv: -kv[1])]
-    pending_total = sum(p["translate"] + p["stage"] for p in pending.values())
-
-    tier_counts = snapshot["tier_counts"]
-    total_articles = sum(tier_counts.values()) or 1
-    known = {t for t, _ in TIER_BUCKETS}
-    tiers = [{"label": label, "count": tier_counts.get(t, 0),
-              "pct": round(tier_counts.get(t, 0) / total_articles * 100)}
-             for t, label in TIER_BUCKETS]
-    etc = sum(n for t, n in tier_counts.items() if t not in known)
-    tiers.append({"label": ETC_TIER_LABEL, "count": etc,
-                  "pct": round(etc / total_articles * 100)})
-
-    if runs:
-        avg_sr = sum(r["success_rate"] for r in runs) / len(runs)
-        avg_dur = sum(r["duration_sec"] for r in runs) / len(runs)
-        fetch_vals = [r["fetch_duration_sec"] for r in runs
-                      if r.get("fetch_duration_sec") is not None]  # NULL 이력 제외 (§6)
-        avg_fetch = sum(fetch_vals) / len(fetch_vals) if fetch_vals else None
-        slo = [
-            {"slo_id": "SLO-2", "definition": "최근 30회 평균 success_rate",
-             "value": f"{avg_sr * 100:.1f}%",
-             "status": "ok" if avg_sr >= 0.9 else "bad"},
-            {"slo_id": "SLO-5", "definition": "수집 끊긴 소스 수 (최신 run)",
-             "value": "—" if stale_count is None else str(stale_count),
-             "status": "info" if stale_count is None else ("ok" if not stale_count else "bad")},
-            {"slo_id": "SLO-6", "definition": "현재 회차 이상 감지 소스 수",
-             "value": str(anomaly_count),
-             "status": "ok" if anomaly_count == 0 else "bad"},
-            {"slo_id": "duration", "definition": "최근 30회 평균 소요 시간",
-             "value": f"{avg_dur:.0f}s", "status": "info"},
-            {"slo_id": "fetch_duration", "definition": "최근 30회 평균 fetch 시간",
-             "value": "—" if avg_fetch is None else f"{avg_fetch:.0f}s",
-             "status": "info"},
-        ]
-    else:
-        slo = []
-
-    # snapshot.get — 옛 스냅샷 (키 없음) 으로도 렌더가 죽지 않게 한다
-    high = snapshot.get("high_retention") or []
-
-    return {"generated_at": f"{now:%Y-%m-%d %H:%M} UTC",
-            "kpi": _kpi(runs, stale_count, pending_total),
-            "runs_chart": runs_chart, "freshness": freshness,
-            "volume": volume, "tiers": tiers, "slo": slo,
-            "high_retention": [{"content_hash": r["content_hash"],
-                                "outlet": r["outlet"] or "—",
-                                "retention": f"{r['retention']:.2f}",
-                                "href": f"article/{r['content_hash']}.html"}
-                               for r in high],
-            "high_retention_count": len(high)}
-
 # 이적시장 창 — 상단 바 타이머의 단일 원천 (2026-08-28 사용자 요청).
 #
 # 시각은 **현지 (런던) 기준을 오프셋까지 적어 절대 시각으로** 둔다. 「9월 1일 23시」
@@ -2148,8 +2011,9 @@ def unmatched_articles(articles: list[dict], linked: set[str]) -> list[dict]:
     return out
 
 
-def render_ops(view: dict, unmatched: list[dict] | None = None) -> str:
-    return _env().get_template("ops.html.j2").render(view=view, unmatched=unmatched)
+def render_ops(view: dict) -> str:
+    """수집 현황 화면. 뷰모델은 serve/ops_view 가 만들고 여기서는 템플릿만 부른다."""
+    return _env().get_template("ops.html.j2").render(view=view, missing_note=view["missing_note"])
 
 
 def render_behavior(metrics: dict, *, players=(), articles=(), sources=None) -> str:
@@ -2182,10 +2046,18 @@ def write_behavior(metrics_path: str | Path, out_dir: str | Path, *,
 
 def write_ops(snapshot: dict, sources: dict, out_dir: str | Path,
               anomaly_count: int, now: datetime,
-              unmatched: list[dict] | None = None) -> None:
-    """운영 뷰 site/ops.html 생성. 실패 격리는 호출부 (run.py) 책임."""
-    view = build_ops_view(snapshot, sources, anomaly_count, now)
+              unmatched: list[dict] | None = None,
+              gate_path: str | Path | None = None) -> None:
+    """수집 현황 site/ops.html 생성. 실패 격리는 호출부 (run.py) 책임.
+
+    gate_path 는 직전 회차 게이트의 `dbt/target/run_results.json` 이다 — 회차의 gate
+    태스크가 publish 뒤에 돌아 이번 회차 것은 아직 없다 (스펙 2026-09-05 §2). 없으면
+    SLO-3 · 4 가 「게이트 결과 없음」 으로 그려진다.
+    """
+    from bullet_in.dbt_gate import gate_tally
+    from bullet_in.serve.ops_view import build_ops_view
+    gate = gate_tally(Path(gate_path)) if gate_path else None
+    view = build_ops_view(snapshot, sources, anomaly_count, now, gate=gate, unmatched=unmatched)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "ops.html").write_text(render_ops(view, unmatched=unmatched),
-                                  encoding="utf-8")
+    (out / "ops.html").write_text(render_ops(view), encoding="utf-8")

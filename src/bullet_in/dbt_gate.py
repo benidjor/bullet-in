@@ -39,6 +39,16 @@ class GateResult:
     dbt_returncode: int | None = None
 
 
+@dataclass(frozen=True)
+class GateTally:
+    """수집 현황 화면의 SLO-3 · 4 재료 — unique · not_null 테스트가 몇 종이고 무엇이 안 통과했나."""
+    generated_at: str                       # dbt 가 적은 ISO 시각 (UTC · 없으면 빈 문자열)
+    unique_total: int
+    unique_failed: list[TestOutcome]
+    not_null_total: int
+    not_null_failed: list[TestOutcome]
+
+
 def _short(unique_id: str) -> str:
     """`test.bullet_in.unique_stg_articles_url.abc` 에서 사람이 읽을 이름만 뽑는다."""
     parts = unique_id.split(".")
@@ -64,6 +74,34 @@ def parse_results(path: Path) -> GateResult:
         elif status == "warn":
             warned.append(outcome)
     return GateResult(blocked=blocked, warned=warned)
+
+
+def gate_tally(path: Path) -> GateTally | None:
+    """SLO-3 (중복 적재율) · SLO-4 (필수 필드 완전성) 용 집계.
+
+    `parse_results` 는 차단 · 경고만 남기고 통과를 버린다 — 「unique 5종 전부 통과」 라고
+    말하려면 통과한 것도 세야 해서 같은 파일을 따로 읽는다. 경고 (`warn`) 도 결측 행이
+    있다는 뜻이라 실패로 센다. 파일이 없거나 못 읽으면 None 이고 화면은 「게이트 결과 없음」
+    으로 그린다 (스펙 2026-09-05 §3.4).
+    """
+    try:
+        data = json.loads(Path(path).read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    total = {"unique": 0, "not_null": 0}
+    failed: dict[str, list[TestOutcome]] = {"unique": [], "not_null": []}
+    for r in data.get("results", []):
+        name = _short(r.get("unique_id", ""))
+        # 모델 테스트만 센다 — 소스 테스트는 이름이 source_unique_… · source_not_null_… 로 시작해 안 걸린다 (지금 프로젝트에는 없다)
+        kind = next((k for k in total if name.startswith(k + "_")), None)
+        if kind is None:
+            continue
+        total[kind] += 1
+        if r.get("status") in _BLOCKING or r.get("status") == "warn":
+            failed[kind].append(TestOutcome(name, int(r.get("failures") or 0)))
+    return GateTally(generated_at=(data.get("metadata") or {}).get("generated_at", ""),
+                     unique_total=total["unique"], unique_failed=failed["unique"],
+                     not_null_total=total["not_null"], not_null_failed=failed["not_null"])
 
 
 def dbt_env(mariadb_url: str) -> dict[str, str]:
