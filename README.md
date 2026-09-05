@@ -2,15 +2,15 @@
 
 [![CI](https://github.com/benidjor/bullet-in/actions/workflows/ci.yml/badge.svg)](https://github.com/benidjor/bullet-in/actions/workflows/ci.yml)
 
-> 영국 현지 언론 · ITK (X) 의 Arsenal FC 소식을 하루 8회 병렬 수집하고, 공신력으로 스코어링 · 중복 제거한 뒤 LLM 으로 번역 · 요약해 신뢰도순으로 보여주는 뉴스 수집 파이프라인.
+> 영국 현지 언론 · ITK (X) 의 Arsenal FC 소식을 하루 8회 병렬 수집하고 공신력으로 스코어링 · 중복 제거한 뒤 LLM 으로 번역 · 요약해 신뢰도순으로 보여주는 뉴스 수집 파이프라인.
 >
 > **공개 서비스**: https://bullet-in.pages.dev — 2026-08-29 공개 · Airflow 회차가 3시간마다 수집 · 검사 · 배포한다. 지금 살아 있는지는 [수집 현황 화면](https://bullet-in.pages.dev/ops.html) 의 「생성」 시각과 SLO 표가 말해 준다.
 
 *Bullet-in = bulletin (단신) + bullet (병기고 Arsenal) 의 언어유희.*
 
-![Bullet-in 인덱스 — 실데이터](docs/assets/serving-page-live.png)
+![Bullet-in 전체 기사 — 실데이터](docs/assets/serving-page-live.png)
 
-> 첫 화면. 신뢰도 (tier) 순 정렬 · 언론사 · 기자 facet 필터 · 한국어 번역 · 요약 · 선수별 페이지.
+> 전체 기사 화면 (`all.html`). 날짜별 시간순 · 영입 단계 · 공신력 · 소스 · 기자 facet 필터 · 한국어 번역 · 요약. 홈은 대표 기사와 주요 소식을 신문처럼 배치한다.
 
 ![Bullet-in 기사 상세 — 실데이터](docs/assets/article-detail-live.png)
 
@@ -20,9 +20,9 @@
 
 ## 1. 동기
 
-아스날 뉴스는 영국 현지 언론과 ITK (In The Know) 트위터에 흩어져 있고, 매체 · 계정마다 공신력 편차가 크다. 신뢰할 만한 소스만 골라 한곳에서, 한국어로 번역 · 요약해 신뢰도순으로 보고 싶다는 필요에서 출발했다. **영국 현지 소스를 한곳에 모아 공신력순으로 정렬하고 한국어로 번역 · 요약**하는 서비스다.
+아스날 뉴스는 영국 현지 언론과 ITK (In The Know) 트위터에 흩어져 있고 매체 · 계정마다 공신력 편차가 크다. 신뢰할 만한 소스만 골라 한곳에서, 한국어로 번역 · 요약해 신뢰도순으로 보고 싶다는 필요에서 출발했다. **영국 현지 소스를 한곳에 모아 공신력순으로 정렬하고 한국어로 번역 · 요약**하는 서비스다.
 
-단순 「긁어서 저장」 스크립트가 아니라 신뢰성 · 멱등성 · 데이터 품질 · 관측성을 갖춘 **데이터 프로덕트**로 설계했고, 공개 첫 주에 실제 독자 890명 (7일 · 광고 차단 방문은 안 잡히므로 하한선) 이 다녀갔다.
+단순 「긁어서 저장」 스크립트가 아니라 신뢰성 · 멱등성 · 데이터 품질 · 관측성을 갖춘 **데이터 프로덕트**로 설계했고 공개 첫 주에 실제 독자 890명 (7일 · 광고 차단 방문은 안 잡히므로 하한선) 이 다녀갔다.
 
 ## 2. 아키텍처
 
@@ -55,9 +55,9 @@ systemd 는 회차 밖의 부수 작업만 맡는다 — 선수 워치리스트 
 - **공신력 스코어링** — Tier 0 (Arsenal.com 공식) 에서 4 (타블로이드) 를 YAML 로 외부화, confidence 로 정렬. 기자 단위 tier 가 매체 tier 를 덮는다 (전담 기자의 기사만 승격).
 - **중복 제거 · 증분 · 변경 감지** — content_hash + URL 정규화, DB UNIQUE 제약으로 앱 · DB 이중 방어.
 - **LLM 번역 · 요약** — Gemini 2.5 Flash-Lite 로 제목 · 본문 번역, 한 줄 · 3줄 요약, 영입 단계 분류. 신규 행만 처리해 멱등. 429 를 만나면 그 회차를 멈추고 다음 회차가 잇는다.
-- **선수 축** — 기사에서 선수를 추출해 주체 · 언급으로 귀속하고, 선수별 페이지와 이적 상태 (영입 진행 · 확정 · 무산 · 타 클럽행 · 방출) 를 명단에서 관리한다.
+- **선수 축** — 기사에서 선수를 추출해 주체 · 언급으로 귀속하고 선수별 페이지와 이적 상태 (영입 진행 · 확정 · 무산 · 타 클럽행 · 방출) 를 명단에서 관리한다.
 - **데이터 품질 게이트** — 회차 끝 dbt test 21종이 배포를 막는다 (§6).
-- **배포 자동화** — 머지된 코드를 다음 회차가 스스로 받고, 반영을 라이브에서 확인하고, 실패면 되돌린다 (§5).
+- **배포 자동화** — 머지된 코드를 다음 회차가 스스로 받고 반영을 라이브에서 확인하고 실패면 되돌린다 (§5).
 - **관측성** — 대시보드 두 화면 (행동 지표 · 수집 현황) 과 Discord 알림 (수집량 이상 · 신선도 · 게이트 · 태스크 실패 · 배포 판정).
 - **행동 로그 · 레이크하우스** — GA4 이벤트를 Iceberg 에 bronze · silver · gold 로 쌓고 (사람 · 세션 · 코호트 표), 마트의 변경 이력과 일별 스냅샷도 같은 레이크하우스에 남긴다 (§8).
 
@@ -76,11 +76,11 @@ systemd 는 회차 밖의 부수 작업만 맡는다 — 선수 워치리스트 
 | David Ornstein (X) | 1 | x_playwright | 기자 본인 계정 — 트윗에 @핸들이 없어 고정 tier |
 | fmkorea 축구 소식통 | 동적 | fmkorea | 한국 커뮤니티 — 언급 기자 · 매체 tier 로 라우팅 (기본 4) |
 
-**기자 · ITK 공신력** — 동적 소스 항목의 tier 산출 기준 (기자 먼저 → 매체 → 기본 4). 레지스트리 전체 (기자 · ITK 105명 · 매체 55곳 · 별칭) 는 [`config/credibility.yaml`](config/credibility.yaml) 에 있고, 화면의 기자 필터가 같은 파일을 읽는다.
+**기자 · ITK 공신력** — 동적 소스 항목의 tier 산출 기준 (기자 먼저 → 매체 → 기본 4). 레지스트리 전체 (기자 · ITK 105명 · 매체 55곳 · 별칭) 는 [`config/credibility.yaml`](config/credibility.yaml) 에 있고 화면의 기자 필터가 같은 파일을 읽는다.
 
 ## 4. 정량 지표 (SLO)
 
-> 목표치와 측정 방법. 번호는 [수집 현황 화면](https://bullet-in.pages.dev/ops.html) 의 SLO 표와 같고, SLO-2 에서 6 은 회차마다 그 화면에 다시 적힌다. 병렬화 실측 절차는 [SLO-1 벤치마크 런북](docs/runbook/2026-07-14-slo1-benchmark.md), 측정 방법의 정의는 [SLO 측정 런북](docs/runbook/2026-07-19-slo-measurement.md).
+> 목표치와 측정 방법. 번호는 [수집 현황 화면](https://bullet-in.pages.dev/ops.html) 의 SLO 표와 같고 SLO-2 에서 6 은 회차마다 그 화면에 다시 적힌다. 병렬화 실측 절차는 [SLO-1 벤치마크 런북](docs/runbook/2026-07-14-slo1-benchmark.md), 측정 방법의 정의는 [SLO 측정 런북](docs/runbook/2026-07-19-slo-measurement.md).
 
 | 번호 | 지표 | 목표 | 측정 방법 | 실측 (2026-09-05) |
 |---|---|---|---|---|
@@ -95,7 +95,7 @@ systemd 는 회차 밖의 부수 작업만 맡는다 — 선수 워치리스트 
 
 ## 5. 운영
 
-회차 · 배포 · 감시가 사람 손 없이 돈다. 2026-09-04 에 systemd 타이머에서 Airflow DAG 로 옮겼고, 첫 24시간 정규 8회가 전부 성공했다 (3.5분에서 6.0분 · 재시도 0 · 오경보 0 — [런북 §6.5](docs/runbook/2026-09-04-running-the-cycle-under-airflow.md)).
+회차 · 배포 · 감시가 사람 손 없이 돈다. 2026-09-04 에 systemd 타이머에서 Airflow DAG 로 옮겼고 첫 24시간 정규 8회가 전부 성공했다 (3.5분에서 6.0분 · 재시도 0 · 오경보 0 — [런북 §6.5](docs/runbook/2026-09-04-running-the-cycle-under-airflow.md)).
 
 - **회차** — Airflow 3.3.1 · LocalExecutor · Postgres 메타 DB · DAG 하나 · 태스크 여덟 (§2). `catchup=False` · `max_active_runs=1` · `dagrun_timeout` 30분으로 옛 타이머의 성질 (밀린 회차는 한 번 · 이중 실행 금지) 을 그대로 옮겼다.
 - **배포 자동화** — `advance` 가 `origin/main` 을 내려받고 회차가 돈 뒤 `judge` 가 라이브의 `build.json` 으로 반영을 확인한다. 게이트 실패 · 배포 실패 · 반영 불일치면 이전 커밋으로 되돌리고 Discord 리뷰 채널에 알린다. 설계는 [배포 자동화 스펙](docs/superpowers/specs/2026-09-03-deploy-automation-design.md).
@@ -113,10 +113,10 @@ systemd 는 회차 밖의 부수 작업만 맡는다 — 선수 워치리스트 
 
 ## 6. 데이터 품질
 
-품질 검사는 「이상 점검」 을 선언하고, 통과하지 못하면 배포를 세운다.
+품질 검사는 「이상 점검」 을 선언하고 통과하지 못하면 배포를 세운다.
 
 - **dbt 게이트** — 회차의 `gate` 태스크가 `dbt build` 로 스테이징 다섯 · gold 셋을 만들고 테스트 21종 (unique 5 · not_null 10 · accepted_values 4 · relationships 2) 을 돈다. 차단이면 `deploy_site` 가 돌지 않고 알림이 나간다. 경고 (임계 아래 결측) 는 저널에 남긴다. 설계는 [dbt 품질 게이트 스펙](docs/superpowers/specs/2026-08-31-dbt-quality-gate-design.md).
-- **게이트 자체의 고장** — dbt 가 신호로 죽으면 (세그폴트) 한 번 더 돌리고, 결과 파일이 없으면 통과로 읽지 않는다. 2026-08-31 에 실제로 막힌 뒤 진단을 stdout · stderr 둘 다 싣게 고쳤다 ([트러블슈팅](docs/troubleshooting/2026-09-01-the-gate-blocked-and-the-journal-could-not-say-why.md)).
+- **게이트 자체의 고장** — dbt 가 신호로 죽으면 (세그폴트) 한 번 더 돌리고 결과 파일이 없으면 통과로 읽지 않는다. 2026-08-31 에 실제로 막힌 뒤 진단을 stdout · stderr 둘 다 싣게 고쳤다 ([트러블슈팅](docs/troubleshooting/2026-09-01-the-gate-blocked-and-the-journal-could-not-say-why.md)).
 - **신선도** — 소스마다 마지막 수집 시각을 원본 수집 워터마크로 판정한다. 임계는 소스마다 다르고 (24h 에서 192h) 실측 공백 분포로 정했다. 초과하면 알림, 재알림은 48시간 간격.
 - **수집량 이상** — 직전 회차들의 소스별 건수 대비 ±2σ 드롭 · 스파이크를 회차마다 본다.
 - **번역 품질** — 재작성 잔존율 (원문 문장이 그대로 남은 비율) 이 임계를 넘은 기사를 수집 현황 화면에 올린다. 사람이 본다.
