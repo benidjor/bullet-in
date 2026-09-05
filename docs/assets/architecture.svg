@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 560" width="1180" height="560" font-family="-apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Segoe UI', Roboto, sans-serif" font-size="13">
+  <style>
+    .paper { fill: #fbfaf7; }
+    .lane { fill: #f2efe9; stroke: #ddd8ce; }
+    .lanelab { fill: #6f6960; font-size: 11px; letter-spacing: .06em; font-weight: 600; }
+    .task { fill: #ffffff; stroke: #1D5FA8; stroke-width: 1.5; }
+    .task.judge { stroke: #1D7A42; }
+    .task.gate { stroke: #A8710A; }
+    .store { fill: #ffffff; stroke: #16130f; stroke-width: 1.2; }
+    .ext { fill: #ffffff; stroke: #8d877d; stroke-width: 1.2; stroke-dasharray: 4 3; }
+    .t { fill: #16130f; font-weight: 600; }
+    .s { fill: #6f6960; font-size: 11px; }
+    .arrow { stroke: #16130f; stroke-width: 1.4; fill: none; marker-end: url(#a); }
+    .arrow.thin { stroke: #8d877d; stroke-width: 1; stroke-dasharray: 3 3; marker-end: url(#a2); }
+    .arrow.back { stroke: #1D7A42; stroke-width: 1.2; stroke-dasharray: 5 3; marker-end: url(#a3); }
+    .cap { fill: #6f6960; font-size: 11px; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16130f"/></marker>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8d877d"/></marker>
+    <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1D7A42"/></marker>
+  </defs>
+  <rect class="paper" x="0" y="0" width="1180" height="560"/>
+
+  <text x="24" y="30" class="t" font-size="16">Bullet-in — 회차 하나의 흐름 (Airflow DAG `bullet_in_cycle` · 3시간 간격 · 태스크 여덟)</text>
+  <text x="24" y="50" class="cap">실선 = 회차 순서 · 점선 = 읽기 · 쓰기 · 녹색 점선 = 판정과 되돌림. 2026-09-05 기준.</text>
+
+  <!-- lane: external inputs -->
+  <rect class="lane" x="24" y="70" width="1132" height="78" rx="8"/>
+  <text x="36" y="88" class="lanelab">밖 (읽기만)</text>
+  <rect class="ext" x="40" y="98" width="150" height="40" rx="6"/><text x="115" y="116" text-anchor="middle" class="t">GitHub origin/main</text><text x="115" y="131" text-anchor="middle" class="s">머지된 코드</text>
+  <rect class="ext" x="230" y="98" width="230" height="40" rx="6"/><text x="345" y="116" text-anchor="middle" class="t">소스 아홉</text><text x="345" y="131" text-anchor="middle" class="s">RSS · API · HTML · X (Playwright) · 커뮤니티</text>
+  <rect class="ext" x="500" y="98" width="150" height="40" rx="6"/><text x="575" y="116" text-anchor="middle" class="t">Gemini 2.5 Flash-Lite</text><text x="575" y="131" text-anchor="middle" class="s">번역 · 요약 · 단계 분류</text>
+  <rect class="ext" x="690" y="98" width="150" height="40" rx="6"/><text x="765" y="116" text-anchor="middle" class="t">Cloudflare Pages</text><text x="765" y="131" text-anchor="middle" class="s">bullet-in.pages.dev</text>
+  <rect class="ext" x="880" y="98" width="120" height="40" rx="6"/><text x="940" y="116" text-anchor="middle" class="t">Discord</text><text x="940" y="131" text-anchor="middle" class="s">사고 · 리뷰 채널</text>
+  <rect class="ext" x="1020" y="98" width="120" height="40" rx="6"/><text x="1080" y="116" text-anchor="middle" class="t">GA4 → BigQuery</text><text x="1080" y="131" text-anchor="middle" class="s">행동 로그 내보내기</text>
+
+  <!-- lane: tasks -->
+  <rect class="lane" x="24" y="170" width="1132" height="150" rx="8"/>
+  <text x="36" y="188" class="lanelab">회차 (Airflow · VM · LocalExecutor)</text>
+
+  <rect class="task" x="40" y="205" width="118" height="52" rx="6"/><text x="99" y="226" text-anchor="middle" class="t">advance</text><text x="99" y="243" text-anchor="middle" class="s">코드 내려받기</text>
+  <rect class="task" x="188" y="205" width="118" height="52" rx="6"/><text x="247" y="226" text-anchor="middle" class="t">collect</text><text x="247" y="243" text-anchor="middle" class="s">수집 · 중복 제거 · tier</text>
+  <rect class="task" x="336" y="205" width="118" height="52" rx="6"/><text x="395" y="226" text-anchor="middle" class="t">enrich</text><text x="395" y="243" text-anchor="middle" class="s">신규 행만 · 멱등</text>
+  <rect class="task" x="484" y="205" width="118" height="52" rx="6"/><text x="543" y="226" text-anchor="middle" class="t">publish</text><text x="543" y="243" text-anchor="middle" class="s">HTML 렌더 · 대시보드</text>
+  <rect class="task gate" x="632" y="205" width="118" height="52" rx="6"/><text x="691" y="226" text-anchor="middle" class="t">gate</text><text x="691" y="243" text-anchor="middle" class="s">dbt test 21종 · 차단</text>
+  <rect class="task" x="780" y="205" width="118" height="52" rx="6"/><text x="839" y="226" text-anchor="middle" class="t">deploy_site</text><text x="839" y="243" text-anchor="middle" class="s">Pages 업로드</text>
+  <rect class="task judge" x="928" y="205" width="118" height="52" rx="6"/><text x="987" y="226" text-anchor="middle" class="t">judge</text><text x="987" y="243" text-anchor="middle" class="s">반영 확인 · 롤백 · 알림</text>
+  <rect class="task" x="632" y="272" width="192" height="40" rx="6"/><text x="728" y="289" text-anchor="middle" class="t">warehouse_load</text><text x="728" y="304" text-anchor="middle" class="s">publish 뒤 병렬 · Iceberg 적재</text>
+
+  <path class="arrow" d="M158,231 L186,231"/>
+  <path class="arrow" d="M306,231 L334,231"/>
+  <path class="arrow" d="M454,231 L482,231"/>
+  <path class="arrow" d="M602,231 L630,231"/>
+  <path class="arrow" d="M750,231 L778,231"/>
+  <path class="arrow" d="M898,231 L926,231"/>
+  <path class="arrow" d="M602,245 L616,292 L630,292"/>
+
+  <!-- external ↔ task links -->
+  <path class="arrow thin" d="M115,138 L99,203"/>
+  <path class="arrow thin" d="M345,138 L247,203"/>
+  <path class="arrow thin" d="M575,138 L395,203"/>
+  <path class="arrow thin" d="M839,203 L765,138"/>
+  <path class="arrow thin" d="M987,203 L940,138"/>
+  <path class="arrow back" d="M987,257 L987,262 L99,262 L99,257"/>
+
+  <!-- lane: storage -->
+  <rect class="lane" x="24" y="342" width="1132" height="120" rx="8"/>
+  <text x="36" y="360" class="lanelab">저장 (메달리온)</text>
+  <rect class="store" x="40" y="376" width="200" height="70" rx="6"/><text x="140" y="397" text-anchor="middle" class="t">Bronze · MongoDB</text><text x="140" y="414" text-anchor="middle" class="s">raw_items · 원문 불변</text><text x="140" y="430" text-anchor="middle" class="s">신선도 워터마크</text>
+  <rect class="store" x="270" y="376" width="240" height="70" rx="6"/><text x="390" y="397" text-anchor="middle" class="t">Silver · MariaDB 6표</text><text x="390" y="414" text-anchor="middle" class="s">articles · players · article_players</text><text x="390" y="430" text-anchor="middle" class="s">pipeline_runs · source_freshness</text>
+  <rect class="store" x="540" y="376" width="200" height="70" rx="6"/><text x="640" y="397" text-anchor="middle" class="t">Gold · dbt (DuckDB)</text><text x="640" y="414" text-anchor="middle" class="s">gold 3모델 · 테스트 21종</text><text x="640" y="430" text-anchor="middle" class="s">MariaDB 를 attach</text>
+  <rect class="store" x="770" y="376" width="370" height="70" rx="6"/><text x="955" y="397" text-anchor="middle" class="t">레이크하우스 · Iceberg on GCS</text><text x="955" y="414" text-anchor="middle" class="s">mart_history (변경분 · 스냅샷 · ops_daily)</text><text x="955" y="430" text-anchor="middle" class="s">behavior (GA4 bronze · silver · gold 5표) · Google Lakehouse 카탈로그</text>
+
+  <path class="arrow thin" d="M247,257 L140,374"/>
+  <path class="arrow thin" d="M247,257 L390,374"/>
+  <path class="arrow thin" d="M395,257 L390,374"/>
+  <path class="arrow thin" d="M543,257 L400,374"/>
+  <path class="arrow thin" d="M691,257 L640,374"/>
+  <path class="arrow thin" d="M728,312 L955,374"/>
+  <path class="arrow thin" d="M1080,138 L1090,200 L1090,340 L1000,374"/>
+
+  <!-- lane: side jobs -->
+  <rect class="lane" x="24" y="482" width="1132" height="62" rx="8"/>
+  <text x="36" y="500" class="lanelab">회차 밖 (systemd 타이머)</text>
+  <text x="40" y="524" class="s">선수 워치리스트 (fmkorea 검색) · 매일 백업 (MariaDB 덤프 + MongoDB 아카이브 → GCS) · 레이크하우스 유지보수 (스냅샷 만료 · 컴팩션) · Airflow 감시 (심박 · 회차 지연 → Discord)</text>
+</svg>
