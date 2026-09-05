@@ -2148,8 +2148,9 @@ def unmatched_articles(articles: list[dict], linked: set[str]) -> list[dict]:
     return out
 
 
-def render_ops(view: dict, unmatched: list[dict] | None = None) -> str:
-    return _env().get_template("ops.html.j2").render(view=view, unmatched=unmatched)
+def render_ops(view: dict) -> str:
+    """수집 현황 화면. 뷰모델은 serve/ops_view 가 만들고 여기서는 템플릿만 부른다."""
+    return _env().get_template("ops.html.j2").render(view=view, missing_note=view["missing_note"])
 
 
 def render_behavior(metrics: dict, *, players=(), articles=(), sources=None) -> str:
@@ -2182,10 +2183,18 @@ def write_behavior(metrics_path: str | Path, out_dir: str | Path, *,
 
 def write_ops(snapshot: dict, sources: dict, out_dir: str | Path,
               anomaly_count: int, now: datetime,
-              unmatched: list[dict] | None = None) -> None:
-    """운영 뷰 site/ops.html 생성. 실패 격리는 호출부 (run.py) 책임."""
-    view = build_ops_view(snapshot, sources, anomaly_count, now)
+              unmatched: list[dict] | None = None,
+              gate_path: str | Path | None = None) -> None:
+    """수집 현황 site/ops.html 생성. 실패 격리는 호출부 (run.py) 책임.
+
+    gate_path 는 직전 회차 게이트의 `dbt/target/run_results.json` 이다 — 회차의 gate
+    태스크가 publish 뒤에 돌아 이번 회차 것은 아직 없다 (스펙 2026-09-05 §2). 없으면
+    SLO-3 · 4 가 「게이트 결과 없음」 으로 그려진다.
+    """
+    from bullet_in.dbt_gate import gate_tally
+    from bullet_in.serve.ops_view import build_ops_view
+    gate = gate_tally(Path(gate_path)) if gate_path else None
+    view = build_ops_view(snapshot, sources, anomaly_count, now, gate=gate, unmatched=unmatched)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "ops.html").write_text(render_ops(view, unmatched=unmatched),
-                                  encoding="utf-8")
+    (out / "ops.html").write_text(render_ops(view), encoding="utf-8")
