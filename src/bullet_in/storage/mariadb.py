@@ -9,6 +9,12 @@ from bullet_in.models import Article
 from bullet_in.quality import SourceFreshness
 from bullet_in.fidelity import RETENTION_THRESHOLD
 
+# 수집 현황 화면의 창 셋 (런북 2026-09-04-measuring-visitors-funnel-and-retention-from-bronze.md §8).
+OPS_EPOCH = datetime(2026, 6, 12)        # 첫 라이브 실행 · 회차 전체의 시작 (UTC)
+LATENCY_SINCE = datetime(2026, 7, 14)    # 발행 → 수집 지연 · 그 전 행은 backfill 로 fetched_at 이 옮겨졌다
+LATENCY_MAX_DAYS = 30
+MIX_SINCE = datetime(2026, 7, 13)        # 주별 구성 · 월요일
+
 _SCHEMA = Path(__file__).with_name("schema.sql")
 log = logging.getLogger(__name__)
 
@@ -238,17 +244,20 @@ class MartStore:
                 "ORDER BY checked_at DESC LIMIT 1)")).mappings().all()
         return {r["source_id"]: dict(r) for r in rows}
 
-    def ops_snapshot(self, chart_runs: int = 30, trend_runs: int = 12) -> dict:
-        """운영 뷰 (ops.html) 집계 스냅샷. 지표 정의는 spec §5 표가 기준.
-        pending 은 rows_missing_translation/stage 와 동일 술어로 카운트."""
+    def ops_snapshot(self, trend_runs: int = 12) -> dict:
+        """수집 현황 (ops.html) 집계 스냅샷 — 뷰모델 serve/ops_view 가 읽는다.
+
+        회차는 첫 라이브 실행부터 전부 (오름차순) · 신선도는 최근 trend_runs 회 ·
+        지연 · 주별 구성 · 선수 주체는 런북 §8 의 SQL 그대로다 (스펙 2026-09-05 §3.4).
+        """
         with self.engine.connect() as c:
             # 회차 행이 두 단계로 적혀 finished_at 이 빈 행이 생길 수 있다 (collect · publish 스펙 2026-09-04 §5.3).
-            # render.py 가 duration_sec 을 합산하는데 빈 행은 오류가 된다.
-            runs = [dict(r) for r in c.execute(text(
+            # 뷰모델이 duration_sec 을 합산하는데 빈 행은 오류가 된다.
+            runs_all = [dict(r) for r in c.execute(text(
                 "SELECT run_id,started_at,duration_sec,fetch_duration_sec,"
                 "source_counts,new_count,dup_count,error_count,success_rate "
-                "FROM pipeline_runs WHERE finished_at IS NOT NULL ORDER BY started_at DESC LIMIT :n"),
-                {"n": chart_runs}).mappings().all()]
+                "FROM pipeline_runs WHERE finished_at IS NOT NULL AND started_at >= :epoch "
+                "ORDER BY started_at"), {"epoch": OPS_EPOCH}).mappings().all()]
             freshness = [dict(r) for r in c.execute(text(
                 "SELECT run_id,checked_at,source_id,last_fetched_at,"
                 "age_hours,threshold_hours,stale FROM source_freshness "
@@ -257,23 +266,39 @@ class MartStore:
                 " ORDER BY checked_at DESC LIMIT :n) w) "
                 "ORDER BY checked_at, source_id"),
                 {"n": trend_runs}).mappings().all()]
-            tier_rows = c.execute(text(
-                "SELECT tier, COUNT(*) FROM articles GROUP BY tier")).all()
-            pending_rows = c.execute(text(
-                "SELECT source_id, SUM(title_ko IS NULL), "
-                "SUM(transfer_stage IS NULL) FROM articles "
-                "GROUP BY source_id")).all()
+            # 소스 × 주 커버리지는 articles.fetched_at 이 아니라 위 runs_all 의 source_counts 로 그린다 —
+            # 재수집 backfill 이 fetched_at 을 옮겨 6월이 빈다 (트러블슈팅 2026-09-04 three-charts §1).
+            latency = [(sid, float(h)) for sid, h in c.execute(text(
+                "SELECT source_id, TIMESTAMPDIFF(MINUTE, published_at, fetched_at) / 60 "
+                "FROM articles WHERE published_at IS NOT NULL AND fetched_at >= :since "
+                "AND fetched_at >= published_at "
+                "AND TIMESTAMPDIFF(DAY, published_at, fetched_at) <= :max_days"),
+                {"since": LATENCY_SINCE, "max_days": LATENCY_MAX_DAYS}).all()]
+            weekly_mix = [{"yw": int(yw), "tier": tier, "stage": stage, "n": int(n), "n_byline": int(b)}
+                          for yw, tier, stage, n, b in c.execute(text(
+                "SELECT YEARWEEK(fetched_at, 3), tier, transfer_stage, COUNT(*), "
+                "SUM(journalist IS NOT NULL AND journalist <> '') FROM articles "
+                "WHERE fetched_at >= :since "
+                "GROUP BY YEARWEEK(fetched_at, 3), tier, transfer_stage"),
+                {"since": MIX_SINCE}).all()]
+            # 선수 축은 기사 주체 (subject) 만 · 감독 · 임원은 뺀다 (같은 트러블슈팅 §2).
+            player_subjects = [{"player_id": pid, "ko_name": ko, "category": cat, "n": int(n)}
+                               for pid, ko, cat, n in c.execute(text(
+                "SELECT p.id, p.ko_name, p.category, COUNT(*) FROM article_players ap "
+                "JOIN players p ON p.id = ap.player_id "
+                "WHERE ap.role = 'subject' AND p.category IN ('squad', 'external') "
+                "GROUP BY p.id, p.ko_name, p.category")).all()]
+            articles_total = c.execute(text("SELECT COUNT(*) FROM articles")).scalar_one()
             high_rows = c.execute(text(
                 "SELECT content_hash, outlet, rewrite_retention FROM articles "
                 "WHERE rewrite_retention > :thr ORDER BY rewrite_retention DESC"),
                 {"thr": RETENTION_THRESHOLD}).mappings().all()
-        for r in runs:
+        for r in runs_all:
             r["source_counts"] = (json.loads(r["source_counts"])
                                   if r["source_counts"] else {})
-        return {"runs": runs, "freshness": freshness,
-                "tier_counts": {t: int(n) for t, n in tier_rows},
-                "pending": {sid: {"translate": int(tr), "stage": int(st)}
-                            for sid, tr, st in pending_rows},
+        return {"runs_all": runs_all, "freshness": freshness, "latency": latency,
+                "weekly_mix": weekly_mix, "player_subjects": player_subjects,
+                "articles_total": int(articles_total),
                 "high_retention": [{"content_hash": r["content_hash"],
                                     "outlet": r["outlet"],
                                     "retention": float(r["rewrite_retention"])}
