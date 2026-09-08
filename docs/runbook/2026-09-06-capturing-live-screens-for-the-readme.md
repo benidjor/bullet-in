@@ -84,6 +84,24 @@ GA4 수집 요청과 lazy 이미지가 이어져 `wait_until="networkidle"` 이 
 `load` 뒤 고정 대기 (1 에서 3초) 가 안정적이다.
 대시보드는 정적 SVG 라 1초면 충분하다.
 
+### 4.5. 대시보드는 `.wrap` 만 찍고, 다크 모드는 `color_scheme` 으로 고른다
+
+대시보드 두 화면은 본문이 `.wrap` (최대 1040px · 가운데 정렬) 안에 있어 1440px 뷰포트로 전체를 찍으면 양옆에 회색 여백이 200px 씩 붙는다.
+슬라이드처럼 폭을 줄여 넣는 자리에서는 그 여백이 그대로 낭비가 되므로, 요소의 bounding box 로 잘라 찍는다.
+사이트는 `prefers-color-scheme` 다크를 지원하므로 라이트 · 다크는 `color_scheme` 으로 고른다 (2026-09-06 · 소개 자료에는 라이트를 썼다 · 축소하면 다크의 글자 대비가 먼저 죽는다).
+
+```python
+ctx = await browser.new_context(viewport={"width": 1440, "height": 1600}, color_scheme="light")
+page = await ctx.new_page()
+await page.goto("https://bullet-in.pages.dev/ops.html", wait_until="load"); await page.wait_for_timeout(1500)
+box = await page.locator(".wrap").first.bounding_box()
+await page.screenshot(path="dashboard-ops-live.png",
+                      clip={"x": box["x"], "y": 0, "width": box["width"], "height": min(1500, box["height"])})
+```
+
+`.wrap` 의 `x` 는 1440px 에서 200 이다.
+전체 기사 화면 (`all.html`) 은 사이드바가 있어 `body` 전체를 그대로 찍는다.
+
 ## 5. 뒤처리
 
 캡처 파일 이름은 옛 문서가 가리키는 것을 바꾸지 않는다 (`serving-page-live.png` 는 내용만 갈았다).
