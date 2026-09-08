@@ -565,7 +565,11 @@ def test_고아_청소가_참조_없는_옛_파일만_지운다(local_catalog, f
     t.refresh()
     assert len(_data_files(t)) == 4
     rows = t.scan().to_arrow().num_rows
-    result = warehouse.sweep_orphans(t, _t(2026, 9, 10))     # 문턱 (3일) 을 넘긴 시점
+    # 기준 시각은 달력이 아니라 파일의 실제 mtime 에서 잰다 — 고정 날짜 (2026-09-10) 로 두었더니
+    # 그날이 가까워지자 파일이 「3일 안 된 것」 이 되어 CI 가 떨어졌다 (2026-09-08).
+    fresh = datetime.now(timezone.utc)
+    assert warehouse.sweep_orphans(t, fresh) == {"listed": 4, "live": 1, "young": 3, "deleted": 0}
+    result = warehouse.sweep_orphans(t, fresh + warehouse.ORPHAN_MIN_AGE + timedelta(days=1))   # 문턱을 넘긴 시점
     assert result == {"listed": 4, "live": 1, "young": 0, "deleted": 3}
     assert len(_data_files(t)) == 1
     t.refresh()
