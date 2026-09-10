@@ -174,7 +174,7 @@ open site/index.html          # 기사 · 선수 · 대시보드 두 화면 (sit
 
 ## 10. 문서 지도
 
-설계 (`docs/superpowers/specs/` 71편) · 계획 (`docs/superpowers/plans/` 60편) · 런북 (`docs/runbook/` 84편) · 트러블슈팅 (`docs/troubleshooting/` 173편) 이 있다. 처음 읽을 다섯 편.
+설계 (`docs/superpowers/specs/` 70편) · 계획 (`docs/superpowers/plans/` 60편) · 런북 (`docs/runbook/` 87편) · 트러블슈팅 (`docs/troubleshooting/` 180편) 이 있다. 처음 읽을 다섯 편.
 
 1. [회차를 Airflow 로 옮긴 설계](docs/superpowers/specs/2026-09-04-airflow-migration-design.md) — 왜 지금 옮겼나 · 태스크 여덟 · 실패의 세 갈래 (급사 · 건너뜀 · 차단) · 되돌리기.
 2. [배포 자동화 설계](docs/superpowers/specs/2026-09-03-deploy-automation-design.md) — 머지된 코드가 스스로 배포되고 확인되고 되돌려지는 길.
@@ -184,7 +184,92 @@ open site/index.html          # 기사 · 선수 · 대시보드 두 화면 (sit
 
 트러블슈팅은 「무엇이 틀렸나」 보다 「어떤 잣대가 그것을 못 봤나」 를 적는다. 같은 잣대의 구멍이 다른 자리에서 되풀이되기 때문이다.
 
-## 11. 한계 & 향후
+## 11. AI 도구 활용
+
+이 저장소는 한 사람이 Claude Code 와 함께 만들고 운영한다.
+무엇을 AI 에게 맡기고 무엇을 사람이 쥐었는지, AI 가 만든 실수를 어떻게 잡았는지를 적는다.
+관점은 제품과 공정이다.
+
+```
+brainstorming ──▶ 스펙 ──▶ 계획서 (dry run) ──▶ Task 단위 구현 (subagent · TDD) ──▶ spec 리뷰 · code 리뷰 ──▶ 실측 검증 ──▶ PR ──▶ 사람이 Merge ──▶ 다음 파이프라인 실행이 배포
+       ↑ 사람 승인                                                                              리뷰 모델            사람 · 리뷰 모델      ↑ 사람
+```
+
+### 11.1. 방법론
+
+- 흐름은 `superpowers` 스킬 묶음으로 고정한다.
+  `brainstorming` 이 숨은 결정을 먼저 묻고, `writing-plans` 가 스펙과 계획서를 문서로 만들고, `subagent-driven-development` 가 계획서를 Task 단위로 구현하고, `verification-before-completion` 이 실행 결과로만 완료를 말하게 한다.
+  스펙 70편과 계획서 60편이 `docs/superpowers/` 에 그대로 남아 있다.
+- 코드를 다루는 규칙은 Karpathy 4원칙이다.
+  코딩 전 사고, 단순함 우선, 수술적 변경, 검증 가능한 목표를 2026-06-12 에 `CLAUDE.md` 에 병합했고 모든 코드 태스크에 같이 적용한다.
+- 계획서에 코드 전문이 있으면 구현 전에 한 번 돌려 본다.
+  절차는 [계획서 dry run 런북](docs/runbook/2026-09-06-dry-running-a-plan-before-executing-it.md) 에 있다.
+  2026-09-05 에는 단위 테스트를 다 통과한 계획서 코드에서 실물과 어긋난 자리가 열한 곳 나왔다.
+- 모델은 역할로 나눈다.
+  설계, 구현, 최종 리뷰를 서로 다른 모델이 맡고, 실제로 작업한 모델을 커밋의 co-author 로 남긴다.
+  2026-09-11 기준 co-author 를 단 커밋이 589건, 등장한 모델이 7종이다 (`git log --format='%(trailers:key=Co-Authored-By)'` 로 센다).
+- 세션은 여럿이 병렬로 돌지만 파일은 워크트리로 격리하고, 규칙의 원본은 `CLAUDE.md` 와 [커밋 · PR 컨벤션](docs/conventions/2026-06-11-commit-pr-convention.md) 두 곳에만 둔다.
+
+### 11.2. 역할 분담
+
+**사람이 한 것**
+
+- 요구와 지표 정의 — 수집 대상 소스, 3시간 주기의 SLO 6종, 공신력 등급 (기자 105명 · 매체 55곳), 이적 단계 9종.
+- 스펙 · 계획서 · 화면 목업 승인과 반려.
+  예를 들어 잘린 트윗 뒷부분을 프롬프트로 보정하자는 제안은 물리고 수집기를 고쳐 전문을 받게 했다.
+- 실측값 대조 (화면 · DB · 로그), LLM 호출 승인 (비용 · 분당 한도), 운영 데이터 정정 승인 (dry run 으로 대상 건수를 확인한 뒤).
+- 리뷰 피드백의 채택과 기각, 최종 전체 리뷰.
+- PR Merge 473건 전부.
+  AI 에게는 Merge 권한이 없다.
+- 인프라 · 계정 · 비용, 서빙 방침 (요약 + 발췌 + 원문 링크, 전문은 트윗과 공식 발표만), 윤리.
+
+**AI 가 한 것**
+
+- 실측 스크립트 (방문자 · 퍼널 · 리텐션, 요금 조회 절차).
+- 스펙과 계획서 초안, 실데이터로 만든 대시보드 목업.
+- 코드와 테스트.
+  계획서 Task 단위로, 워크트리 안에서만 커밋하고, 버그는 재현 테스트부터 쓴다.
+- 리뷰 (리뷰 전용 모델이 계획서 결함과 값 오류를 짚고, 그 지적은 그대로 반영하지 않고 검증한다).
+- PR 본문 · 커밋 메시지 · 배포 판정 코드 · Discord 알림 본문 · 런북 · 트러블슈팅 · README 초안 · 화면 캡처와 복구 대조 스크립트.
+
+**AI 에게 맡기지 않은 것**
+
+- Merge 권한.
+- 운영 서버에서의 `git pull` (배포는 파이프라인의 첫 태스크가 `origin/main` 을 내려받는다, [§5 운영](#5-운영)).
+- 승인 없는 운영 데이터 정정.
+
+### 11.3. 검사 장치
+
+사람이 매번 보지 않아도 걸리게 만든 것들이다.
+
+- 문서 서식은 저장할 때 검사한다.
+  `.claude/hooks/check-doc-format.py` 가 컨벤션 §2.2 (줄 시작의 `→` · `—`, 한 줄 한 문장, 기호 양옆 띄우기) 를 보고, CI 의 `docs-format` 잡이 바뀐 `docs/*.md` 에 같은 검사를 다시 건다.
+- PR 본문은 게시 전에 `.claude/tools/check-pr-format.py` 를 통과시킨다.
+  같은 위반이 다섯 번 재발한 뒤에 만든 도구라 파일 머리에 그 이력이 적혀 있다.
+  CI 의 `pr-format` 잡은 제목을 차단하고 본문은 알린다.
+- 산문 비중이 큰 산출물 (PR 본문 · 런북 · 트러블슈팅) 은 게시 전에 문체 점검 (humanize-korean, fast) 을 한 번 거친다.
+- 완료는 실측으로만 판정한다.
+  테스트 수집 수, 라이브 화면, 대조표처럼 다시 잴 수 있는 것을 근거로 적고, 「테스트 통과」 만으로는 값이 맞다고 말하지 않는다 ([테스트 통과가 값을 보증하지 않은 회차](docs/troubleshooting/2026-09-06-passing-tests-said-nothing-about-the-values.md)).
+
+### 11.4. AI 협업에서 밟은 함정
+
+트러블슈팅 180편 가운데 AI 협업에서 생긴 문제를 따로 적은 것들이 있다.
+같은 실패가 되풀이되면 트러블슈팅으로 남기고, 재발 방지 규칙을 `CLAUDE.md` 나 런북에 옮긴다.
+검사 장치가 그 규칙을 받아 강해지는 것이 바깥쪽 루프다.
+
+- [계획서 산출물 결함의 구현 전파](docs/troubleshooting/2026-07-14-plan-artifact-defect-propagation.md) — 구현 subagent 는 계획서 코드를 사실상 전사하므로 계획서의 결함이 그대로 코드가 된다.
+  계획서 dry run 이 여기서 나왔다.
+- [병렬 세션 중 subagent 가 남의 체크아웃에 커밋](docs/troubleshooting/2026-07-15-subagent-cross-checkout-contamination.md) 과 [워크트리 밖 main 에 커밋](docs/troubleshooting/2026-08-02-subagent-commits-outside-worktree.md) — 디스패치 문구를 게이트 형태로 바꾼 뒤 같은 트랙의 나머지 일곱 태스크에서 재발이 없었다.
+- [세션 간 지시 표류](docs/troubleshooting/2026-07-19-cross-session-directive-drift.md) — 같은 항목에 세션마다 다른 방침이 남는다.
+  규칙의 원본을 한 곳에 두는 이유다.
+- [번역 모델을 바꾸자 게이트가 정상 번역을 오판](docs/troubleshooting/2026-07-22-model-swap-gate-false-positives.md) — 에러가 아니라 「정상 동작」 으로 보이는 고장이라, 무엇이 실패했나가 아니라 무엇이 전보다 늘었나를 세야 잡힌다.
+- [프롬프트 문구 수정이 경계 사례에서 시소가 된다](docs/troubleshooting/2026-08-08-prompt-wording-seesaw-on-boundary-cases.md) — 문구 4판이 전부 시소였고, 근거를 재료로 주입해 해소했다.
+- [계획서 코드를 돌려 봐야 나온 결함 셋](docs/troubleshooting/2026-09-05-what-only-showed-up-when-the-plan-was-run.md) — 템플릿 엔진이 CSS 를 주석으로 읽는 식으로, 부분 테스트로는 안 보이고 한 번 돌려야 드러나는 유형.
+- [문체 점검 산출물이 PR 검사기를 넘어뜨린 날](docs/troubleshooting/2026-09-03-humanize-output-trips-the-pr-checker.md) — 서로를 모르는 도구 둘을 이어 붙일 때 생기는 일.
+
+나머지는 `docs/troubleshooting/` 에서 `subagent` · `session` · `plan` · `prompt` 로 찾으면 된다.
+
+## 12. 한계 & 향후
 
 - **재방문을 붙잡는 장치가 없다** — 공개 첫 주 진입 863명 가운데 카드를 누른 사람이 221명, 그 가운데 이틀 이상 다시 온 사람은 71명이다. 구독 · 알림 같은 장치는 아직 없다.
 - **방문자 수는 하한선이다** — GA4 는 광고 차단 방문을 잡지 못한다. 화면과 이 문서의 사용자 수는 전부 실제보다 작다.
@@ -192,7 +277,7 @@ open site/index.html          # 기사 · 선수 · 대시보드 두 화면 (sit
 - **소스 확장** — The Athletic 같은 하드 페이월 · 추가 ITK 는 어댑터 추가로 대응한다. 교차 corroboration 스코어링 (다수 소스 보도 시 신뢰도↑) 과 번역 정확도 스팟체크는 stretch.
 - **단일 VM** — 회차 · Airflow · DB 컨테이너가 한 VM 에 있다. 백업이 매일 나가지만 장애 시 복구는 사람이 런북대로 한다.
 
-## 12. 윤리 & 법적 고지
+## 13. 윤리 & 법적 고지
 
 - 공개 콘텐츠 대상, robots.txt 준수, 보수적 rate limit, 출처 · 링크 표기.
 - X (ITK) 는 ToS 그레이존 → 버너 계정 사용, 자격증명은 `.env` 로 분리 (커밋 금지), 개인 학습 용도.
