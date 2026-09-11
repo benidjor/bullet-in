@@ -46,8 +46,23 @@ jobs:
 
       # test_playwright_adapter 가 실제 크로미움을 띄운다 — 로컬은 셋업 절차에 이 명령이
       # 들어 있어 가려져 있었고, 브라우저 없는 러너에서 처음 드러났다.
+      # 브라우저 (수백 MB) 를 매번 CDN 에서 받으면 러너와 CDN 사이 속도에 따라 22초에서 7분 50초까지
+      # 흔들렸다 (#479 · 2026-09-11). 캐시 키는 uv.lock 해시 — Playwright 버전이 바뀌면 다시 받는다.
+      - name: 크로미움 캐시
+        id: pw-cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+
+      # 캐시가 맞으면 브라우저는 건너뛰고 시스템 의존 패키지 (apt) 만 깐다 — 그 부분은 캐시 대상이 아니다.
       - name: 크로미움 설치
-        run: uv run playwright install --with-deps chromium
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            uv run playwright install-deps chromium
+          else
+            uv run playwright install --with-deps chromium
+          fi
 
       - name: 테스트
         run: uv run pytest -q -rs --junitxml=report.xml
