@@ -402,8 +402,12 @@ function applyFilters() {
   const stageSel = checkedVals('stage');                 // 각 값은 콤마로 이은 enum 집합
   const stageEnums = new Set(stageSel.flatMap(v => v.split(',')));
   const showOther = boxesOf('bucket').some(c => c.checked);
-  const srcActive = outlets.length || journalists.length;
-  const conds = outlets.length + journalists.length + tiers.length
+  // 공신력을 고르면 그 등급의 소스 · 기자가 자동으로 체크되는데 (UI 스펙 07-21 §7.2) 그 체크는
+  // 「무엇이 들어가는지 보여 주는 출발점」 이지 조건이 아니다. 조건으로 세면 등급은 최상인데
+  // 체크된 기자가 없는 기사 (기자 미상 · 미등재 공저) 가 빠져 사이드바 건수 (125) 와 결과 (123) 가
+  // 갈린다 (2026-09-19 실측). 사용자가 소스 · 기자를 직접 손댔을 때만 조건이 된다.
+  const srcActive = userTouchedSrc && (outlets.length || journalists.length);
+  const conds = (userTouchedSrc ? outlets.length + journalists.length : 0) + tiers.length
     + stageSel.length + (showOther ? 1 : 0) + (q ? 1 : 0);
   const active = conds > 0;
   if (active) {
@@ -560,6 +564,8 @@ function restoreFromQuery() {
   for (const g of URL_GROUPS) want[g] = p.getAll(g);
   boxesOf('outlet').concat(boxesOf('journalist'), boxesOf('stage'), boxesOf('bucket'))
     .forEach(c => { c.checked = want[c.dataset.group].includes(c.dataset.value); });
+  // 주소에 적힌 소스 · 기자는 사용자가 고른 것이다 — 자동 체크와 구분해 조건으로 센다
+  userTouchedSrc = want.outlet.length > 0 || want.journalist.length > 0;
   box('tier').forEach(c => {
     if (c.dataset.value === 'all') c.checked = want.tier.length === 0;
     else c.checked = want.tier.includes(c.dataset.value);
