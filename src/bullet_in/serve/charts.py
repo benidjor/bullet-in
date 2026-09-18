@@ -313,7 +313,7 @@ def heatmap(rows, cols, cells, *, w=640, cell=None, unit="명", marks=(),
         y = T + len(rows) * (ch + 2) + 4
         out.append(f'<path class="mark" d="M{x - 4:.1f},{y + 8} L{x:.1f},{y} L{x + 4:.1f},{y + 8} Z"/>')
     if marks:
-        out.append(f'<text class="tick" x="{L}" y="{T + len(rows) * (ch + 2) + 24}">▲ 회차 시각 (KST)</text>')
+        out.append(f'<text class="tick" x="{L}" y="{T + len(rows) * (ch + 2) + 24}">▲ 실행 시각 (KST)</text>')
     return svg(w, h, "".join(out))
 
 

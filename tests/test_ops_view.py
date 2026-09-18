@@ -74,14 +74,14 @@ def test_절_열이_목업의_id_순서로_나온다():
 def test_타일_여섯은_최근_30회에서_만든다():
     tiles = {t["label"]: t for t in _view()["tiles"]}
     assert len(tiles) == 7
-    assert tiles["신규 · 최근 회차"]["value"] == "6" and tiles["신규 · 최근 회차"]["sub"] == "09-04 00:00 UTC"
+    assert tiles["신규 · 최근 실행"]["value"] == "6" and tiles["신규 · 최근 실행"]["sub"] == "09-04 00:00 UTC"
     assert tiles["Dedup Rate · 4회"]["value"] == "86%"          # 132 / (22 + 132) = 85.7
     assert tiles["Success Rate · 4회"]["value"] == "97.5%"      # (1 + 1 + .9 + 1) / 4
     assert tiles["Run Duration p50 · 4회"]["value"] == "120초"  # [100, 100, 120, 300] 의 p50
     assert tiles["Run Duration p50 · 4회"]["sub"] == "fetch 60초"
     assert tiles["Stale Sources"]["value"] == "1"
     assert tiles["Runs · 12주"]["value"] == "4"                 # 06-12 에서 09-05 = 86일 = 12주
-    assert tiles["Runs · 12주"]["sub"] == "에러 회차 1 · 기대 8/일"
+    assert tiles["Runs · 12주"]["sub"] == "에러 실행 1 · 기대 8/일"
 
 
 def test_slo_여섯_행의_값과_상태():
@@ -141,12 +141,12 @@ def test_처리량은_주별_합과_중복률이다():
 def test_소요_절은_밴드_에러_표시_주별_구성을_그린다():
     s = _sec(_view(), "sec-run-duration")
     body = str(s["body"])
-    assert body.count('class="fail"') == 1 and "09/03\n에러 회차 1회" in body
+    assert body.count('class="fail"') == 1 and "09/03\n에러 실행 1회" in body
     assert 'class="band s1"' in body
     # 주 08/31: fetch (60 + 60 + 0) / 3 = 40 · 나머지 ((100−60) + (300−60) + 120) / 3 = 133.33
     assert "08/31\n40초 · 수집 (fetch)\n133.33초 · 번역 · 게이트 · 배포" in body
     assert s["insights"][0][0] == "지난 4회 p50 은 120초이고 fetch 가 60초다."
-    assert s["insights"][1][0] == "1,000초를 넘긴 회차는 0회다."
+    assert s["insights"][1][0] == "1,000초를 넘긴 실행은 0회다."
 
 
 def test_지연은_소스별_p50_p95_를_p50_순으로_로그_축에_그린다():
@@ -154,7 +154,7 @@ def test_지연은_소스별_p50_p95_를_p50_순으로_로그_축에_그린다()
     body = str(s["body"])
     assert "BBC Sport\np50 3.0h · p95 100.0h\n기사 3건" in body
     assert body.index(">BBC Sport<") < body.index(">fmkorea<")
-    assert s["insights"][1][0] == "회차 간격 (3시간) 안에 드는 소스는 1곳이다."
+    assert s["insights"][1][0] == "실행 간격 (3시간) 안에 드는 소스는 1곳이다."
 
 
 def test_선수_축은_주체만_세고_이름_없는_후보는_한_줄로_모은다():
@@ -217,12 +217,12 @@ def test_설명문은_문장마다_줄을_가른다():
 def test_회차_수_인사이트는_오늘을_빼고_회차가_있던_날만_센다():
     snap = dict(SNAPSHOT, runs_all=RUNS + [_run("r4", datetime(2026, 9, 5, 0, 5), 1, 9)])   # 오늘 · 회차 1
     s = _sec(build_ops_view(snap, SOURCES, 0, NOW, gate=GATE, unmatched=UNMATCHED), "sec-ingestion-volume")
-    assert s["insights"][1] == ("회차가 있던 날 가운데 8회에 못 미친 날은 3일이다 (오늘 제외).", [])  # 08-27 · 09-03 · 09-04
+    assert s["insights"][1] == ("실행이 있던 날 가운데 8회에 못 미친 날은 3일이다 (오늘 제외).", [])  # 08-27 · 09-03 · 09-04
 
 
 def test_소요_선은_회차가_있던_날만_그린다():
     body = str(_sec(_view(), "sec-run-duration")["body"])
-    line = body[:body.index("주별 회차당")]                    # 첫 figure (p50 선) 만
+    line = body[:body.index("주별 실행당")]                    # 첫 figure (p50 선) 만
     assert line.count('class="hit"') == 3                      # 08/27 · 09/03 · 09/04
     assert "06/12" not in line
 

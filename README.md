@@ -4,7 +4,7 @@
 
 > 영국 현지 언론 · ITK (X) 의 Arsenal FC 소식을 하루 8회 병렬 수집하고 공신력으로 스코어링 · 중복 제거한 뒤 LLM 으로 번역 · 요약해 신뢰도순으로 보여주는 뉴스 수집 파이프라인.
 >
-> **공개 서비스**: https://bullet-in.pages.dev — 2026-08-29 공개 · Airflow 가 3시간마다 데이터 파이프라인을 실행해 수집 · 검사 · 배포한다. 지금 살아 있는지는 [수집 현황 화면](https://bullet-in.pages.dev/ops.html) 의 「생성」 시각과 SLO 표가 말해 준다.
+> **공개 서비스**: https://bullet-in.pages.dev — 2026-08-29 공개 · Airflow 가 3시간마다 데이터 파이프라인을 실행해 수집 · 검사 · 배포한다. 지금 살아 있는지는 [수집 현황 대시보드](https://bullet-in.pages.dev/ops.html) 의 「생성」 시각과 SLO 표가 말해 준다.
 
 *Bullet-in = bulletin (단신) + bullet (병기고 Arsenal) 의 언어유희.*
 
@@ -26,7 +26,7 @@
 
 ## 2. 아키텍처
 
-메달리온 (Bronze → Silver → Gold) + LLM 번역 · 요약 + 품질 게이트 + 배포 자동화. 실행 한 번 (운영 화면과 옛 문서에서는 「회차」) 이 Airflow DAG 의 태스크 여덟으로 돈다.
+메달리온 (Bronze → Silver → Gold) + LLM 번역 · 요약 + 품질 게이트 + 배포 자동화. 실행 한 번 (옛 문서에서는 「회차」) 이 Airflow DAG 의 태스크 여덟으로 돈다.
 
 ![아키텍처 — 실행 한 번의 흐름](docs/assets/architecture.svg)
 
@@ -39,7 +39,7 @@ advance ─▶ collect ─▶ enrich ─▶ publish ─▶ gate ─▶ deploy_si
 advance         origin/main 을 내려받는다 (세션이 VM 에서 git pull 을 하지 않는다)
 collect         소스 어댑터 아홉 (설정 10종 · 하나 비활성) 을 asyncio 로 병렬 수집 → 정규화 → URL · content_hash 로 중복 제거 → 공신력 tier → MongoDB (Bronze) · MariaDB (Silver)
 enrich          Gemini 로 번역 · 요약 · 영입 단계 분류 (신규 행만 · 멱등)
-publish         정적 HTML 렌더 (기사 · 선수 · 대시보드 두 화면) + 실행 기록 · 신선도 판정
+publish         정적 HTML 렌더 (기사 · 선수 · 대시보드 둘) + 실행 기록 · 신선도 판정
 gate            dbt build + test 21종 (DuckDB 가 MariaDB attach) — 실패면 배포를 세운다
 deploy_site     Cloudflare Pages 업로드 (산출물이 비정상이면 중단)
 judge           라이브의 build.json 으로 반영을 확인 · 실패면 이전 커밋으로 롤백 · Discord 알림
@@ -58,7 +58,7 @@ systemd 는 파이프라인 밖의 부수 작업만 맡는다 — 선수 워치�
 - **선수 축** — 기사에서 선수를 추출해 주체 · 언급으로 귀속하고 선수별 페이지와 이적 상태 (영입 진행 · 확정 · 무산 · 타 클럽행 · 방출) 를 명단에서 관리한다.
 - **데이터 품질 게이트** — 실행 끝의 dbt test 21종이 배포를 막는다 (§6).
 - **배포 자동화** — 머지된 코드를 다음 실행이 스스로 받고 반영을 라이브에서 확인하고 실패면 되돌린다 (§5).
-- **관측성** — 대시보드 두 화면 (행동 지표 · 수집 현황) 과 Discord 알림 (수집량 이상 · 신선도 · 게이트 · 태스크 실패 · 배포 판정).
+- **관측성** — 대시보드 둘 (행동 지표 · 수집 현황) 과 Discord 알림 (수집량 이상 · 신선도 · 게이트 · 태스크 실패 · 배포 판정).
 - **행동 로그 · 레이크하우스** — GA4 이벤트를 Iceberg 에 bronze · silver · gold 로 쌓고 (사람 · 세션 · 코호트 표), 마트의 변경 이력과 일별 스냅샷도 같은 레이크하우스에 남긴다 (§8).
 
 **수집 소스** — 고정 tier 7종 + 항목별 동적 tier 2종 (X · 커뮤니티는 언급된 기자 · 매체의 공신력으로 산출). 언론 5종은 공통 이적 키워드 필터를 공유한다 (`config/sources.yaml`).
@@ -80,7 +80,7 @@ systemd 는 파이프라인 밖의 부수 작업만 맡는다 — 선수 워치�
 
 ## 4. 정량 지표 (SLO)
 
-> 목표치와 측정 방법. 번호는 [수집 현황 화면](https://bullet-in.pages.dev/ops.html) 의 SLO 표와 같고 SLO-2 에서 6 은 실행마다 그 화면에 다시 적힌다 (화면의 SLO 이름은 「회차」 로 적혀 있다). 병렬화 실측 절차는 [SLO-1 벤치마크 런북](docs/runbook/2026-07-14-slo1-benchmark.md), 측정 방법의 정의는 [SLO 측정 런북](docs/runbook/2026-07-19-slo-measurement.md).
+> 목표치와 측정 방법. 번호는 [수집 현황 대시보드](https://bullet-in.pages.dev/ops.html) 의 SLO 표와 같고 SLO-2 에서 6 은 실행마다 그 대시보드에 다시 적힌다. 병렬화 실측 절차는 [SLO-1 벤치마크 런북](docs/runbook/2026-07-14-slo1-benchmark.md), 측정 방법의 정의는 [SLO 측정 런북](docs/runbook/2026-07-19-slo-measurement.md).
 
 | 번호 | 지표 | 목표 | 측정 방법 | 실측 (2026-09-05) |
 |---|---|---|---|---|
@@ -101,17 +101,17 @@ systemd 는 파이프라인 밖의 부수 작업만 맡는다 — 선수 워치�
 - **배포 자동화** — `advance` 가 `origin/main` 을 내려받고 파이프라인이 돈 뒤 `judge` 가 라이브의 `build.json` 으로 반영을 확인한다. 게이트 실패 · 배포 실패 · 반영 불일치면 이전 커밋으로 되돌리고 Discord 리뷰 채널에 알린다. 설계는 [배포 자동화 스펙](docs/superpowers/specs/2026-09-03-deploy-automation-design.md).
 - **알림** — Discord 채널 둘 (사고 · 리뷰). 수집량 이상 · 소스 신선도 · dbt 게이트 차단 · 태스크 실패 · DAG 시간 초과 · 배포 판정 · 워치리스트 · 명단 정합. 알림은 「무엇이 · 어디서 · 다음에 볼 로그」 를 한 장에 싣는다.
 - **백업** — 매일 MariaDB 논리 덤프와 MongoDB 아카이브 (합쳐 약 4 MB) 를 GCS 로. 복구는 되살려 본 절차만 적는다 ([백업 · 복구 런북](docs/runbook/2026-09-01-backup-and-restore.md)).
-- **대시보드 두 화면** — 정적 HTML 이고 실행마다 다시 그린다. 검색 엔진에는 싣지 않는다.
+- **대시보드 둘** — 정적 HTML 이고 실행마다 다시 그린다. 검색 엔진에는 싣지 않는다.
 
-![행동 지표 화면](docs/assets/dashboard-behavior-live.png)
+![행동 지표 대시보드](docs/assets/dashboard-behavior-live.png)
 
 > [행동 지표](https://bullet-in.pages.dev/behavior.html) — DAU · 퍼널 (진입 → 카드 클릭 → 반복 → 재방문) · 요일 × 시각 히트맵 · 관심 지수 · 리텐션 · 화면별 클릭 · 페이지 · 상위 기사 · 선수 페이지. GA4 → Iceberg gold 표에서 집계한다.
 
-**행동 로그의 출처 (GA4 → BigQuery → Iceberg)** — 행동 지표 화면의 숫자는 GA4 가 BigQuery 로 매일 내보낸 이벤트 원본을 `warehouse_load` 태스크가 Iceberg bronze 로 옮겨 집계한 것이다. 같은 이벤트를 GA4 화면에서도 읽을 수 있어 바깥 도구로 대조가 된다. 아래 캡처는 2026-09-18 것이고 계정 · 프로젝트 식별자는 가렸다.
+**행동 로그의 출처 (GA4 → BigQuery → Iceberg)** — 행동 지표 대시보드의 숫자는 GA4 가 BigQuery 로 매일 내보낸 이벤트 원본을 `warehouse_load` 태스크가 Iceberg bronze 로 옮겨 집계한 것이다. 같은 이벤트를 GA4 화면에서도 읽을 수 있어 바깥 도구로 대조가 된다. 아래 캡처는 2026-09-18 것이고 계정 · 프로젝트 식별자는 가렸다.
 
 ![GA4 보고서 개요 — 공개 주간](docs/assets/ga4-users-launch-week.png)
 
-> GA4 보고서 개요, 2026-08-29 부터 09-04 (공개 주간). 활성 사용자 822 · 새 사용자 812, 신규 대 재방문 그래프의 08-29 급등이 공개일이다. 같은 7일을 GA4 는 총 사용자 827 로 세고 행동 지표 화면의 「Users · 7일」 도 827 이라 §1 의 값과 맞는다. 옛 문서의 890 은 날짜를 거르지 않은 표 전체 (공개 전 08-24 · 08-28 포함) 의 순 사용자라 공개 주간 값이 아니다 ([두 키를 섞으면 두 배로 센다](docs/troubleshooting/2026-09-04-two-keys-double-the-visitor-count.md) §3 의 셈).
+> GA4 보고서 개요, 2026-08-29 부터 09-04 (공개 주간). 활성 사용자 822 · 새 사용자 812, 신규 대 재방문 그래프의 08-29 급등이 공개일이다. 같은 7일을 GA4 는 총 사용자 827 로 세고 행동 지표 대시보드의 「Users · 7일」 도 827 이라 §1 의 값과 맞는다. 옛 문서의 890 은 날짜를 거르지 않은 표 전체 (공개 전 08-24 · 08-28 포함) 의 순 사용자라 공개 주간 값이 아니다 ([두 키를 섞으면 두 배로 센다](docs/troubleshooting/2026-09-04-two-keys-double-the-visitor-count.md) §3 의 셈).
 
 ![GA4 이벤트 보고서](docs/assets/ga4-events-table.png)
 
@@ -129,7 +129,7 @@ systemd 는 파이프라인 밖의 부수 작업만 맡는다 — 선수 워치�
 
 > BigQuery 데이터셋 `analytics_551139164` 의 일별 표 `events_YYYYMMDD` (08-24 · 08-28 부터 09-17 · 22개). `warehouse_load` 는 이 표 목록에서 아직 안 옮긴 날짜만 골라 적재하고, 그날이 끝나면 사라지는 `events_intraday_*` 는 읽지 않는다.
 
-![수집 현황 화면](docs/assets/dashboard-ops-live.png)
+![수집 현황 대시보드](docs/assets/dashboard-ops-live.png)
 
 > [수집 현황](https://bullet-in.pages.dev/ops.html) — SLO 여섯 행 · 일별 신규 · 회차 수 캘린더 · 소스 × 주 · 처리량 · 소요 밴드 · 발행 → 수집 지연 · 선수 축 · 공신력 · 단계 구성 · 소스 신선도. MariaDB 와 직전 실행의 게이트 결과 파일에서 그린다.
 
@@ -141,7 +141,7 @@ systemd 는 파이프라인 밖의 부수 작업만 맡는다 — 선수 워치�
 - **게이트 자체의 고장** — dbt 가 신호로 죽으면 (세그폴트) 한 번 더 돌리고 결과 파일이 없으면 통과로 읽지 않는다. 2026-08-31 에 실제로 막힌 뒤 진단을 stdout · stderr 둘 다 싣게 고쳤다 ([트러블슈팅](docs/troubleshooting/2026-09-01-the-gate-blocked-and-the-journal-could-not-say-why.md)).
 - **신선도** — 소스마다 마지막 수집 시각을 원본 수집 워터마크로 판정한다. 임계는 소스마다 다르고 (24h 에서 192h) 실측 공백 분포로 정했다. 초과하면 알림, 재알림은 48시간 간격.
 - **수집량 이상** — 직전 실행들의 소스별 건수 대비 ±2σ 드롭 · 스파이크를 실행마다 본다.
-- **번역 품질** — 재작성 잔존율 (원문 문장이 그대로 남은 비율) 이 임계를 넘은 기사를 수집 현황 화면에 올린다. 사람이 본다.
+- **번역 품질** — 재작성 잔존율 (원문 문장이 그대로 남은 비율) 이 임계를 넘은 기사를 수집 현황 대시보드에 올린다. 사람이 본다.
 - **테스트** — 1,772 (단위 · 통합 · DAG 임포트). 통합 테스트는 CI 의 MariaDB 컨테이너에 실제로 붙는다.
 
 ## 7. 기술 스택 & 선택 이유
@@ -189,7 +189,7 @@ set -a; source .env; set +a
 uv run python -m bullet_in.run --concurrency 8          # collect → enrich → publish → gate 를 한 프로세스로
 
 # 3. 결과 확인
-open site/index.html          # 기사 · 선수 · 대시보드 두 화면 (site/behavior.html · site/ops.html)
+open site/index.html          # 기사 · 선수 · 대시보드 둘 (site/behavior.html · site/ops.html)
 ```
 
 테스트는 `uv run pytest -q` (단위 · 통합 · 통합은 MariaDB 컨테이너가 없으면 skip). Airflow DAG 임포트는 별도 venv 에서 검증한다 ([docs/MIGRATION.md](docs/MIGRATION.md)). 운영 VM 의 실행 · 손 시작 · 되돌리기는 [Airflow 런북](docs/runbook/2026-09-04-running-the-cycle-under-airflow.md).

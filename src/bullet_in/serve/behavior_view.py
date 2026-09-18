@@ -155,7 +155,7 @@ def _heat_cells(cells):
 
 def _heatmap(heat: dict | None):
     title, sub = "Activity Heatmap", "요일 × 시간대 · KST"
-    q = "요일과 시간대별로 사용자가 언제 읽는지 본다. 회차 시각 ▲ 과 읽는 시각이 맞물리는지 함께 확인한다."
+    q = "요일과 시간대별로 사용자가 언제 읽는지 본다. 실행 시각 ▲ 과 읽는 시각이 맞물리는지 함께 확인한다."
     if not heat or not heat.get("excl"):
         return _missing("sec-activity-heatmap", title, sub, q)
 
@@ -387,12 +387,12 @@ def _overview(window: dict | None):
     span = (f"{window['start']} 부터 {window['end']} 까지" if window and window.get("start")
             else "집계 창은 다음 적재 뒤에 정해진다")
     return [
-        ("데이터 흐름", "GA4 → BigQuery 내보내기 → Iceberg (bronze · silver · gold) → 집계 파일 → 이 화면.",
+        ("데이터 흐름", "GA4 → BigQuery 내보내기 → Iceberg (bronze · silver · gold) → 집계 파일 → 이 대시보드.",
          [("bronze", "GA4 원본 이벤트 (behavior.ga4_events)."),
           ("silver", "이벤트를 평탄화한 표 (ga4_events_flat)."),
           ("gold", "카드 클릭 팩트 · 세션 · 사용자 × 날짜 · 사용자 표와 날짜 디멘션.")]),
         ("기간", f"{span}.", []),
-        ("갱신", "화면은 회차마다 (3시간) 다시 그리지만 GA4 내보내기가 다음 날 오전에 도착하므로 숫자는 하루에 한 번 바뀐다.", []),
+        ("갱신", "대시보드는 실행마다 (3시간) 다시 그리지만 GA4 내보내기가 다음 날 오전에 도착하므로 숫자는 하루에 한 번 바뀐다.", []),
         ("집계 기준", "사용자는 GA4 익명 id 로 센다.",
          [("하한선", "광고 차단을 쓰는 방문은 잡히지 않으므로 모든 수는 실제보다 작다."),
           ("공개일", "08-29 하루가 표본의 대부분이라 평균 · 비율 · 분포에서는 뺀다. Activity Heatmap 과 Engagement by Dimension 은 제목 옆 버튼으로 포함 · 제외를 바꿀 수 있다.")]),

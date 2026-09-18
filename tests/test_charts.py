@@ -68,7 +68,7 @@ def test_히트맵은_값이_없는_칸을_따로_그리고_숫자를_넣을_수
 
 def test_히트맵의_회차_표시는_삼각형과_설명이다():
     svg = C.heatmap([1], list(range(24)), {(1, h): 0 for h in range(24)}, marks=[0, 3])
-    assert svg.count('class="mark"') == 2 and "▲ 회차 시각" in svg
+    assert svg.count('class="mark"') == 2 and "▲ 실행 시각" in svg
 
 
 def test_캘린더는_기간_밖_날짜를_안_그린다():
@@ -100,7 +100,7 @@ def test_라벨의_html_은_이스케이프된다():
 
 def test_선_차트는_밴드와_실패_표시를_그린다():
     svg = C.line_chart(["a", "b", "c"], [("p50", [1, 2, 3])], band=([0, 1, 2], [2, 3, 4]),
-                       fails=[(1, "에러 회차 1회")])
+                       fails=[(1, "에러 실행 1회")])
     assert 'class="band s1"' in svg and 'class="fail"' in svg
     assert "p10 0 · p90 2" in svg
 
