@@ -221,3 +221,22 @@ sudo systemctl enable --now bullet-in.timer bullet-in-warehouse.timer
   세션이 VM 에서 `git pull` 을 한 번도 안 했다.
 
 첫 24시간은 되돌리기 조건 (§5 · 연속 두 회차가 Airflow 탓으로 안 돌 때) 에 한 번도 근접하지 않았다.
+
+## 7. 완주율 타일이 「—」 이면 (2026-09-18 추가)
+
+수집 현황 화면의 「완주율 · 07-20 이후」 타일은 회차가 세지 않는다.
+매시 :37 UTC 에 도는 감시 타이머 (`bullet-in-airflow-watch.service`) 가 저널과 Airflow 실행 목록을 세어 `state/completion.json` 에 쓰고, 다음 회차의 `publish` 가 그 파일을 읽어 그린다.
+설계는 `docs/superpowers/specs/2026-09-18-completion-rate-tile-design.md` 다.
+
+- 타일이 「감시 기록 없음」 이면 파일이 없는 것이다.
+  `ls -la ~/bullet-in/state/completion.json` 과 `journalctl -u bullet-in-airflow-watch.service -n 20 --no-pager` 를 본다.
+  타이머를 기다리지 않으려면 `sudo systemctl start bullet-in-airflow-watch.service` 로 한 번 돌린다.
+- 값이 한 시간 이상 낡아 보이면 보조 줄의 「감시 HH:MM UTC」 를 본다.
+  회차와 감시가 따로 돌므로 최대 한 시간 늦는 것은 정상이다.
+- 저널 값 (시작 358 · 완주 354 · 실패 4) 은 2026-09-04 에 유닛이 비활성화된 뒤 상수다.
+  `journalctl` 이 실패하면 감시가 직전 파일의 값을 그대로 쓰고 경고를 남긴다.
+- 손 셈으로 대조하려면 트러블슈팅 `docs/troubleshooting/2026-09-11-three-success-rates-and-the-one-nobody-measured.md` §2 의 명령 둘을 그대로 친다.
+  진행 중 (`running` · `queued`) 실행은 분모에서 뺀 값이다.
+- 같은 파일의 `gate` 블록은 게이트가 신호로 죽고 재시도로 지나간 실행 수다 (안건 2ν).
+  수가 늘면 리뷰 채널에 알림이 오고 SLO 절 인사이트에 「N회 중 M」 으로 적힌다.
+  덤프는 `coredumpctl info -1`, 손 셈은 `grep -rl "신호로 죽었다" ~/airflow/logs/dag_id=bullet_in_cycle/*/task_id=gate/ | wc -l` 이다.

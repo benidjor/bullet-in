@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from markupsafe import Markup
 
@@ -97,7 +97,23 @@ def _gate_at(iso: str) -> str:
 
 # --- 타일 ---------------------------------------------------------------------
 
-def _tiles(runs_all, recent, stale_count, span_weeks) -> list[dict]:
+def _completion_tile(completion: dict | None) -> dict:
+    """완주율 = (저널 완주 + Airflow 완주) ÷ (저널 시작 + Airflow 시작) · 감시 타이머가 쓴 파일에서 (스펙 09-18)."""
+    label = "완주율 · 07-20 이후"
+    if not completion:
+        return {"label": label, "value": "—", "sub": "감시 기록 없음", "spark": ""}
+    from bullet_in.airflow_watch import completion as _completion
+    done, started = _completion(completion.get("journal") or {}, completion.get("airflow") or {})
+    when = ""
+    try:
+        when = f" · 감시 {datetime.fromisoformat(completion['computed_at']).astimezone(timezone.utc):%H:%M} UTC"
+    except (KeyError, TypeError, ValueError):
+        pass
+    value = f"{done / started * 100:.1f}%" if started else "—"        # 빈 칸끼리 나누지 않는다
+    return {"label": label, "value": value, "sub": f"{done}/{started} · 진행 중 제외{when}", "spark": ""}
+
+
+def _tiles(runs_all, recent, stale_count, span_weeks, completion: dict | None = None) -> list[dict]:
     if not recent:
         return []
     top = recent[-1]
@@ -115,7 +131,8 @@ def _tiles(runs_all, recent, stale_count, span_weeks) -> list[dict]:
         {"label": f"Dedup Rate · {n}회", "value": f"{_pct(dup, new + dup)}%",
          "sub": "중복 차단 ÷ (신규 + 중복)", "spark": Markup(C.sparkline(rates))},
         {"label": f"Success Rate · {n}회", "value": f"{sr * 100:.1f}%",
-         "sub": f"SLO-2 목표 {SLO2_TARGET * 100:.0f}%", "spark": ""},
+         "sub": f"소스 단위 · SLO-2 목표 {SLO2_TARGET * 100:.0f}%", "spark": ""},
+        _completion_tile(completion),
         {"label": f"Run Duration p50 · {n}회", "value": f"{_pctile(durs, .5):.0f}초",
          "sub": f"fetch {_pctile(fetch, .5):.0f}초" if fetch else "fetch 이력 없음",
          "spark": Markup(C.sparkline(durs))},
@@ -172,7 +189,7 @@ _PILL = {"ok": '<span class="pill ok">✓ 충족</span>', "bad": '<span class="p
          "info": '<span class="pill">참고</span>'}
 
 
-def _slo(rows, gate):
+def _slo(rows, gate, completion: dict | None = None):
     q = ("회차 성공률 · 중복 적재율 · 필수 필드 완전성 · 소스 신선도 · 수집량 이상 · 병렬화 여섯 지표가 각자의 목표치를 지금 지키는지 확인한다. "
          "2 · 5 · 6 은 회차마다 코드가 직접 재고 3 · 4 는 회차 끝 dbt 게이트가 낸 테스트 결과에서 읽으며 1 은 벤치마크로 잰 값이다.")
     body = ('<table class="fresh"><thead><tr><th>#</th><th>지표</th><th>목표</th><th class="num">현재</th>'
@@ -187,6 +204,12 @@ def _slo(rows, gate):
         ins.append((f"미달은 {' · '.join(bad)} 이다.", []))
     ins.append((f"SLO-3 · 4 는 직전 회차 게이트 ({_gate_at(gate.generated_at)}) 의 값이다." if gate
                 else "SLO-3 · 4 는 게이트 결과 파일이 생기면 채워진다.", []))
+    deaths = (completion or {}).get("gate")
+    if deaths and deaths.get("gate_runs"):
+        # 안건 2ν — 재시도 1회가 성공으로 바꾼 급사는 여기 말고는 어디에도 안 보인다.
+        last = f" · 마지막 {deaths['last_at'][5:10]}" if deaths.get("last_at") else ""
+        ins.append((f"게이트가 신호로 죽고 재시도로 지나간 실행은 {deaths['gate_runs']}회 중 "
+                    f"{deaths['signal_deaths']} (2026-09-04 이후{last}) 이다.", []))
     return _section("sec-slo", "SLO", "여섯 지표 · 목표 · 현재", q, body, ins)
 
 
@@ -476,7 +499,7 @@ def _overview(articles_total: int, span_weeks: int, span_days: int):
 
 
 def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int, now: datetime, *,
-                   gate: GateTally | None = None, unmatched=None) -> dict:
+                   gate: GateTally | None = None, unmatched=None, completion: dict | None = None) -> dict:
     """스냅샷 · 게이트 집계를 화면이 그릴 dict 로. 키가 비어도 절은 전부 그린다."""
     runs_all = snapshot.get("runs_all") or []
     recent = runs_all[-RECENT_RUNS:]
@@ -487,7 +510,7 @@ def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int, now: datet
     fresh_sec, stale_count = _freshness(snapshot.get("freshness") or [], sources)
     slo = _slo_rows(recent, stale_count, anomaly_count, gate, articles_total)
     sections = [
-        _slo(slo, gate),
+        _slo(slo, gate, completion),
         _volume(runs_all, today, span_weeks),
         _coverage(runs_all, sources, today, span_weeks),
         _throughput(runs_all, today, span_weeks),
@@ -500,5 +523,5 @@ def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int, now: datet
     ]
     return {"generated_at": f"{now:%Y-%m-%d %H:%M} UTC",
             "overview": _overview(articles_total, span_weeks, span_days),
-            "tiles": _tiles(runs_all, recent, stale_count, span_weeks),
+            "tiles": _tiles(runs_all, recent, stale_count, span_weeks, completion),
             "slo": slo, "sections": sections, "missing_note": MISSING_NOTE}

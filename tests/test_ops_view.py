@@ -73,7 +73,7 @@ def test_절_열이_목업의_id_순서로_나온다():
 
 def test_타일_여섯은_최근_30회에서_만든다():
     tiles = {t["label"]: t for t in _view()["tiles"]}
-    assert len(tiles) == 6
+    assert len(tiles) == 7
     assert tiles["신규 · 최근 회차"]["value"] == "6" and tiles["신규 · 최근 회차"]["sub"] == "09-04 00:00 UTC"
     assert tiles["Dedup Rate · 4회"]["value"] == "86%"          # 132 / (22 + 132) = 85.7
     assert tiles["Success Rate · 4회"]["value"] == "97.5%"      # (1 + 1 + .9 + 1) / 4
@@ -237,3 +237,48 @@ def test_등급이_없는_행은_등급_비율의_분모에서_빠진다():
     assert "기타 · 08/31\n40%" in body                        # 단계 분모 10 (전체)
     assert "08/31\n30% · 식별률" in body                       # 3 / 10
     assert s["insights"][0] == ("등급 4 비중이 가장 높은 주는 08/31 (100%) 다.", [])
+
+
+# ── 완주율 타일 (스펙 2026-09-18 completion-rate-tile §3) ─────────────────────
+
+COMPLETION = {"computed_at": "2026-09-18T08:37:00+00:00",
+              "journal": {"started": 358, "finished": 354, "failed": 4},
+              "airflow": {"started": 118, "success": 118, "failed": 0, "in_progress": 0,
+                          "first_start": "2026-09-04T09:00:01+00:00", "last_end": "2026-09-18T06:03:30+00:00"}}
+
+
+def test_완주율_타일은_저널과_airflow_를_합쳐_센다():
+    tiles = {t["label"]: t for t in build_ops_view(SNAPSHOT, SOURCES, 0, NOW, gate=GATE, completion=COMPLETION)["tiles"]}
+    assert tiles["완주율 · 07-20 이후"]["value"] == "99.2%"                       # (354 + 118) / (358 + 118)
+    assert tiles["완주율 · 07-20 이후"]["sub"] == "472/476 · 진행 중 제외 · 감시 08:37 UTC"
+    labels = list(tiles)
+    assert labels.index("완주율 · 07-20 이후") == labels.index("Success Rate · 4회") + 1
+    assert tiles["Success Rate · 4회"]["sub"] == "소스 단위 · SLO-2 목표 99%"
+
+
+def test_완주율_타일은_감시_기록이_없으면_대시다():
+    tiles = {t["label"]: t for t in _view()["tiles"]}
+    assert tiles["완주율 · 07-20 이후"]["value"] == "—"
+    assert tiles["완주율 · 07-20 이후"]["sub"] == "감시 기록 없음"
+
+
+def test_완주율_타일은_분모가_0_이면_대시다():
+    zero = {"computed_at": "2026-09-18T08:37:00+00:00",
+            "journal": {"started": 0, "finished": 0, "failed": 0},
+            "airflow": {"started": 0, "success": 0, "failed": 0, "in_progress": 2}}
+    tiles = {t["label"]: t for t in build_ops_view(SNAPSHOT, SOURCES, 0, NOW, completion=zero)["tiles"]}
+    assert tiles["완주율 · 07-20 이후"]["value"] == "—"
+    assert tiles["완주율 · 07-20 이후"]["sub"] == "0/0 · 진행 중 제외 · 감시 08:37 UTC"
+
+
+def test_slo_절은_게이트_급사_계수를_한_줄로_적는다():
+    comp = dict(COMPLETION, gate={"gate_runs": 118, "signal_deaths": 5,
+                                  "last_at": "2026-09-17T09:01:50.385438Z", "last_run_id": "scheduled__2026-09-17T09:00:00+00:00"})
+    slo = _flat(build_ops_view(SNAPSHOT, SOURCES, 0, NOW, gate=GATE, completion=comp))[0]
+    texts = [t for t, _ in slo["insights"]]
+    assert any("신호로 죽고 재시도로 지나간 실행은 118회 중 5" in t and "09-17" in t for t in texts)
+
+
+def test_slo_절은_계수가_없으면_그_줄을_안_적는다():
+    slo = _flat(_view())[0]
+    assert not any("재시도로 지나간" in t for t, _ in slo["insights"])

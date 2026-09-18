@@ -14,7 +14,7 @@
 {% endfor %}
 </div>
 {% if view.tiles %}
-<div class="tiles">
+<div class="tiles{% if view.tiles|length == 7 %} seven{% endif %}">
 {% for t in view.tiles %}
   <div class="tile"><div class="tl">{{ t.label }}</div><div class="tv">{{ t.value }}</div><div class="ts">{{ t.sub }}</div>{{ t.spark }}</div>
 {% endfor %}
