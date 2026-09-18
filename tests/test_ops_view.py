@@ -269,3 +269,16 @@ def test_완주율_타일은_분모가_0_이면_대시다():
     tiles = {t["label"]: t for t in build_ops_view(SNAPSHOT, SOURCES, 0, NOW, completion=zero)["tiles"]}
     assert tiles["완주율 · 07-20 이후"]["value"] == "—"
     assert tiles["완주율 · 07-20 이후"]["sub"] == "0/0 · 진행 중 제외 · 감시 08:37 UTC"
+
+
+def test_slo_절은_게이트_급사_계수를_한_줄로_적는다():
+    comp = dict(COMPLETION, gate={"gate_runs": 118, "signal_deaths": 5,
+                                  "last_at": "2026-09-17T09:01:50.385438Z", "last_run_id": "scheduled__2026-09-17T09:00:00+00:00"})
+    slo = _flat(build_ops_view(SNAPSHOT, SOURCES, 0, NOW, gate=GATE, completion=comp))[0]
+    texts = [t for t, _ in slo["insights"]]
+    assert any("신호로 죽고 재시도로 지나간 실행은 118회 중 5" in t and "09-17" in t for t in texts)
+
+
+def test_slo_절은_계수가_없으면_그_줄을_안_적는다():
+    slo = _flat(_view())[0]
+    assert not any("재시도로 지나간" in t for t, _ in slo["insights"])

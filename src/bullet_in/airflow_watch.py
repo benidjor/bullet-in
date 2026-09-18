@@ -24,6 +24,8 @@ DAG_ID = "bullet_in_cycle"
 STATE_PATH = Path("state/airflow_watch.json")
 COMPLETION_PATH = Path("state/completion.json")
 UNIT = "bullet-in.service"
+AIRFLOW_LOG_ROOT = Path(os.environ.get("AIRFLOW_HOME", "/home/ubuntu/airflow")) / "logs"
+SIGNAL_DEATH_MARK = "신호로 죽었다"          # dbt_gate.run_gate 의 경고 문구
 
 
 def evaluate(heartbeat_ok: bool, last_success_age_hours: float | None, *,
@@ -90,6 +92,37 @@ def completion(journal: dict, airflow: dict) -> tuple[int, int]:
             journal.get("started", 0) + airflow.get("started", 0))
 
 
+def gate_signal_deaths(log_root: Path) -> dict:
+    """gate 태스크 로그에서 「신호로 죽었다」 가 있는 실행 수 (안건 2ν · 재시도가 성공으로 바꾼 급사).
+
+    분모는 gate 태스크 디렉터리 수 (실행 수) 다 — 시도가 둘이어도 실행은 하나로 센다.
+    """
+    runs = sorted(log_root.glob(f"dag_id={DAG_ID}/run_id=*/task_id=gate"))
+    deaths, last_at, last_run = 0, None, None
+    for d in runs:
+        hit = None
+        for f in sorted(d.glob("attempt=*.log")):
+            for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
+                if SIGNAL_DEATH_MARK in line:
+                    try:
+                        hit = json.loads(line).get("timestamp") or hit
+                    except ValueError:
+                        hit = hit or ""
+        if hit is not None:
+            deaths += 1
+            last_run = d.parent.name.removeprefix("run_id=")
+            if hit and (last_at is None or hit > last_at):
+                last_at = hit
+    return {"gate_runs": len(runs), "signal_deaths": deaths, "last_at": last_at, "last_run_id": last_run}
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
 def _journal() -> subprocess.CompletedProcess:
     # journalctl 이 없는 기계 (맥 · CI) 나 시간 초과는 rc ≠ 0 로 돌려 write_completion 이 경고를 남기게 한다.
     cmd = ["journalctl", "-u", UNIT, "--no-pager", "-q", "-o", "short-iso"]
@@ -100,19 +133,16 @@ def _journal() -> subprocess.CompletedProcess:
 
 
 def write_completion(list_runs_json: str, journal: subprocess.CompletedProcess, now: datetime,
-                     path: Path = COMPLETION_PATH) -> dict:
+                     path: Path = COMPLETION_PATH, log_root: Path | None = None) -> dict:
     """저널이 안 읽히면 직전 파일의 저널 블록을 쓴다 — 09-04 이후 그 값은 상수라 낡지 않는다."""
-    previous = {}
-    try:
-        previous = json.loads(path.read_text())
-    except (OSError, ValueError):
-        pass
+    previous = _read_json(path)
     if journal.returncode == 0:
         counts = journal_counts(journal.stdout)
     else:
         counts = previous.get("journal") or {"started": 0, "finished": 0, "failed": 0}
         log.warning("journalctl 실패 (rc=%d) — 이전 저널 값을 쓴다: %s", journal.returncode, journal.stderr[:300])
-    data = {"computed_at": now.isoformat(), "journal": counts, "airflow": airflow_counts(list_runs_json)}
+    data = {"computed_at": now.isoformat(), "journal": counts, "airflow": airflow_counts(list_runs_json),
+            "gate": gate_signal_deaths(log_root if log_root is not None else AIRFLOW_LOG_ROOT)}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=1))
     return data
@@ -135,7 +165,15 @@ def main(argv: list[str] | None = None) -> int:
         log.warning("%s 실패 (rc=%d) — %s", "dags list-runs", runs.returncode, runs.stderr[:300])
     age = latest_success_age(runs.stdout, now) if runs.returncode == 0 else None
     if runs.returncode == 0:
-        write_completion(runs.stdout, _journal(), now)
+        before = (_read_json(COMPLETION_PATH).get("gate") or {}).get("signal_deaths", 0)
+        gate = write_completion(runs.stdout, _journal(), now)["gate"]
+        if gate["signal_deaths"] > before:
+            # 재시도가 성공으로 바꾼 급사는 실패로 안 드러난다 — 흡수 장치에는 계수기를 붙인다 (트러블슈팅 2026-09-18).
+            notify.send_alert(f"⚠️ dbt 게이트가 신호로 죽고 재시도로 지나갔다 ({gate['signal_deaths']}번째)",
+                              f"- 실행 `{gate['last_run_id']}` · {gate['last_at']}\n"
+                              f"- 09-04 이후 게이트 {gate['gate_runs']}회 중 {gate['signal_deaths']}회 · 배포는 정상\n"
+                              "- `coredumpctl info -1` 로 덤프를 본다 · 안건 2ν (`mysql_scanner` 확장)",
+                              color=notify.COLOR_ANOMALY, channel=notify.CHANNEL_REVIEW)
     problems = evaluate(hb.returncode == 0, age)
     state = {}
     try:

@@ -4,8 +4,8 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 
 from bullet_in import airflow_watch, notify
-from bullet_in.airflow_watch import (airflow_counts, completion, evaluate, journal_counts,
-                                     latest_success_age, should_alert)
+from bullet_in.airflow_watch import (airflow_counts, completion, evaluate, gate_signal_deaths,
+                                     journal_counts, latest_success_age, should_alert)
 
 NOW = datetime(2026, 9, 6, 6, 0, tzinfo=timezone.utc)
 
@@ -205,3 +205,74 @@ def test_main_leaves_the_completion_file_alone_when_list_runs_fails(monkeypatch,
 
     assert airflow_watch.main() == 0
     assert (state / "completion.json").read_text() == before
+
+
+# ── 게이트 급사 계수기 (안건 2ν · 트러블슈팅 2026-09-18 재시도가 가린 코어 덤프) ────────
+
+DEATH_LINE = ('{"timestamp":"2026-09-17T09:01:50.385438Z","level":"info",'
+              '"event":"WARNING dbt 가 신호로 죽었다 (종료코드 -11 · 시도 1/2)","task_id":"gate",'
+              '"run_id":"scheduled__2026-09-17T09:00:00+00:00"}\n')
+
+
+def _gate_logs(root, runs):
+    """runs = {run_id: [attempt 텍스트, ...]} 로 Airflow 로그 트리를 흉내 낸다."""
+    for rid, attempts in runs.items():
+        d = root / "dag_id=bullet_in_cycle" / f"run_id={rid}" / "task_id=gate"
+        d.mkdir(parents=True)
+        for i, text in enumerate(attempts, 1):
+            (d / f"attempt={i}.log").write_text(text)
+    return root
+
+
+def test_gate_signal_deaths_counts_runs_whose_gate_log_has_the_warning(tmp_path):
+    root = _gate_logs(tmp_path, {
+        "scheduled__2026-09-16T09:00:00+00:00": ['{"event":"dbt 게이트 통과"}\n'],
+        "scheduled__2026-09-17T09:00:00+00:00": [DEATH_LINE + '{"event":"dbt 게이트 통과"}\n'],
+        "scheduled__2026-09-17T12:00:00+00:00": ['{"event":"dbt 게이트 통과"}\n', DEATH_LINE],   # 시도 둘 · 한 실행
+    })
+    assert gate_signal_deaths(root) == {
+        "gate_runs": 3, "signal_deaths": 2,
+        "last_at": "2026-09-17T09:01:50.385438Z", "last_run_id": "scheduled__2026-09-17T12:00:00+00:00"}
+
+
+def test_gate_signal_deaths_of_a_missing_log_root(tmp_path):
+    assert gate_signal_deaths(tmp_path / "nowhere") == {
+        "gate_runs": 0, "signal_deaths": 0, "last_at": None, "last_run_id": None}
+
+
+def test_main_notifies_the_review_channel_when_a_signal_death_is_new(monkeypatch, tmp_path):
+    state = tmp_path / "state"; state.mkdir()
+    (state / "completion.json").write_text(json.dumps(
+        {"computed_at": "old", "journal": {}, "airflow": {}, "gate": {"gate_runs": 2, "signal_deaths": 1}}))
+    root = _gate_logs(tmp_path / "logs", {
+        "r1": [DEATH_LINE], "r2": [DEATH_LINE], "r3": ['{"event":"ok"}\n']})
+    monkeypatch.setattr(airflow_watch, "_cli", _healthy_cli)
+    monkeypatch.setattr(airflow_watch, "_journal", lambda: _cp(0, stdout=JOURNAL))
+    monkeypatch.setattr(airflow_watch, "AIRFLOW_LOG_ROOT", root)
+    sent = []
+    monkeypatch.setattr(notify, "send_alert",
+                        lambda title, description, **kw: sent.append({"title": title, "description": description, **kw}))
+    monkeypatch.chdir(tmp_path)
+
+    assert airflow_watch.main() == 0
+
+    data = json.loads((state / "completion.json").read_text())
+    assert data["gate"]["signal_deaths"] == 2 and data["gate"]["gate_runs"] == 3
+    assert len(sent) == 1 and sent[0]["channel"] == notify.CHANNEL_REVIEW
+    assert "2번째" in sent[0]["title"] and "coredumpctl" in sent[0]["description"]
+
+
+def test_main_stays_quiet_when_the_signal_death_count_is_unchanged(monkeypatch, tmp_path):
+    state = tmp_path / "state"; state.mkdir()
+    (state / "completion.json").write_text(json.dumps(
+        {"computed_at": "old", "journal": {}, "airflow": {}, "gate": {"gate_runs": 1, "signal_deaths": 1}}))
+    root = _gate_logs(tmp_path / "logs", {"r1": [DEATH_LINE], "r2": ['{"event":"ok"}\n']})
+    monkeypatch.setattr(airflow_watch, "_cli", _healthy_cli)
+    monkeypatch.setattr(airflow_watch, "_journal", lambda: _cp(0, stdout=JOURNAL))
+    monkeypatch.setattr(airflow_watch, "AIRFLOW_LOG_ROOT", root)
+    sent = []
+    monkeypatch.setattr(notify, "send_alert", lambda *a, **k: sent.append(1))
+    monkeypatch.chdir(tmp_path)
+
+    assert airflow_watch.main() == 0
+    assert sent == []

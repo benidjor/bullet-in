@@ -189,7 +189,7 @@ _PILL = {"ok": '<span class="pill ok">✓ 충족</span>', "bad": '<span class="p
          "info": '<span class="pill">참고</span>'}
 
 
-def _slo(rows, gate):
+def _slo(rows, gate, completion: dict | None = None):
     q = ("회차 성공률 · 중복 적재율 · 필수 필드 완전성 · 소스 신선도 · 수집량 이상 · 병렬화 여섯 지표가 각자의 목표치를 지금 지키는지 확인한다. "
          "2 · 5 · 6 은 회차마다 코드가 직접 재고 3 · 4 는 회차 끝 dbt 게이트가 낸 테스트 결과에서 읽으며 1 은 벤치마크로 잰 값이다.")
     body = ('<table class="fresh"><thead><tr><th>#</th><th>지표</th><th>목표</th><th class="num">현재</th>'
@@ -204,6 +204,12 @@ def _slo(rows, gate):
         ins.append((f"미달은 {' · '.join(bad)} 이다.", []))
     ins.append((f"SLO-3 · 4 는 직전 회차 게이트 ({_gate_at(gate.generated_at)}) 의 값이다." if gate
                 else "SLO-3 · 4 는 게이트 결과 파일이 생기면 채워진다.", []))
+    deaths = (completion or {}).get("gate")
+    if deaths and deaths.get("gate_runs"):
+        # 안건 2ν — 재시도 1회가 성공으로 바꾼 급사는 여기 말고는 어디에도 안 보인다.
+        last = f" · 마지막 {deaths['last_at'][5:10]}" if deaths.get("last_at") else ""
+        ins.append((f"게이트가 신호로 죽고 재시도로 지나간 실행은 {deaths['gate_runs']}회 중 "
+                    f"{deaths['signal_deaths']} (2026-09-04 이후{last}) 이다.", []))
     return _section("sec-slo", "SLO", "여섯 지표 · 목표 · 현재", q, body, ins)
 
 
@@ -504,7 +510,7 @@ def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int, now: datet
     fresh_sec, stale_count = _freshness(snapshot.get("freshness") or [], sources)
     slo = _slo_rows(recent, stale_count, anomaly_count, gate, articles_total)
     sections = [
-        _slo(slo, gate),
+        _slo(slo, gate, completion),
         _volume(runs_all, today, span_weeks),
         _coverage(runs_all, sources, today, span_weeks),
         _throughput(runs_all, today, span_weeks),

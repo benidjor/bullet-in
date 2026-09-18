@@ -40,6 +40,12 @@
 - [ ] README 는 이 PR 에서 손대지 않는다 (PR #485 가 같은 문단을 고치는 중이라 충돌을 피한다 · 머지 뒤 별도 한 줄).
 - [ ] 런북 `docs/runbook/2026-09-04-running-the-cycle-under-airflow.md` 에 「완주율 타일이 「—」 이면」 한 절 (감시 타이머 · `state/completion.json`).
 
+## Task 5 · 게이트 급사 계수기 (스펙 §4)
+
+- [ ] `gate_signal_deaths(log_root)` · `write_completion(..., log_root)` 의 `gate` 블록 · `main` 의 리뷰 채널 알림 (수가 늘 때만).
+- [ ] `ops_view._slo(rows, gate, completion)` 인사이트 한 줄.
+- [ ] 테스트: 로그 트리 · 없는 경로 · 늘면 알림 · 같으면 침묵 · SLO 절 한 줄 · 계수 없으면 줄 없음.
+
 ## 검증
 
 - [ ] `uv run --project . --extra dev pytest -q` 전체 통과 · 수집 수 기준선 대비 증가분 기록.

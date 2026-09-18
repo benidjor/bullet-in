@@ -237,3 +237,6 @@ sudo systemctl enable --now bullet-in.timer bullet-in-warehouse.timer
   `journalctl` 이 실패하면 감시가 직전 파일의 값을 그대로 쓰고 경고를 남긴다.
 - 손 셈으로 대조하려면 트러블슈팅 `docs/troubleshooting/2026-09-11-three-success-rates-and-the-one-nobody-measured.md` §2 의 명령 둘을 그대로 친다.
   진행 중 (`running` · `queued`) 실행은 분모에서 뺀 값이다.
+- 같은 파일의 `gate` 블록은 게이트가 신호로 죽고 재시도로 지나간 실행 수다 (안건 2ν).
+  수가 늘면 리뷰 채널에 알림이 오고 SLO 절 인사이트에 「N회 중 M」 으로 적힌다.
+  덤프는 `coredumpctl info -1`, 손 셈은 `grep -rl "신호로 죽었다" ~/airflow/logs/dag_id=bullet_in_cycle/*/task_id=gate/ | wc -l` 이다.
