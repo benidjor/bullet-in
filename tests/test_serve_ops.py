@@ -71,3 +71,20 @@ def test_write_ops_는_게이트_파일이_없어도_그린다(tmp_path):
 def test_빈_스냅샷도_페이지가_나온다():
     html = _html(EMPTY)
     assert html.count('class="sec"') == 10 and "회차 이력이 아직 없다" in html
+
+
+def test_write_ops_는_완주율_파일을_읽어_타일을_그린다(tmp_path):
+    p = tmp_path / "completion.json"
+    p.write_text(json.dumps({"computed_at": "2026-09-18T08:37:00+00:00",
+                             "journal": {"started": 358, "finished": 354, "failed": 4},
+                             "airflow": {"started": 118, "success": 118, "failed": 0, "in_progress": 0}}))
+    write_ops(SNAPSHOT, SOURCES, tmp_path, anomaly_count=0, now=NOW, completion_path=p)
+    html = (tmp_path / "ops.html").read_text()
+    assert "99.2%" in html and "472/476" in html
+    assert 'class="tiles seven"' in html
+
+
+def test_write_ops_는_완주율_파일이_없어도_그린다(tmp_path):
+    write_ops(SNAPSHOT, SOURCES, tmp_path, anomaly_count=0, now=NOW, completion_path=tmp_path / "missing.json")
+    html = (tmp_path / "ops.html").read_text()
+    assert "감시 기록 없음" in html

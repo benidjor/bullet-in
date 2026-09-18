@@ -2047,17 +2047,28 @@ def write_behavior(metrics_path: str | Path, out_dir: str | Path, *,
 def write_ops(snapshot: dict, sources: dict, out_dir: str | Path,
               anomaly_count: int, now: datetime,
               unmatched: list[dict] | None = None,
-              gate_path: str | Path | None = None) -> None:
+              gate_path: str | Path | None = None,
+              completion_path: str | Path | None = None) -> None:
     """수집 현황 site/ops.html 생성. 실패 격리는 호출부 (run.py) 책임.
 
     gate_path 는 직전 회차 게이트의 `dbt/target/run_results.json` 이다 — 회차의 gate
     태스크가 publish 뒤에 돌아 이번 회차 것은 아직 없다 (스펙 2026-09-05 §2). 없으면
     SLO-3 · 4 가 「게이트 결과 없음」 으로 그려진다.
+    completion_path 는 매시 감시 타이머가 쓰는 `state/completion.json` 이다 (완주율 타일).
+    없거나 깨져 있으면 타일은 「감시 기록 없음」 이다.
     """
+    import json
     from bullet_in.dbt_gate import gate_tally
     from bullet_in.serve.ops_view import build_ops_view
     gate = gate_tally(Path(gate_path)) if gate_path else None
-    view = build_ops_view(snapshot, sources, anomaly_count, now, gate=gate, unmatched=unmatched)
+    completion = None
+    if completion_path:
+        try:
+            completion = json.loads(Path(completion_path).read_text())
+        except (OSError, ValueError):
+            completion = None
+    view = build_ops_view(snapshot, sources, anomaly_count, now, gate=gate, unmatched=unmatched,
+                          completion=completion)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "ops.html").write_text(render_ops(view), encoding="utf-8")

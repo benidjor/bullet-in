@@ -40,6 +40,7 @@ h1{font-family:var(--serif);font-weight:600;font-size:22px;margin:0;letter-spaci
 .toc li a:hover,.toc li a:focus-visible{color:var(--ink);border-color:var(--hair)}
 .toc li a.cur{color:var(--ink);background:var(--sunk);border-color:var(--hair)}
 .tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:0 0 8px}
+.tiles.seven{grid-template-columns:repeat(7,1fr)}
 .tile{border:1px solid var(--hair);border-radius:8px;padding:11px 12px 9px;background:var(--paper);display:grid;gap:2px;align-content:start}
 .tl{font-size:11px;letter-spacing:.02em;color:var(--mut)}
 .tv{font-size:26px;font-weight:600;line-height:1.1;letter-spacing:-.02em}
@@ -114,7 +115,7 @@ figcaption{font-size:12.5px;color:var(--mut);margin-bottom:4px}
 #tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--paper);padding:6px 9px;border-radius:6px;font-size:12px;line-height:1.4;white-space:pre;opacity:0;transition:opacity .08s;z-index:9;max-width:340px}
 #tip b{font-size:13px}
 [hidden]{display:none!important}
-@media (max-width:760px){.tiles{grid-template-columns:repeat(2,1fr)}.two,.two-sec{grid-template-columns:1fr}}
+@media (max-width:760px){.tiles,.tiles.seven{grid-template-columns:repeat(2,1fr)}.two,.two-sec{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){#tip{transition:none}}
 {% endraw %}
 </style>
