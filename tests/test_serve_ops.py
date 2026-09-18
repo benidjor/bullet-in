@@ -70,7 +70,7 @@ def test_write_ops_는_게이트_파일이_없어도_그린다(tmp_path):
 
 def test_빈_스냅샷도_페이지가_나온다():
     html = _html(EMPTY)
-    assert html.count('class="sec"') == 10 and "회차 이력이 아직 없다" in html
+    assert html.count('class="sec"') == 10 and "실행 이력이 아직 없다" in html
 
 
 def test_write_ops_는_완주율_파일을_읽어_타일을_그린다(tmp_path):

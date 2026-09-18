@@ -20,7 +20,7 @@
 {% endfor %}
 </div>
 {% else %}
-<p class="missing">회차 이력이 아직 없다.</p>
+<p class="missing">실행 이력이 아직 없다.</p>
 {% endif %}
 {% for item in view.sections %}
 {% if item.pair %}<div class="two-sec">{% for s in item.pair %}{{ dash.section(s) }}{% endfor %}</div>

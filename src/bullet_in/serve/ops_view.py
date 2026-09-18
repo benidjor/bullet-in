@@ -26,7 +26,7 @@ SLO2_TARGET = 0.99
 SLO4_TARGET = 0.99
 # SLO-1 은 회차마다 안 재므로 런북 값을 고정으로 적는다 (README §4 · 런북 2026-07-14-slo1-benchmark.md).
 SLO1_VALUE = "56.5%↓"
-SLO1_HOW = "벤치마크 3회 중앙값 · 2026-07-15 · 회차마다 안 잰다"
+SLO1_HOW = "벤치마크 3회 중앙값 · 2026-07-15 · 실행마다 안 잰다"
 STAGE_GROUPS = (("루머", ("rumour",)), ("관심", ("interest",)), ("협상", ("negotiating",)),
                 ("합의 · 메디컬", ("agreed", "personal_terms", "medical")),
                 ("공식 · 완료", ("official", "done")), ("무산", ("collapsed",)),
@@ -125,7 +125,7 @@ def _tiles(runs_all, recent, stale_count, span_weeks, completion: dict | None = 
     sr = sum(r["success_rate"] for r in recent) / n
     errs = sum(1 for r in runs_all if r["error_count"] > 0)
     return [
-        {"label": "신규 · 최근 회차", "value": C.fmt(top["new_count"]),
+        {"label": "신규 · 최근 실행", "value": C.fmt(top["new_count"]),
          "sub": f"{top['started_at']:%m-%d %H:%M} UTC",
          "spark": Markup(C.sparkline([r["new_count"] for r in recent]))},
         {"label": f"Dedup Rate · {n}회", "value": f"{_pct(dup, new + dup)}%",
@@ -139,7 +139,7 @@ def _tiles(runs_all, recent, stale_count, span_weeks, completion: dict | None = 
         {"label": "Stale Sources", "value": "—" if stale_count is None else C.fmt(stale_count),
          "sub": "임계 초과 소스 (SLO-5)", "spark": ""},
         {"label": f"Runs · {span_weeks}주", "value": C.fmt(len(runs_all)),
-         "sub": f"에러 회차 {C.fmt(errs)} · 기대 {EXPECTED_RUNS_PER_DAY}/일", "spark": ""},
+         "sub": f"에러 실행 {C.fmt(errs)} · 기대 {EXPECTED_RUNS_PER_DAY}/일", "spark": ""},
     ]
 
 
@@ -152,10 +152,10 @@ def _slo_rows(recent, stale_count, anomaly_count, gate: GateTally | None, articl
     rows = [row(1, "병렬화 수집 시간 단축", "순차 대비 ≥ 55%↓", SLO1_VALUE, SLO1_HOW, "ok")]
     if recent:
         sr = sum(r["success_rate"] for r in recent) / len(recent)
-        rows.append(row(2, "회차 성공률", f"≥ {SLO2_TARGET * 100:.0f}%", f"{sr * 100:.1f}%",
+        rows.append(row(2, "실행 성공률", f"≥ {SLO2_TARGET * 100:.0f}%", f"{sr * 100:.1f}%",
                         f"최근 {len(recent)}회 평균 success_rate", "ok" if sr >= SLO2_TARGET else "bad"))
     else:
-        rows.append(row(2, "회차 성공률", f"≥ {SLO2_TARGET * 100:.0f}%", "—", "회차 이력 없음", "info"))
+        rows.append(row(2, "실행 성공률", f"≥ {SLO2_TARGET * 100:.0f}%", "—", "실행 이력 없음", "info"))
     total = articles_total or 1
     if gate is None:
         rows.append(row(3, "중복 적재율", "0%", NO_GATE, "dbt unique 테스트", "info"))
@@ -180,7 +180,7 @@ def _slo_rows(recent, stale_count, anomaly_count, gate: GateTally | None, articl
                     "source_freshness 워터마크 · 임계 초과 소스 수",
                     "info" if stale_count is None else ("ok" if not stale_count else "bad")))
     rows.append(row(6, "수집량 이상", "이상 소스 0", C.fmt(anomaly_count),
-                    "직전 회차들 대비 ±2σ 드롭 · 스파이크 (quality.volume_anomalies)",
+                    "직전 실행들 대비 ±2σ 드롭 · 스파이크 (quality.volume_anomalies)",
                     "ok" if anomaly_count == 0 else "bad"))
     return rows
 
@@ -190,8 +190,8 @@ _PILL = {"ok": '<span class="pill ok">✓ 충족</span>', "bad": '<span class="p
 
 
 def _slo(rows, gate, completion: dict | None = None):
-    q = ("회차 성공률 · 중복 적재율 · 필수 필드 완전성 · 소스 신선도 · 수집량 이상 · 병렬화 여섯 지표가 각자의 목표치를 지금 지키는지 확인한다. "
-         "2 · 5 · 6 은 회차마다 코드가 직접 재고 3 · 4 는 회차 끝 dbt 게이트가 낸 테스트 결과에서 읽으며 1 은 벤치마크로 잰 값이다.")
+    q = ("실행 성공률 · 중복 적재율 · 필수 필드 완전성 · 소스 신선도 · 수집량 이상 · 병렬화 여섯 지표가 각자의 목표치를 지금 지키는지 확인한다. "
+         "2 · 5 · 6 은 실행마다 코드가 직접 재고 3 · 4 는 실행 끝 dbt 게이트가 낸 테스트 결과에서 읽으며 1 은 벤치마크로 잰 값이다.")
     body = ('<table class="fresh"><thead><tr><th>#</th><th>지표</th><th>목표</th><th class="num">현재</th>'
             '<th>측정</th><th>상태</th></tr></thead><tbody>'
             + "".join(f"<tr><td>{r['slo_id']}</td><td>{C.E(r['name'])}</td><td>{C.E(r['target'])}</td>"
@@ -202,7 +202,7 @@ def _slo(rows, gate, completion: dict | None = None):
     bad = [r["slo_id"] for r in rows if r["status"] == "bad"]
     if bad:
         ins.append((f"미달은 {' · '.join(bad)} 이다.", []))
-    ins.append((f"SLO-3 · 4 는 직전 회차 게이트 ({_gate_at(gate.generated_at)}) 의 값이다." if gate
+    ins.append((f"SLO-3 · 4 는 직전 실행의 게이트 ({_gate_at(gate.generated_at)}) 의 값이다." if gate
                 else "SLO-3 · 4 는 게이트 결과 파일이 생기면 채워진다.", []))
     deaths = (completion or {}).get("gate")
     if deaths and deaths.get("gate_runs"):
@@ -216,19 +216,19 @@ def _slo(rows, gate, completion: dict | None = None):
 # --- 절 -----------------------------------------------------------------------
 
 def _volume(runs_all, today: date, span_weeks: int):
-    title, sub = "Ingestion Volume", "일별 신규 기사 · 회차 수"
+    title, sub = "Ingestion Volume", "일별 신규 기사 · 실행 수"
     q = (f"{span_weeks}주 동안 하루에 몇 건씩 새 기사가 들어왔는지 캘린더로 본다. "
-         f"회차가 하루 {EXPECTED_RUNS_PER_DAY}회를 채웠는지 기준선과 함께 확인한다.")
+         f"실행이 하루 {EXPECTED_RUNS_PER_DAY}회를 채웠는지 기준선과 함께 확인한다.")
     days = _days(OPS_EPOCH, today)
     by = _by_day(runs_all)
     new = {d.isoformat(): sum(r["new_count"] for r in by.get(d, [])) for d in days}
     counts = [len(by.get(d, [])) for d in days]
     events = [(days.index(date.fromisoformat(d)), lab) for d, lab in EVENTS if date.fromisoformat(d) in days]
     body = (_two(_fig("일별 신규 기사 (캘린더)", C.calendar(new, OPS_EPOCH, today, w=520)),
-                 _fig(f"일별 회차 수 (기대 {EXPECTED_RUNS_PER_DAY})",
-                      C.line_chart([_wl(d) for d in days], [("회차", counts)], unit="회",
+                 _fig(f"일별 실행 수 (기대 {EXPECTED_RUNS_PER_DAY})",
+                      C.line_chart([_wl(d) for d in days], [("실행", counts)], unit="회",
                                    ref=EXPECTED_RUNS_PER_DAY, events=events, w=520, h=190)))
-            + C.table(["날짜", "신규", "중복", "회차", "에러 회차", "p50 소요"],
+            + C.table(["날짜", "신규", "중복", "실행", "에러 실행", "p50 소요"],
                       [(d.isoformat(), new[d.isoformat()], sum(r["dup_count"] for r in by[d]), len(by[d]),
                         sum(1 for r in by[d] if r["error_count"] > 0),
                         f"{_pctile([r['duration_sec'] for r in by[d]], .5):.0f}")
@@ -238,14 +238,14 @@ def _volume(runs_all, today: date, span_weeks: int):
         top = max(new, key=new.get)
         ins.append((f"하루 최고는 {top[5:]} 의 {C.fmt(new[top])}건이다.", []))
         short = sum(1 for d in days if d in by and d != today and len(by[d]) < EXPECTED_RUNS_PER_DAY)
-        ins.append((f"회차가 있던 날 가운데 {EXPECTED_RUNS_PER_DAY}회에 못 미친 날은 {short}일이다 (오늘 제외).", []))
+        ins.append((f"실행이 있던 날 가운데 {EXPECTED_RUNS_PER_DAY}회에 못 미친 날은 {short}일이다 (오늘 제외).", []))
     return _section("sec-ingestion-volume", title, sub, q, body, ins)
 
 
 def _coverage(runs_all, sources, today: date, span_weeks: int):
     title, sub = "Source Coverage", "소스 × 주 신규 기사"
     q = ("소스마다 주 단위로 새 기사 수를 보고 어느 소스가 언제 살아 있었는지 확인한다. "
-         "회차 기록에 남은 소스별 건수라 재수집으로 날짜가 옮겨진 것과는 상관이 없다. "
+         "실행 기록에 남은 소스별 건수라 재수집으로 날짜가 옮겨진 것과는 상관이 없다. "
          "빈 칸이 이어지면 셀렉터가 깨졌거나 차단당한 구간이다.")
     weeks = _weeks(OPS_EPOCH, today)
     cells = defaultdict(int)
@@ -296,7 +296,7 @@ def _throughput(runs_all, today: date, span_weeks: int):
 
 def _duration(runs_all, today: date):
     title, sub = "Run Duration", "p10 에서 p90 밴드 · p50 선 · 주별 구성"
-    q = "회차에 걸린 시간이 어떻게 분포하는지 보고 그 시간이 수집과 번역 · 게이트 · 배포로 어떻게 나뉘는지 확인한다."
+    q = "실행에 걸린 시간이 어떻게 분포하는지 보고 그 시간이 수집과 번역 · 게이트 · 배포로 어떻게 나뉘는지 확인한다."
     days = _days(OPS_EPOCH, today)
     by = _by_day(runs_all)
 
@@ -310,7 +310,7 @@ def _duration(runs_all, today: date):
     for i, d in enumerate(run_days):
         k = sum(1 for r in by[d] if r["error_count"] > 0)
         if k:
-            fails.append((i, f"에러 회차 {k}회"))
+            fails.append((i, f"에러 실행 {k}회"))
     events = [(run_days.index(date.fromisoformat(d)), lab) for d, lab in EVENTS
               if date.fromisoformat(d) in run_days]
     weeks = _weeks(OPS_EPOCH, today)
@@ -322,10 +322,10 @@ def _duration(runs_all, today: date):
 
     fetch = [avg(w, lambda r: r.get("fetch_duration_sec") or 0) for w in weeks]        # NULL 이력은 0 (옛 13회)
     rest = [avg(w, lambda r: r["duration_sec"] - (r.get("fetch_duration_sec") or 0)) for w in weeks]
-    body = _two(_fig("하루 p50 (초) · 밴드 p10 에서 p90 · ✕ 에러 회차",
+    body = _two(_fig("하루 p50 (초) · 밴드 p10 에서 p90 · ✕ 에러 실행",
                      C.line_chart([_wl(d) for d in run_days], [("p50", p50)], unit="초", band=band, fails=fails,
                                   events=events, w=520, h=190)),
-                _fig("주별 회차당 평균 소요 구성 (초)",
+                _fig("주별 실행당 평균 소요 구성 (초)",
                      C.stacked_columns([_wl(w) for w in weeks],
                                        [("수집 (fetch)", fetch, "s1"), ("번역 · 게이트 · 배포", rest, "s2")], unit="초")
                      + C.legend([("수집 (fetch)", "s1"), ("번역 · 게이트 · 배포", "s2")])))
@@ -335,14 +335,14 @@ def _duration(runs_all, today: date):
         fv = [r["fetch_duration_sec"] for r in recent if r.get("fetch_duration_sec") is not None]
         ins.append((f"지난 {len(recent)}회 p50 은 {_pctile([r['duration_sec'] for r in recent], .5):.0f}초이고"
                     + (f" fetch 가 {_pctile(fv, .5):.0f}초다." if fv else " fetch 이력은 없다."), []))
-        ins.append((f"1,000초를 넘긴 회차는 {C.fmt(sum(1 for r in runs_all if r['duration_sec'] > 1000))}회다.", []))
+        ins.append((f"1,000초를 넘긴 실행은 {C.fmt(sum(1 for r in runs_all if r['duration_sec'] > 1000))}회다.", []))
     return _section("sec-run-duration", title, sub, q, body, ins)
 
 
 def _latency(latency, sources):
     title, sub = "Ingestion Latency", "발행 → 수집 지연 · 소스별 p50 · p95"
     q = ("기사가 발행된 뒤 우리가 받기까지 걸린 시간을 소스마다 본다. "
-         "3시간 회차의 이론 하한은 1.5시간이다. "
+         "3시간 실행 주기의 이론 하한은 1.5시간이다. "
          "07-14 이후에 수집한 것만 세고 30일 넘는 것은 뺐다.")
     by = defaultdict(list)
     for sid, h in latency:
@@ -355,7 +355,7 @@ def _latency(latency, sources):
     if rows:
         ins.append((f"p50 이 가장 짧은 소스는 {rows[0][0]} {rows[0][1]:.1f}시간이고 "
                     f"가장 긴 소스는 {rows[-1][0]} {rows[-1][1]:.1f}시간이다.", []))
-        ins.append((f"회차 간격 (3시간) 안에 드는 소스는 {sum(1 for r in rows if r[1] <= 3)}곳이다.", []))
+        ins.append((f"실행 간격 (3시간) 안에 드는 소스는 {sum(1 for r in rows if r[1] <= 3)}곳이다.", []))
     return _section("sec-ingestion-latency", title, sub, q, body, ins)
 
 
@@ -487,13 +487,13 @@ def _review(high, unmatched):
 
 def _overview(articles_total: int, span_weeks: int, span_days: int):
     return [
-        ("데이터 원천", "MariaDB (silver) 의 표 셋과 회차 끝 dbt 게이트의 테스트 결과.",
-         [("pipeline_runs", "회차마다 한 행 · 신규 · 중복 · 에러 · 소요 시간 · 소스별 건수."),
-          ("source_freshness", "회차 × 소스의 마지막 수집 시각과 임계."),
+        ("데이터 원천", "MariaDB (silver) 의 표 셋과 실행 끝 dbt 게이트의 테스트 결과.",
+         [("pipeline_runs", "실행마다 한 행 · 신규 · 중복 · 에러 · 소요 시간 · 소스별 건수."),
+          ("source_freshness", "실행 × 소스의 마지막 수집 시각과 임계."),
           ("articles", f"기사 {C.fmt(articles_total)}건 · 등급 · 이적 단계 · 발행 시각."),
           ("dbt 게이트", "unique · not_null 테스트 결과 (SLO-3 · 4).")]),
         ("기간", f"{OPS_EPOCH.isoformat()} 첫 라이브 실행부터 {span_weeks}주 ({span_days}일).", []),
-        ("갱신", "3시간마다 회차가 끝날 때 다시 그린다.", []),
+        ("갱신", "3시간마다 실행이 끝날 때 다시 그린다.", []),
         ("시각", "UTC · KST 는 +9시간.", []),
     ]
 
