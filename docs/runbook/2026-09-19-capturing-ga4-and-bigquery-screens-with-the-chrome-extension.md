@@ -1,6 +1,6 @@
 # 구글 로그인이 필요한 화면 (GA4 · BigQuery) 을 Chrome 확장으로 찍기
 
-README 와 소개 자료에 GA4 · BigQuery 캡처를 넣은 회차 (2026-09-18) 에서 쓴 절차다.
+README 에 GA4 · BigQuery 캡처를 넣은 회차 (2026-09-18) 에서 쓴 절차다.
 헤드리스 Playwright 는 구글 로그인을 못 지나므로 사용자의 Chrome 에 붙는 확장 (`claude-in-chrome`) 으로 찍는다.
 
 ## 1. 무엇을 찍었나
