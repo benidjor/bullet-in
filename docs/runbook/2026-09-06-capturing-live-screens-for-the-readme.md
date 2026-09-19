@@ -107,3 +107,17 @@ await page.screenshot(path="dashboard-ops-live.png",
 캡처 파일 이름은 옛 문서가 가리키는 것을 바꾸지 않는다 (`serving-page-live.png` 는 내용만 갈았다).
 새 이름은 화면 이름을 그대로 쓴다 (`dashboard-behavior-live.png` · `dashboard-ops-live.png`).
 슬라이드가 같은 캡처를 쓰면 같은 시각의 것을 쓰고 캡처 시각을 캡션에 적는다.
+
+## 6. 다크 · 라이트를 나란히 찍어 고르기 (2026-09-19 추가)
+
+테마를 정하기 전에 다섯 페이지 (홈 · 전체 기사 · 기사 상세 · 수집 현황 · 행동 지표) 를 두 테마로 찍고 좌우로 붙여 보여 준다.
+
+- 테마는 `new_context(color_scheme="light" | "dark")` 로 준다.
+  사이트는 `localStorage` 의 `theme` 이 없으면 `prefers-color-scheme` 을 따른다.
+- 페이지마다 `full_page=True` 에 `clip` 1440 × 1500 으로 찍고, Pillow 로 두 장을 24px 간격으로 이어 `<page>-compare.png` 를 만든다.
+- 2026-09-19 에는 홈의 대표 사진 (`assets.arsenal.com`) 이 헤드리스에서 정상으로 실렸다.
+  §4 의 ORB 차단은 늘 나는 것이 아니다.
+- 사용자는 라이트를 골랐다.
+  README 는 오늘 캡처 넷을 쓰고, 소개 자료 19장은 수집 현황만 새 캡처를 쓰고 행동 지표는 09-06 캡처 (공개 주간 창) 를 남겼다.
+  오늘 캡처는 최근 7일 창이라 서사와 안 맞는다.
+
