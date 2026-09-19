@@ -82,20 +82,20 @@ systemd 는 파이프라인 밖의 부수 작업만 맡는다 — 선수 워치�
 
 > 목표치와 측정 방법. 번호는 [수집 현황 대시보드](https://bullet-in.pages.dev/ops.html) 의 SLO 표와 같고 SLO-2 에서 6 은 실행마다 그 대시보드에 다시 적힌다. 병렬화 실측 절차는 [SLO-1 벤치마크 런북](docs/runbook/2026-07-14-slo1-benchmark.md), 측정 방법의 정의는 [SLO 측정 런북](docs/runbook/2026-07-19-slo-measurement.md).
 
-| 번호 | 지표 | 목표 | 측정 방법 | 실측 (2026-09-05) |
+| 번호 | 지표 | 목표 | 측정 방법 | 실측 (2026-09-19) |
 |---|---|---|---|---|
 | SLO-1 | 병렬화 수집 시간 단축 | 순차 대비 ≥ 55%↓ (실측 기반 재조정¹) | `metrics.benchmark()` (concurrency=1 vs N 벤치마크) | 56.5%↓ (2026-07-15, 3회 중앙값 · 실행마다 안 잰다) |
-| SLO-2 | 실행 성공률 | ≥ 99% | `pipeline_runs.success_rate` 최근 30회 평균 (재시도 · 소스 격리 포함) | 99.6% |
-| SLO-3 | 중복 적재율 | 0% | content_hash · URL UNIQUE + dbt `unique` 테스트 5종 | 0% (기사 1,045건) |
+| SLO-2 | 실행 성공률 | ≥ 99% | `pipeline_runs.success_rate` 최근 30회 평균 (재시도 · 소스 격리 포함) | 100.0% |
+| SLO-3 | 중복 적재율 | 0% | content_hash · URL UNIQUE + dbt `unique` 테스트 5종 | 0% (기사 1,140건) |
 | SLO-4 | 필수 필드 완전성 | ≥ 99% | dbt `not_null` 테스트 10종 | 100% |
-| SLO-5 | 소스 신선도 | 끊긴 소스 0 | `source_freshness` 워터마크 · 소스별 임계 (24h 에서 192h) 초과 여부 | 0 |
+| SLO-5 | 소스 신선도 | 끊긴 소스 0 | `source_freshness` 워터마크 · 소스별 임계 (24h 에서 192h) 초과 여부 | 2 (이적 시장 마감 뒤 기사가 줄어 임계 초과 · 임계 재조정 검토 중) |
 | SLO-6 | 수집량 이상 감지 | 이상 소스 0 · ±2σ 알림 | `quality.volume_anomalies` (직전 실행들 대비) | 0 · 가동 (실발송 검증 2026-07-13) |
 
 ¹ 초기 목표 ~70% 는 최장 소스 (x_afcstuff, Playwright ~42s) 가 병렬 시간의 하한을 결정하는 구조로 도달 불가 실측 — 사유 · 산식은 런북 §5.
 
 ## 5. 운영
 
-실행 · 배포 · 감시가 자동화돼 돈다. 2026-09-04 에 systemd 타이머에서 Airflow DAG 로 옮겼고 첫 24시간 정규 8회가 전부 성공했다 (3.5분에서 6.0분 · 재시도 0 · 오탐 0 — [런북 §6.5](docs/runbook/2026-09-04-running-the-cycle-under-airflow.md)). 시작한 실행이 끝까지 간 비율 (완주율) 은 417회 중 413회, 99.0% 다 (2026-07-20 부터 09-11 까지 · 셈법은 [성공률 셋과 아무도 안 잰 하나](docs/troubleshooting/2026-09-11-three-success-rates-and-the-one-nobody-measured.md)).
+실행 · 배포 · 감시가 자동화돼 돈다. 2026-09-04 에 systemd 타이머에서 Airflow DAG 로 옮겼고 첫 24시간 정규 8회가 전부 성공했다 (3.5분에서 6.0분 · 재시도 0 · 오탐 0 — [런북 §6.5](docs/runbook/2026-09-04-running-the-cycle-under-airflow.md)). 시작한 실행이 끝까지 간 비율 (완주율) 은 417회 중 413회, 99.0% 다 (2026-07-20 부터 09-11 까지 · 셈법은 [성공률 셋과 아무도 안 잰 하나](docs/troubleshooting/2026-09-11-three-success-rates-and-the-one-nobody-measured.md)). 수집 현황 대시보드의 「완주율 · 07-20 이후」 타일이 같은 셈을 매시 다시 센다 (2026-09-19 09시 480회 중 476회, 99.2%).
 
 - **실행** — Airflow 3.3.1 · LocalExecutor · Postgres 메타 DB · DAG 하나 · 태스크 여덟 (§2). `catchup=False` · `max_active_runs=1` · `dagrun_timeout` 30분으로 옛 타이머의 성질 (밀린 실행은 한 번 · 이중 실행 금지) 을 그대로 옮겼다.
 - **배포 자동화** — `advance` 가 `origin/main` 을 내려받고 파이프라인이 돈 뒤 `judge` 가 라이브의 `build.json` 으로 반영을 확인한다. 게이트 실패 · 배포 실패 · 반영 불일치면 이전 커밋으로 되돌리고 Discord 리뷰 채널에 알린다. 설계는 [배포 자동화 스펙](docs/superpowers/specs/2026-09-03-deploy-automation-design.md).
@@ -131,7 +131,7 @@ systemd 는 파이프라인 밖의 부수 작업만 맡는다 — 선수 워치�
 
 ![수집 현황 대시보드](docs/assets/dashboard-ops-live.png)
 
-> [수집 현황](https://bullet-in.pages.dev/ops.html) — SLO 여섯 행 · 일별 신규 · 회차 수 캘린더 · 소스 × 주 · 처리량 · 소요 밴드 · 발행 → 수집 지연 · 선수 축 · 공신력 · 단계 구성 · 소스 신선도. MariaDB 와 직전 실행의 게이트 결과 파일에서 그린다.
+> [수집 현황](https://bullet-in.pages.dev/ops.html) — SLO 여섯 행 · 완주율 타일 · 일별 신규 · 실행 수 캘린더 · 소스 × 주 · 처리량 · 소요 밴드 · 발행 → 수집 지연 · 선수 축 · 공신력 · 단계 구성 · 소스 신선도. MariaDB 와 직전 실행의 게이트 결과 파일에서 그린다.
 
 ## 6. 데이터 품질
 
@@ -142,7 +142,7 @@ systemd 는 파이프라인 밖의 부수 작업만 맡는다 — 선수 워치�
 - **신선도** — 소스마다 마지막 수집 시각을 원본 수집 워터마크로 판정한다. 임계는 소스마다 다르고 (24h 에서 192h) 실측 공백 분포로 정했다. 초과하면 알림, 재알림은 48시간 간격.
 - **수집량 이상** — 직전 실행들의 소스별 건수 대비 ±2σ 드롭 · 스파이크를 실행마다 본다.
 - **번역 품질** — 재작성 잔존율 (원문 문장이 그대로 남은 비율) 이 임계를 넘은 기사를 수집 현황 대시보드에 올린다. 사람이 본다.
-- **테스트** — 1,772 (단위 · 통합 · DAG 임포트). 통합 테스트는 CI 의 MariaDB 컨테이너에 실제로 붙는다.
+- **테스트** — 1,792 (단위 · 통합 · DAG 임포트 · 브라우저 1). 통합 테스트는 CI 의 MariaDB 컨테이너에 실제로 붙는다.
 
 ## 7. 기술 스택 & 선택 이유
 
@@ -196,7 +196,7 @@ open site/index.html          # 기사 · 선수 · 대시보드 둘 (site/behav
 
 ## 10. 문서 지도
 
-설계 (`docs/superpowers/specs/` 70편) · 계획 (`docs/superpowers/plans/` 60편) · 런북 (`docs/runbook/` 87편) · 트러블슈팅 (`docs/troubleshooting/` 180편) 이 있다. 처음 읽을 다섯 편.
+설계 (`docs/superpowers/specs/` 71편) · 계획 (`docs/superpowers/plans/` 61편) · 런북 (`docs/runbook/` 87편) · 트러블슈팅 (`docs/troubleshooting/` 188편) 이 있다. 처음 읽을 다섯 편.
 
 1. [파이프라인 실행을 Airflow 로 옮긴 설계](docs/superpowers/specs/2026-09-04-airflow-migration-design.md) — 왜 지금 옮겼나 · 태스크 여덟 · 실패의 세 갈래 (급사 · 건너뜀 · 차단) · 되돌리기.
 2. [배포 자동화 설계](docs/superpowers/specs/2026-09-03-deploy-automation-design.md) — 머지된 코드가 스스로 배포되고 확인되고 되돌려지는 길.
@@ -221,7 +221,7 @@ brainstorming ──▶ 스펙 ──▶ 계획서 (dry run) ──▶ Task 단�
 
 - 흐름은 `superpowers` 스킬 묶음으로 고정한다.
   `brainstorming` 이 숨은 결정을 먼저 묻고, `writing-plans` 가 스펙과 계획서를 문서로 만들고, `subagent-driven-development` 가 계획서를 Task 단위로 구현하고, `verification-before-completion` 이 실행 결과로만 완료를 말하게 한다.
-  스펙 70편과 계획서 60편이 `docs/superpowers/` 에 그대로 남아 있다.
+  스펙 71편과 계획서 61편이 `docs/superpowers/` 에 그대로 남아 있다.
 - 코드를 다루는 규칙은 Karpathy 4원칙이다.
   코딩 전 사고, 단순함 우선, 수술적 변경, 검증 가능한 목표를 2026-06-12 에 `CLAUDE.md` 에 병합했고 모든 코드 태스크에 같이 적용한다.
 - 계획서에 코드 전문이 있으면 구현 전에 한 번 돌려 본다.
@@ -229,7 +229,7 @@ brainstorming ──▶ 스펙 ──▶ 계획서 (dry run) ──▶ Task 단�
   2026-09-05 에는 단위 테스트를 다 통과한 계획서 코드에서 실물과 어긋난 자리가 열한 곳 나왔다.
 - 모델은 역할로 나눈다.
   설계, 구현, 최종 리뷰를 서로 다른 모델이 맡고, 실제로 작업한 모델을 커밋의 co-author 로 남긴다.
-  2026-09-11 기준 co-author 를 단 커밋이 589건, 등장한 모델이 7종이다 (`git log --format='%(trailers:key=Co-Authored-By)'` 로 센다).
+  2026-09-19 기준 co-author 를 단 커밋이 600건, 등장한 모델이 7종이다 (`git log --format='%(trailers:key=Co-Authored-By)'` 로 센다).
 - 세션은 여럿이 병렬로 돌지만 파일은 워크트리로 격리하고, 규칙의 원본은 `CLAUDE.md` 와 [커밋 · PR 컨벤션](docs/conventions/2026-06-11-commit-pr-convention.md) 두 곳에만 둔다.
 
 ### 11.2. 역할 분담
@@ -241,7 +241,7 @@ brainstorming ──▶ 스펙 ──▶ 계획서 (dry run) ──▶ Task 단�
   예를 들어 잘린 트윗 뒷부분을 프롬프트로 보정하자는 제안은 물리고 수집기를 고쳐 전문을 받게 했다.
 - 실측값 대조 (화면 · DB · 로그), LLM 호출 승인 (비용 · 분당 한도), 운영 데이터 정정 승인 (dry run 으로 대상 건수를 확인한 뒤).
 - 리뷰 피드백의 채택과 기각, 최종 전체 리뷰.
-- PR Merge 473건 전부.
+- PR Merge 484건 전부.
   AI 에게는 Merge 권한이 없다.
 - 인프라 · 계정 · 비용, 서빙 방침 (요약 + 발췌 + 원문 링크, 전문은 트윗과 공식 발표만), 윤리.
 
@@ -275,7 +275,7 @@ brainstorming ──▶ 스펙 ──▶ 계획서 (dry run) ──▶ Task 단�
 
 ### 11.4. AI 협업에서 밟은 함정
 
-트러블슈팅 180편 가운데 AI 협업에서 생긴 문제를 따로 적은 것들이 있다.
+트러블슈팅 188편 가운데 AI 협업에서 생긴 문제를 따로 적은 것들이 있다.
 같은 실패가 되풀이되면 트러블슈팅으로 남기고, 재발 방지 규칙을 `CLAUDE.md` 나 런북에 옮긴다.
 검사 장치가 그 규칙을 받아 강해지는 것이 바깥쪽 루프다.
 
@@ -293,7 +293,7 @@ brainstorming ──▶ 스펙 ──▶ 계획서 (dry run) ──▶ Task 단�
 
 ## 12. 한계 & 향후
 
-- **재방문을 붙잡는 장치가 없다** — 공개 첫 주 진입 863명 가운데 카드를 누른 사람이 221명, 그 가운데 이틀 이상 다시 온 사람은 71명이다. 구독 · 알림 같은 장치는 아직 없다.
+- **재방문을 붙잡는 장치가 없다** — 공개 첫 주 순 사용자 827명 가운데 카드를 누른 사람이 207명, 이틀 이상 방문한 사람은 113명이다 (행동 로그 gold `fact_user_daily` · 08-29 부터 09-04). 구독 · 알림 같은 장치는 아직 없다.
 - **방문자 수는 하한선이다** — GA4 는 광고 차단 방문을 잡지 못한다. 화면과 이 문서의 사용자 수는 전부 실제보다 작다.
 - **정적 서빙** — 페이지는 실행마다 다시 그린 HTML 이고 개인화 · 검색은 없다.
 - **소스 확장** — The Athletic 같은 하드 페이월 · 추가 ITK 는 어댑터 추가로 대응한다. 교차 corroboration 스코어링 (다수 소스 보도 시 신뢰도↑) 과 번역 정확도 스팟체크는 stretch.
