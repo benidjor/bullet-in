@@ -24,7 +24,7 @@ PY
 ## 2. 조립과 측정
 
 - 쪽은 `.page{width:794px;height:1123px;overflow:hidden}` 고정이고 `@page{size:A4;margin:0}` 다.
-- `build.py` 가 쪽마다 PNG 를 찍고 `page.pdf(format="A4")` 로 PDF 를 만들며, 자식 요소의 마지막 바닥으로 넘침을 잰다.
+- `build.py` 가 쪽마다 PNG 를 찍고 `page.pdf(format="A4")` 로 PDF 를 만들며 자식 요소의 마지막 바닥으로 넘침을 잰다.
   넘침이 0 이하가 될 때까지 여백 · 그림 폭 · 절 배치를 조정한다.
 - 잘 듣는 순서 = 그림 폭 → 소제목 여백 → 절을 다음 쪽으로 → 내용 삭제 (마지막은 사용자 결정).
 
