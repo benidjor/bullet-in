@@ -196,7 +196,7 @@ open site/index.html          # 기사 · 선수 · 대시보드 둘 (site/behav
 
 ## 10. 문서 지도
 
-설계 (`docs/superpowers/specs/` 71편) · 계획 (`docs/superpowers/plans/` 61편) · 런북 (`docs/runbook/` 86편) · 트러블슈팅 (`docs/troubleshooting/` 179편) 이 있다. 처음 읽을 다섯 편.
+설계 (`docs/superpowers/specs/` 71편) · 계획 (`docs/superpowers/plans/` 61편) · 런북 (`docs/runbook/` 87편) · 트러블슈팅 (`docs/troubleshooting/` 180편) 이 있다. 처음 읽을 다섯 편.
 
 1. [파이프라인 실행을 Airflow 로 옮긴 설계](docs/superpowers/specs/2026-09-04-airflow-migration-design.md) — 왜 지금 옮겼나 · 태스크 여덟 · 실패의 세 갈래 (급사 · 건너뜀 · 차단) · 되돌리기.
 2. [배포 자동화 설계](docs/superpowers/specs/2026-09-03-deploy-automation-design.md) — 머지된 코드가 스스로 배포되고 확인되고 되돌려지는 길.
@@ -275,7 +275,7 @@ brainstorming ──▶ 스펙 ──▶ 계획서 (dry run) ──▶ Task 단�
 
 ### 11.4. AI 협업에서 밟은 함정
 
-트러블슈팅 179편 가운데 AI 협업에서 생긴 문제를 따로 적은 것들이 있다.
+트러블슈팅 180편 가운데 AI 협업에서 생긴 문제를 따로 적은 것들이 있다.
 같은 실패가 되풀이되면 트러블슈팅으로 남기고, 재발 방지 규칙을 `CLAUDE.md` 나 런북에 옮긴다.
 검사 장치가 그 규칙을 받아 강해지는 것이 바깥쪽 루프다.
 
