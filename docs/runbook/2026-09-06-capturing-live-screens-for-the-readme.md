@@ -1,6 +1,6 @@
-# 런북 — README · 슬라이드용 라이브 화면 캡처
+# 런북 — README 용 라이브 화면 캡처
 
-배포된 사이트의 화면을 README 나 슬라이드에 넣을 크기로 찍는 절차다.
+배포된 사이트의 화면을 README 에 넣을 크기로 찍는 절차다.
 2026-09-06 README 개편 (#473) 에서 전체 기사 · 행동 지표 · 수집 현황 셋을 이 절차로 찍었고 그때 밟은 함정 넷을 함께 적는다.
 
 ## 1. 언제 찍나
@@ -87,8 +87,8 @@ GA4 수집 요청과 lazy 이미지가 이어져 `wait_until="networkidle"` 이 
 ### 4.5. 대시보드는 `.wrap` 만 찍고, 다크 모드는 `color_scheme` 으로 고른다
 
 대시보드 두 화면은 본문이 `.wrap` (최대 1040px · 가운데 정렬) 안에 있어 1440px 뷰포트로 전체를 찍으면 양옆에 회색 여백이 200px 씩 붙는다.
-슬라이드처럼 폭을 줄여 넣는 자리에서는 그 여백이 그대로 낭비가 되므로, 요소의 bounding box 로 잘라 찍는다.
-사이트는 `prefers-color-scheme` 다크를 지원하므로 라이트 · 다크는 `color_scheme` 으로 고른다 (2026-09-06 · 소개 자료에는 라이트를 썼다 · 축소하면 다크의 글자 대비가 먼저 죽는다).
+폭을 줄여 넣는 자리에서는 그 여백이 그대로 낭비가 되므로, 요소의 bounding box 로 잘라 찍는다.
+사이트는 `prefers-color-scheme` 다크를 지원하므로 라이트 · 다크는 `color_scheme` 으로 고른다 (2026-09-06 · 축소하면 다크의 글자 대비가 먼저 죽는다).
 
 ```python
 ctx = await browser.new_context(viewport={"width": 1440, "height": 1600}, color_scheme="light")
@@ -106,4 +106,17 @@ await page.screenshot(path="dashboard-ops-live.png",
 
 캡처 파일 이름은 옛 문서가 가리키는 것을 바꾸지 않는다 (`serving-page-live.png` 는 내용만 갈았다).
 새 이름은 화면 이름을 그대로 쓴다 (`dashboard-behavior-live.png` · `dashboard-ops-live.png`).
-슬라이드가 같은 캡처를 쓰면 같은 시각의 것을 쓰고 캡처 시각을 캡션에 적는다.
+다른 문서가 같은 캡처를 쓰면 같은 시각의 것을 쓰고 캡처 시각을 캡션에 적는다.
+
+## 6. 다크 · 라이트를 나란히 찍어 고르기 (2026-09-19 추가)
+
+테마를 정하기 전에 다섯 페이지 (홈 · 전체 기사 · 기사 상세 · 수집 현황 · 행동 지표) 를 두 테마로 찍고 좌우로 붙여 보여 준다.
+
+- 테마는 `new_context(color_scheme="light" | "dark")` 로 준다.
+  사이트는 `localStorage` 의 `theme` 이 없으면 `prefers-color-scheme` 을 따른다.
+- 페이지마다 `full_page=True` 에 `clip` 1440 × 1500 으로 찍고, Pillow 로 두 장을 24px 간격으로 이어 `<page>-compare.png` 를 만든다.
+- 2026-09-19 에는 홈의 대표 사진 (`assets.arsenal.com`) 이 헤드리스에서 정상으로 실렸다.
+  §4 의 ORB 차단은 늘 나는 것이 아니다.
+- README 는 라이트 캡처 넷을 쓴다 (2026-09-19 결정).
+- 행동 지표 대시보드의 「Users · 7일」 은 최근 7일 창이라, 공개 주간 값을 보이려면 그때 찍어 둔 캡처 (09-06) 를 쓴다.
+
