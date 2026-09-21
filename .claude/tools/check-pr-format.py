@@ -19,7 +19,8 @@
 ## 이 검사가 안 보는 것
 
 - 내용의 정확성 · 근거 · 수치
-- 헤더 번호 체계 · 섹션 누락 · 체크리스트 고정 문구
+- 헤더 번호 체계 가운데 `###` 이하 · (섹션 일곱의 제목 · 순서와 §6 task-list 고정 항목 일곱은 2026-09-21 부터 본다 —
+  #484 부터 #491 여덟 PR 이 「## 6. 후속 작업 · ## 7. 체크리스트 (라벨 불릿)」 로 흘러도 아무도 못 잡았다)
 - 백틱 · 엔대시 · 기호 간격 (docs 는 .claude/hooks/check-doc-format.py 가 본다)
 - 문체의 자연스러움 (humanize 스킬의 몫이고, 그쪽은 반대로 이 형식을 안 본다)
 
@@ -40,6 +41,10 @@ BARE_BULLET = re.compile(r"^\s*- (?!\*\*)(?!`)")
 TILDE_RANGE = re.compile(r"\d\s*~\s*\d")
 # 단어 + 임 종결 — 동사의 명사형과 기계로 못 가르므로 소프트 경고
 IM_ENDING = re.compile(r"[가-힣]임[.]?$")
+# 본문 구조 (§2.1) — 섹션 일곱의 제목 · 순서 · §6 의 task-list 고정 항목 일곱
+SECTIONS = ["## 1. 개요", "## 2. 의사결정 & Trade-off", "## 3. 변경 사항", "## 4. 검증",
+            "## 5. 장애 시나리오 & 롤백 전략", "## 6. 체크리스트", "## 7. 레퍼런스"]
+CHECK_ITEMS = ["atomicity", "secrets", "tests + lint", "SoT 일관", "commit 컨벤션", "설정 키", "PR 크기"]
 # 제목의 서술형 종결 (§1.1) — type(scope): 와 (#NN) 을 벗기고 본다
 TITLE_TAIL = re.compile(r"[가-힣]다$")
 TITLE_STRIP = (re.compile(r"\s*\(#\d+\)$"), re.compile(r"^[a-z]+(\([a-z_.-]+\))?:\s*"))
@@ -71,6 +76,29 @@ def check_body(path: str) -> list[tuple[str, str, str]]:
     return out
 
 
+def check_sections(path: str) -> list[tuple[str, str, str]]:
+    """섹션 헤더 일곱이 그 제목 · 그 순서로 있고, §6 이 task-list (`- [x]` · `- [ ]`) 로 고정 항목 일곱을 갖는지."""
+    lines = open(path, encoding="utf-8").read().splitlines()
+    heads = [ln.rstrip() for ln in lines if ln.startswith("## ")]
+    out = []
+    if heads != SECTIONS:
+        missing = [s for s in SECTIONS if s not in heads]
+        extra = [h for h in heads if h not in SECTIONS]
+        out.append((path, "섹션 헤더 (§2.1 · 제목 · 순서)",
+                    ("빠짐 " + " · ".join(missing) if missing else "") + (" 낯섦 " + " · ".join(extra) if extra else "")))
+    if SECTIONS[5] in heads:
+        start = lines.index(SECTIONS[5])
+        end = lines.index(SECTIONS[6]) if SECTIONS[6] in heads else len(lines)
+        tasks = [ln for ln in lines[start:end] if ln.startswith(("- [x]", "- [ ]"))]
+        if len(tasks) < len(CHECK_ITEMS):
+            out.append((path, "§6 체크리스트가 task-list 가 아님", f"`- [x]` 줄 {len(tasks)} (고정 항목 {len(CHECK_ITEMS)})"))
+        else:
+            for item in CHECK_ITEMS:
+                if not any(item in t for t in tasks):
+                    out.append((path, "§6 고정 항목 빠짐", item))
+    return out
+
+
 def check_title(title: str, where: str) -> list[tuple[str, str, str]]:
     """제목 하나 — 명사형 종결만 본다 (§1.1)."""
     body = title
@@ -97,7 +125,7 @@ def main() -> int:
 
     hits: list[tuple[str, str, str]] = []
     for path in a.body:
-        hits += check_body(path)
+        hits += check_body(path) + check_sections(path)
     for t in a.title:
         hits += check_title(t, "--title")
     if a.open_prs:
