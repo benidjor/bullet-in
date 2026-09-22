@@ -4,17 +4,21 @@
 
 > 영국 현지 언론과 ITK (X) 에 흩어진 Arsenal FC 소식을 하루 8회 병렬 수집하고 공신력 스코어링과 중복 제거를 거쳐 LLM 으로 번역 · 요약한 뒤 신뢰도순으로 제공하는 뉴스 데이터 파이프라인입니다.
 >
-> **공개 서비스**: https://bullet-in.pages.dev · 2026-08-29 공개 · Airflow 가 3시간마다 파이프라인을 실행해 수집하고 검증하고 배포합니다. 현재 가동 상태는 [수집 현황 대시보드](https://bullet-in.pages.dev/ops.html) 의 페이지 생성 시각과 SLO 표에서 확인하실 수 있습니다.
+> **공개 서비스**: https://bullet-in.pages.dev · 2026-08-29 공개 · Airflow 가 3시간마다 파이프라인을 실행해 수집하고 검증하고 배포합니다.
+> 현재 가동 상태는 [수집 현황 대시보드](https://bullet-in.pages.dev/ops.html) 의 페이지 생성 시각과 SLO 표에서 확인하실 수 있습니다.
 
 *Bullet-in = bulletin (단신) + bullet (병기고 Arsenal) 의 언어유희입니다.*
 
 ![Bullet-in 전체 기사 (실데이터)](docs/assets/serving-page-live.png)
 
-> 전체 기사 화면 (`all.html`) 입니다. 날짜별 시간순 정렬, 영입 단계 · 공신력 · 소스 · 기자 facet 필터, 한국어 번역과 요약을 표시합니다. 홈 화면은 대표 기사와 주요 소식을 신문 레이아웃으로 배치합니다.
+> 전체 기사 화면 (`all.html`) 입니다.
+> 날짜별 시간순 정렬, 영입 단계 · 공신력 · 소스 · 기자 facet 필터, 한국어 번역과 요약을 표시합니다.
+> 홈 화면은 대표 기사와 주요 소식을 신문 레이아웃으로 배치합니다.
 
 ![Bullet-in 기사 상세 (실데이터)](docs/assets/article-detail-live.png)
 
-> 기사 상세 화면입니다. 3줄 요약, 소스 성격에 따른 차등 서빙 (언론사는 발췌 + 원문 링크, X 와 공식 발표는 전문), 기자 바이라인을 표시합니다.
+> 기사 상세 화면입니다.
+> 3줄 요약, 소스 성격에 따른 차등 서빙 (언론사는 발췌 + 원문 링크, X 와 공식 발표는 전문), 기자 바이라인을 표시합니다.
 
 ## 한눈에 보기
 
@@ -47,11 +51,13 @@
 매체와 계정마다 공신력 편차가 커서, 같은 이적설이라도 어디서 나왔는지에 따라 신뢰도가 크게 달라집니다.
 이 불편을 해결하기 위해 **신뢰할 수 있는 소스만 선별해 한곳에 모으고, 한국어로 번역 · 요약해 신뢰도순으로 제공하는** 서비스를 만들었습니다.
 
-단순 수집 스크립트가 아니라 신뢰성 · 멱등성 · 데이터 품질 · 관측성을 갖춘 **데이터 프로덕트**로 설계했습니다. 공개일에 688명, 공개 첫 주 (08-29 ~ 09-04) 에 827명이 방문했습니다 (순 사용자 기준이며, 광고 차단 환경의 방문은 집계되지 않습니다).
+단순 수집 스크립트가 아니라 신뢰성 · 멱등성 · 데이터 품질 · 관측성을 갖춘 **데이터 프로덕트**로 설계했습니다.
+공개일에 688명, 공개 첫 주 (08-29 ~ 09-04) 에 827명이 방문했습니다 (순 사용자 기준이며, 광고 차단 환경의 방문은 집계되지 않습니다).
 
 ## 2. 아키텍처
 
-메달리온 아키텍처 (Bronze → Silver → Gold) 위에 LLM 번역 · 요약, 데이터 품질 게이트, 배포 자동화를 올린 구조입니다. 파이프라인 1회 실행은 Airflow DAG 의 태스크 8개로 나뉩니다.
+메달리온 아키텍처 (Bronze → Silver → Gold) 위에 LLM 번역 · 요약, 데이터 품질 게이트, 배포 자동화를 올린 구조입니다.
+파이프라인 1회 실행은 Airflow DAG 의 태스크 8개로 나뉩니다.
 
 ![아키텍처 (실행 한 번의 전체 지형)](docs/assets/architecture.svg)
 
@@ -108,7 +114,9 @@ systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 �
 
 ### 3.4. 수집 소스
 
-활성 소스는 9종이며 고정 tier 7종과 항목별 동적 tier 2종으로 구성했습니다 (X 와 커뮤니티는 게시물에 언급된 기자 · 매체의 공신력으로 tier 를 산출합니다). 아래 표에는 2026-07 에 비활성으로 돌린 1종을 포함해 10종을 싣습니다. 언론 5종은 공통 이적 키워드 필터를 공유합니다 (`config/sources.yaml`).
+활성 소스는 9종이며 고정 tier 7종과 항목별 동적 tier 2종으로 구성했습니다 (X 와 커뮤니티는 게시물에 언급된 기자 · 매체의 공신력으로 tier 를 산출합니다).
+아래 표에는 2026-07 에 비활성으로 돌린 1종을 포함해 10종을 싣습니다.
+언론 5종은 공통 이적 키워드 필터를 공유합니다 (`config/sources.yaml`).
 
 | 소스 | tier | 어댑터 | 비고 |
 |---|---|---|---|
@@ -123,7 +131,8 @@ systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 �
 | David Ornstein (X) | 1 | x_playwright | 기자 본인 계정: 트윗에 @핸들이 없어 고정 tier |
 | fmkorea 축구 소식통 | 동적 | fmkorea | 한국 커뮤니티: 언급된 기자 · 매체 tier 로 라우팅 (기본 4) |
 
-**기자 · ITK 공신력**: 동적 소스는 항목마다 tier 를 개별 산출합니다. 기자를 먼저 조회하고, 없으면 매체를 조회하고, 둘 다 없으면 기본값을 적용합니다.
+**기자 · ITK 공신력**: 동적 소스는 항목마다 tier 를 개별 산출합니다.
+기자를 먼저 조회하고, 없으면 매체를 조회하고, 둘 다 없으면 기본값을 적용합니다.
 
 ```
 항목 1건의 tier 산출
@@ -140,7 +149,9 @@ systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 �
 
 ## 4. 정량 지표 (SLO)
 
-> 목표치와 측정 방법입니다. 번호는 [수집 현황 대시보드](https://bullet-in.pages.dev/ops.html) 의 SLO 표와 동일하며 SLO-2 부터 6 까지는 실행마다 해당 대시보드에 갱신됩니다. 병렬화 측정 절차는 [SLO-1 벤치마크 런북](docs/runbook/2026-07-14-slo1-benchmark.md), 지표 정의는 [SLO 측정 런북](docs/runbook/2026-07-19-slo-measurement.md) 에 정리했습니다.
+> 목표치와 측정 방법입니다.
+> 번호는 [수집 현황 대시보드](https://bullet-in.pages.dev/ops.html) 의 SLO 표와 동일하며 SLO-2 부터 6 까지는 실행마다 해당 대시보드에 갱신됩니다.
+> 병렬화 측정 절차는 [SLO-1 벤치마크 런북](docs/runbook/2026-07-14-slo1-benchmark.md), 지표 정의는 [SLO 측정 런북](docs/runbook/2026-07-19-slo-measurement.md) 에 정리했습니다.
 
 | 번호 | 지표 | 목표 | 측정 방법 | 실측 (2026-09-22) |
 |---|---|---|---|---|
@@ -159,12 +170,21 @@ systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 �
 2026-09-04 에 systemd 타이머에서 Airflow DAG 로 마이그레이션했습니다.
 첫 24시간 동안 정규 실행 8회가 모두 성공했습니다 (소요 3.5~6.0분 · 재시도 0 · 오탐 0 · [런북 §6.5](docs/runbook/2026-09-04-running-the-cycle-under-airflow.md)).
 
-전체 실행 중 마지막 태스크까지 완료된 비율 (완주율) 은 508회 중 504회로 99.2% 입니다.
-2026-07-20 이후 집계이며, 산출 방식은 [성공률 3종과 아무도 측정하지 않았던 1종](docs/troubleshooting/2026-09-11-three-success-rates-and-the-one-nobody-measured.md) 에 정리했습니다.
-수집 현황 대시보드의 「완주율 · 07-20 이후」 타일이 같은 기준으로 실행마다 값을 새로 산출합니다.
+### 5.1. 실행
 
-- **실행**: Airflow 3.3.1 · `LocalExecutor` · Postgres 메타 DB · DAG 1개 · 태스크 8개 구성입니다 (§2). `catchup=False` · `max_active_runs=1` · `dagrun_timeout` 30분을 설정해, 기존 타이머의 동작 (밀린 실행은 1회만 수행 · 동시 실행 금지) 을 그대로 유지했습니다.
-- **배포 자동화**: `advance` 가 `origin/main` 을 내려받고, 파이프라인 실행 후 `judge` 가 라이브의 `build.json` 으로 반영 여부를 확인합니다. 설계는 [배포 자동화 스펙](docs/superpowers/specs/2026-09-03-deploy-automation-design.md) 에 있습니다.
+- **구성**: Airflow 3.3.1 · `LocalExecutor` · Postgres 메타 DB · DAG 1개 · 태스크 8개 (§2)
+- **옛 타이머의 성질을 그대로 옮긴 설정**
+  - `catchup=False`: 밀린 실행은 1회만 수행
+  - `max_active_runs=1`: 동시 실행 금지
+  - `dagrun_timeout` 30분
+- **완주율**: 508회 중 504회로 **99.2%** (2026-07-20 이후 · 마지막 태스크까지 끝낸 실행의 비율)
+  - 산출 방식은 [성공률 3종과 아무도 측정하지 않았던 1종](docs/troubleshooting/2026-09-11-three-success-rates-and-the-one-nobody-measured.md) 에 정리했습니다.
+  - 수집 현황 대시보드의 「완주율 · 07-20 이후」 타일이 같은 기준으로 실행마다 값을 새로 산출합니다.
+
+### 5.2. 배포 자동화
+
+`advance` 가 `origin/main` 을 내려받고, 파이프라인 실행 후 `judge` 가 라이브의 `build.json` 으로 반영 여부를 확인합니다.
+설계는 [배포 자동화 스펙](docs/superpowers/specs/2026-09-03-deploy-automation-design.md) 에 있습니다.
 
 ```
 gate (dbt 테스트 21종)
@@ -181,14 +201,39 @@ gate (dbt 테스트 21종)
 
 게이트 결과 파일이 없으면 통과로 간주하지 않고 차단으로 판정합니다 ([8. 설계 결정과 트레이드오프](#8-설계-결정과-트레이드오프)).
 
-- **알림**: Discord 채널 2개 (사고 · 리뷰) 를 운영합니다. 수집량 이상 · 소스 신선도 · dbt 게이트 차단 · 태스크 실패 · DAG 타임아웃 · 배포 판정 · 워치리스트 · 명단 정합을 알리며, 모든 알림에 「무엇이 · 어디서 · 다음에 확인할 로그」 를 함께 담습니다.
-- **백업과 복구**: 매일 MariaDB 논리 덤프와 MongoDB 아카이브 (합계 약 4 MB) 를 GCS 에 업로드합니다. 복구할 때는 별도 DB 에 복원해 테이블 6개와 `raw_items` 의 행 수를 백업 매니페스트와 대조합니다. 하나라도 불일치하면 0 이 아닌 종료 코드로 끝납니다 (2026-09-01 복구 테스트 통과 · [백업 · 복구 런북](docs/runbook/2026-09-01-backup-and-restore.md)).
-- **재처리와 스키마 변경**: 원본을 Bronze 에 불변으로 보존하므로 판정 규칙이 바뀌면 전체 재처리가 가능합니다. 실제로 `src/bullet_in/` 에 `backfill_*.py` 15개와 `migrate_*.py` 2개가 일회성 재처리 스크립트로 쌓여 있습니다 (바이라인 회수 · 본문 재수집 · 선수 귀속 재추출 · URL 신원 이관 등). 스키마 변경은 `schema.sql` 의 `ALTER TABLE … IF NOT EXISTS` 25건으로 멱등하게 처리하며 실행 시작 시 `ensure_schema()` 가 다시 적용합니다.
-- **대시보드 2종**: 정적 HTML 로 실행할 때마다 새로 생성하며 검색 엔진에는 노출하지 않습니다.
+### 5.3. 알림
+
+Discord 채널 2개 (사고 · 리뷰) 를 운영합니다.
+모든 알림에 「무엇이 · 어디서 · 다음에 확인할 로그」 를 함께 담습니다.
+
+- **데이터 축**: 수집량 이상 · 소스 신선도 · dbt 게이트 차단
+- **실행 축**: 태스크 실패 · DAG 타임아웃 · 배포 판정
+- **운영 축**: 워치리스트 · 명단 정합
+
+### 5.4. 백업과 복구
+
+- **매일**: MariaDB 논리 덤프와 MongoDB 아카이브 (합계 약 4 MB) 를 GCS 에 업로드
+- **복구할 때**: 별도 DB 에 복원해 테이블 6개와 `raw_items` 의 행 수를 백업 매니페스트와 대조
+  - 하나라도 불일치하면 0 이 아닌 종료 코드로 끝납니다.
+  - 2026-09-01 복구 테스트에서 7개가 전부 일치했습니다 ([백업 · 복구 런북](docs/runbook/2026-09-01-backup-and-restore.md)).
+
+### 5.5. 재처리와 스키마 변경
+
+원본을 Bronze 에 불변으로 보존하므로 판정 규칙이 바뀌면 전체 재처리가 가능합니다.
+
+- **누적된 일회성 스크립트**: `src/bullet_in/` 의 `backfill_*.py` 15개와 `migrate_*.py` 2개
+  - 바이라인 회수 · 본문 재수집 · 선수 귀속 재추출 · URL 신원 이관 등
+- **스키마 변경**: `schema.sql` 의 `ALTER TABLE … IF NOT EXISTS` 25건으로 멱등하게 처리
+  - 실행 시작 시 `ensure_schema()` 가 다시 적용합니다.
+
+### 5.6. 대시보드 2종
+
+정적 HTML 로 실행할 때마다 새로 생성하며 검색 엔진에는 노출하지 않습니다.
 
 ![행동 지표 대시보드](docs/assets/dashboard-behavior-live.png)
 
-> [행동 지표](https://bullet-in.pages.dev/behavior.html): DAU · 퍼널 (진입 → 카드 클릭 → 반복 → 재방문) · 요일 × 시각 히트맵 · 관심 지수 · 리텐션 · 화면별 클릭 · 페이지 · 상위 기사 · 선수 페이지를 보여 줍니다. GA4 이벤트를 Iceberg Gold 테이블로 집계해 렌더링합니다.
+> [행동 지표](https://bullet-in.pages.dev/behavior.html): DAU · 퍼널 (진입 → 카드 클릭 → 반복 → 재방문) · 요일 × 시각 히트맵 · 관심 지수 · 리텐션 · 화면별 클릭 · 페이지 · 상위 기사 · 선수 페이지를 보여 줍니다.
+> GA4 이벤트를 Iceberg Gold 테이블로 집계해 렌더링합니다.
 
 **행동 로그의 출처 (GA4 → BigQuery → Iceberg)**: 행동 지표 대시보드의 수치는 GA4 가 BigQuery 로 매일 내보낸 이벤트 원본을 `warehouse_load` 태스크가 Iceberg Bronze 로 적재해 집계한 결과입니다.
 직접 정의한 이벤트는 `bi_entry` (유입) · `bi_card_click` (카드 클릭) · `bi_filter_apply` (필터) · `bi_origin_exit` (원문 이탈) 4종이고, 계측 코드는 `src/bullet_in/serve/static/app.js` 에 있습니다.
@@ -197,7 +242,8 @@ gate (dbt 테스트 21종)
 
 ![수집 현황 대시보드](docs/assets/dashboard-ops-live.png)
 
-> [수집 현황](https://bullet-in.pages.dev/ops.html): SLO 6개 행 · 완주율 타일 · 일별 신규 · 실행 수 캘린더 · 소스 × 주차 · 처리량 · 소요 시간 분포 · 발행에서 수집까지의 지연 · 선수 축 · 공신력 · 단계 구성 · 소스 신선도를 한 화면에 모았습니다. MariaDB 와 직전 실행의 게이트 결과 파일을 읽어 생성합니다.
+> [수집 현황](https://bullet-in.pages.dev/ops.html): SLO 6개 행 · 완주율 타일 · 일별 신규 · 실행 수 캘린더 · 소스 × 주차 · 처리량 · 소요 시간 분포 · 발행에서 수집까지의 지연 · 선수 축 · 공신력 · 단계 구성 · 소스 신선도를 한 화면에 모았습니다.
+> MariaDB 와 직전 실행의 게이트 결과 파일을 읽어 생성합니다.
 
 ## 6. 데이터 품질
 
@@ -205,11 +251,18 @@ gate (dbt 테스트 21종)
 
 ### 6.1. dbt 게이트
 
-- **검사 구성**: 실행의 `gate` 태스크가 `dbt build` 로 스테이징 5개와 Gold 3개를 생성하고 테스트 21종 (`unique` 5 · `not_null` 10 · `accepted_values` 4 · `relationships` 2) 을 돌립니다. 차단되면 `deploy_site` 가 실행되지 않고 알림이 발송됩니다. 임계 미만의 결측은 경고로 분류해 로그에만 남깁니다. 설계는 [dbt 품질 게이트 스펙](docs/superpowers/specs/2026-08-31-dbt-quality-gate-design.md) 에 있습니다.
-- **게이트 자체의 장애**: dbt 프로세스가 시그널로 종료되면 (세그멘테이션 폴트) 1회 재시도하고 그래도 결과 파일이 생기지 않으면 통과로 간주하지 않습니다. 2026-08-31 에 실제로 차단이 발생했고, 이후 진단 정보를 stdout 과 stderr 양쪽에 기록하도록 수정했습니다 ([트러블슈팅](docs/troubleshooting/2026-09-01-the-gate-blocked-and-the-journal-could-not-say-why.md)).
+- **검사 구성**: 실행의 `gate` 태스크가 `dbt build` 로 스테이징 5개와 Gold 3개를 생성하고 테스트 21종을 돌립니다.
+  - `unique` 5 · `not_null` 10 · `accepted_values` 4 · `relationships` 2
+  - 차단되면 `deploy_site` 가 실행되지 않고 알림이 발송됩니다.
+  - 임계 미만의 결측은 경고로 분류해 로그에만 남깁니다.
+  설계는 [dbt 품질 게이트 스펙](docs/superpowers/specs/2026-08-31-dbt-quality-gate-design.md) 에 있습니다.
+- **게이트 자체의 장애**: dbt 프로세스가 시그널로 종료되면 (세그멘테이션 폴트) 1회 재시도하고 그래도 결과 파일이 생기지 않으면 통과로 간주하지 않습니다.
+  2026-08-31 에 실제로 차단이 발생했고, 이후 진단 정보를 stdout 과 stderr 양쪽에 기록하도록 수정했습니다 ([트러블슈팅](docs/troubleshooting/2026-09-01-the-gate-blocked-and-the-journal-could-not-say-why.md)).
 ### 6.2. 신선도와 수집량
 
-- **신선도**: 소스별 마지막 수집 시각을 원본 수집 워터마크로 판정합니다. 임계는 소스마다 다르며 (24h ~ 192h) 실측 공백 분포를 근거로 설정했습니다. 임계를 초과하면 알리고, 재알림 간격은 48시간입니다.
+- **신선도**: 소스별 마지막 수집 시각을 원본 수집 워터마크로 판정합니다.
+  임계는 소스마다 다르며 (24h ~ 192h) 실측 공백 분포를 근거로 설정했습니다.
+  임계를 초과하면 알리고, 재알림 간격은 48시간입니다.
 - **수집량 이상**: 직전 실행들의 소스별 수집 건수를 기준으로 ±2σ 를 벗어나는 급감과 급증을 실행마다 탐지합니다.
 ### 6.3. 번역 품질 게이트
 
@@ -253,17 +306,20 @@ LLM 이 만든 본문을 LLM 없이 규칙 코드로 검사합니다.
 - **CDC 를 사용하지 않았습니다**
   - 배경: CDC (Debezium · binlog) 는 상류 트랜잭션 DB 의 변경을 캡처하는 기술인데, 이 파이프라인의 소스는 웹 · API · X 라 읽을 binlog 가 없습니다.
   - 선택: 일 수백 건 규모의 배치에 Kafka + Debezium 은 과설계라, 애플리케이션 레벨 변경 감지 (`content_hash` 비교 + `revision` 증가) 를 사용했습니다.
-  - 감수한 것: 소스가 조용히 수정한 기사는 다음 수집 시점까지 감지하지 못합니다. 변경 이력은 실행마다 Iceberg `articles_changes` 에 적재합니다.
+  - 감수한 것: 소스가 조용히 수정한 기사는 다음 수집 시점까지 감지하지 못합니다.
+    변경 이력은 실행마다 Iceberg `articles_changes` 에 적재합니다.
 
 - **SLO-1 목표를 70% 에서 55% 로 하향했습니다**
   - 배경: 병렬화로 수집 시간을 단축하는 목표를 초기에 70% 로 설정했으나, 벤치마크 결과 최장 소스 (x_afcstuff · Playwright 약 42초) 가 병렬 수행 시간의 하한을 결정하는 구조였습니다.
   - 선택: 구조적으로 도달 불가능한 목표를 유지하면 지표가 실제 상태를 왜곡하므로 실측을 근거로 재조정했습니다 ([SLO-1 벤치마크 런북](docs/runbook/2026-07-14-slo1-benchmark.md)).
-  - 감수한 것: 목표를 하향한 이력이 남습니다. 다만 그 이력 자체가 목표치를 임의로 정하지 않았다는 근거가 됩니다.
+  - 감수한 것: 목표를 하향한 이력이 남습니다.
+    다만 그 이력 자체가 목표치를 임의로 정하지 않았다는 근거가 됩니다.
 
 - **매니지드 Iceberg 테이블을 사용하지 않았습니다**
   - 배경: BigQuery 의 `BigLake Table Management` 는 **시간당 165.99 KRW** 라 상시 가동하면 월 12만원 수준입니다 ([레이크하우스 설계 §2](docs/superpowers/specs/2026-09-02-history-lakehouse-design.md)).
   - 선택: 카탈로그만 Google Lakehouse runtime catalog 를 사용하고 테이블은 직접 관리합니다.
-  - 감수한 것: PyIceberg 가 제공하지 않는 **Compaction · 스냅샷 만료 · 고아 파일 정리**를 직접 구현하고 매일 수행해야 합니다. 그 대신 시간당 요금 없이 GCS 저장 · 작업 요금만 부담합니다.
+  - 감수한 것: PyIceberg 가 제공하지 않는 **Compaction · 스냅샷 만료 · 고아 파일 정리**를 직접 구현하고 매일 수행해야 합니다.
+    그 대신 시간당 요금 없이 GCS 저장 · 작업 요금만 부담합니다.
 
 - **품질 게이트와 웨어하우스 적재를 분리했습니다**
   - 배경: 두 작업은 실패했을 때 영향 범위가 다릅니다.
@@ -272,22 +328,27 @@ LLM 이 만든 본문을 LLM 없이 규칙 코드로 검사합니다.
 
 - **게이트 실패 시 배포를 차단하는 쪽으로 설계했습니다 (fail-closed)**
   - 배경: dbt 프로세스가 시그널로 종료되면 (세그멘테이션 폴트) 결과 파일이 생기지 않아 판정 근거가 사라집니다.
-  - 선택: 1회 재시도하고 그래도 결과 파일이 없으면 **차단**으로 판정합니다. 2026-08-31 에 실제로 발생했으며, 당시 로그만으로는 원인을 특정할 수 없어 진단 정보를 stdout 과 stderr 양쪽에 기록하도록 수정했습니다 ([트러블슈팅](docs/troubleshooting/2026-09-01-the-gate-blocked-and-the-journal-could-not-say-why.md)).
-  - 감수한 것: 게이트 자체의 장애도 배포를 막습니다. 검증되지 않은 데이터가 배포되는 것보다 낫다고 판단했습니다.
+  - 선택: 1회 재시도하고 그래도 결과 파일이 없으면 **차단**으로 판정합니다.
+    2026-08-31 에 실제로 발생했으며, 당시 로그만으로는 원인을 특정할 수 없어 진단 정보를 stdout 과 stderr 양쪽에 기록하도록 수정했습니다 ([트러블슈팅](docs/troubleshooting/2026-09-01-the-gate-blocked-and-the-journal-could-not-say-why.md)).
+  - 감수한 것: 게이트 자체의 장애도 배포를 막습니다.
+    검증되지 않은 데이터가 배포되는 것보다 낫다고 판단했습니다.
 
 - **LLM 429 응답에 행 단위 백오프를 두지 않았습니다**
   - 배경: 분당 요청 수 제한이라 건별로 대기하면 실행 시간이 길어집니다.
   - 선택: 429 를 받으면 해당 실행의 번역을 중단하고 다음 실행이 남은 건을 처리합니다.
-  - 감수한 것: 제한에 걸린 실행의 기사는 번역이 한 주기 지연됩니다. 스케줄이 3시간마다 재시도하므로 누적되지는 않습니다.
+  - 감수한 것: 제한에 걸린 실행의 기사는 번역이 한 주기 지연됩니다.
+    스케줄이 3시간마다 재시도하므로 누적되지는 않습니다.
 
 - **systemd 타이머에서 Airflow 로 마이그레이션했습니다 (2026-09-04)**
   - 배경: 단일 유닛이 실패하면 어느 단계에서 중단됐는지 로그를 직접 추적해야 했습니다.
   - 선택: 태스크 8개로 분리해 실패한 태스크만 식별되게 하고, 판정 태스크가 배포를 롤백하도록 구성했습니다 ([마이그레이션 설계](docs/superpowers/specs/2026-09-04-airflow-migration-design.md)).
-  - 감수한 것: Postgres 메타 DB 와 스케줄러가 같은 VM 에 추가로 올라갔습니다. 되돌릴 경로 (기존 타이머 재활성화) 는 남겨 두었습니다.
+  - 감수한 것: Postgres 메타 DB 와 스케줄러가 같은 VM 에 추가로 올라갔습니다.
+    되돌릴 경로 (기존 타이머 재활성화) 는 남겨 두었습니다.
 
 ## 9. 데이터 모델
 
-메달리온을 2개 운영합니다. 기사와 행동 로그는 원천 시스템도 저장소도 달라 층을 따로 구성했으며, 둘 다 같은 DAG 가 채웁니다.
+메달리온을 2개 운영합니다.
+기사와 행동 로그는 원천 시스템도 저장소도 달라 층을 따로 구성했으며, 둘 다 같은 DAG 가 채웁니다.
 
 ```
 메달리온 1 · 기사
@@ -332,16 +393,30 @@ Silver 는 mart_history (Iceberg) 로도 흘러갑니다 · 아래 레이크하�
 
 층 이름은 실제 데이터가 존재하는 자리에만 붙였습니다.
 
-- **Bronze (MongoDB `raw_items`)**: 원문을 변형 없이 보존합니다. 신선도 판정의 워터마크가 이 층에서 산출됩니다.
-- **Silver (MariaDB 테이블 6개)**: `articles` (정규화 메타 + `tier` + `confidence` + 번역 · 요약, `content_hash` · `url` `UNIQUE` 로 dedup) · `sources` · `players` · `article_players` (주체 · 언급) · `pipeline_runs` (실행별 SLO 근거) · `source_freshness` (실행 × 소스 신선도 이력).
-- **Gold (dbt `models/gold/` 모델 3개)**: `gold_daily_source_quality` · `gold_slo_rollup` · `gold_tier_distribution`. 실행 종료 시 `dbt build` 가 갱신하며 같은 실행의 테스트 21종이 품질 게이트로 동작합니다.
+- **Bronze (MongoDB `raw_items`)**: 원문을 변형 없이 보존합니다.
+  신선도 판정의 워터마크가 이 층에서 산출됩니다.
+- **Silver (MariaDB 테이블 6개)**
+  - `articles`: 정규화 메타 + `tier` + `confidence` + 번역 · 요약 · `content_hash` 와 `url` 에 `UNIQUE` 로 dedup
+  - `sources` · `players`: 소스와 선수 명단
+  - `article_players`: 기사 × 선수 매핑 (주체 · 언급)
+  - `pipeline_runs`: 실행별 SLO 근거
+  - `source_freshness`: 실행 × 소스 신선도 이력
+- **Gold (dbt `models/gold/` 모델 3개)**: `gold_daily_source_quality` · `gold_slo_rollup` · `gold_tier_distribution`.
+  실행 종료 시 `dbt build` 가 갱신하며 같은 실행의 테스트 21종이 품질 게이트로 동작합니다.
 
 `models/staging/` 의 모델 5개는 MariaDB 테이블을 그대로 읽어 오는 경유 뷰라 층 이름을 붙이지 않았습니다.
 
 **레이크하우스 (Iceberg on GCS)**: 서빙 DB 외부에 적재하는 네임스페이스 2개입니다.
 
-- `mart_history`: `articles_changes` (실행별 변경분) · `articles_snapshot` · `players_snapshot` · `article_players_snapshot` (90일까지 매일 · 이후 주 1회) · `ops_daily`.
-- `behavior`: GA4 이벤트 (BigQuery 일별 내보내기 · §5) 를 Bronze `ga4_events` · Silver `ga4_events_flat` · Gold `fact_card_click` · `dim_date` · `fact_session` · `fact_user_daily` · `dim_user` 로 적재합니다. Gold 는 실행마다 Silver 에서 전량 재구축하며 사용자 식별에는 `user_pseudo_id` 만 사용합니다 ([사용자 키를 혼용하면 방문자가 두 배로 집계된다](docs/troubleshooting/2026-09-04-two-keys-double-the-visitor-count.md)).
+- **`mart_history`**: 서빙 DB 가 덮어쓰면 사라질 값을 남깁니다.
+  - `articles_changes`: 실행별 변경분
+  - `articles_snapshot` · `players_snapshot` · `article_players_snapshot`: 90일까지 매일 · 이후 주 1회
+  - `ops_daily`: 일별 운영 지표
+- **`behavior`**: GA4 이벤트 (BigQuery 일별 내보내기 · §5) 를 층으로 나눠 적재합니다.
+  - Bronze `ga4_events` · Silver `ga4_events_flat`
+  - Gold 팩트: `fact_card_click` · `fact_session` · `fact_user_daily`
+  - Gold 디멘션: `dim_date` · `dim_user`
+  - Gold 는 실행마다 Silver 에서 전량 재구축하며 사용자 식별에는 `user_pseudo_id` 만 씁니다 ([사용자 키를 혼용하면 방문자가 두 배로 집계된다](docs/troubleshooting/2026-09-04-two-keys-double-the-visitor-count.md)).
 
 ## 10. 저장소 구조
 
@@ -383,11 +458,14 @@ uv run python -m bullet_in.run --concurrency 8          # collect → enrich →
 open site/index.html          # 기사 · 선수 · 대시보드 2종 (site/behavior.html · site/ops.html)
 ```
 
-테스트는 `uv run pytest -q` 로 실행합니다 (통합 테스트는 MariaDB 컨테이너가 없으면 skip 됩니다). Airflow DAG 임포트는 별도 venv 에서 검증합니다 ([docs/MIGRATION.md](docs/MIGRATION.md)). 운영 VM 의 실행 · 수동 트리거 · 롤백 절차는 [Airflow 런북](docs/runbook/2026-09-04-running-the-cycle-under-airflow.md) 에 있습니다.
+테스트는 `uv run pytest -q` 로 실행합니다 (통합 테스트는 MariaDB 컨테이너가 없으면 skip 됩니다).
+Airflow DAG 임포트는 별도 venv 에서 검증합니다 ([docs/MIGRATION.md](docs/MIGRATION.md)).
+운영 VM 의 실행 · 수동 트리거 · 롤백 절차는 [Airflow 런북](docs/runbook/2026-09-04-running-the-cycle-under-airflow.md) 에 있습니다.
 
 ## 12. 문서 구성
 
-설계 (`docs/superpowers/specs/` 71편) · 계획 (`docs/superpowers/plans/` 61편) · 런북 (`docs/runbook/` 88편) · 트러블슈팅 (`docs/troubleshooting/` 181편) 이 있습니다. 아래 5편을 먼저 읽는 것을 권장합니다.
+설계 (`docs/superpowers/specs/` 71편) · 계획 (`docs/superpowers/plans/` 61편) · 런북 (`docs/runbook/` 88편) · 트러블슈팅 (`docs/troubleshooting/` 181편) 이 있습니다.
+아래 5편을 먼저 읽는 것을 권장합니다.
 
 1. [파이프라인 실행을 Airflow 로 이관한 설계](docs/superpowers/specs/2026-09-04-airflow-migration-design.md): 이관 시점의 판단 근거 · 태스크 8개 구성 · 실패 유형 3종 (프로세스 종료 · 건너뜀 · 차단) · 롤백 경로.
 2. [배포 자동화 설계](docs/superpowers/specs/2026-09-03-deploy-automation-design.md): 머지된 코드가 자동으로 배포되고 검증되고 롤백되는 경로.
@@ -395,7 +473,8 @@ open site/index.html          # 기사 · 선수 · 대시보드 2종 (site/beha
 4. [백업 · 복구 런북](docs/runbook/2026-09-01-backup-and-restore.md): 복원 검증까지 포함한 절차.
 5. [사용자 키를 혼용하면 방문자가 두 배로 집계된다](docs/troubleshooting/2026-09-04-two-keys-double-the-visitor-count.md) 와 [층을 잘못 참조한 차트 3건](docs/troubleshooting/2026-09-04-three-charts-that-pointed-at-the-wrong-layer.md): 행동 로그를 화면에 올리기 전에 겪은 측정 오류.
 
-트러블슈팅 문서는 「무엇이 틀렸는가」 보다 「해당 결함을 어떤 검증 수단이 놓쳤는가」 에 무게를 둡니다. 같은 검증 공백이 다른 곳에서 반복되기 때문입니다.
+트러블슈팅 문서는 「무엇이 틀렸는가」 보다 「해당 결함을 어떤 검증 수단이 놓쳤는가」 에 무게를 둡니다.
+같은 검증 공백이 다른 곳에서 반복되기 때문입니다.
 
 ## 13. AI 도구 활용
 
@@ -452,7 +531,8 @@ open site/index.html          # 기사 · 선수 · 대시보드 2종 (site/beha
 
 ### 13.4. AI 협업에서 발생한 문제
 
-동일한 실패가 반복되면 트러블슈팅으로 기록하고, 재발 방지 규칙을 `CLAUDE.md` 나 런북으로 옮기고, 검사 장치가 그 규칙을 받아 강화됩니다. 이 순환이 실제로 동작한 사례 4건입니다.
+동일한 실패가 반복되면 트러블슈팅으로 기록하고, 재발 방지 규칙을 `CLAUDE.md` 나 런북으로 옮기고, 검사 장치가 그 규칙을 받아 강화됩니다.
+이 순환이 실제로 동작한 사례 4건입니다.
 
 - [계획서 결함이 구현으로 전파된 사례](docs/troubleshooting/2026-07-14-plan-artifact-defect-propagation.md): 구현 subagent 가 계획서 코드를 사실상 그대로 옮기므로 계획서의 결함이 코드가 됩니다.
   여기서 계획서 dry run 절차가 도입됐습니다.
@@ -464,16 +544,21 @@ open site/index.html          # 기사 · 선수 · 대시보드 2종 (site/beha
 
 ## 14. 한계 및 향후 개선 방향
 
-- **재방문 유도 장치가 없습니다**: 공개 첫 주 순 사용자 827명 중 카드를 클릭한 사용자는 207명, 이틀 이상 방문한 사용자는 113명입니다 (행동 로그 Gold `fact_user_daily` · 08-29 ~ 09-04). 구독이나 알림 기능은 아직 없습니다.
-- **방문자 수는 실제보다 적게 집계됩니다**: GA4 는 광고 차단 환경의 방문을 잡지 못합니다. 화면과 이 문서에 적힌 사용자 수도 같은 이유로 작게 나옵니다.
+- **재방문 유도 장치가 없습니다**: 공개 첫 주 순 사용자 827명 중 카드를 클릭한 사용자는 207명, 이틀 이상 방문한 사용자는 113명입니다 (행동 로그 Gold `fact_user_daily` · 08-29 ~ 09-04).
+  구독이나 알림 기능은 아직 없습니다.
+- **방문자 수는 실제보다 적게 집계됩니다**: GA4 는 광고 차단 환경의 방문을 잡지 못합니다.
+  화면과 이 문서에 적힌 사용자 수도 같은 이유로 작게 나옵니다.
 - **정적 서빙**: 페이지는 실행마다 다시 생성한 HTML 이며 개인화와 검색 기능은 없습니다.
-- **소스 확장**: The Athletic 같은 하드 페이월과 추가 ITK 는 어댑터 추가로 대응합니다. 교차 검증 스코어링 (복수 소스가 같은 내용을 보도하면 신뢰도 가산) 과 번역 정확도 표본 검수는 후순위 과제입니다.
-- **단일 VM**: 파이프라인 · Airflow · DB 컨테이너가 한 VM 에서 동작합니다. 백업은 매일 수행하지만 장애 발생 시 복구는 사람이 런북에 따라 수동으로 진행합니다.
+- **소스 확장**: The Athletic 같은 하드 페이월과 추가 ITK 는 어댑터 추가로 대응합니다.
+  교차 검증 스코어링 (복수 소스가 같은 내용을 보도하면 신뢰도 가산) 과 번역 정확도 표본 검수는 후순위 과제입니다.
+- **단일 VM**: 파이프라인 · Airflow · DB 컨테이너가 한 VM 에서 동작합니다.
+  백업은 매일 수행하지만 장애 발생 시 복구는 사람이 런북에 따라 수동으로 진행합니다.
 
 ## 15. 윤리 및 법적 고지
 
 - 공개된 콘텐츠만 대상으로 하며, robots.txt 준수 · 보수적 rate limit · 출처와 링크 표기를 원칙으로 합니다.
-- X (ITK) 는 ToS 그레이존이라 버너 계정을 사용하고 자격증명은 `.env` 로 분리해 커밋하지 않습니다. 개인 학습 용도입니다.
+- X (ITK) 는 ToS 그레이존이라 버너 계정을 사용하고 자격증명은 `.env` 로 분리해 커밋하지 않습니다.
+  개인 학습 용도입니다.
 - 원문 전체를 재배포하지 않고 메타데이터 · 요약 · 원문 링크 중심으로 서빙합니다.
 - 소스 성격에 비례한 차등 서빙: 언론사 기사는 요약과 짧은 발췌에 원문 링크를 붙이고, 수십 단어 분량의 트윗과 구단 공식 발표문만 전문을 싣고, 퍼가기를 금지한 커뮤니티는 헤드라인만 표시합니다.
 - 방문 분석은 GA4 익명 id 만 사용하며 개인을 식별하지 않습니다 ([이벤트 스키마](docs/superpowers/specs/2026-08-31-analytics-event-schema.md)).
