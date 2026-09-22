@@ -190,32 +190,10 @@ gate (dbt 테스트 21종)
 
 > [행동 지표](https://bullet-in.pages.dev/behavior.html): DAU · 퍼널 (진입 → 카드 클릭 → 반복 → 재방문) · 요일 × 시각 히트맵 · 관심 지수 · 리텐션 · 화면별 클릭 · 페이지 · 상위 기사 · 선수 페이지를 보여 줍니다. GA4 이벤트를 Iceberg Gold 테이블로 집계해 렌더링합니다.
 
-**행동 로그의 출처 (GA4 → BigQuery → Iceberg)**: 행동 지표 대시보드의 수치는 GA4 가 BigQuery 로 매일 내보낸 이벤트 원본을 `warehouse_load` 태스크가 Iceberg Bronze 로 적재해 집계한 결과입니다. 같은 이벤트를 GA4 콘솔에서도 조회할 수 있어 외부 도구로 교차 검증이 가능합니다. 아래 캡처는 2026-09-18 기준이며 계정 · 프로젝트 식별자는 가렸습니다.
-
-![GA4 보고서 개요 (공개 주간)](docs/assets/ga4-users-launch-week.png)
-
-> GA4 보고서 개요, 2026-08-29 ~ 09-04 (공개 주간) 입니다.
-> 활성 사용자 822명 · 신규 사용자 812명이며, 신규 대 재방문 그래프의 08-29 급등이 공개일입니다.
->
-> 같은 7일 구간을 GA4 는 총 사용자 827명으로 집계하고 행동 지표 대시보드의 「Users · 7일」 도 827명이라 §1 의 값과 일치합니다.
->
-> 이전 문서에 적힌 890명은 날짜 필터 없이 테이블 전체 (공개 전인 08-24 · 08-28 포함) 를 집계한 값이라 공개 주간 수치가 아닙니다 ([사용자 키를 혼용하면 방문자가 두 배로 집계된다](docs/troubleshooting/2026-09-04-two-keys-double-the-visitor-count.md) §3 의 산출 참조).
-
-![GA4 이벤트 보고서](docs/assets/ga4-events-table.png)
-
-> GA4 이벤트 보고서, 08-29 ~ 09-17. 직접 정의한 이벤트는 4종입니다: `bi_entry` (유입) 3,769 · `bi_card_click` (카드 클릭) 628 · `bi_filter_apply` (필터) 238 · `bi_origin_exit` (원문 이탈) 15. 계측 코드는 `src/bullet_in/serve/static/app.js` 에 있습니다.
-
-![GA4 실시간 (bi_card_click 의 매개변수)](docs/assets/ga4-realtime-card-hash-param.png)
-
-> 실시간 개요에서 `bi_card_click` 이벤트를 펼친 화면입니다. 매개변수 `card_hash` 가 기사의 `content_hash` 와 같아 클릭 로그를 Silver 의 기사 행과 조인할 수 있고, 익명 식별자 `bi_cid` 와 클라이언트 시각 `bi_ts` 는 모든 이벤트에 포함됩니다.
-
-![GA4 관리 (BigQuery 링크)](docs/assets/ga4-bigquery-link.png)
-
-> GA4 관리 → BigQuery 링크 설정입니다. 내보내기 유형은 「매일」, 데이터 세트 위치는 서울 (asia-northeast3), 연결일은 2026-08-24 입니다.
-
-![BigQuery 데이터셋의 일별 테이블](docs/assets/bigquery-events-tables.png)
-
-> BigQuery 데이터셋 `analytics_551139164` 의 일별 테이블 `events_YYYYMMDD` (08-24 및 08-28 ~ 09-17 · 22개) 입니다. `warehouse_load` 는 이 목록에서 아직 적재하지 않은 날짜만 선별해 처리하며 당일 종료 시 삭제되는 `events_intraday_*` 는 읽지 않습니다.
+**행동 로그의 출처 (GA4 → BigQuery → Iceberg)**: 행동 지표 대시보드의 수치는 GA4 가 BigQuery 로 매일 내보낸 이벤트 원본을 `warehouse_load` 태스크가 Iceberg Bronze 로 적재해 집계한 결과입니다.
+직접 정의한 이벤트는 `bi_entry` (유입) · `bi_card_click` (카드 클릭) · `bi_filter_apply` (필터) · `bi_origin_exit` (원문 이탈) 4종이고, 계측 코드는 `src/bullet_in/serve/static/app.js` 에 있습니다.
+`bi_card_click` 의 매개변수 `card_hash` 가 기사의 `content_hash` 와 같아 클릭 로그를 Silver 의 기사 행과 조인할 수 있습니다.
+같은 이벤트를 GA4 콘솔에서도 조회할 수 있어 외부 도구로 교차 검증이 가능하며, 콘솔 화면으로 확인한 기록은 [계측 배선과 도착 증명 런북](docs/runbook/2026-08-24-wiring-analytics-and-proving-it-arrives.md) 에, 방문자 수 산출은 [방문자 · 퍼널 런북](docs/runbook/2026-09-04-measuring-visitors-funnel-and-retention-from-bronze.md) 에 있습니다.
 
 ![수집 현황 대시보드](docs/assets/dashboard-ops-live.png)
 
