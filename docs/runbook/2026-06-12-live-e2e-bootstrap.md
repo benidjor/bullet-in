@@ -34,7 +34,13 @@ SELECT source_id, COUNT(*), ROUND(AVG(confidence_score),2) FROM articles GROUP B
 SELECT * FROM pipeline_runs ORDER BY started_at DESC LIMIT 1;  -- SLO 기록
 ```
 
-## 6. 알려진 제약 — Gemini 무료 티어 429
+## 6. 알려진 제약 — Gemini 429
+
+> **2026-07 정정** — 아래는 2026-06 결정 당시의 기록이다.
+> 운영 키가 물린 AI Studio 프로젝트는 지금 **Tier 1 선불이고 실제로 과금된다.**
+> 「결제 불필요 (₩0)」 는 그때의 전제이지 현재 상태가 아니다.
+> 분당 요청 한도가 속도 제한이라는 점과 429 방어 코드는 그대로 유효하다.
+
 - 분당 요청 한도 (~15 RPM)는 **속도** 제한이지 총량이 아니다 — 1분에 15콜까지, 1분 뒤 리셋. 한 회차에 90건을 몰면 ~15건만 되고 나머지는 `429 RESOURCE_EXHAUSTED`.
 - **채택: 옵션 C (멱등 누적, 2026-06)** — 결제 불필요 (₩0), 추가 코드 0. 기존 dedup · `title_ko IS NULL` 구조가 매 실행 신규만 번역하므로, **하루 4회 스케줄** (DAG `0 */6 * * *`)로 신규를 누적 처리한다. 90건은 콜드스타트 1회뿐이고, 정상 운영 시 회당 신규는 보통 15 미만이라 한도에 거의 안 닿는다.
   - 한국 Gemini API 결제는 **선불 (Cloud Prepay, 최소 ₩25,000 · 1년 만료)** 이라, 회당 수 센트 사용량엔 상당액이 만료돼 비효율 → A 미채택.
@@ -42,7 +48,7 @@ SELECT * FROM pipeline_runs ORDER BY started_at DESC LIMIT 1;  -- SLO 기록
 - **방어 코드 (적용됨)**: enrich가 429를 식별해 그 회차를 **즉시 중단 (break) · `WARNING` 로깅**하고 남은 행은 다음 사이클에 누적한다 (파싱 실패 · 기타 예외는 행 단위 스킵). 스케줄이 곧 재시도이므로 per-row 백오프는 두지 않는다 (헛 호출 · 실행 지연 방지).
 
 ## 7. 현재 활성 소스 (첫 라이브 기준)
-- **활성**: `arsenal_official`(HTML), `bbc_sport`(HTML), `football_london`(HTML).
+- **활성**: `arsenal_official` (HTML), `bbc_sport` (HTML), `football_london` (HTML).
 - **비활성 (후속 복구)**:
   - `goal` — Playwright 셀렉터/동의월 드리프트 (troubleshooting/2026-06-12-live-source-selector-drift.md).
   - `x_afcstuff` — X 버너 자격증명 필요.

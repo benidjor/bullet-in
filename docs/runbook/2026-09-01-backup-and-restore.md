@@ -228,13 +228,23 @@ docker exec bullet-in-mongo-1 mongosh --quiet \
 
 밟는 순서는 이렇다.
 
-- 타이머를 먼저 멈춘다
-— `sudo systemctl stop bullet-in.timer bullet-in-watchlist.timer`.
+- **쓰는 것을 먼저 멈춘다** — 회차 DAG 와 워치리스트 타이머 둘이다.
+회차는 Airflow 가 돌리므로 타이머가 아니라 DAG 를 멈춘다 (`bullet-in.timer` 는 2026-09-04 이후 비활성이라 멈출 것이 없다).
+
+```bash
+set -a; . ~/airflow/airflow.env; set +a
+PYTHONWARNINGS=ignore ~/airflow-venv/bin/airflow dags pause bullet_in_cycle
+PYTHONWARNINGS=ignore ~/airflow-venv/bin/airflow dags list-runs bullet_in_cycle -o table | head -3
+sudo systemctl stop bullet-in-watchlist.timer
+```
+
+`pause` 는 새 실행을 막을 뿐 **도는 중인 실행을 멈추지 않는다.**
+맨 윗줄이 `running` 이면 끝날 때까지 기다린 뒤 복구를 시작한다.
 - 지금 DB 가 조금이라도 살아 있으면 **먼저 §5 로 한 벌 뜬다**
 — 복구가 잘못돼도 돌아올 자리가 생긴다.
 - 되살릴 백업을 §5 의 `list` 로 고른다.
 - `--target-db bulletin` 으로 §6.1 의 명령을 돌린다.
-- 대조가 통과하면 타이머를 다시 켜고 한 회차를 지켜본다.
+- 대조가 통과하면 멈춘 둘을 다시 켜고 (`airflow dags unpause bullet_in_cycle` · `sudo systemctl start bullet-in-watchlist.timer`) 한 회차를 지켜본다.
 
 **복구 뒤 첫 회차는 반드시 눈으로 본다.**
 `content_hash` 와 URL UNIQUE 로 중복이 막히므로 재수집이 행을 늘리지는 않는다.
