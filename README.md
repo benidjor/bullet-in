@@ -59,9 +59,10 @@
 메달리온 아키텍처 (Bronze → Silver → Gold) 위에 LLM 번역 · 요약, 데이터 품질 게이트, 배포 자동화를 올린 구조입니다.
 파이프라인 1회 실행은 Airflow DAG 의 태스크 8개로 나뉩니다.
 
-![아키텍처 (실행 한 번의 전체 지형)](docs/assets/architecture.svg)
+[![아키텍처 (실행 한 번의 전체 지형)](docs/assets/architecture.svg)](https://raw.githubusercontent.com/benidjor/bullet-in/main/docs/assets/architecture.svg)
 
 > 왼쪽이 입력 (수집 소스 · 코드 저장소 · GA4 사이트 태그), 가운데가 Oracle Cloud VM 에서 도는 수집 · 저장과 Airflow DAG, 아래가 Google Cloud 의 레이크하우스, 오른쪽이 서빙과 알림입니다.
+> 글자가 작으면 그림을 눌러 원본 크기로 여십시오.
 > 그림의 「소스 10종」 은 설정에 등재된 수를 말하며 이 가운데 9종이 활성입니다 (§3).
 
 DAG 안에서 태스크는 이 순서로 돕니다.
@@ -235,10 +236,17 @@ Discord 채널 2개 (사고 · 리뷰) 를 운영합니다.
 > [행동 지표](https://bullet-in.pages.dev/behavior.html): DAU · 퍼널 (진입 → 카드 클릭 → 반복 → 재방문) · 요일 × 시각 히트맵 · 관심 지수 · 리텐션 · 화면별 클릭 · 페이지 · 상위 기사 · 선수 페이지를 보여 줍니다.
 > GA4 이벤트를 Iceberg Gold 테이블로 집계해 렌더링합니다.
 
-**행동 로그의 출처 (GA4 → BigQuery → Iceberg)**: 행동 지표 대시보드의 수치는 GA4 가 BigQuery 로 매일 내보낸 이벤트 원본을 `warehouse_load` 태스크가 Iceberg Bronze 로 적재해 집계한 결과입니다.
-직접 정의한 이벤트는 `bi_entry` (유입) · `bi_card_click` (카드 클릭) · `bi_filter_apply` (필터) · `bi_origin_exit` (원문 이탈) 4종이고, 계측 코드는 `src/bullet_in/serve/static/app.js` 에 있습니다.
-`bi_card_click` 의 매개변수 `card_hash` 가 기사의 `content_hash` 와 같아 클릭 로그를 Silver 의 기사 행과 조인할 수 있습니다.
-같은 이벤트를 GA4 콘솔에서도 조회할 수 있어 외부 도구로 교차 검증이 가능하며, 콘솔 화면으로 확인한 기록은 [계측 배선과 도착 증명 런북](docs/runbook/2026-08-24-wiring-analytics-and-proving-it-arrives.md) 에, 방문자 수 산출은 [방문자 · 퍼널 런북](docs/runbook/2026-09-04-measuring-visitors-funnel-and-retention-from-bronze.md) 에 있습니다.
+**행동 로그의 출처 (GA4 → BigQuery → Iceberg)**
+
+행동 지표 대시보드의 수치는 GA4 가 BigQuery 로 매일 내보낸 이벤트 원본을 `warehouse_load` 태스크가 Iceberg Bronze 로 적재해 집계한 결과입니다.
+
+- **직접 정의한 이벤트 4종**: `bi_entry` (유입) · `bi_card_click` (카드 클릭) · `bi_filter_apply` (필터) · `bi_origin_exit` (원문 이탈)
+  - 계측 코드는 `src/bullet_in/serve/static/app.js` 에 있습니다.
+- **기사와의 연결**: `bi_card_click` 의 매개변수 `card_hash` 가 기사의 `content_hash` 와 같습니다.
+  - 클릭 로그를 Silver 의 기사 행과 그대로 조인할 수 있습니다.
+- **교차 검증**: 같은 이벤트를 GA4 콘솔에서도 조회할 수 있습니다.
+  - 콘솔 화면으로 확인한 기록은 [계측 배선과 도착 증명 런북](docs/runbook/2026-08-24-wiring-analytics-and-proving-it-arrives.md) 에 있습니다.
+  - 방문자 수 산출은 [방문자 · 퍼널 런북](docs/runbook/2026-09-04-measuring-visitors-funnel-and-retention-from-bronze.md) 에 있습니다.
 
 ![수집 현황 대시보드](docs/assets/dashboard-ops-live.png)
 
@@ -280,7 +288,10 @@ LLM 이 만든 본문을 LLM 없이 규칙 코드로 검사합니다.
 
 게이트는 재생성 트리거이지 폐기 조건이 아니라서 본문을 버리지 않습니다.
 잔존율이 임계를 넘은 채로 남은 기사는 수집 현황 대시보드에 올려 사람이 검토합니다.
-설계는 [번역 신뢰성 설계](docs/superpowers/specs/2026-07-29-translation-trust-design.md) 에 있고, 숫자를 세는 잣대가 형식을 내용으로 세던 함정은 [LLM 산출물을 코드로 채점할 때 잣대가 만드는 가짜 발견](docs/troubleshooting/2026-07-29-llm-metric-artifacts.md) 에 정리했습니다.
+
+- **설계**: [번역 신뢰성 설계](docs/superpowers/specs/2026-07-29-translation-trust-design.md)
+- **측정 함정**: [LLM 산출물을 코드로 채점할 때 잣대가 만드는 가짜 발견](docs/troubleshooting/2026-07-29-llm-metric-artifacts.md)
+  - 숫자를 세는 잣대가 형식을 내용으로 세던 사례입니다.
 
 ### 6.4. 테스트
 
