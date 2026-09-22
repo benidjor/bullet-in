@@ -53,26 +53,31 @@
 
 메달리온 아키텍처 (Bronze → Silver → Gold) 위에 LLM 번역 · 요약, 데이터 품질 게이트, 배포 자동화를 올린 구조입니다. 파이프라인 1회 실행은 Airflow DAG 의 태스크 8개로 나뉩니다.
 
-![아키텍처 (1회 실행의 전체 흐름)](docs/assets/architecture.svg)
+![아키텍처 (실행 한 번의 전체 지형)](docs/assets/architecture.svg)
+
+> 왼쪽이 입력 (수집 소스 · 코드 저장소 · GA4 사이트 태그), 가운데가 Oracle Cloud VM 에서 도는 수집 · 저장과 Airflow DAG, 아래가 Google Cloud 의 레이크하우스, 오른쪽이 서빙과 알림입니다.
+> 그림의 「소스 10종」 은 설정에 등재된 수를 말하며 이 가운데 9종이 활성입니다 (§3).
+
+DAG 안에서 태스크는 이 순서로 돕니다.
 
 ```
-Airflow DAG  bullet_in_cycle   3시간 간격 · LocalExecutor · 태스크 8개
-
 advance -> collect -> enrich -> publish -> gate -> deploy_site -> judge
                                 |
                                 +-> warehouse_load (publish 이후 병렬)
-
-advance          origin/main 을 내려받는다 (운영 서버에서 사람이 pull 하지 않는다)
-collect          어댑터 9종을 asyncio 로 병렬 수집
-                   -> 정규화 -> URL, content_hash 기준 중복 제거 -> 공신력 tier 산출
-                   -> MongoDB (Bronze), MariaDB (Silver) 적재
-enrich           Gemini API 로 번역 · 요약 · 영입 단계 분류 (신규 행만 처리하는 멱등 설계)
-publish          정적 HTML 렌더 (기사 · 선수 · 대시보드 2종) + 실행 기록 · 신선도 판정
-gate             dbt build + test 21종 (DuckDB 가 MariaDB 를 attach) · 실패 시 배포 중단
-deploy_site      Cloudflare Pages 업로드 (산출물이 비정상이면 중단)
-judge            라이브 build.json 으로 반영 확인 · 불일치 시 이전 커밋으로 롤백 · Discord 알림
-warehouse_load   MariaDB 변경분 · 스냅샷과 GA4 행동 로그를 Iceberg (GCS) 에 적재 · Gold 재작성
 ```
+
+| 태스크 | 하는 일 |
+|---|---|
+| `advance` | `origin/main` 내려받기 (사람이 운영 서버에서 pull 하지 않는 구조) |
+| `collect` | 어댑터 9종 asyncio 병렬 수집 → 정규화 → URL · `content_hash` 기준 중복 제거 → 공신력 tier 산출 → Bronze · Silver 적재 |
+| `enrich` | Gemini API 로 번역 · 요약 · 영입 단계 분류 (신규 행만 처리하는 멱등 설계) |
+| `publish` | 정적 HTML 렌더 (기사 · 선수 · 대시보드 2종) · 실행 기록 · 신선도 판정 |
+| `gate` | `dbt build` 와 테스트 21종 (DuckDB 가 MariaDB 를 attach) · 실패 시 배포 중단 |
+| `deploy_site` | Cloudflare Pages 업로드 (산출물이 비정상이면 중단) |
+| `judge` | 라이브 `build.json` 으로 반영 확인 · 불일치 시 이전 커밋으로 롤백 · Discord 알림 |
+| `warehouse_load` | MariaDB 변경분 · 스냅샷과 GA4 행동 로그를 Iceberg (GCS) 에 적재 · Gold 재작성 |
+
+실행 주기는 3시간이고 실행기는 LocalExecutor 입니다 (§5).
 
 systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 워치리스트 (귀속된 선수를 fmkorea 에서 재검색) · 일일 백업 (GCS) · 레이크하우스 유지보수 (스냅샷 만료 · 컴팩션) · Airflow 감시 (하트비트 · 실행 지연).
 
