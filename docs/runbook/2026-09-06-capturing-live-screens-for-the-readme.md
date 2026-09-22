@@ -68,7 +68,7 @@ curl -sL https://bullet-in.pages.dev/ | grep -o 'href="[a-z]*\.html"' | sort | u
 홈의 대표 기사 (`article.lead`) 와 주요 소식 카드는 구단 공식 기사라 사진이 `assets.arsenal.com` 에서 온다.
 헤드리스 Chromium 에서 그 요청이 `net::ERR_BLOCKED_BY_ORB` 로 막혀 사진 자리가 비고 사이드 카드가 좁게 접힌다.
 보통 Chrome 의 UA 문자열을 넣어도 같다.
-그래서 README 첫 캡처는 홈 대신 `all.html` 로 찍었다 (다른 매체 이미지는 뜬다).
+그래서 2026-09-06 개편 때는 README 첫 캡처를 홈 대신 `all.html` 로 찍었다 (다른 매체 이미지는 뜬다).
 
 **2026-09-22 확인 — 실제 브라우저에서는 정상이고 원인은 응답 헤더다.**
 
@@ -93,6 +93,15 @@ await pg.route("**assets.arsenal.com/**", relay)
 
 중계 뒤 `naturalWidth` 가 0 이 아닌지 보고 찍는다.
 사진이 들어가면 용량이 늘므로 (기사 상세 523 → 761 KB) `device_scale_factor` 는 1 로 둔다.
+
+**2026-09-23 — 이 중계로 홈을 찍어 README 첫 캡처로 되돌렸다 (`home-page-live.png`).**
+
+- 설정은 뷰포트 1180 × 900 · `device_scale_factor=1` · `color_scheme="light"` · `full_page=True` 다.
+홈 전체가 1,425px 이라 자르지 않고 다 담긴다 (572 KB).
+- 뷰포트 높이를 결과 높이보다 크게 두면 `full_page` 가 뷰포트 높이로 늘어나 아래에 빈 띠가 생긴다.
+먼저 `document.body.scrollHeight` 를 재고 그보다 낮은 뷰포트로 다시 찍는다.
+- 중계가 들었는지는 `.lead img` 의 `naturalWidth` 로 본다.
+1200 이 나오면 채워진 것이고 0 이면 여전히 막힌 것이다.
 
 ### 4.3. 「깨진 이미지 수」 는 뜻이 없다
 
