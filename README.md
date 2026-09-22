@@ -61,9 +61,8 @@
 
 [![아키텍처 (실행 한 번의 전체 지형)](docs/assets/architecture.svg)](https://raw.githubusercontent.com/benidjor/bullet-in/main/docs/assets/architecture.svg)
 
-> 위에서 아래로 네 층입니다.
-> 입력 (수집 소스 · 코드 저장소) → Oracle Cloud VM (수집 · 저장 · Airflow DAG) → Google Cloud (LLM · 레이크하우스) → 관측 · 서빙 (Pages · Discord · GA4 사이트 태그).
-> 세부가 필요하면 그림을 눌러 원본 크기로 여십시오.
+> 왼쪽이 입력 (수집 소스 · 코드 저장소 · GA4 사이트 태그), 가운데가 Oracle Cloud VM 에서 도는 수집 · 저장과 Airflow DAG, 아래가 Google Cloud 의 레이크하우스, 오른쪽이 서빙과 알림입니다.
+> 글자가 작으면 그림을 눌러 3배 크기로 여십시오.
 > 그림의 「소스 10종」 은 설정에 등재된 수를 말하며 이 가운데 9종이 활성입니다 (§3).
 
 DAG 안에서 태스크는 이 순서로 돕니다.
@@ -252,7 +251,17 @@ Discord 채널 2개 (사고 · 리뷰) 를 운영합니다.
 ![수집 현황 대시보드](docs/assets/dashboard-ops-live.png)
 
 > [수집 현황](https://bullet-in.pages.dev/ops.html): SLO 6개 행 · 완주율 타일 · 일별 신규 · 실행 수 캘린더 · 소스 × 주차 · 처리량 · 소요 시간 분포 · 발행에서 수집까지의 지연 · 선수 축 · 공신력 · 단계 구성 · 소스 신선도를 한 화면에 모았습니다.
-> MariaDB 와 직전 실행의 게이트 결과 파일을 읽어 생성합니다.
+
+**수집 현황의 출처 (MariaDB Silver → 화면)**
+
+행동 지표와 달리 별도의 집계 저장소를 두지 않고 서빙 DB 를 직접 읽습니다.
+
+- **`pipeline_runs`**: 실행마다 한 행 · 신규 · 중복 · 에러 · 소요 시간 · 소스별 건수
+- **`articles`**: 등급 · 이적 단계 · 발행 시각
+- **`source_freshness`**: 실행 × 소스의 마지막 수집 시각과 임계
+- **dbt 게이트 결과 파일**: 직전 실행의 `unique` · `not_null` 테스트 결과 (SLO-3 과 SLO-4 의 값)
+
+화면 맨 위의 「데이터 원천」 절이 같은 내용을 밝히고 있어 열어서 대조할 수 있습니다.
 
 ## 6. 데이터 품질
 
