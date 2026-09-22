@@ -69,7 +69,7 @@ advance -> collect -> enrich -> publish -> gate -> deploy_site -> judge
 | 태스크 | 하는 일 |
 |---|---|
 | `advance` | `origin/main` 내려받기 (사람이 운영 서버에서 pull 하지 않는 구조) |
-| `collect` | 어댑터 9종 asyncio 병렬 수집 → 정규화 → URL · `content_hash` 기준 중복 제거 → 공신력 tier 산출 → Bronze · Silver 적재 |
+| `collect` | 어댑터 9종 `asyncio` 병렬 수집 → 정규화 → URL · `content_hash` 기준 중복 제거 → 공신력 tier 산출 → Bronze · Silver 적재 |
 | `enrich` | Gemini API 로 번역 · 요약 · 영입 단계 분류 (신규 행만 처리하는 멱등 설계) |
 | `publish` | 정적 HTML 렌더 (기사 · 선수 · 대시보드 2종) · 실행 기록 · 신선도 판정 |
 | `gate` | `dbt build` 와 테스트 21종 (DuckDB 가 MariaDB 를 attach) · 실패 시 배포 중단 |
@@ -77,29 +77,29 @@ advance -> collect -> enrich -> publish -> gate -> deploy_site -> judge
 | `judge` | 라이브 `build.json` 으로 반영 확인 · 불일치 시 이전 커밋으로 롤백 · Discord 알림 |
 | `warehouse_load` | MariaDB 변경분 · 스냅샷과 GA4 행동 로그를 Iceberg (GCS) 에 적재 · Gold 재작성 |
 
-실행 주기는 3시간이고 실행기는 LocalExecutor 입니다 (§5).
+실행 주기는 3시간이고 실행기는 `LocalExecutor` 입니다 (§5).
 
 systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 워치리스트 (귀속된 선수를 fmkorea 에서 재검색) · 일일 백업 (GCS) · 레이크하우스 유지보수 (스냅샷 만료 · 컴팩션) · Airflow 감시 (하트비트 · 실행 지연).
 
 ## 3. 핵심 기능
 
-### 3.1. 모으기
+### 3.1. 수집과 적재
 
 - **이종 소스 통합**: RSS · REST API · 정적 HTML · JS 렌더링 · X (트위터) · 한국 커뮤니티를 단일 어댑터 인터페이스로 추상화했습니다.
-  소스 특성에 맞는 도구를 각각 선택합니다 (정적 = httpx, API = Guardian Open Platform, X = 쿠키 주입 Playwright).
-- **병렬 수집과 실패 격리**: asyncio 팬아웃으로 소스를 동시에 호출하며, 한 소스가 실패해도 나머지 수집은 정상 진행됩니다.
-- **중복 제거와 변경 감지**: `content_hash` 와 URL 정규화에 DB UNIQUE 제약을 더해 애플리케이션과 DB 양쪽에서 중복을 막습니다.
+  소스 특성에 맞는 도구를 각각 선택합니다 (정적 = `httpx`, API = Guardian Open Platform, X = 쿠키 주입 Playwright).
+- **병렬 수집과 실패 격리**: `asyncio` 팬아웃으로 소스를 동시에 호출하며, 한 소스가 실패해도 나머지 수집은 정상 진행됩니다.
+- **중복 제거와 변경 감지**: `content_hash` 와 URL 정규화에 DB `UNIQUE` 제약을 더해 애플리케이션과 DB 양쪽에서 중복을 막습니다.
 
-### 3.2. 가려내기
+### 3.2. 변환과 품질 판정
 
-- **공신력 스코어링**: Tier 0 (Arsenal.com 공식) 부터 4 (타블로이드) 까지를 YAML 로 외부화하고 confidence 값으로 정렬합니다.
+- **공신력 스코어링**: Tier 0 (Arsenal.com 공식) 부터 4 (타블로이드) 까지를 YAML 로 외부화하고 `confidence` 값으로 정렬합니다.
   기자 단위 tier 가 매체 tier 보다 우선 적용됩니다 (전담 기자의 기사만 등급 상향).
 - **LLM 번역 · 요약**: Gemini 3.1 Flash-Lite 로 제목 · 본문 번역, 1줄 · 3줄 요약, 영입 단계 분류를 만듭니다.
   신규 행만 처리하므로 같은 실행을 다시 돌려도 결과가 달라지지 않고, 429 (rate limit) 를 만나면 그 실행의 번역을 멈추고 다음 실행이 이어서 처리합니다.
 - **번역 품질 게이트**: LLM 산출물을 규칙 코드로 검사해 위반이 있으면 다시 생성합니다 (§6.3).
 - **선수 추출과 이적 상태 관리**: 기사 본문에서 선수를 추출해 주체와 단순 언급으로 구분해 매핑하고, 선수별 페이지와 이적 상태 (영입 진행 · 확정 · 무산 · 타 클럽행 · 방출) 를 명단에서 관리합니다.
 
-### 3.3. 내보내기와 지켜보기
+### 3.3. 서빙과 관측
 
 - **데이터 품질 게이트**: 실행 마지막 단계의 dbt 테스트 21종이 배포를 차단합니다 (§6.1).
 - **배포 자동화**: 머지된 코드를 다음 실행이 자동으로 내려받아 배포하고, 운영 환경에서 반영을 검증한 뒤 불일치 시 롤백합니다 (§5).
@@ -146,7 +146,7 @@ systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 �
 |---|---|---|---|---|
 | SLO-1 | 병렬화 수집 시간 단축 | 순차 대비 55% 이상 단축 (실측 기반 재조정¹) | `metrics.benchmark()` (concurrency=1 vs N 벤치마크) | 56.5% 단축 (2026-07-15 · 3회 중앙값 · 실행마다 측정하지 않음) |
 | SLO-2 | 실행 성공률 | 99% 이상 | `pipeline_runs.success_rate` 최근 30회 평균 (재시도 · 소스 격리 포함) | 100.0% |
-| SLO-3 | 중복 적재율 | 0% | content_hash · URL UNIQUE 제약 + dbt `unique` 테스트 5종 | 0% (기사 1,161건) |
+| SLO-3 | 중복 적재율 | 0% | `content_hash` · URL `UNIQUE` 제약 + dbt `unique` 테스트 5종 | 0% (기사 1,161건) |
 | SLO-4 | 필수 필드 완전성 | 99% 이상 | dbt `not_null` 테스트 10종 | 100% |
 | SLO-5 | 소스 신선도 | 중단된 소스 0 | `source_freshness` 워터마크 · 소스별 임계 (24h ~ 192h) 초과 여부 | 2 (이적 시장 마감 후 기사량 감소로 임계 초과 · 임계 재조정 검토 중) |
 | SLO-6 | 수집량 이상 감지 | 이상 소스 0 · ±2σ 알림 | `quality.volume_anomalies` (직전 실행 대비) | 0 · 가동 중 (실발송 검증 2026-07-13) |
@@ -163,7 +163,7 @@ systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 �
 2026-07-20 이후 집계이며, 산출 방식은 [성공률 3종과 아무도 측정하지 않았던 1종](docs/troubleshooting/2026-09-11-three-success-rates-and-the-one-nobody-measured.md) 에 정리했습니다.
 수집 현황 대시보드의 「완주율 · 07-20 이후」 타일이 같은 기준으로 실행마다 값을 새로 산출합니다.
 
-- **실행**: Airflow 3.3.1 · LocalExecutor · Postgres 메타 DB · DAG 1개 · 태스크 8개 구성입니다 (§2). `catchup=False` · `max_active_runs=1` · `dagrun_timeout` 30분을 설정해, 기존 타이머의 동작 (밀린 실행은 1회만 수행 · 동시 실행 금지) 을 그대로 유지했습니다.
+- **실행**: Airflow 3.3.1 · `LocalExecutor` · Postgres 메타 DB · DAG 1개 · 태스크 8개 구성입니다 (§2). `catchup=False` · `max_active_runs=1` · `dagrun_timeout` 30분을 설정해, 기존 타이머의 동작 (밀린 실행은 1회만 수행 · 동시 실행 금지) 을 그대로 유지했습니다.
 - **배포 자동화**: `advance` 가 `origin/main` 을 내려받고, 파이프라인 실행 후 `judge` 가 라이브의 `build.json` 으로 반영 여부를 확인합니다. 설계는 [배포 자동화 스펙](docs/superpowers/specs/2026-09-03-deploy-automation-design.md) 에 있습니다.
 
 ```
@@ -190,32 +190,10 @@ gate (dbt 테스트 21종)
 
 > [행동 지표](https://bullet-in.pages.dev/behavior.html): DAU · 퍼널 (진입 → 카드 클릭 → 반복 → 재방문) · 요일 × 시각 히트맵 · 관심 지수 · 리텐션 · 화면별 클릭 · 페이지 · 상위 기사 · 선수 페이지를 보여 줍니다. GA4 이벤트를 Iceberg Gold 테이블로 집계해 렌더링합니다.
 
-**행동 로그의 출처 (GA4 → BigQuery → Iceberg)**: 행동 지표 대시보드의 수치는 GA4 가 BigQuery 로 매일 내보낸 이벤트 원본을 `warehouse_load` 태스크가 Iceberg Bronze 로 적재해 집계한 결과입니다. 같은 이벤트를 GA4 콘솔에서도 조회할 수 있어 외부 도구로 교차 검증이 가능합니다. 아래 캡처는 2026-09-18 기준이며 계정 · 프로젝트 식별자는 가렸습니다.
-
-![GA4 보고서 개요 (공개 주간)](docs/assets/ga4-users-launch-week.png)
-
-> GA4 보고서 개요, 2026-08-29 ~ 09-04 (공개 주간) 입니다.
-> 활성 사용자 822명 · 신규 사용자 812명이며, 신규 대 재방문 그래프의 08-29 급등이 공개일입니다.
->
-> 같은 7일 구간을 GA4 는 총 사용자 827명으로 집계하고 행동 지표 대시보드의 「Users · 7일」 도 827명이라 §1 의 값과 일치합니다.
->
-> 이전 문서에 적힌 890명은 날짜 필터 없이 테이블 전체 (공개 전인 08-24 · 08-28 포함) 를 집계한 값이라 공개 주간 수치가 아닙니다 ([사용자 키를 혼용하면 방문자가 두 배로 집계된다](docs/troubleshooting/2026-09-04-two-keys-double-the-visitor-count.md) §3 의 산출 참조).
-
-![GA4 이벤트 보고서](docs/assets/ga4-events-table.png)
-
-> GA4 이벤트 보고서, 08-29 ~ 09-17. 직접 정의한 이벤트는 4종입니다: `bi_entry` (유입) 3,769 · `bi_card_click` (카드 클릭) 628 · `bi_filter_apply` (필터) 238 · `bi_origin_exit` (원문 이탈) 15. 계측 코드는 `src/bullet_in/serve/static/app.js` 에 있습니다.
-
-![GA4 실시간 (bi_card_click 의 매개변수)](docs/assets/ga4-realtime-card-hash-param.png)
-
-> 실시간 개요에서 `bi_card_click` 이벤트를 펼친 화면입니다. 매개변수 `card_hash` 가 기사의 `content_hash` 와 같아 클릭 로그를 Silver 의 기사 행과 조인할 수 있고, 익명 식별자 `bi_cid` 와 클라이언트 시각 `bi_ts` 는 모든 이벤트에 포함됩니다.
-
-![GA4 관리 (BigQuery 링크)](docs/assets/ga4-bigquery-link.png)
-
-> GA4 관리 → BigQuery 링크 설정입니다. 내보내기 유형은 「매일」, 데이터 세트 위치는 서울 (asia-northeast3), 연결일은 2026-08-24 입니다.
-
-![BigQuery 데이터셋의 일별 테이블](docs/assets/bigquery-events-tables.png)
-
-> BigQuery 데이터셋 `analytics_551139164` 의 일별 테이블 `events_YYYYMMDD` (08-24 및 08-28 ~ 09-17 · 22개) 입니다. `warehouse_load` 는 이 목록에서 아직 적재하지 않은 날짜만 선별해 처리하며 당일 종료 시 삭제되는 `events_intraday_*` 는 읽지 않습니다.
+**행동 로그의 출처 (GA4 → BigQuery → Iceberg)**: 행동 지표 대시보드의 수치는 GA4 가 BigQuery 로 매일 내보낸 이벤트 원본을 `warehouse_load` 태스크가 Iceberg Bronze 로 적재해 집계한 결과입니다.
+직접 정의한 이벤트는 `bi_entry` (유입) · `bi_card_click` (카드 클릭) · `bi_filter_apply` (필터) · `bi_origin_exit` (원문 이탈) 4종이고, 계측 코드는 `src/bullet_in/serve/static/app.js` 에 있습니다.
+`bi_card_click` 의 매개변수 `card_hash` 가 기사의 `content_hash` 와 같아 클릭 로그를 Silver 의 기사 행과 조인할 수 있습니다.
+같은 이벤트를 GA4 콘솔에서도 조회할 수 있어 외부 도구로 교차 검증이 가능하며, 콘솔 화면으로 확인한 기록은 [계측 배선과 도착 증명 런북](docs/runbook/2026-08-24-wiring-analytics-and-proving-it-arrives.md) 에, 방문자 수 산출은 [방문자 · 퍼널 런북](docs/runbook/2026-09-04-measuring-visitors-funnel-and-retention-from-bronze.md) 에 있습니다.
 
 ![수집 현황 대시보드](docs/assets/dashboard-ops-live.png)
 
@@ -227,7 +205,7 @@ gate (dbt 테스트 21종)
 
 ### 6.1. dbt 게이트
 
-- **검사 구성**: 실행의 `gate` 태스크가 `dbt build` 로 스테이징 5개와 Gold 3개를 생성하고 테스트 21종 (unique 5 · not_null 10 · accepted_values 4 · relationships 2) 을 돌립니다. 차단되면 `deploy_site` 가 실행되지 않고 알림이 발송됩니다. 임계 미만의 결측은 경고로 분류해 로그에만 남깁니다. 설계는 [dbt 품질 게이트 스펙](docs/superpowers/specs/2026-08-31-dbt-quality-gate-design.md) 에 있습니다.
+- **검사 구성**: 실행의 `gate` 태스크가 `dbt build` 로 스테이징 5개와 Gold 3개를 생성하고 테스트 21종 (`unique` 5 · `not_null` 10 · `accepted_values` 4 · `relationships` 2) 을 돌립니다. 차단되면 `deploy_site` 가 실행되지 않고 알림이 발송됩니다. 임계 미만의 결측은 경고로 분류해 로그에만 남깁니다. 설계는 [dbt 품질 게이트 스펙](docs/superpowers/specs/2026-08-31-dbt-quality-gate-design.md) 에 있습니다.
 - **게이트 자체의 장애**: dbt 프로세스가 시그널로 종료되면 (세그멘테이션 폴트) 1회 재시도하고 그래도 결과 파일이 생기지 않으면 통과로 간주하지 않습니다. 2026-08-31 에 실제로 차단이 발생했고, 이후 진단 정보를 stdout 과 stderr 양쪽에 기록하도록 수정했습니다 ([트러블슈팅](docs/troubleshooting/2026-09-01-the-gate-blocked-and-the-journal-could-not-say-why.md)).
 ### 6.2. 신선도와 수집량
 
@@ -260,9 +238,9 @@ LLM 이 만든 본문을 LLM 없이 규칙 코드로 검사합니다.
 
 | 영역 | 선택 | 이유 |
 |---|---|---|
-| 서빙 mart | **MariaDB** | 일 수십 건 규모의 서빙 (포인트 조회 · 필터 · UNIQUE dedup) 에는 OLTP 가 적합 |
+| 서빙 mart | **MariaDB** | 일 수십 건 규모의 서빙 (포인트 조회 · 필터 · `UNIQUE` dedup) 에는 OLTP 가 적합 |
 | 원본 랜딩 | **MongoDB** | 구조가 제각각인 원문을 손실 없이 schema-on-read 로 보존해 언제든 재처리 가능 |
-| 품질 · 분석 | **dbt + DuckDB** | dbt test 가 데이터 계약 검증과 그대로 대응 · DuckDB 가 MariaDB 를 attach 해 별도 인프라 없이 집계와 테스트 수행 |
+| 품질 · 분석 | **dbt + DuckDB** | `dbt test` 가 데이터 계약 검증과 그대로 대응 · DuckDB 가 MariaDB 를 attach 해 별도 인프라 없이 집계와 테스트 수행 |
 | 레이크하우스 | **Apache Iceberg on GCS + Google Lakehouse runtime catalog** | 변경 이력 · 스냅샷 · 행동 로그처럼 append 위주 데이터를 서빙 DB 외부에 적재 · PyIceberg 로 직접 쓰고 카탈로그만 매니지드 서비스를 사용해 운영할 서버가 없음 (§8) |
 | 스크래핑 | **Playwright / httpx** | 소스 난이도 (정적 · 쿠키 인증 · 안티봇) 에 맞춰 도구를 선택 · X 는 쿠키 주입 Playwright |
 | 스케줄 · 배포 | **Airflow 3 (LocalExecutor) + wrangler** | 실행을 태스크 8개로 분리해 3시간마다 수행 · 실패한 태스크만 식별되고 판정 태스크가 배포를 롤백 (§8) · 실행 종료 시 Pages 직접 업로드 |
@@ -274,7 +252,7 @@ LLM 이 만든 본문을 LLM 없이 규칙 코드로 검사합니다.
 
 - **CDC 를 사용하지 않았습니다**
   - 배경: CDC (Debezium · binlog) 는 상류 트랜잭션 DB 의 변경을 캡처하는 기술인데, 이 파이프라인의 소스는 웹 · API · X 라 읽을 binlog 가 없습니다.
-  - 선택: 일 수백 건 규모의 배치에 Kafka + Debezium 은 과설계라, 애플리케이션 레벨 변경 감지 (content_hash 비교 + revision 증가) 를 사용했습니다.
+  - 선택: 일 수백 건 규모의 배치에 Kafka + Debezium 은 과설계라, 애플리케이션 레벨 변경 감지 (`content_hash` 비교 + `revision` 증가) 를 사용했습니다.
   - 감수한 것: 소스가 조용히 수정한 기사는 다음 수집 시점까지 감지하지 못합니다. 변경 이력은 실행마다 Iceberg `articles_changes` 에 적재합니다.
 
 - **SLO-1 목표를 70% 에서 55% 로 하향했습니다**
@@ -355,7 +333,7 @@ Silver 는 mart_history (Iceberg) 로도 흘러갑니다 · 아래 레이크하�
 층 이름은 실제 데이터가 존재하는 자리에만 붙였습니다.
 
 - **Bronze (MongoDB `raw_items`)**: 원문을 변형 없이 보존합니다. 신선도 판정의 워터마크가 이 층에서 산출됩니다.
-- **Silver (MariaDB 테이블 6개)**: `articles` (정규화 메타 + tier + confidence + 번역 · 요약, `content_hash` · `url` UNIQUE 로 dedup) · `sources` · `players` · `article_players` (주체 · 언급) · `pipeline_runs` (실행별 SLO 근거) · `source_freshness` (실행 × 소스 신선도 이력).
+- **Silver (MariaDB 테이블 6개)**: `articles` (정규화 메타 + `tier` + `confidence` + 번역 · 요약, `content_hash` · `url` `UNIQUE` 로 dedup) · `sources` · `players` · `article_players` (주체 · 언급) · `pipeline_runs` (실행별 SLO 근거) · `source_freshness` (실행 × 소스 신선도 이력).
 - **Gold (dbt `models/gold/` 모델 3개)**: `gold_daily_source_quality` · `gold_slo_rollup` · `gold_tier_distribution`. 실행 종료 시 `dbt build` 가 갱신하며 같은 실행의 테스트 21종이 품질 게이트로 동작합니다.
 
 `models/staging/` 의 모델 5개는 MariaDB 테이블을 그대로 읽어 오는 경유 뷰라 층 이름을 붙이지 않았습니다.
@@ -372,7 +350,7 @@ Silver 는 mart_history (Iceberg) 로도 흘러갑니다 · 아래 레이크하�
 | `src/bullet_in/run.py` · `pipeline.py` | 실행 1회의 진입점과 항목 판정 (여성 축구 제외 · 본문 등급 · 기자 선택) |
 | `src/bullet_in/adapters/` | 소스별 수집기 (`rss` · `html` · `playwright_news` · `x_playwright` · `arsenal_api` · `guardian_api` · `fmkorea`) |
 | `src/bullet_in/ingest.py` · `canonical.py` · `dedup.py` | 병렬 수집 · URL 정본화와 `content_hash` · 신규 · 변경 · 중복 분류 |
-| `src/bullet_in/credibility.py` · `score.py` | 기자 · 매체 레지스트리 조회와 tier · confidence 산출 |
+| `src/bullet_in/credibility.py` · `score.py` | 기자 · 매체 레지스트리 조회와 `tier` · `confidence` 산출 |
 | `src/bullet_in/enrich.py` · `fidelity.py` | LLM 번역 · 요약과 번역 품질 게이트 (§6) |
 | `src/bullet_in/roster.py` · `transfer_stage.py` | 선수 명단과 이적 단계 |
 | `src/bullet_in/storage/` | MongoDB (Bronze) · MariaDB (Silver) 접근과 `schema.sql` |
