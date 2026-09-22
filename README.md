@@ -61,8 +61,9 @@
 
 [![아키텍처 (실행 한 번의 전체 지형)](docs/assets/architecture.svg)](https://raw.githubusercontent.com/benidjor/bullet-in/main/docs/assets/architecture.svg)
 
-> 왼쪽이 입력 (수집 소스 · 코드 저장소 · GA4 사이트 태그), 가운데가 Oracle Cloud VM 에서 도는 수집 · 저장과 Airflow DAG, 아래가 Google Cloud 의 레이크하우스, 오른쪽이 서빙과 알림입니다.
-> 글자가 작으면 그림을 눌러 원본 크기로 여십시오.
+> 위에서 아래로 네 층입니다.
+> 입력 (수집 소스 · 코드 저장소) → Oracle Cloud VM (수집 · 저장 · Airflow DAG) → Google Cloud (LLM · 레이크하우스) → 관측 · 서빙 (Pages · Discord · GA4 사이트 태그).
+> 세부가 필요하면 그림을 눌러 원본 크기로 여십시오.
 > 그림의 「소스 10종」 은 설정에 등재된 수를 말하며 이 가운데 9종이 활성입니다 (§3).
 
 DAG 안에서 태스크는 이 순서로 돕니다.
