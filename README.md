@@ -5,7 +5,7 @@
 > 영국 현지 언론과 ITK (X) 에 흩어진 Arsenal FC 소식을 하루 8회 병렬 수집하고 공신력 스코어링과 중복 제거를 거쳐 LLM 으로 번역 · 요약한 뒤 신뢰도순으로 제공하는 뉴스 데이터 파이프라인입니다.
 >
 > **공개 서비스**: https://bullet-in.pages.dev · 2026-08-29 공개 · Airflow 가 3시간마다 파이프라인을 실행해 수집하고 검증하고 배포합니다.
-> 현재 가동 상태는 [수집 현황 대시보드](https://bullet-in.pages.dev/ops.html) 의 페이지 생성 시각과 SLO 표에서 확인하실 수 있습니다.
+> 현재 가동 상태는 [수집 현황 대시보드](https://bullet-in.pages.dev/ops.html) 의 페이지 생성 시각과 SLO 표에서 확인할 수 있습니다.
 
 *Bullet-in = bulletin (단신) + bullet (병기고 Arsenal) 의 언어유희입니다.*
 
@@ -33,7 +33,7 @@
 | **비용** | Iceberg 테이블은 GCS · 카탈로그만 Google Lakehouse runtime catalog · 매니지드 Iceberg 테이블의 시간당 요금 없이 GCS 저장 · 작업 요금만 발생 (금액은 GCP 결제 보고서에서 조회) |
 
 위 수치는 [수집 현황 대시보드](https://bullet-in.pages.dev/ops.html) 가 실행할 때마다 새로 계산합니다.
-설계 판단만 빠르게 확인하시려면 [8. 설계 결정과 트레이드오프](#8-설계-결정과-트레이드오프) 로 바로 이동하셔도 됩니다.
+설계 판단만 빠르게 보려면 [8. 설계 결정과 트레이드오프](#8-설계-결정과-트레이드오프) 로 바로 가도 됩니다.
 
 **이 문서 읽는 법**
 
@@ -62,7 +62,7 @@
 [![아키텍처 (실행 한 번의 전체 지형)](docs/assets/architecture.svg)](https://raw.githubusercontent.com/benidjor/bullet-in/main/docs/assets/architecture.svg)
 
 > 왼쪽이 입력 (수집 소스 · 코드 저장소 · GA4 사이트 태그), 가운데가 Oracle Cloud VM 에서 도는 수집 · 저장과 Airflow DAG, 아래가 Google Cloud 의 레이크하우스, 오른쪽이 서빙과 알림입니다.
-> 글자가 작으면 그림을 눌러 3배 크기로 여십시오.
+> 글자가 작으면 그림을 누르면 3배 크기로 열립니다.
 > 그림의 「소스 10종」 은 설정에 등재된 수를 말하며 이 가운데 9종이 활성입니다 (§3).
 
 DAG 안에서 태스크는 이 순서로 돕니다.
@@ -555,7 +555,7 @@ Airflow DAG 임포트는 별도 venv 에서 검증합니다 ([docs/MIGRATION.md]
 - [번역 모델 교체 후 게이트가 정상 번역을 오탐한 사례](docs/troubleshooting/2026-07-22-model-swap-gate-false-positives.md): 에러가 아니라 정상 동작처럼 보이는 장애라, 무엇이 실패했는지가 아니라 무엇이 이전보다 늘었는지를 세어야 발견됩니다.
 - [계획서 코드를 실행해야 드러난 결함 3건](docs/troubleshooting/2026-09-05-what-only-showed-up-when-the-plan-was-run.md): 템플릿 엔진이 CSS 를 주석으로 해석하는 사례처럼, 부분 테스트로는 드러나지 않고 실제로 실행해야 발견되는 유형입니다.
 
-나머지는 `docs/troubleshooting/` 에서 `subagent` · `session` · `plan` · `prompt` 로 검색하시면 됩니다.
+나머지는 `docs/troubleshooting/` 에서 `subagent` · `session` · `plan` · `prompt` 로 검색하면 됩니다.
 
 ## 14. 한계 및 향후 개선 방향
 
