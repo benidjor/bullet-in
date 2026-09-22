@@ -5,7 +5,7 @@
 > 영국 현지 언론과 ITK (X) 에 흩어진 Arsenal FC 소식을 하루 8회 병렬 수집하고 공신력 스코어링과 중복 제거를 거쳐 LLM 으로 번역 · 요약한 뒤 신뢰도순으로 제공하는 뉴스 데이터 파이프라인입니다.
 >
 > **공개 서비스**: https://bullet-in.pages.dev · 2026-08-29 공개 · Airflow 가 3시간마다 파이프라인을 실행해 수집하고 검증하고 배포합니다.
-> 현재 가동 상태는 [수집 현황 대시보드](https://bullet-in.pages.dev/ops.html) 의 페이지 생성 시각과 SLO 표에서 확인하실 수 있습니다.
+> 현재 가동 상태는 [수집 현황 대시보드](https://bullet-in.pages.dev/ops.html) 의 페이지 생성 시각과 SLO 표에서 확인할 수 있습니다.
 
 *Bullet-in = bulletin (단신) + bullet (병기고 Arsenal) 의 언어유희입니다.*
 
@@ -33,7 +33,7 @@
 | **비용** | Iceberg 테이블은 GCS · 카탈로그만 Google Lakehouse runtime catalog · 매니지드 Iceberg 테이블의 시간당 요금 없이 GCS 저장 · 작업 요금만 발생 (금액은 GCP 결제 보고서에서 조회) |
 
 위 수치는 [수집 현황 대시보드](https://bullet-in.pages.dev/ops.html) 가 실행할 때마다 새로 계산합니다.
-설계 판단만 빠르게 확인하시려면 [8. 설계 결정과 트레이드오프](#8-설계-결정과-트레이드오프) 로 바로 이동하셔도 됩니다.
+설계 판단만 빠르게 확인하려면 [8. 설계 결정과 트레이드오프](#8-설계-결정과-트레이드오프) 로 바로 이동해도 됩니다.
 
 **이 문서 읽는 법**
 
@@ -62,8 +62,8 @@
 [![아키텍처 (실행 한 번의 전체 지형)](docs/assets/architecture.svg)](https://raw.githubusercontent.com/benidjor/bullet-in/main/docs/assets/architecture.svg)
 
 > 왼쪽이 입력 (수집 소스 · 코드 저장소 · GA4 사이트 태그), 가운데가 Oracle Cloud VM 에서 도는 수집 · 저장과 Airflow DAG, 아래가 Google Cloud 의 레이크하우스, 오른쪽이 서빙과 알림입니다.
-> 글자가 작으면 그림을 눌러 3배 크기로 여십시오.
-> 그림의 「소스 10종」 은 설정에 등재된 수를 말하며 이 가운데 9종이 활성입니다 (§3).
+> 글자가 작으면 그림을 누르면 3배 크기로 열립니다.
+> 그림의 「소스 10종」 은 설정에 등재된 수를 말하며 이 가운데 9종이 활성입니다 ([§3](#3-핵심-기능)).
 
 DAG 안에서 태스크는 이 순서로 돕니다.
 
@@ -84,7 +84,7 @@ advance -> collect -> enrich -> publish -> gate -> deploy_site -> judge
 | `judge` | 라이브 `build.json` 으로 반영 확인 · 불일치 시 이전 커밋으로 롤백 · Discord 알림 |
 | `warehouse_load` | MariaDB 변경분 · 스냅샷과 GA4 행동 로그를 Iceberg (GCS) 에 적재 · Gold 재작성 |
 
-실행 주기는 3시간이고 실행기는 `LocalExecutor` 입니다 (§5).
+실행 주기는 3시간이고 실행기는 `LocalExecutor` 입니다 ([§5](#5-운영)).
 
 systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 워치리스트 (귀속된 선수를 fmkorea 에서 재검색) · 일일 백업 (GCS) · 레이크하우스 유지보수 (스냅샷 만료 · 컴팩션) · Airflow 감시 (하트비트 · 실행 지연).
 
@@ -103,15 +103,15 @@ systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 �
   기자 단위 tier 가 매체 tier 보다 우선 적용됩니다 (전담 기자의 기사만 등급 상향).
 - **LLM 번역 · 요약**: Gemini 3.1 Flash-Lite 로 제목 · 본문 번역, 1줄 · 3줄 요약, 영입 단계 분류를 만듭니다.
   신규 행만 처리하므로 같은 실행을 다시 돌려도 결과가 달라지지 않고, 429 (rate limit) 를 만나면 그 실행의 번역을 멈추고 다음 실행이 이어서 처리합니다.
-- **번역 품질 게이트**: LLM 산출물을 규칙 코드로 검사해 위반이 있으면 다시 생성합니다 (§6.3).
+- **번역 품질 게이트**: LLM 산출물을 규칙 코드로 검사해 위반이 있으면 다시 생성합니다 ([§6.3](#63-번역-품질-게이트)).
 - **선수 추출과 이적 상태 관리**: 기사 본문에서 선수를 추출해 주체와 단순 언급으로 구분해 매핑하고, 선수별 페이지와 이적 상태 (영입 진행 · 확정 · 무산 · 타 클럽행 · 방출) 를 명단에서 관리합니다.
 
 ### 3.3. 서빙과 관측
 
-- **데이터 품질 게이트**: 실행 마지막 단계의 dbt 테스트 21종이 배포를 차단합니다 (§6.1).
-- **배포 자동화**: 머지된 코드를 다음 실행이 자동으로 내려받아 배포하고, 운영 환경에서 반영을 검증한 뒤 불일치 시 롤백합니다 (§5).
+- **데이터 품질 게이트**: 실행 마지막 단계의 dbt 테스트 21종이 배포를 차단합니다 ([§6.1](#61-dbt-게이트)).
+- **배포 자동화**: 머지된 코드를 다음 실행이 자동으로 내려받아 배포하고, 운영 환경에서 반영을 검증한 뒤 불일치 시 롤백합니다 ([§5](#5-운영)).
 - **관측성**: 대시보드 2종 (행동 지표 · 수집 현황) 과 Discord 알림 (수집량 이상 · 신선도 · 게이트 · 태스크 실패 · 배포 판정) 을 운영합니다.
-- **행동 로그와 레이크하우스**: GA4 이벤트를 Iceberg 에 Bronze · Silver · Gold 로 적재하고, 서빙 DB 의 변경 이력과 일별 스냅샷도 같은 레이크하우스에 보존합니다 (§9).
+- **행동 로그와 레이크하우스**: GA4 이벤트를 Iceberg 에 Bronze · Silver · Gold 로 적재하고, 서빙 DB 의 변경 이력과 일별 스냅샷도 같은 레이크하우스에 보존합니다 ([§9](#9-데이터-모델)).
 
 ### 3.4. 수집 소스
 
@@ -173,7 +173,7 @@ systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 �
 
 ### 5.1. 실행
 
-- **구성**: Airflow 3.3.1 · `LocalExecutor` · Postgres 메타 DB · DAG 1개 · 태스크 8개 (§2)
+- **구성**: Airflow 3.3.1 · `LocalExecutor` · Postgres 메타 DB · DAG 1개 · 태스크 8개 ([§2](#2-아키텍처))
 - **옛 타이머의 성질을 그대로 옮긴 설정**
   - `catchup=False`: 밀린 실행은 1회만 수행
   - `max_active_runs=1`: 동시 실행 금지
@@ -315,9 +315,9 @@ LLM 이 만든 본문을 LLM 없이 규칙 코드로 검사합니다.
 | 서빙 mart | **MariaDB** | 일 수십 건 규모의 서빙 (포인트 조회 · 필터 · `UNIQUE` dedup) 에는 OLTP 가 적합 |
 | 원본 랜딩 | **MongoDB** | 구조가 제각각인 원문을 손실 없이 schema-on-read 로 보존해 언제든 재처리 가능 |
 | 품질 · 분석 | **dbt + DuckDB** | `dbt test` 가 데이터 계약 검증과 그대로 대응 · DuckDB 가 MariaDB 를 attach 해 별도 인프라 없이 집계와 테스트 수행 |
-| 레이크하우스 | **Apache Iceberg on GCS + Google Lakehouse runtime catalog** | 변경 이력 · 스냅샷 · 행동 로그처럼 append 위주 데이터를 서빙 DB 외부에 적재 · PyIceberg 로 직접 쓰고 카탈로그만 매니지드 서비스를 사용해 운영할 서버가 없음 (§8) |
+| 레이크하우스 | **Apache Iceberg on GCS + Google Lakehouse runtime catalog** | 변경 이력 · 스냅샷 · 행동 로그처럼 append 위주 데이터를 서빙 DB 외부에 적재 · PyIceberg 로 직접 쓰고 카탈로그만 매니지드 서비스를 사용해 운영할 서버가 없음 ([§8](#8-설계-결정과-트레이드오프)) |
 | 스크래핑 | **Playwright / httpx** | 소스 난이도 (정적 · 쿠키 인증 · 안티봇) 에 맞춰 도구를 선택 · X 는 쿠키 주입 Playwright |
-| 스케줄 · 배포 | **Airflow 3 (LocalExecutor) + wrangler** | 실행을 태스크 8개로 분리해 3시간마다 수행 · 실패한 태스크만 식별되고 판정 태스크가 배포를 롤백 (§8) · 실행 종료 시 Pages 직접 업로드 |
+| 스케줄 · 배포 | **Airflow 3 (LocalExecutor) + wrangler** | 실행을 태스크 8개로 분리해 3시간마다 수행 · 실패한 태스크만 식별되고 판정 태스크가 배포를 롤백 ([§8](#8-설계-결정과-트레이드오프)) · 실행 종료 시 Pages 직접 업로드 |
 | LLM 번역 · 요약 | **Gemini 3.1 Flash-Lite** | 일 수백 건 규모 · 단순 번역에 맞는 단가 · `response_mime_type` 으로 JSON 출력 강제. **유료 (Tier 1 선불)** 이며 월 요금은 GCP 결제 보고서에서 조회 (문서에 금액을 고정하면 값이 낡음) |
 
 ## 8. 설계 결정과 트레이드오프
@@ -345,7 +345,7 @@ LLM 이 만든 본문을 LLM 없이 규칙 코드로 검사합니다.
 - **품질 게이트와 웨어하우스 적재를 분리했습니다**
   - 배경: 두 작업은 실패했을 때 영향 범위가 다릅니다.
   - 선택: 게이트는 DuckDB 가 MariaDB 를 attach 해 수행하는 **필수 단계**로 두어 실패 시 배포를 중단하고, 웨어하우스 적재는 파이프라인 뒤에 붙는 **부가 단계**로 두어 실패해도 배포에 영향을 주지 않게 했습니다.
-  - 감수한 것: Gold 가 두 곳에 생겨 문서와 화면에서 「어느 Gold 인지」 를 매번 명시해야 합니다 (§9).
+  - 감수한 것: Gold 가 두 곳에 생겨 문서와 화면에서 「어느 Gold 인지」 를 매번 명시해야 합니다 ([§9](#9-데이터-모델)).
 
 - **게이트 실패 시 배포를 차단하는 쪽으로 설계했습니다 (fail-closed)**
   - 배경: dbt 프로세스가 시그널로 종료되면 (세그멘테이션 폴트) 결과 파일이 생기지 않아 판정 근거가 사라집니다.
@@ -427,7 +427,7 @@ Gold
   - `articles_changes`: 실행별 변경분
   - `articles_snapshot` · `players_snapshot` · `article_players_snapshot`: 90일까지 매일 · 이후 주 1회
   - `ops_daily`: 일별 운영 지표
-- **`behavior`**: GA4 이벤트 (BigQuery 일별 내보내기 · §5) 를 층으로 나눠 적재합니다.
+- **`behavior`**: GA4 이벤트 (BigQuery 일별 내보내기 · [§5](#5-운영)) 를 층으로 나눠 적재합니다.
   - Bronze `ga4_events` · Silver `ga4_events_flat`
   - Gold 팩트: `fact_card_click` · `fact_session` · `fact_user_daily`
   - Gold 디멘션: `dim_date` · `dim_user`
@@ -441,7 +441,7 @@ Gold
 | `src/bullet_in/adapters/` | 소스별 수집기 (`rss` · `html` · `playwright_news` · `x_playwright` · `arsenal_api` · `guardian_api` · `fmkorea`) |
 | `src/bullet_in/ingest.py` · `canonical.py` · `dedup.py` | 병렬 수집 · URL 정본화와 `content_hash` · 신규 · 변경 · 중복 분류 |
 | `src/bullet_in/credibility.py` · `score.py` | 기자 · 매체 레지스트리 조회와 `tier` · `confidence` 산출 |
-| `src/bullet_in/enrich.py` · `fidelity.py` | LLM 번역 · 요약과 번역 품질 게이트 (§6) |
+| `src/bullet_in/enrich.py` · `fidelity.py` | LLM 번역 · 요약과 번역 품질 게이트 ([§6](#6-데이터-품질)) |
 | `src/bullet_in/roster.py` · `transfer_stage.py` | 선수 명단과 이적 단계 |
 | `src/bullet_in/storage/` | MongoDB (Bronze) · MariaDB (Silver) 접근과 `schema.sql` |
 | `src/bullet_in/serve/` | 정적 HTML 렌더 · 대시보드 2종의 뷰 · 차트 |
@@ -452,7 +452,7 @@ Gold
 | `config/` | 수집 소스 · 공신력 레지스트리 · 표기 사전 등 YAML 5개 |
 | `tests/` | 단위 테스트와 `integration/` (MariaDB 컨테이너가 필요합니다) |
 | `infra/` | systemd 유닛 · 백업 · 배포 스크립트 |
-| `docs/` | 설계 · 계획 · 런북 · 트러블슈팅 (§12) |
+| `docs/` | 설계 · 계획 · 런북 · 트러블슈팅 ([§12](#12-문서-구성)) |
 
 ## 11. 실행 방법
 
@@ -537,7 +537,7 @@ Airflow DAG 임포트는 별도 venv 에서 검증합니다 ([docs/MIGRATION.md]
 사람이 매번 확인하지 않아도 자동으로 걸러지도록 만든 장치입니다.
 
 - 문서 서식은 저장 시점에 검사합니다.
-  `.claude/hooks/check-doc-format.py` 가 컨벤션 §2.2 를 검사하고, CI 의 `docs-format` 잡이 변경된 `docs/*.md` 에 같은 검사를 한 번 더 돌립니다.
+  `.claude/hooks/check-doc-format.py` 가 [커밋 · PR 컨벤션 §2.2](docs/conventions/2026-06-11-commit-pr-convention.md) 를 검사하고, CI 의 `docs-format` 잡이 변경된 `docs/*.md` 에 같은 검사를 한 번 더 돌립니다.
 - PR 본문은 게시 전에 `.claude/tools/check-pr-format.py` 를 통과시킵니다.
   동일한 위반이 5회 재발한 뒤에 만든 도구라 파일 상단에 그 이력을 기록해 두었습니다.
 - 산문 비중이 큰 산출물 (PR 본문 · 런북 · 트러블슈팅) 은 게시 전에 문체 점검을 1회 거칩니다.
@@ -555,7 +555,7 @@ Airflow DAG 임포트는 별도 venv 에서 검증합니다 ([docs/MIGRATION.md]
 - [번역 모델 교체 후 게이트가 정상 번역을 오탐한 사례](docs/troubleshooting/2026-07-22-model-swap-gate-false-positives.md): 에러가 아니라 정상 동작처럼 보이는 장애라, 무엇이 실패했는지가 아니라 무엇이 이전보다 늘었는지를 세어야 발견됩니다.
 - [계획서 코드를 실행해야 드러난 결함 3건](docs/troubleshooting/2026-09-05-what-only-showed-up-when-the-plan-was-run.md): 템플릿 엔진이 CSS 를 주석으로 해석하는 사례처럼, 부분 테스트로는 드러나지 않고 실제로 실행해야 발견되는 유형입니다.
 
-나머지는 `docs/troubleshooting/` 에서 `subagent` · `session` · `plan` · `prompt` 로 검색하시면 됩니다.
+나머지는 `docs/troubleshooting/` 에서 `subagent` · `session` · `plan` · `prompt` 로 검색하면 됩니다.
 
 ## 14. 한계 및 향후 개선 방향
 
