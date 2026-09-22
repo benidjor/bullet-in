@@ -66,10 +66,33 @@ curl -sL https://bullet-in.pages.dev/ | grep -o 'href="[a-z]*\.html"' | sort | u
 ### 4.2. 홈 대표 기사 사진이 헤드리스에서 빈 자리로 나온다
 
 홈의 대표 기사 (`article.lead`) 와 주요 소식 카드는 구단 공식 기사라 사진이 `assets.arsenal.com` 에서 온다.
-헤드리스 Chromium 에서 그 요청이 `net::ERR_BLOCKED_BY_ORB` 로 막혀 (응답이 이미지가 아니어서 Chrome 이 버린다) 사진 자리가 비고 사이드 카드가 좁게 접힌다.
+헤드리스 Chromium 에서 그 요청이 `net::ERR_BLOCKED_BY_ORB` 로 막혀 사진 자리가 비고 사이드 카드가 좁게 접힌다.
 보통 Chrome 의 UA 문자열을 넣어도 같다.
-실제 브라우저에서도 같은지는 2026-09-06 시점에 미확인이다.
 그래서 README 첫 캡처는 홈 대신 `all.html` 로 찍었다 (다른 매체 이미지는 뜬다).
+
+**2026-09-22 확인 — 실제 브라우저에서는 정상이고 원인은 응답 헤더다.**
+
+- 사용자 Chrome 으로 같은 기사를 열면 사진이 뜬다.
+제품 결함이 아니라 촬영 환경의 문제다.
+- 응답을 보면 파일명은 `.webp` 인데 `content-type: image/jpeg` 이고 `x-content-type-options: nosniff` 가 붙어 있다.
+이 어긋남을 헤드리스의 ORB 가 막는다.
+- 기사 상세 템플릿은 `onerror` 로 `.hero` 를 통째로 숨기므로, 막히면 **깨진 이미지가 아니라 사진 자리 자체가 사라진다.**
+캡처만 보고 「사진이 없는 기사」 로 오해하기 쉽다.
+
+**촬영할 때는 그 요청만 중계해 채운다.**
+
+```python
+async def relay(route):                      # ORB 우회가 아니라 촬영용 대체다
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as c:
+        r = await c.get(route.request.url)
+    await route.fulfill(status=r.status_code, body=r.content,
+                        headers={"content-type": r.headers.get("content-type", "image/jpeg")})
+
+await pg.route("**assets.arsenal.com/**", relay)
+```
+
+중계 뒤 `naturalWidth` 가 0 이 아닌지 보고 찍는다.
+사진이 들어가면 용량이 늘므로 (기사 상세 523 → 761 KB) `device_scale_factor` 는 1 로 둔다.
 
 ### 4.3. 「깨진 이미지 수」 는 뜻이 없다
 
