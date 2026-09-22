@@ -16,11 +16,9 @@
 렌더 도중에 회차가 값을 바꾸면 중간 상태가 그대로 배포된다.
 
 ```bash
-ssh -i ~/.ssh/<키> <운영> 'systemctl show bullet-in.service -p ActiveState --value'
-# inactive 여야 한다
-
-ssh -i ~/.ssh/<키> <운영> 'systemctl list-timers bullet-in.timer --no-pager | sed -n 2p'
-# 다음 회차까지 남은 시간을 본다 — 렌더 · 배포에 5분쯤 걸린다
+ssh -i ~/.ssh/<키> <운영> 'set -a; . ~/airflow/airflow.env; set +a; PYTHONWARNINGS=ignore ~/airflow-venv/bin/airflow dags list-runs bullet_in_cycle -o table | head -3'
+# 맨 윗줄이 success 여야 한다 (running 이면 회차가 도는 중이다)
+# 실행은 3시간 간격이다 — 렌더 · 배포에 5분쯤 걸리므로 다음 정시까지 여유를 본다
 ```
 
 ### 1.2. 다른 배치가 도는 중인지
@@ -163,8 +161,8 @@ soup = BeautifulSoup(open("live_index.html", encoding="utf-8").read(), "html.par
 
 ```bash
 ssh -i ~/.ssh/<키> <운영> 'rm -f /tmp/vm_render.py'
-ssh -i ~/.ssh/<키> <운영> 'systemctl is-active bullet-in.timer bullet-in-watchlist.timer bullet-in-backup.timer'
-# 셋 다 active 여야 한다
+ssh -i ~/.ssh/<키> <운영> 'systemctl is-active bullet-in-watchlist.timer bullet-in-backup.timer bullet-in-airflow-watch.timer bullet-in-warehouse-maint.timer'
+# 넷 다 active 여야 한다 (회차 타이머 `bullet-in.timer` 는 Airflow 전환 뒤 비활성이 정상이다)
 ```
 
 터널 · 로컬 서버를 열었으면 함께 닫는다.

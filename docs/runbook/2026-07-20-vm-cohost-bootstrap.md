@@ -3,6 +3,11 @@
 bullet-in 을 seoulnow Oracle Free VM 에 함께 올려 (동거) systemd timer 로 하루 8회 무인 실행하는 절차와 일상 운영.
 SP-C 트랙 (plan `docs/superpowers/plans/2026-07-20-spc-schedule-cohost.md`) 에서 실제 수행한 명령 · 출력 기준이다.
 
+> **2026-09-04 이후 — 이 문서는 당시 부트스트랩 기록이다.**
+> 회차는 지금 Airflow DAG `bullet_in_cycle` 이 돌리고 `bullet-in.timer` 는 비활성이다.
+> 아래 §5 의 타이머 명령을 그대로 치면 멈추는 것이 없다 — 지금 절차는 [Airflow 런북](2026-09-04-running-the-cycle-under-airflow.md) 에 있다.
+> VM 접속 · 동거 구성 · 경로는 그대로 유효하다.
+
 ## 1. 접속
 
 - 대상: `ubuntu@155.248.164.17` (Oracle A1 arm64 · Ubuntu · 시스템 TZ 는 KST, 타이머는 UTC 지정).

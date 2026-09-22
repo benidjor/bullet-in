@@ -56,7 +56,7 @@ curl -sS -L -A "Mozilla/5.0 bullet-in/0.1" --max-time 25 \
 ### 3.1. 회차를 피한다
 
 ```bash
-ssh <vm> 'systemctl list-timers bullet-in.timer --no-pager | head -2'
+ssh <vm> 'set -a; . ~/airflow/airflow.env; set +a; PYTHONWARNINGS=ignore ~/airflow-venv/bin/airflow dags list-runs bullet_in_cycle -o table | head -3'
 ```
 
 정기 회차는 KST 3시간 간격 (00 · 03 · … · 21시) 이고 한 회차가 2 ~ 4분이다.

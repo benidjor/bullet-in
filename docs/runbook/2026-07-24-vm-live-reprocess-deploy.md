@@ -6,11 +6,13 @@
 ## 1. 작업 창 확보 — 정기 회차와의 충돌 회피
 
 백필 도중 정기 회차가 겹치면 DB 쓰기와 Gemini 속도 한도를 두고 경합한다.
-착수 전 다음 발화 시각을 확인하고, 작업 예상 시간 안이면 타이머를 세운다.
+착수 전 최근 실행 상태를 확인하고, 작업 예상 시간 안에 다음 정시가 오면 DAG 를 멈춘다.
+회차는 2026-09-04 부터 Airflow DAG `bullet_in_cycle` 이 돌린다 (절차 정본은 [Airflow 런북](2026-09-04-running-the-cycle-under-airflow.md)).
 
 ```bash
-systemctl list-timers bullet-in.timer --no-pager   # NEXT 확인
-sudo systemctl stop bullet-in.timer                # 정지 (작업 후 반드시 재가동)
+set -a; . ~/airflow/airflow.env; set +a
+PYTHONWARNINGS=ignore ~/airflow-venv/bin/airflow dags list-runs bullet_in_cycle -o table | head -3   # 최근 실행 · 다음 정시 가늠
+PYTHONWARNINGS=ignore ~/airflow-venv/bin/airflow dags pause bullet_in_cycle                          # 정지 (작업 후 반드시 unpause)
 ```
 
 - **실측 (2026-07-24)** — 착수 시점에 다음 발화가 5분 뒤라 정지하고 진행했다.
@@ -54,7 +56,7 @@ tier 델타 재계산의 old 는 **VM 이 실제로 돌리던 커밋** (pull 전
 7. **렌더 · 배포** — enrich 전용 런북 §4 재생성 후 `./infra/deploy-site.sh`.
 8. **검증 3단** — ① VM 산출물 grep → ② 프리뷰 URL → ③ 최상위 도메인 (VM 동거 런북 §8).
 상세 페이지 공신력은 `<dt>공신력</dt><dd>…</dd>` 패턴으로 grep 해야 사이드바 라벨 오매치를 피한다.
-9. **타이머 재가동** — `sudo systemctl start bullet-in.timer`.
+9. **스케줄 재개** — `airflow dags unpause bullet_in_cycle`.
 캐치업 회차가 즉시 돌 수 있으니 (§1) `journalctl` 로 종료를 지켜보고 백필분 유지를 재확인한다.
 
 ## 5. 실측 기록 (2026-07-24 · PR-A)
