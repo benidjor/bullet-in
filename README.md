@@ -485,7 +485,7 @@ Airflow DAG 임포트는 별도 venv 에서 검증합니다 ([docs/MIGRATION.md]
 
 ## 12. 문서 구성
 
-설계 (`docs/superpowers/specs/` 71편) · 계획 (`docs/superpowers/plans/` 61편) · 런북 (`docs/runbook/` 88편) · 트러블슈팅 (`docs/troubleshooting/` 181편) 이 있습니다.
+설계 (`docs/superpowers/specs/` 71편) · 계획 (`docs/superpowers/plans/` 61편) · 런북 (`docs/runbook/` 88편) · 트러블슈팅 (`docs/troubleshooting/` 182편) 이 있습니다.
 아래 5편을 먼저 읽는 것을 권장합니다.
 
 1. [파이프라인 실행을 Airflow 로 이관한 설계](docs/superpowers/specs/2026-09-04-airflow-migration-design.md): 이관 시점의 판단 근거 · 태스크 8개 구성 · 실패 유형 3종 (프로세스 종료 · 건너뜀 · 차단) · 롤백 경로.
