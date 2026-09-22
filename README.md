@@ -354,18 +354,18 @@ LLM 이 만든 본문을 LLM 없이 규칙 코드로 검사합니다.
 메달리온 1 · 기사
 
 Bronze · MongoDB
-    raw_items · 소스 원문을 변형 없이 보존
-    신선도 판정의 워터마크가 이 층에서 나옵니다
+    - raw_items · 소스 원문을 변형 없이 보존
+    - 신선도 판정의 워터마크가 이 층에서 나옵니다
     |
     v   정규화 · content_hash 계산 · 공신력 tier 산출 · UNIQUE 중복 제거
 Silver · MariaDB
-    테이블 6개 · 서비스 화면과 수집 현황 대시보드가 직접 조회합니다
-    articles · sources · players · article_players
-    pipeline_runs · source_freshness
+    - 테이블 6개 · 서비스 화면과 수집 현황 대시보드가 직접 조회합니다
+    - articles · sources · players · article_players
+    - pipeline_runs · source_freshness
     |
     v   dbt build (실행의 마지막 단계)
 Gold · dbt + DuckDB
-    집계 모델 3개 · 테스트 21종이 배포를 막는 품질 게이트
+    - 집계 모델 3개 · 테스트 21종이 배포를 막는 품질 게이트
 
 Silver 는 mart_history (Iceberg) 로도 흘러갑니다 · 아래 레이크하우스 절
 
@@ -373,16 +373,16 @@ Silver 는 mart_history (Iceberg) 로도 흘러갑니다 · 아래 레이크하�
 메달리온 2 · 행동 로그        Iceberg on GCS 의 behavior 네임스페이스
 
 Bronze · ga4_events
-    BigQuery 일별 내보내기 · 중첩 · 반복 필드를 그대로 적재
+    - BigQuery 일별 내보내기 · 중첩 · 반복 필드를 그대로 적재
     |
     v   Flatten (ARRAY · STRUCT 해제) · 중복 이벤트 제거
 Silver · ga4_events_flat
-    1행 1이벤트 · 1열 1값
+    - 1행 1이벤트 · 1열 1값
     |
     v   전량 재구축 (신규 · 재방문은 전체 이력이 필요한 비가산 지표)
 Gold
-    팩트 3개 · fact_card_click · fact_session · fact_user_daily
-    디멘션 2개 · dim_date · dim_user
+    - 팩트 3개 · fact_card_click · fact_session · fact_user_daily
+    - 디멘션 2개 · dim_date · dim_user
 ```
 
 층 이름은 실제 데이터가 존재하는 자리에만 붙였습니다.
