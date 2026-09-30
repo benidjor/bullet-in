@@ -610,7 +610,10 @@ def test_만료가_스냅샷을_줄이고_행은_남긴다(local_catalog, fake_m
     rows_before = t.scan().to_arrow().num_rows
     assert len(t.metadata.snapshots) == 5
     # 만료 기준을 넘기려고 한참 뒤 시점으로 부른다.
-    warehouse.expire(t, _t(2026, 10, 1))
+    # 스냅샷은 실제 시계로 찍히므로 기준도 실제 시계에서 띄운다 — 달력 날짜로 고정하면
+    # 그 날짜의 7일 전을 실제 날짜가 지나는 순간부터 늘 실패한다 (2026-09-24 에 만료됐다).
+    later = datetime.now(timezone.utc) + timedelta(days=warehouse.EXPIRE_SNAPSHOT_DAYS + 1)
+    warehouse.expire(t, later)
     t.refresh()
     assert len(t.metadata.snapshots) == 1
     assert t.scan().to_arrow().num_rows == rows_before
