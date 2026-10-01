@@ -1,5 +1,7 @@
 from __future__ import annotations
+import hashlib
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from statistics import mean, pstdev
@@ -56,6 +58,90 @@ class SourceFreshness:
     # last_fetched_at 보다 오래됐으면 그 소스는 다른 행으로 흡수되고 있다는 뜻이다
     # (설계 2026-08-20 §3.4). 판정 뒤 run.py 가 채운다.
     stored_fetched_at: datetime | None = None
+    # SLO-5 끊김 판정 (스펙 2026-10-02 §2) — evaluate_states 가 채운다.
+    state: str | None = None            # ok · quiet · no_response · broken
+    miss_streak: int | None = None      # 연속 무응답 횟수
+    list_sig: str | None = None         # 마지막으로 응답한 실행의 목록 지문
+    list_changed_at: datetime | None = None
+    cap_hours: float | None = None
+    reason: str = ""                    # 저장하지 않는다 — 알림 문안용
+
+
+def list_signature(urls: Iterable[str]) -> str:
+    """목록 링크 묶음의 지문 — 순서와 중복은 무시한다 (스펙 2026-10-02 §2.3.2).
+
+    같은 기사들의 순서만 바뀐 것은 목록이 바뀐 것으로 보지 않는다."""
+    uniq = sorted({u for u in urls if u})
+    if not uniq:
+        return ""
+    return hashlib.sha256("\n".join(uniq).encode()).hexdigest()[:16]
+
+
+def responded(adapter: str | None, funnel: dict | None,
+              errored: bool) -> tuple[bool, str]:
+    """이번 실행에 목록이 응답했는가와 무응답 사유 (스펙 2026-10-02 §2.2).
+
+    HTML 은 제목 확인 비율 (titled ÷ deduped) 이 절반 이상이어야 응답이다 —
+    제목이 확인되지 않은 링크는 이적 키워드 검사까지 가지 못하고 버려진다."""
+    if errored:
+        return False, "error"
+    if not funnel:
+        return False, "no_record"
+    if adapter == "html":
+        links, titled = int(funnel.get("deduped", 0)), int(funnel.get("titled", 0))
+        if links == 0:
+            return False, "no_links"
+        if titled * 2 < links:
+            return False, "title_ratio"
+        return True, ""
+    if adapter == "x_playwright":
+        return (True, "") if int(funnel.get("scraped", 0)) > 0 else (False, "no_tweets")
+    if adapter == "fmkorea":
+        if int(funnel.get("searched", 0)) == 0:
+            return False, "search_failed"
+        if int(funnel.get("listed", 0)) == 0:
+            return False, "no_results"
+        return True, ""
+    return True, ""
+
+
+# 목록이 이만큼 바뀌지 않으면 「옛 글만 보이는」 고장으로 본다 (스펙 2026-10-02 §2.3.3).
+LIST_UNCHANGED_CAP_HOURS = 48.0
+
+
+def evaluate_states(records: list[SourceFreshness],
+                    responses: dict[str, tuple[bool, str]],
+                    sigs: dict[str, str | None], cap_hours: float,
+                    previous: dict[str, dict], now: datetime) -> None:
+    """소스마다 상태 넷 가운데 하나를 매기고 이어 적을 값을 채운다 (스펙 §2.1 · §2.5).
+
+    무응답 실행은 지문과 바뀐 시각을 직전 값 그대로 잇는다 — 비워 두면 다음 응답
+    실행이 빈 값과 비교해 목록이 그대로여도 「바뀜」 으로 판정한다."""
+    for r in records:
+        ok, reason = responses.get(r.source_id, (False, "no_record"))
+        prev = previous.get(r.source_id) or {}
+        prev_sig, prev_changed = prev.get("list_sig"), prev.get("list_changed_at")
+        if ok:
+            r.miss_streak = 0
+            r.list_sig = sigs.get(r.source_id) or None
+            r.list_changed_at = (now if prev_changed is None or r.list_sig != prev_sig
+                                 else prev_changed)
+        else:
+            r.miss_streak = int(prev.get("miss_streak") or 0) + 1
+            r.list_sig = prev_sig
+            r.list_changed_at = prev_changed or now
+        r.cap_hours = cap_hours
+        unchanged = (now - r.list_changed_at).total_seconds() / 3600
+        if not ok and r.miss_streak >= 2:
+            r.state, r.reason = "broken", reason
+        elif unchanged > cap_hours:
+            r.state, r.reason = "broken", "list_unchanged"
+        elif not ok:
+            r.state, r.reason = "no_response", reason
+        elif r.stale:
+            r.state, r.reason = "quiet", ""
+        else:
+            r.state, r.reason = "ok", ""
 
 
 def evaluate_freshness(watermarks: dict[str, datetime | None], now: datetime,
@@ -129,6 +215,51 @@ def freshness_alert_split(records: list[SourceFreshness],
             next_age = r.threshold_hours + (level + 1) * interval_hours
             hold.append(FreshnessHold(r.source_id, r.age_hours,
                                       round(next_age - r.age_hours, 1)))
+    return send, hold
+
+
+# 무응답 끊김의 재알림 단위 — 3시간 실행 × 16 = 48시간 (스펙 2026-10-02 §4.1.2).
+REALERT_RUNS = 16
+
+
+def _broken_level(miss_streak, list_changed_at, cap_hours, at,
+                  interval_hours: float, runs_per_interval: int) -> tuple[str, int, float]:
+    """끊긴 종류 · 재알림 구간 · 다음 구간까지 남은 시간 (시간)."""
+    if (miss_streak or 0) >= 2:
+        done = miss_streak - 2
+        level = done // runs_per_interval
+        return "miss", level, ((level + 1) * runs_per_interval - done) * 3.0
+    over = (at - list_changed_at).total_seconds() / 3600 - (cap_hours or 0.0)
+    level = int(over // interval_hours)
+    return "list", level, round((level + 1) * interval_hours - over, 1)
+
+
+def broken_alert_split(records: list[SourceFreshness], previous: dict[str, dict],
+                       now: datetime,
+                       interval_hours: float = FRESHNESS_REALERT_HOURS,
+                       runs_per_interval: int = REALERT_RUNS
+                       ) -> tuple[list[SourceFreshness], list[FreshnessHold]]:
+    """끊김 소스를 이번 실행 발송분과 보류분으로 가른다 (스펙 2026-10-02 §4.1.2).
+
+    직전 행과 비교하는 무상태 판정이다. 직전 행이 끊김이 아니었거나, 끊긴 종류가
+    바뀌었거나, 상한이 바뀌었거나, 재알림 구간이 올라가면 보낸다."""
+    send: list[SourceFreshness] = []
+    hold: list[FreshnessHold] = []
+    for r in records:
+        if r.state != "broken":
+            continue
+        kind, level, to_next = _broken_level(r.miss_streak, r.list_changed_at, r.cap_hours,
+                                             now, interval_hours, runs_per_interval)
+        prev = previous.get(r.source_id) or {}
+        if (prev.get("state") == "broken" and prev.get("cap_hours") == r.cap_hours
+                and prev.get("checked_at") is not None):
+            p_kind, p_level, _ = _broken_level(
+                prev.get("miss_streak"), prev.get("list_changed_at"), prev.get("cap_hours"),
+                prev["checked_at"], interval_hours, runs_per_interval)
+            if p_kind == kind and level <= p_level:
+                hold.append(FreshnessHold(r.source_id, r.age_hours or 0.0, to_next))
+                continue
+        send.append(r)
     return send, hold
 
 
