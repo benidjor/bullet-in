@@ -93,7 +93,7 @@ def completion(journal: dict, airflow: dict) -> tuple[int, int]:
 
 
 def gate_signal_deaths(log_root: Path) -> dict:
-    """gate 태스크 로그에서 「신호로 죽었다」 가 있는 실행 수 (안건 2ν · 재시도가 성공으로 바꾼 급사).
+    """gate 태스크 로그에서 「신호로 죽었다」 가 있는 실행 수 (안건 2ν · 재시도가 성공으로 덮은 세그폴트).
 
     분모는 gate 태스크 디렉터리 수 (실행 수) 다 — 시도가 둘이어도 실행은 하나로 센다.
     """
@@ -168,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         before = (_read_json(COMPLETION_PATH).get("gate") or {}).get("signal_deaths", 0)
         gate = write_completion(runs.stdout, _journal(), now)["gate"]
         if gate["signal_deaths"] > before:
-            # 재시도가 성공으로 바꾼 급사는 실패로 안 드러난다 — 흡수 장치에는 계수기를 붙인다 (트러블슈팅 2026-09-18).
+            # 재시도가 성공으로 덮은 세그폴트는 실패로 안 드러난다 — 흡수 장치에는 횟수를 세는 장치를 붙인다 (트러블슈팅 2026-09-18).
             notify.send_alert(f"⚠️ dbt 게이트가 신호로 죽고 재시도로 지나갔다 ({gate['signal_deaths']}번째)",
                               f"- 실행 `{gate['last_run_id']}` · {gate['last_at']}\n"
                               f"- 09-04 이후 게이트 {gate['gate_runs']}회 중 {gate['signal_deaths']}회 · 배포는 정상\n"

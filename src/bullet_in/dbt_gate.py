@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 _BLOCKING = {"fail", "error"}
 
 # 게이트가 못 돈 것 중 dbt 가 신호로 죽은 경우 (세그폴트 · 강제 종료) 의 종료 코드.
-# 판정기 (deploy.judge) 가 $EXIT_STATUS 하나로 「급사」 와 나머지를 가른다 (스펙 §8).
+# 판정기 (deploy.judge) 가 $EXIT_STATUS 하나로 「세그폴트」 와 나머지를 가른다 (스펙 §8).
 GATE_CRASH_EXIT = 3
 
 

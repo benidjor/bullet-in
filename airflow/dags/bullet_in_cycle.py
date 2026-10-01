@@ -77,8 +77,8 @@ with DAG(
     collect = BashOperator(task_id="collect", bash_command=_stage("collect"))
     enrich = BashOperator(task_id="enrich", bash_command=_stage("enrich"))
     publish = BashOperator(task_id="publish", bash_command=_stage("publish"), retries=1)
-    # 급사 (종료 코드 3) 는 실패가 아니라 건너뜀 — 뒤의 deploy_site 가 기본 규칙으로 함께 건너뛰고
-    # judge 가 「보류」 를 낸다. 급사 재시도는 게이트 안에서 이미 한 번 했다 (dbt_gate.run_gate).
+    # dbt 게이트 세그폴트 (종료 코드 3) 는 실패가 아니라 건너뜀 — 뒤의 deploy_site 가 기본 규칙으로 함께 건너뛰고
+    # judge 가 「보류」 를 낸다. 세그폴트 재시도는 게이트 안에서 이미 한 번 했다 (dbt_gate.run_gate).
     gate = BashOperator(task_id="gate", bash_command=_stage("gate"), skip_on_exit_code=3)
     # 끝 공백 — `.sh` 로 끝나면 BashOperator 가 Jinja 템플릿 파일로 읽으려 든다
     deploy_site = BashOperator(task_id="deploy_site",
