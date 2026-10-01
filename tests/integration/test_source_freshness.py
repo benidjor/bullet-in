@@ -76,3 +76,25 @@ def test_previous_freshness_returns_latest_cycle_only(engine):
 
 def test_previous_freshness_empty_on_first_cycle(engine):
     assert MartStore(engine).previous_freshness() == {}
+
+
+def test_record_and_previous_freshness_round_trip_new_columns(engine):
+    store = MartStore(engine)
+    at = datetime(2026, 10, 2, 3, 0)
+    [r] = evaluate_freshness({"bbc_sport": at - timedelta(hours=10)}, at, 96.0)
+    r.state, r.miss_streak, r.list_sig = "no_response", 1, "abcd1234abcd1234"
+    r.list_changed_at, r.cap_hours = at - timedelta(hours=6), 48.0
+    store.record_freshness("run-1", at, [r])
+    prev = store.previous_freshness()["bbc_sport"]
+    assert (prev["state"], prev["miss_streak"], prev["list_sig"]) == ("no_response", 1, "abcd1234abcd1234")
+    assert prev["list_changed_at"] == at - timedelta(hours=6)
+    assert prev["cap_hours"] == 48.0 and prev["checked_at"] == at
+
+
+def test_previous_freshness_old_rows_return_none_for_new_columns(engine):
+    store = MartStore(engine)
+    at = datetime(2026, 10, 2, 0, 0)
+    store.record_freshness("run-old", at, evaluate_freshness(
+        {"bbc_sport": at - timedelta(hours=2)}, at, 96.0))
+    prev = store.previous_freshness()["bbc_sport"]
+    assert prev["state"] is None and prev["miss_streak"] is None and prev["list_changed_at"] is None

@@ -53,7 +53,9 @@ SELECT source_id, checked_at FROM source_freshness
 WHERE checked_at >= '2026-07-25' ORDER BY checked_at;
 ```
 
-각 회차 시각에 대해 그 소스의 직전 원본 문서와의 경과를 구하고, `quality.freshness_alert_split` 과 같은 규칙으로 발송 건수를 센다.
+2026-10-02 부터 임계는 조용함 표시선일 뿐이라 알림 건수 시뮬레이션은 더 필요하지 않다.
+공백 분포만 쓴다 (§8 참조).
+아래는 옛 알림 규칙 기준의 기록이다.
 
 ```
 경과 <= 임계            → 정상
@@ -108,3 +110,30 @@ GROUP BY source_id ORDER BY stale_n DESC;
 - 신호 교체 설계 — `docs/superpowers/specs/2026-08-20-absorbed-source-freshness-signal-design.md` (§5 가 마감 전 임시 임계와 그 근거).
 - 임계 · 재알림 규칙의 원 설계 — `docs/superpowers/specs/2026-08-14-slo5-freshness-alert-blind-spot-design.md`.
 - 알림 해석과 진단표 — `docs/runbook/2026-07-13-freshness-watermark-ops.md`.
+
+## 8. 상한과 제목 확인 비율 (2026-10-02 추가)
+
+### 8.1. 무엇이 바뀌었나
+
+SLO-5 는 이제 「끊긴 소스」 만 센다 (스펙 `docs/superpowers/specs/2026-10-02-slo5-broken-source-signal-design.md`).
+
+`freshness_hours` 는 끊김 판정에서 빠지고, 수집 현황 화면에서 「조용함」 을 표시하는 기준선이 됐다.
+이 런북의 재측정 절차는 조용함 표시선을 고를 때 그대로 쓴다.
+조용함 표시선은 수집 현황 화면에서 목록이 응답하는 소스를 조용함으로 표시하는 기준선이다 (알림은 없다).
+
+### 8.2. 끊김을 정하는 값
+
+| 값 | 위치 | 뜻 |
+| --- | --- | --- |
+| 무응답 2회 연속 | 코드 (`quality.evaluate_states`) | 목록이 응답하지 않으면 끊김 |
+| 제목 확인 비율 절반 | 코드 (`quality.responded`) | HTML 목록에서 제목까지 확인된 링크가 절반보다 적으면 무응답 |
+| `list_unchanged_cap_hours: 48` | `config/sources.yaml` | 목록이 48시간 넘게 그대로면 끊김 |
+
+무응답이 처음 한 번이면 화면에 「응답 없음 1회」 만 보이고 알림은 없다.
+연속 두 번째에 끊김이 되어 알림이 가고, 끊긴 동안은 48시간마다 다시 알린다.
+
+### 8.3. 상한을 다시 볼 때
+
+배포 뒤 「신선도 판정」 로그에서 소스마다 목록이 바뀐 간격을 모은다.
+어느 소스든 정상일 때 목록이 48시간 넘게 그대로인 일이 있으면, 그 근거를 적고 상한을 올린다.
+상한을 소스마다 다르게 두는 것은 그런 근거가 생긴 뒤에 정한다.

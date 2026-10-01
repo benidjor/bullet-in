@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
 from bullet_in.quality import (success_rate, volume_anomaly, volume_anomalies,
                                Anomaly, evaluate_freshness, candidate_cliffs,
-                               freshness_alert_split)
+                               list_signature, responded,
+                               evaluate_states, SourceFreshness, broken_alert_split)
 
 def test_success_rate_excludes_errored_sources():
     assert success_rate(total_sources=5, errored=1) == 0.8
@@ -285,59 +286,222 @@ def test_roster_staleness_silent_on_closing_stage_for_axisless_player():
         [_pair(27, "요케레스", "none", "done")], {(27, "done"): 6}) == []
 
 
-def _stale(sid, age, thr):
-    from bullet_in.quality import SourceFreshness
-    return SourceFreshness(sid, datetime(2026, 8, 19) - timedelta(hours=age),
-                           thr, age, age > thr)
+# ── SLO-5 끊김 신호 (스펙 2026-10-02 §2.2 · §2.3) ─────────────────────────────
+
+def test_list_signature_ignores_order_and_duplicates():
+    a = list_signature(["https://x.test/2", "https://x.test/1", "https://x.test/1"])
+    b = list_signature(["https://x.test/1", "https://x.test/2"])
+    assert a == b and len(a) == 16
 
 
-def test_freshness_alert_split_first_cycle_sends_every_stale_source():
-    # 직전 회차 행이 없으면 비교 기준이 없다 — stale 이면 알린다
-    send, hold = freshness_alert_split([_stale("x_ornstein", 426.0, 120.0)], {})
-    assert [r.source_id for r in send] == ["x_ornstein"]
-    assert hold == []
+def test_list_signature_changes_when_one_link_changes():
+    assert list_signature(["https://x.test/1", "https://x.test/2"]) != \
+        list_signature(["https://x.test/1", "https://x.test/3"])
 
 
-def test_freshness_alert_split_holds_within_same_interval():
-    # 직전 회차와 같은 간격 구간 — 48h 가 아직 안 지났다
-    prev = {"x_ornstein": {"age_hours": 423.0, "threshold_hours": 120.0}}
-    send, [h] = freshness_alert_split([_stale("x_ornstein", 426.0, 120.0)], prev)
-    assert send == []
-    # 120 + 7*48 = 456h 에 다음 알림
-    assert (h.source_id, h.hours_to_next) == ("x_ornstein", 30.0)
+def test_list_signature_of_empty_list_is_empty_string():
+    assert list_signature([]) == "" and list_signature(["", None]) == ""
 
 
-def test_freshness_alert_split_sends_when_interval_elapses():
-    prev = {"x_ornstein": {"age_hours": 455.0, "threshold_hours": 120.0}}
-    send, hold = freshness_alert_split([_stale("x_ornstein", 458.0, 120.0)], prev)
-    assert [r.source_id for r in send] == ["x_ornstein"]
-    assert hold == []
+def test_responded_error_wins_over_funnel():
+    assert responded("html", {"deduped": 9, "titled": 9}, errored=True) == (False, "error")
 
 
-def test_freshness_alert_split_sends_on_first_crossing():
-    prev = {"skysports": {"age_hours": 118.0, "threshold_hours": 120.0}}
-    send, hold = freshness_alert_split([_stale("skysports", 121.0, 120.0)], prev)
-    assert [r.source_id for r in send] == ["skysports"]
-    assert hold == []
+def test_responded_without_record_is_no_response():
+    assert responded("html", {}, errored=False) == (False, "no_record")
+    assert responded("x_playwright", None, errored=False) == (False, "no_record")
 
 
-def test_freshness_alert_split_sends_when_threshold_changed():
-    # 임계를 고친 회차는 새 규칙으로 처음 판정하는 회차라 옛 판정을 기준으로 못 쓴다.
-    # 이 규칙이 없으면 x_ornstein (24h → 120h) 이 배포 회차에 조용히 넘어간다.
-    prev = {"x_ornstein": {"age_hours": 423.0, "threshold_hours": 24.0}}
-    send, hold = freshness_alert_split([_stale("x_ornstein", 426.0, 120.0)], prev)
-    assert [r.source_id for r in send] == ["x_ornstein"]
-    assert hold == []
+def test_responded_html_needs_links():
+    assert responded("html", {"selected": 0, "deduped": 0, "titled": 0}, False) == (False, "no_links")
 
 
-def test_freshness_alert_split_ignores_fresh_sources():
-    send, hold = freshness_alert_split([_stale("bbc_sport", 21.0, 96.0)], {})
-    assert (send, hold) == ([], [])
+def test_responded_html_title_ratio_boundary():
+    # 2026-10-01 BBC Sport 실측은 7개 중 1개 (14%) 였다
+    assert responded("html", {"deduped": 7, "titled": 1}, False) == (False, "title_ratio")
+    assert responded("html", {"deduped": 7, "titled": 3}, False) == (False, "title_ratio")
+    assert responded("html", {"deduped": 7, "titled": 4, "list_sig": "s1"}, False) == (True, "")
+    assert responded("html", {"deduped": 20, "titled": 20, "list_sig": "s1"}, False) == (True, "")
 
 
-def test_freshness_alert_split_sends_after_watermark_moved_but_still_stale():
-    # 새 글이 들어와 경과가 줄면 구간도 내려간다 — 다음 구간을 새로 넘을 때 알린다
-    prev = {"guardian": {"age_hours": 400.0, "threshold_hours": 192.0}}
-    send, [h] = freshness_alert_split([_stale("guardian", 200.0, 192.0)], prev)
-    assert send == []
-    assert h.hours_to_next == 40.0   # 192 + 48 = 240h
+def test_responded_x_needs_scraped_tweets():
+    assert responded("x_playwright", {"scraped": 0, "passed": 0}, False) == (False, "no_tweets")
+    assert responded("x_playwright", {"scraped": 30, "passed": 0, "list_sig": "s1"}, False) == (True, "")
+
+
+def test_responded_fmkorea_partial_failure_still_responds():
+    assert responded("fmkorea", {"keywords": 3, "searched": 0, "listed": 0}, False) == (False, "search_failed")
+    assert responded("fmkorea", {"keywords": 3, "searched": 1, "listed": 0}, False) == (False, "no_results")
+    assert responded("fmkorea", {"keywords": 3, "searched": 1, "listed": 12, "list_sig": "s1"}, False) == (True, "")
+
+
+def test_responded_unknown_adapter_with_record_responds():
+    assert responded("arsenal_api", {"anything": 1}, False) == (True, "")
+
+
+def test_responded_without_signature_is_no_record():
+    # 목록 지문이 없으면 수집 단계 기록이 깨진 것이다 — 세 모니터 어댑터는 응답 조건 미충족
+    assert responded("html", {"deduped": 7, "titled": 4}, False) == (False, "no_record")
+    assert responded("x_playwright", {"scraped": 30, "passed": 0}, False) == (False, "no_record")
+    assert responded("fmkorea", {"keywords": 3, "searched": 1, "listed": 12}, False) == (False, "no_record")
+
+
+_T0 = datetime(2026, 10, 2, 3, 0)
+
+
+def _rec(sid="bbc_sport", age=10.0, thr=96.0):
+    return SourceFreshness(sid, _T0 - timedelta(hours=age), thr, age, age > thr)
+
+
+def _judge(rec, ok=True, reason="", sig="s1", prev=None, now=_T0, cap=48.0):
+    evaluate_states([rec], {rec.source_id: (ok, reason)}, {rec.source_id: sig},
+                    cap, {rec.source_id: prev} if prev else {}, now)
+    return rec
+
+
+def test_broken_without_signature_never_reaches_list_unchanged():
+    # 두 번 연속 무응답(지문 부재)이면 -> no_response, broken (no_record) 로 끝난다
+    # list_unchanged 절대 아님 (목록 서명 없으므로)
+    r = _rec()
+    # 첫 실행: 지문 없이 응답 시도 → no_record
+    ok1, reason1 = responded("html", {"deduped": 7, "titled": 4}, False)
+    assert (ok1, reason1) == (False, "no_record")
+    evaluate_states([r], {r.source_id: (ok1, reason1)}, {r.source_id: None}, 48.0, {}, _T0)
+    assert (r.state, r.miss_streak) == ("no_response", 1)
+    # 두 번째 실행: 역시 지문 없음 → 연속 무응답 2회 → broken (이유는 no_record)
+    first_prev = {"state": "no_response", "miss_streak": 1, "list_sig": None,
+                  "list_changed_at": _T0, "cap_hours": 48.0, "checked_at": _T0}
+    ok2, reason2 = responded("html", {"deduped": 7, "titled": 4}, False)
+    assert (ok2, reason2) == (False, "no_record")
+    evaluate_states([r], {r.source_id: (ok2, reason2)}, {r.source_id: None}, 48.0,
+                    {r.source_id: first_prev}, _T0 + timedelta(hours=3))
+    assert (r.state, r.miss_streak, r.reason) == ("broken", 2, "no_record")
+
+
+def test_first_run_never_breaks_even_without_response():
+    r = _judge(_rec(), ok=False, reason="title_ratio", sig=None)
+    assert (r.state, r.miss_streak, r.list_changed_at) == ("no_response", 1, _T0)
+
+
+def test_first_run_with_old_row_missing_new_columns_starts_fresh():
+    old = {"state": None, "miss_streak": None, "list_sig": None,
+           "list_changed_at": None, "cap_hours": None, "checked_at": _T0 - timedelta(hours=3)}
+    r = _judge(_rec(), prev=old)
+    assert (r.state, r.miss_streak, r.list_changed_at, r.cap_hours) == ("ok", 0, _T0, 48.0)
+
+
+def test_two_misses_in_a_row_break():
+    prev = {"state": "no_response", "miss_streak": 1, "list_sig": "s1",
+            "list_changed_at": _T0 - timedelta(hours=3), "cap_hours": 48.0,
+            "checked_at": _T0 - timedelta(hours=3)}
+    r = _judge(_rec(), ok=False, reason="title_ratio", sig=None, prev=prev)
+    assert (r.state, r.reason, r.miss_streak) == ("broken", "title_ratio", 2)
+
+
+def test_response_resets_streak():
+    prev = {"state": "broken", "miss_streak": 5, "list_sig": "s1",
+            "list_changed_at": _T0 - timedelta(hours=15), "cap_hours": 48.0,
+            "checked_at": _T0 - timedelta(hours=3)}
+    r = _judge(_rec(), sig="s2", prev=prev)
+    assert (r.state, r.miss_streak, r.list_changed_at) == ("ok", 0, _T0)
+
+
+def test_miss_carries_previous_signature_forward():
+    # 무응답 실행이 지문을 비우면 다음 응답 실행이 빈 값과 비교해 「바뀜」 으로 오판한다
+    changed = _T0 - timedelta(hours=40)
+    prev = {"state": "ok", "miss_streak": 0, "list_sig": "s1", "list_changed_at": changed,
+            "cap_hours": 48.0, "checked_at": _T0 - timedelta(hours=3)}
+    miss = _judge(_rec(), ok=False, reason="error", sig=None, prev=prev)
+    assert (miss.list_sig, miss.list_changed_at) == ("s1", changed)
+    nxt = {"state": miss.state, "miss_streak": miss.miss_streak, "list_sig": miss.list_sig,
+           "list_changed_at": miss.list_changed_at, "cap_hours": 48.0, "checked_at": _T0}
+    back = _judge(_rec(), sig="s1", prev=nxt, now=_T0 + timedelta(hours=3))
+    assert back.list_changed_at == changed and back.state == "ok"
+
+
+def test_list_unchanged_past_cap_breaks_even_with_candidates():
+    # 07-31 함정: 매 실행 응답하고 후보도 있는데 목록이 그대로면 결국 끊김이어야 한다
+    prev = {"state": "ok", "miss_streak": 0, "list_sig": "s1",
+            "list_changed_at": _T0 - timedelta(hours=49), "cap_hours": 48.0,
+            "checked_at": _T0 - timedelta(hours=3)}
+    r = _judge(_rec(age=2.0), sig="s1", prev=prev)
+    assert (r.state, r.reason) == ("broken", "list_unchanged")
+
+
+def test_off_season_silence_is_quiet_not_broken():
+    # 목록은 실행마다 바뀌고 새 원본만 2주째 없다
+    prev = {"state": "quiet", "miss_streak": 0, "list_sig": "s1",
+            "list_changed_at": _T0 - timedelta(hours=3), "cap_hours": 48.0,
+            "checked_at": _T0 - timedelta(hours=3)}
+    r = _judge(_rec(age=336.0, thr=96.0), sig="s2", prev=prev)
+    assert (r.state, r.stale) == ("quiet", True)
+
+
+def test_source_without_watermark_still_gets_a_state():
+    r = SourceFreshness("new_source", None, 48.0, None, False)
+    evaluate_states([r], {"new_source": (True, "")}, {"new_source": "s1"}, 48.0, {}, _T0)
+    assert r.state == "ok"
+
+
+def test_missing_response_entry_counts_as_no_record():
+    r = _rec()
+    evaluate_states([r], {}, {}, 48.0, {}, _T0)
+    assert (r.state, r.reason) == ("no_response", "no_record")
+
+
+def _broken(miss=0, changed_h=10.0, cap=48.0, now=_T0, sid="bbc_sport"):
+    r = _rec(sid)
+    r.state, r.miss_streak, r.cap_hours = "broken", miss, cap
+    r.list_changed_at = now - timedelta(hours=changed_h)
+    r.reason = "title_ratio" if miss >= 2 else "list_unchanged"
+    return r
+
+
+def _prev_of(r, at):
+    return {r.source_id: {"state": r.state, "miss_streak": r.miss_streak, "list_sig": r.list_sig,
+                          "list_changed_at": r.list_changed_at, "cap_hours": r.cap_hours,
+                          "checked_at": at}}
+
+
+def test_broken_alert_sends_on_first_broken_run():
+    send, hold = broken_alert_split([_broken(miss=2)], {}, _T0)
+    assert [r.source_id for r in send] == ["bbc_sport"] and hold == []
+
+
+def test_broken_alert_holds_within_same_interval_then_resends():
+    first = _broken(miss=2)
+    prev = _prev_of(first, _T0)
+    later = _broken(miss=17, now=_T0 + timedelta(hours=45))       # 2 + 15 → 같은 16회 구간
+    assert broken_alert_split([later], prev, _T0 + timedelta(hours=45))[0] == []
+    again = _broken(miss=18, now=_T0 + timedelta(hours=48))       # 2 + 16 → 다음 구간
+    assert len(broken_alert_split([again], prev, _T0 + timedelta(hours=48))[0]) == 1
+
+
+def test_broken_alert_list_unchanged_realerts_every_48_hours():
+    first = _broken(changed_h=49)
+    prev = _prev_of(first, _T0)
+    same = _broken(changed_h=95, now=_T0 + timedelta(hours=46))
+    assert broken_alert_split([same], prev, _T0 + timedelta(hours=46))[0] == []
+    nxt = _broken(changed_h=97, now=_T0 + timedelta(hours=48))
+    assert len(broken_alert_split([nxt], prev, _T0 + timedelta(hours=48))[0]) == 1
+
+
+def test_broken_alert_resends_when_reason_kind_changes():
+    first = _broken(changed_h=49)                                 # 목록 그대로
+    prev = _prev_of(first, _T0)
+    now_miss = _broken(miss=2, changed_h=52, now=_T0 + timedelta(hours=3))
+    assert len(broken_alert_split([now_miss], prev, _T0 + timedelta(hours=3))[0]) == 1
+
+
+def test_broken_alert_resends_when_cap_changes():
+    first = _broken(changed_h=49)
+    prev = _prev_of(first, _T0)
+    moved = _broken(changed_h=52, cap=50.0, now=_T0 + timedelta(hours=3))
+    assert len(broken_alert_split([moved], prev, _T0 + timedelta(hours=3))[0]) == 1
+
+
+def test_broken_alert_ignores_non_broken_and_holds_without_watermark():
+    quiet = _rec(); quiet.state = "quiet"
+    nowm = _broken(miss=2, sid="new_source"); nowm.age_hours = None
+    send, hold = broken_alert_split([quiet, nowm], _prev_of(nowm, _T0), _T0)
+    assert send == [] and hold[0].source_id == "new_source" and hold[0].age_hours == 0.0

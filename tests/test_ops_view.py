@@ -24,11 +24,14 @@ T = datetime(2026, 9, 4, 0, 2)
 FRESH = [{"run_id": "r1", "checked_at": datetime(2026, 9, 3, 0, 2), "source_id": "bbc_sport",
           "last_fetched_at": datetime(2026, 9, 2, 20, 0), "age_hours": 4.0, "threshold_hours": 96.0, "stale": 0},
          {"run_id": "r3", "checked_at": T, "source_id": "bbc_sport",
-          "last_fetched_at": datetime(2026, 9, 3, 20, 0), "age_hours": 4.0, "threshold_hours": 96.0, "stale": 0},
+          "last_fetched_at": datetime(2026, 9, 3, 20, 0), "age_hours": 4.0, "threshold_hours": 96.0, "stale": 0,
+          "state": "broken", "miss_streak": 2, "list_changed_at": T, "cap_hours": 48.0},
          {"run_id": "r3", "checked_at": T, "source_id": "fmkorea",
-          "last_fetched_at": datetime(2026, 9, 2, 18, 0), "age_hours": 30.0, "threshold_hours": 24.0, "stale": 1},
+          "last_fetched_at": datetime(2026, 9, 2, 18, 0), "age_hours": 30.0, "threshold_hours": 24.0, "stale": 1,
+          "state": "quiet", "miss_streak": 0, "list_changed_at": T, "cap_hours": 48.0},
          {"run_id": "r3", "checked_at": T, "source_id": "never",
-          "last_fetched_at": None, "age_hours": None, "threshold_hours": 48.0, "stale": 0}]
+          "last_fetched_at": None, "age_hours": None, "threshold_hours": 48.0, "stale": 0,
+          "state": "no_response", "miss_streak": 1, "list_changed_at": T, "cap_hours": 48.0}]
 LATENCY = [("bbc_sport", 1.0), ("bbc_sport", 3.0), ("bbc_sport", 100.0), ("fmkorea", 20.0)]
 MIX = [{"yw": 202636, "tier": 4.0, "stage": "rumour", "n": 6, "n_byline": 3},        # 주 08/31
        {"yw": 202636, "tier": 1.0, "stage": "official", "n": 4, "n_byline": 4},
@@ -41,6 +44,8 @@ GATE = GateTally(generated_at="2026-09-04T21:03:00.000000Z", unique_total=5, uni
                  not_null_total=10, not_null_failed=[TestOutcome("not_null_stg_articles_transfer_stage", 2)])
 SNAPSHOT = {"runs_all": RUNS, "freshness": FRESH, "latency": LATENCY, "weekly_mix": MIX,
             "player_subjects": SUBJECTS, "articles_total": 200,
+            "latest_funnels": {"bbc_sport": {"deduped": 7, "titled": 1},
+                               "fmkorea": {"keywords": 3, "searched": 3, "listed": 40}},
             "high_retention": [{"content_hash": "a" * 64, "outlet": "The Athletic", "retention": 0.934}]}
 EMPTY = {"runs_all": [], "freshness": [], "latency": [], "weekly_mix": [], "player_subjects": [],
          "articles_total": 0, "high_retention": []}
@@ -79,7 +84,8 @@ def test_타일_여섯은_최근_30회에서_만든다():
     assert tiles["Success Rate · 4회"]["value"] == "97.5%"      # (1 + 1 + .9 + 1) / 4
     assert tiles["Run Duration p50 · 4회"]["value"] == "120초"  # [100, 100, 120, 300] 의 p50
     assert tiles["Run Duration p50 · 4회"]["sub"] == "fetch 60초"
-    assert tiles["Stale Sources"]["value"] == "1"
+    assert tiles["Broken Sources"]["value"] == "1"
+    assert tiles["Broken Sources"]["sub"] == "끊긴 소스 (SLO-5)"
     assert tiles["Runs · 12주"]["value"] == "4"                 # 06-12 에서 09-05 = 86일 = 12주
     assert tiles["Runs · 12주"]["sub"] == "에러 실행 1 · 기대 8/일"
 
@@ -177,14 +183,25 @@ def test_구성_비율은_숫자를_적은_히트맵이고_빈_단계는_기타�
                              ("기자 식별률은 0% 에서 70% 사이다.", [])]
 
 
-def test_신선도_표는_임계_대비_비율_순이고_미터를_그린다():
+def test_신선도_표는_상태와_수집_단계를_보인다():
     s = _sec(_view(), "sec-source-freshness")
     body = str(s["body"])
-    assert body.index(">fmkorea<") < body.index(">BBC Sport<") < body.index(">never<")   # 1.25 · 0.04 · 0
-    assert "✕ 초과" in body and 'class="fill bad"' in body
-    assert "30.0h / 24h" in body and "이력 없음" in body
+    assert body.index(">fmkorea<") < body.index(">BBC Sport<") < body.index(">never<")
+    assert '<span class="pill bad">끊김</span>' in body
+    assert '<span class="pill warn">조용함</span>' in body
+    assert '<span class="pill warn">응답 없음 1회</span>' in body
+    assert "기사 링크 7 · 제목 확인 1" in body and "검색어 3/3 · 글 40" in body
+    assert "30.0h / 24h" in body
     assert s["insights"][0] == ("임계는 소스마다 다르다 (24h 에서 96h).", [])
-    assert s["insights"][1] == ("임계를 넘은 소스는 fmkorea 다.", [])
+    assert ("끊긴 소스는 BBC Sport 다.", []) in s["insights"]
+
+
+def test_옛_행만_있으면_slo5_는_판정_이전이다():
+    old = [dict(r, state=None) for r in FRESH]
+    view = build_ops_view(dict(SNAPSHOT, freshness=old), SOURCES, 0, NOW, gate=GATE, unmatched=None)
+    slo5 = [r for r in view["slo"] if r["slo_id"] == "SLO-5"][0]
+    assert slo5["value"] == "—" and slo5["status"] == "info"
+    assert "판정 이전" in str(_sec(view, "sec-source-freshness")["body"])
 
 
 def test_확인_대상_절은_두_표를_그대로_둔다():

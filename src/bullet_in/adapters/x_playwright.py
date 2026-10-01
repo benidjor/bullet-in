@@ -5,6 +5,7 @@ import os
 import re
 from datetime import datetime
 from bullet_in.models import RawItem
+from bullet_in.quality import list_signature
 from playwright.async_api import async_playwright
 
 _TWEET_JS = """
@@ -199,6 +200,12 @@ async def _scroll_collect(page, js, max_items):
     return list(acc.values())[:max_items]
 
 
+def tweet_list_urls(raw_tweets: list[dict]) -> list[str]:
+    """타임라인 트윗 주소 묶음 — 필터 전 목록 지문의 재료 (스펙 2026-10-02 §2.3.2)."""
+    return [f"{t.get('author') or ''}/status/{t['status_id']}"
+            for t in raw_tweets if t.get("status_id")]
+
+
 class XPlaywrightAdapter:
     source_type = "x"
 
@@ -210,8 +217,10 @@ class XPlaywrightAdapter:
         self.backtrack_config_path = backtrack_config_path
         self.self_source = self_source
         self.own_source_handles = own_source_handles or []
+        self.funnel: dict = {}
 
     async def fetch(self) -> list[RawItem]:
+        self.funnel = {}
         from datetime import timezone
         import logging
         log = logging.getLogger(__name__)
@@ -229,6 +238,8 @@ class XPlaywrightAdapter:
             await page.goto(f"https://x.com/{self.handle}", wait_until="domcontentloaded")
             await page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
             raw_tweets = await _scroll_collect(page, _TWEET_JS, self.max_tweets)
+            self.funnel = {"scraped": len(raw_tweets), "passed": 0,
+                           "list_sig": list_signature(tweet_list_urls(raw_tweets))}
             # 접힌 트윗을 전문으로 바꾼 뒤에 파싱한다 — 파싱이 텍스트에서 인용 핸들과
             # 태그를 뽑으므로 잘린 채로 파싱하면 뒷부분의 인용이 통째로 사라진다.
             await expand_truncated(ctx, raw_tweets, self.handle, log)
@@ -242,6 +253,7 @@ class XPlaywrightAdapter:
         if bt:
             from bullet_in.adapters.x_backtrack import backtrack_promote
             items = await backtrack_promote(items, timelines, bt)
+        self.funnel["passed"] = len(items)
         return items
 
     async def _scrape_journalists(self, ctx, items, cfg, log):

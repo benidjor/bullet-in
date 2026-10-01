@@ -1,4 +1,8 @@
 freshness_default_hours: 48   # SLO-5 신선도 전역 임계 (h)
+# 목록이 이만큼 바뀌지 않으면 「옛 글만 보이는」 고장으로 보고 끊김으로 센다 (스펙 2026-10-02 §2.3).
+# 기준은 키워드 필터 앞의 목록이다 — 팀 · 가십 페이지 · X 타임라인 · fmkorea 검색은 이적 기사가
+# 없어도 매일 바뀐다 (2026-10-01 실측 · Guardian 목록 20건 중 키워드 통과 1건). 모든 소스 같은 값.
+list_unchanged_cap_hours: 48
 tone_backfill_limit: 20       # 말투 백필 회차 상한 (429 여유 내, 라이브 실측 후 조정)
 
 # 이적 키워드 공통 리스트 — 각 소스의 title_contains 에서 *transfer_kw 로 참조

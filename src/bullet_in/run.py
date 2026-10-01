@@ -28,7 +28,8 @@ from bullet_in.serve.render import (write_site, write_ops, write_behavior,
                                     mask_other_people, mask_ambiguous)
 from bullet_in.quality import (success_rate, volume_anomalies, evaluate_freshness,
                                evaluate_coverage, candidate_cliffs, filter_miss_suspects,
-                               roster_axis_staleness, freshness_alert_split,
+                               roster_axis_staleness, evaluate_states, broken_alert_split,
+                               responded, LIST_UNCHANGED_CAP_HOURS,
                                missing_club_candidates, club_head)
 from bullet_in import notify
 from bullet_in import dbt_gate
@@ -277,6 +278,13 @@ def adapter_funnels(adapters) -> dict:
     달라 억지가 된다. 안 내놓으면 알림에서 그 줄이 빠질 뿐이다."""
     return {a.source_id: dict(f) for a in adapters
             if (f := getattr(a, "funnel", None))}
+
+
+def source_responses(sources: dict, fetched: "FetchSummary") -> dict[str, tuple[bool, str]]:
+    """소스마다 이번 실행에 목록이 응답했는가 (스펙 2026-10-02 §2.2)."""
+    return {sid: responded(s.get("adapter"), fetched.funnels.get(sid),
+                           bool(fetched.errors.get(sid)))
+            for sid, s in sources.items()}
 
 
 def cliff_alert_payload(candidate_counts: dict, history: list[dict], *,
@@ -607,21 +615,27 @@ def publish(run_id: str) -> None:
                                  checked_at, default_hours, overrides)
     for r in records:
         r.stored_fetched_at = stored_wm.get(r.source_id)
+    cap = float(cfg.get("list_unchanged_cap_hours", LIST_UNCHANGED_CAP_HOURS))
+    sigs = {sid: (fetched.funnels.get(sid) or {}).get("list_sig") for sid in sources}
+    evaluate_states(records, source_responses(sources, fetched), sigs, cap,
+                    prev_freshness, checked_at)
     mart.record_freshness(run_id, checked_at, records)
-    fresh_targets, fresh_holds = freshness_alert_split(records, prev_freshness)
+    fresh_targets, fresh_holds = broken_alert_split(records, prev_freshness, checked_at)
     if fresh_targets:
         notify.send_alert(**notify.build_freshness_alert(
             records, default_hours, targets=fresh_targets, sources=sources,
             run_id=run_id, checked_at=checked_at, candidates=fetched.candidate_counts,
-            fetch_errors=fetched.errors, funnels=fetched.funnels))
+            fetch_errors=fetched.errors, funnels=fetched.funnels, broken=True))
     # 안 보낸 이유를 남긴다 — 종전에는 대상이 비면 아무 기록 없이 넘어가 "왜 알림이
     # 안 나갔는가" 를 저널로 답할 수 없었다 (스펙 2026-08-14 §5.4).
+    by_state = Counter(r.state for r in records)
     logging.getLogger(__name__).info(
-        "신선도 판정: 감시 %d소스 · stale %d · 발송 %d · 재알림 대기 %d%s",
-        len(records), sum(1 for r in records if r.stale),
-        len(fresh_targets), len(fresh_holds),
-        "".join(f" [{h.source_id} {h.age_hours:.1f}h — 다음 알림까지 {h.hours_to_next:g}h]"
-                for h in fresh_holds))
+        "신선도 판정: 감시 %d소스 · 끊김 %d · 응답 없음 %d · 조용함 %d · 정상 %d · 발송 %d%s%s",
+        len(records), by_state["broken"], by_state["no_response"], by_state["quiet"],
+        by_state["ok"], len(fresh_targets),
+        "".join(f" [{r.source_id} {r.state} {r.reason}]" for r in records
+                if r.state in ("no_response", "quiet", "broken")),
+        "".join(f" [{h.source_id} 다음 알림까지 {h.hours_to_next:g}h]" for h in fresh_holds))
     # 원본은 없는데 기사 행은 있는 소스 — 정상 운영에서 나올 수 없는 조합이다.
     # raw_items 에 보존 정책이 붙었거나 원본이 유실된 것이고, 그대로 두면 그 소스가
     # 판정에서 조용히 빠진다 (None → stale=False → 침묵 · 설계 2026-08-20 §4.3).

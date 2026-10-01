@@ -115,3 +115,14 @@ models:
     columns:
       - name: slo_id
         tests: [unique, not_null]
+  - name: stg_source_freshness
+    columns:
+      - name: state
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['ok', 'quiet', 'no_response', 'broken']
+              config:
+                # 2026-10-02 배포 전 행은 state 가 NULL 이고 accepted_values 는 NULL 을 원래 건너뛴다.
+                # 이 조건은 그 의도를 밝혀 두는 설명이다 (스펙 §4.3).
+                where: "state is not null"
