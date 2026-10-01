@@ -196,6 +196,22 @@ def test_신선도_표는_상태와_수집_단계를_보인다():
     assert ("끊긴 소스는 BBC Sport 다.", []) in s["insights"]
 
 
+def test_목록이_상한의_절반을_넘게_그대로면_시간을_덧붙인다():
+    from datetime import timedelta
+    rows = [dict(FRESH[1], list_changed_at=T - timedelta(hours=30)),     # 30 > 48 / 2
+            dict(FRESH[2], list_changed_at=T - timedelta(hours=24))]     # 24 = 48 / 2 → 안 붙임
+    body = str(_sec(build_ops_view(dict(SNAPSHOT, freshness=rows), SOURCES, 0, NOW, gate=GATE,
+                                   unmatched=None), "sec-source-freshness")["body"])
+    assert body.count("목록 그대로") == 1 and '<span class="q">목록 그대로 30시간</span>' in body
+
+
+def test_신선도_표는_소스_이름을_이스케이프한다():
+    sources = dict(SOURCES, bbc_sport={"display_name": "<b>BBC</b>"})
+    body = str(_sec(build_ops_view(SNAPSHOT, sources, 0, NOW, gate=GATE, unmatched=None),
+                    "sec-source-freshness")["body"])
+    assert "&lt;b&gt;BBC&lt;/b&gt;" in body and "<b>BBC</b>" not in body
+
+
 def test_옛_행만_있으면_slo5_는_판정_이전이다():
     old = [dict(r, state=None) for r in FRESH]
     view = build_ops_view(dict(SNAPSHOT, freshness=old), SOURCES, 0, NOW, gate=GATE, unmatched=None)

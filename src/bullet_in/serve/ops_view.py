@@ -113,7 +113,7 @@ def _completion_tile(completion: dict | None) -> dict:
     return {"label": label, "value": value, "sub": f"{done}/{started} · 진행 중 제외{when}", "spark": ""}
 
 
-def _tiles(runs_all, recent, stale_count, span_weeks, completion: dict | None = None) -> list[dict]:
+def _tiles(runs_all, recent, broken_count, span_weeks, completion: dict | None = None) -> list[dict]:
     if not recent:
         return []
     top = recent[-1]
@@ -136,7 +136,7 @@ def _tiles(runs_all, recent, stale_count, span_weeks, completion: dict | None = 
         {"label": f"Run Duration p50 · {n}회", "value": f"{_pctile(durs, .5):.0f}초",
          "sub": f"fetch {_pctile(fetch, .5):.0f}초" if fetch else "fetch 이력 없음",
          "spark": Markup(C.sparkline(durs))},
-        {"label": "Broken Sources", "value": "—" if stale_count is None else C.fmt(stale_count),
+        {"label": "Broken Sources", "value": "—" if broken_count is None else C.fmt(broken_count),
          "sub": "끊긴 소스 (SLO-5)", "spark": ""},
         {"label": f"Runs · {span_weeks}주", "value": C.fmt(len(runs_all)),
          "sub": f"에러 실행 {C.fmt(errs)} · 기대 {EXPECTED_RUNS_PER_DAY}/일", "spark": ""},
@@ -145,7 +145,7 @@ def _tiles(runs_all, recent, stale_count, span_weeks, completion: dict | None = 
 
 # --- SLO ----------------------------------------------------------------------
 
-def _slo_rows(recent, stale_count, anomaly_count, gate: GateTally | None, articles_total: int) -> list[dict]:
+def _slo_rows(recent, broken_count, anomaly_count, gate: GateTally | None, articles_total: int) -> list[dict]:
     def row(i, name, target, value, how, status):
         return {"slo_id": f"SLO-{i}", "name": name, "target": target, "value": value, "how": how, "status": status}
 
@@ -176,9 +176,9 @@ def _slo_rows(recent, stale_count, anomaly_count, gate: GateTally | None, articl
                 + " · 같은 게이트")
         rows.append(row(4, "필수 필드 완전성", f"≥ {SLO4_TARGET * 100:.0f}%", f"{comp * 100:.1f}%", how4,
                         "ok" if comp >= SLO4_TARGET else "bad"))
-    rows.append(row(5, "소스 신선도", "끊긴 소스 0", "—" if stale_count is None else C.fmt(stale_count),
+    rows.append(row(5, "소스 신선도", "끊긴 소스 0", "—" if broken_count is None else C.fmt(broken_count),
                     "목록 응답 · 목록 변화 · 소스별 상태 (source_freshness.state)",
-                    "info" if stale_count is None else ("ok" if not stale_count else "bad")))
+                    "info" if broken_count is None else ("ok" if not broken_count else "bad")))
     rows.append(row(6, "수집량 이상", "이상 소스 0", C.fmt(anomaly_count),
                     "직전 실행들 대비 ±2σ 드롭 · 스파이크 (quality.volume_anomalies)",
                     "ok" if anomaly_count == 0 else "bad"))
@@ -540,9 +540,9 @@ def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int, now: datet
     span_days = (today - OPS_EPOCH).days + 1
     span_weeks = span_days // 7
     articles_total = snapshot.get("articles_total") or 0
-    fresh_sec, stale_count = _freshness(snapshot.get("freshness") or [], sources,
+    fresh_sec, broken_count = _freshness(snapshot.get("freshness") or [], sources,
                                         snapshot.get("latest_funnels"))
-    slo = _slo_rows(recent, stale_count, anomaly_count, gate, articles_total)
+    slo = _slo_rows(recent, broken_count, anomaly_count, gate, articles_total)
     sections = [
         _slo(slo, gate, completion),
         _volume(runs_all, today, span_weeks),
@@ -557,5 +557,5 @@ def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int, now: datet
     ]
     return {"generated_at": f"{now:%Y-%m-%d %H:%M} UTC",
             "overview": _overview(articles_total, span_weeks, span_days),
-            "tiles": _tiles(runs_all, recent, stale_count, span_weeks, completion),
+            "tiles": _tiles(runs_all, recent, broken_count, span_weeks, completion),
             "slo": slo, "sections": sections, "missing_note": MISSING_NOTE}

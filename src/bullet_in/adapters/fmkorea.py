@@ -446,7 +446,9 @@ class FmkoreaAdapter:
             per_kw.append(results)
         self.funnel = {"keywords": len(self.search_keywords), "searched": searched,
                        "listed": len(listed), "passed": 0,
-                       "list_sig": list_signature(listed)}
+                       "list_sig": list_signature(listed),
+                       # 끊김 알림이 막힘 (430) 과 연결 오류를 가르는 재료 — JSON 키라 문자열로
+                       "codes": {str(k): v for k, v in self.search_failure_codes.items()}}
         return _round_robin(per_kw, self.max_posts, self.round_robin_start)
 
     def _relevant(self, title: str, body: str) -> bool:

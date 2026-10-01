@@ -995,6 +995,39 @@ def test_broken_reason_error_quotes_the_error():
         "목록이 2회 연속 응답하지 않음 · 오류: HTTP 403 Forbidden"
 
 
+def test_broken_reason_link_tweet_and_result_counts():
+    _, r = _broken_rec("no_links")
+    assert notify.broken_reason_text(r, {"deduped": 0}, None) == "목록에서 기사 링크를 찾지 못함 · 2회 연속"
+    r.reason = "no_tweets"
+    assert notify.broken_reason_text(r, {"scraped": 0}, None) == "타임라인 트윗 0개 · 2회 연속"
+    r.reason = "no_results"
+    assert notify.broken_reason_text(r, {"keywords": 3, "searched": 3, "listed": 0}, None) == \
+        "검색 결과 글 0개 · 2회 연속"
+
+
+def test_broken_reason_search_failed_names_the_failure_codes():
+    _, r = _broken_rec("search_failed", sid="fmkorea")
+    assert notify.broken_reason_text(r, {"keywords": 3, "codes": {"430": 6}}, None) == \
+        "검색어 3개 모두 실패 (430) · 2회 연속"
+    assert notify.broken_reason_text(r, {"keywords": 3, "codes": {"error": 1, "430": 5}}, None) == \
+        "검색어 3개 모두 실패 (430 · 연결 오류) · 2회 연속"
+    # 이 칼럼이 생기기 전 기록에는 codes 가 없다
+    assert notify.broken_reason_text(r, {"keywords": 3}, None) == "검색어 3개 모두 실패 · 2회 연속"
+
+
+def test_build_freshness_alert_broken_lists_each_source_when_several():
+    checked, bbc = _broken_rec("title_ratio")
+    _, sky = _broken_rec("no_links", sid="sky_sports")
+    alert = notify.build_freshness_alert(
+        [bbc, sky], 48, targets=[bbc, sky], sources=_FRESH_SOURCES, run_id="abcdef1234",
+        checked_at=checked, funnels={"bbc_sport": {"deduped": 7, "titled": 1}}, broken=True)
+    assert alert["description"].startswith("감시 2소스: 끊김 2 · ")
+    source_fields = [f for f in alert["fields"] if f["name"] != "회차"]
+    assert len(source_fields) == 2
+    assert "제목까지 확인된 것은 1개뿐" in source_fields[0]["value"]
+    assert "기사 링크를 찾지 못함" in source_fields[1]["value"]
+
+
 def test_build_freshness_alert_broken_title_and_state_counts():
     checked, r = _broken_rec("title_ratio")
     quiet = SourceFreshness("guardian", checked - timedelta(hours=226), 192.0, 226.0, True)
