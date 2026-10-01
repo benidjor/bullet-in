@@ -96,6 +96,7 @@ Task 5 의 통합 테스트가 skip 되면 그 사실을 보고에 적는다.
 **Interfaces:**
 - Produces: `list_signature(urls: Iterable[str]) -> str` · `responded(adapter: str | None, funnel: dict | None, errored: bool) -> tuple[bool, str]`
 - 사유 코드: `"error"` · `"no_record"` · `"no_links"` · `"title_ratio"` · `"no_tweets"` · `"search_failed"` · `"no_results"` · 응답이면 `""`
+- 2026-10-02 실행 중 판정 — 세 어댑터는 응답 조건을 만족해도 `list_sig` 가 비면 `(False, "no_record")` 다 (스펙 §2.2.4 · 지문 없는 응답은 기록 고장)
 
 - [ ] **Step 1: 실패하는 테스트를 쓴다**
 
@@ -952,8 +953,8 @@ def _fetched(errors=None, funnels=None):
 
 def test_source_responses_reads_errors_and_funnels_per_adapter():
     f = _fetched(errors={"x_ornstein": "Timeout 20000ms"},
-                 funnels={"bbc_sport": {"deduped": 7, "titled": 1},
-                          "fmkorea": {"keywords": 3, "searched": 2, "listed": 40}})
+                 funnels={"bbc_sport": {"deduped": 7, "titled": 1, "list_sig": "s1"},
+                          "fmkorea": {"keywords": 3, "searched": 2, "listed": 40, "list_sig": "s2"}})
     got = source_responses(SOURCES, f)
     assert got["bbc_sport"] == (False, "title_ratio")
     assert got["x_ornstein"] == (False, "error")
