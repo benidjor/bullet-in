@@ -409,17 +409,17 @@ git commit -m "feat(quality): 목록 응답과 목록 변화로 소스 상태를
 ## Task 3: 끊김 알림 분할
 
 **Files:**
-- Modify: `src/bullet_in/quality.py` (`freshness_alert_split` 을 `broken_alert_split` 으로 바꿈)
-- Test: `tests/test_quality.py` (옛 `freshness_alert_split` 테스트를 새 테스트로 바꿈)
+- Modify: `src/bullet_in/quality.py` (`broken_alert_split` 을 `freshness_alert_split` 옆에 더함 · 옛 함수는 Task 6 에서 지운다)
+- Test: `tests/test_quality.py`
 
 **Interfaces:**
 - Consumes: Task 2 의 `SourceFreshness` 새 필드 · `previous` 의 `checked_at`
 - Produces: `REALERT_RUNS = 16` · `broken_alert_split(records, previous, now, interval_hours=FRESHNESS_REALERT_HOURS, runs_per_interval=REALERT_RUNS) -> tuple[list[SourceFreshness], list[FreshnessHold]]`
 
-- [ ] **Step 1: 옛 테스트를 지우고 새 테스트를 쓴다**
+- [ ] **Step 1: 새 테스트를 쓴다**
 
-`tests/test_quality.py` 에서 `freshness_alert_split` 을 부르는 테스트를 모두 지우고, import 줄의 `freshness_alert_split` 을 `broken_alert_split` 으로 바꾼다.
-지운 테스트 이름은 커밋 본문에 적는다.
+`tests/test_quality.py` import 줄에 `broken_alert_split` 을 더한다.
+옛 `freshness_alert_split` 과 그 테스트는 이 태스크에서 지우지 않는다 — `run.py` 가 Task 6 까지 그것을 import 하므로, 지금 지우면 `import bullet_in.run` 이 깨진다.
 
 ```python
 def _broken(miss=0, changed_h=10.0, cap=48.0, now=_T0, sid="bbc_sport"):
@@ -490,7 +490,7 @@ Expected: ImportError (`broken_alert_split` 없음).
 
 - [ ] **Step 3: 구현한다**
 
-`freshness_alert_split` 과 `_realert_level` 을 지우고 그 자리에 넣는다 (`FRESHNESS_REALERT_HOURS` · `FreshnessHold` 는 그대로 둔다).
+`freshness_alert_split` 바로 아래에 넣는다 (옛 함수 · `_realert_level` · `FRESHNESS_REALERT_HOURS` · `FreshnessHold` 는 그대로 둔다).
 
 ```python
 # 무응답 끊김의 재알림 단위 — 3시간 실행 × 16 = 48시간 (스펙 2026-10-02 §4.1.2).
@@ -538,20 +538,19 @@ def broken_alert_split(records: list[SourceFreshness], previous: dict[str, dict]
     return send, hold
 ```
 
-- [ ] **Step 4: 통과를 확인하고 옛 이름이 남지 않았는지 본다**
+- [ ] **Step 4: 통과를 확인한다**
 
 ```bash
-uv run --project . --extra dev pytest tests/test_quality.py -q
-grep -rn "freshness_alert_split\|_realert_level" src tests
+uv run --project . --extra dev pytest tests/test_quality.py tests/test_run_stages.py -q
 ```
 
-Expected: 테스트 PASS · grep 은 `src/bullet_in/run.py` 의 import 와 호출만 남는다 (Task 6 에서 바꾼다).
+Expected: 전부 PASS.
 
 - [ ] **Step 5: 커밋한다**
 
 ```bash
 git add src/bullet_in/quality.py tests/test_quality.py
-git commit -m "feat(quality): 끊김 알림 분할로 임계 초과 알림 분할을 대체"
+git commit -m "feat(quality): 끊김 소스를 발송분과 보류분으로 가르는 알림 분할 추가"
 ```
 
 ---
@@ -1136,6 +1135,10 @@ def source_responses(sources: dict, fetched: "FetchSummary") -> dict[str, tuple[
 
 `Counter` 가 이미 import 돼 있는지 확인한다 (324행에서 쓰고 있다).
 
+이제 아무도 부르지 않는 옛 함수를 지운다.
+`quality.py` 에서 `freshness_alert_split` 과 `_realert_level` 을 지우고 (`FRESHNESS_REALERT_HOURS` · `FreshnessHold` 는 남긴다), `tests/test_quality.py` 에서 `freshness_alert_split` 을 부르는 테스트와 import 를 지운다.
+지운 테스트 이름은 커밋 본문에 적는다.
+
 - [ ] **Step 6: 통과를 확인한다**
 
 ```bash
@@ -1148,7 +1151,7 @@ Expected: 테스트 PASS · grep 결과 없음.
 - [ ] **Step 7: 커밋한다**
 
 ```bash
-git add src/bullet_in/run.py src/bullet_in/notify.py tests/test_slo5_wiring.py tests/test_notify.py tests/test_run_cliff_alert.py
+git add src/bullet_in/run.py src/bullet_in/notify.py src/bullet_in/quality.py tests/test_slo5_wiring.py tests/test_notify.py tests/test_run_cliff_alert.py tests/test_quality.py
 git commit -m "feat(run): 게시 단계에서 끊김 판정을 연결하고 사유별 끊김 알림 문안 추가"
 ```
 
