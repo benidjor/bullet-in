@@ -9,6 +9,7 @@ bullet_in:
         # duckdb 1.5.3 + mysql_scanner: extension 옵티마이저가 attach 테이블 위
         # 집계 쿼리에서 binder 내부 오류(Failed to bind column reference)를 일으킴.
         # pushdown 최적화만 끄는 우회 — 데이터 소량이라 성능 영향 없음.
+        # 1.5.5 로 올리면서도 유지한다 — 세그폴트 전후 비교 (안건 2ν) 에서 바꾸는 변수를 하나로 둔다.
         disabled_optimizers: "extension"
       attach:
         # 접속 정보의 단일 출처는 .env 의 MARIADB_URL 이다 — run.py 가 풀어서

@@ -23,6 +23,7 @@ dependencies = [
   "pyarrow>=17",                        # Iceberg 가 Parquet 만 받는다 (Lakehouse 카탈로그 제약)
   "google-cloud-bigquery>=3.25",        # 행동 기록 원본 — storage 패키지 없이 REST 로 중첩까지 받는다
   "dbt-duckdb>=1.8",
+  "duckdb==1.5.5",                      # dbt 게이트 세그폴트 (안건 2ν) — mysql_scanner 확장 빌드가 판마다 다르다
 ]
 
 [project.optional-dependencies]
