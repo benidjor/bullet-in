@@ -1741,7 +1741,7 @@ gh pr create --base main --head dashboard-pr2 --title "<위 제목>" --body-file
 - 확인: `curl -sL https://bullet-in.pages.dev/ops.html | grep -c 'class="sec"'` → `10` · `grep -c "<svg"` → 30 이상 · `curl -sL https://bullet-in.pages.dev/behavior.html | grep -c 'class="sec"'` → `9` (행동 화면이 안 깨졌는지).
 - 워크트리 · 로컬 브랜치 · 원격 브랜치 · `git worktree prune` 넷을 지운다 (규율 §2 · 저장소 루트에서).
 - 메모리: `dashboard-redesign-track-2026-09-04` 에 PR 번호 · 재현 결과 · 판정 표의 결정을 적고, 안건 표 2φ 행을 ✅ 로 (열린 안건 27 → 26) 고친다. 색인 머리말의 수를 함께 고친다.
-- 그 뒤 순서 = 2χ README (이 화면 캡처 포함) → 런북 §6.5 첫 24시간 PR → v9 슬라이드.
+- 그 뒤 순서 = 2χ README (이 화면 캡처 포함) → 런북 §6.5 첫 24시간 PR.
 
 ---
 
