@@ -199,15 +199,41 @@ def _sectioned(sections: list[tuple[str, list[str]]]) -> str:
     return "\n".join(out)
 
 
+def broken_reason_text(r, funnel: dict | None, error: str | None,
+                       now: datetime | None = None) -> str:
+    """끊긴 사유를 한 줄로 (스펙 2026-10-02 §4.1.3)."""
+    f, n = funnel or {}, r.miss_streak or 0
+    if r.reason == "list_unchanged":
+        at = now or datetime.utcnow()
+        hours = (at - r.list_changed_at).total_seconds() / 3600
+        return f"목록은 응답하지만 {hours:.0f}시간째 바뀌지 않음 (상한 {r.cap_hours:g}시간)"
+    if r.reason == "error":
+        return f"목록이 {n}회 연속 응답하지 않음 · 오류: {(error or '')[:120]}"
+    if r.reason == "title_ratio":
+        links, titled = int(f.get("deduped", 0)), int(f.get("titled", 0))
+        return (f"목록에서 기사 링크 {links}개를 찾았지만, 제목까지 확인된 것은 "
+                f"{titled}개뿐 ({titled * 100 // max(links, 1)}%) · {n}회 연속")
+    if r.reason == "no_links":
+        return f"목록에서 기사 링크를 찾지 못함 · {n}회 연속"
+    if r.reason == "no_tweets":
+        return f"타임라인 트윗 0개 · {n}회 연속"
+    if r.reason == "search_failed":
+        return f"검색어 {f.get('keywords', 0)}개 모두 실패 · {n}회 연속"
+    if r.reason == "no_results":
+        return f"검색 결과 글 0개 · {n}회 연속"
+    return f"수집 단계 기록 없음 · {n}회 연속 — 소스가 아니라 감시 기록이 고장 났을 수 있음"
+
+
 def build_freshness_alert(records, default_hours: float, *,
                           targets: list, sources: dict, run_id: str,
                           checked_at: datetime,
                           candidates: dict | None = None,
                           fetch_errors: dict | None = None,
-                          funnels: dict | None = None) -> dict:
+                          funnels: dict | None = None,
+                          broken: bool = False) -> dict:
     """전체 판정 레코드를 받아 이번 회차 발송 대상만 필드로 펼친다.
 
-    targets 는 quality.freshness_alert_split 이 고른 발송분이다 — stale 전부가 아니라
+    targets 는 quality.broken_alert_split 이 고른 발송분이다 — stale 전부가 아니라
     임계를 새로 넘었거나 재알림 간격이 돌아온 소스다. 나머지 stale 은 설명의 대기
     계수로만 남긴다.
     candidates 는 이번 회차에 어댑터가 찾은 소스별 후보 건수 (dedup 전) — 키 부재 = 0건.
@@ -216,6 +242,32 @@ def build_freshness_alert(records, default_hours: float, *,
     근거가 있다 (2026-07-30 실측, docs/troubleshooting/
     2026-07-30-silent-drops-and-blind-alerts.md §4).
     candidates=None 이면 계수 없이 힌트만 붙인다."""
+    if broken:
+        counts = {s: sum(1 for r in records if r.state == s)
+                  for s in ("broken", "no_response", "quiet", "ok")}
+        per_source = []
+        for b in targets:
+            err = (fetch_errors or {}).get(b.source_id)
+            funnel = (funnels or {}).get(b.source_id)
+            per_source.append((b.source_id, [
+                ("왜 끊김인가", [broken_reason_text(b, funnel, err, now=checked_at)]),
+                ("수집 단계 기록", _funnel_lines(funnel)),
+                ("다음 알림", [f"끊김이 이어지면 {FRESHNESS_REALERT_HOURS:g}시간마다 다시 알립니다"])]))
+        if len(per_source) == 1:
+            fields = _section_fields(per_source[0][1])
+        else:
+            fields = [{"name": _source_field_name(sid, sources),
+                       "value": _sectioned(sections), "inline": False}
+                      for sid, sections in per_source]
+        fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+        subject = _title_subject([_source_label(b.source_id, sources) for b in targets])
+        return {"title": f"🔌 수집 끊김 — {subject}",
+                "description": (f"감시 {len(records)}소스: 끊김 {counts['broken']} · "
+                                f"응답 없음 {counts['no_response']} · 조용함 {counts['quiet']} · "
+                                f"정상 {counts['ok']}"),
+                "color": COLOR_ANOMALY, "fields": fields, "url": RUNBOOK_FRESHNESS,
+                "timestamp": checked_at.replace(tzinfo=timezone.utc).isoformat(),
+                "footer": "bullet-in", "channel": CHANNEL_TREND}
     breaches = [r for r in records if r.stale]
     waiting = len(breaches) - len(targets)
     no_wm = sum(1 for r in records if r.last_fetched_at is None)
@@ -410,21 +462,24 @@ def _search_keyword_line(source: dict, failed: int) -> str | None:
 
 
 _FUNNEL_STAGES = [("selected", "목록"), ("deduped", "URL"),
-                  ("titled", "제목"), ("passed", "키워드")]
+                  ("titled", "제목 확인"), ("passed", "키워드")]
 
 
 def _funnel_lines(funnel: dict | None) -> list[str]:
-    """발견 4단 계수를 두 줄로 (스펙 2026-08-14 §8.2).
+    """수집 단계 기록을 줄로 (스펙 2026-08-14 §8.2 · 2026-10-02 §3.1).
 
-    기록되는 후보 계수는 마지막 단뿐이라, 셀렉터가 깨져 첫 단이 0 이 된 것과 원문이
-    조용해 마지막 단이 0 이 된 것이 구분되지 않았다 (§2.5 실측 13 → 13 → 7 → 3).
-    계수를 안 내놓는 어댑터 (rss · x_playwright) 는 빈 목록이라 그 줄이 빠진다 —
-    _failure_code_line 과 같은 방식이다."""
+    어댑터마다 키가 다르다 — HTML 은 네 단계, X 는 타임라인 트윗, fmkorea 는 검색."""
     if not funnel:
         return []
+    if "scraped" in funnel:
+        return [f"수집 단계 기록: 타임라인 트윗 {funnel.get('scraped', 0)} "
+                f"→ 필터 통과 {funnel.get('passed', 0)}"]
+    if "keywords" in funnel:
+        return [f"수집 단계 기록: 검색어 {funnel.get('searched', 0)}/{funnel.get('keywords', 0)} · "
+                f"결과 글 {funnel.get('listed', 0)} → 필터 통과 {funnel.get('passed', 0)}"]
     chain = " → ".join(f"{label} {funnel.get(key, 0)}"
                        for key, label in _FUNNEL_STAGES)
-    return [f"발견 퍼널: {chain}",
+    return [f"수집 단계 기록: {chain}",
             "*단마다 남은 수 — 목록이 0이면 셀렉터, 키워드만 0이면 원문이 "
             "조용한 것입니다*"]
 

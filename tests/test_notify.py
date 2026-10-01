@@ -855,7 +855,7 @@ def test_cliff_states_the_count_plainly_without_history():
     assert "- 찾은 글: **0건** (이번 회차)" in _field(alert, "평소와 비교")
 
 
-# ── 발견 퍼널 4단을 알림에 싣는다 (스펙 2026-08-14 §8.2) ─────────────────────
+# ── 수집 단계 기록을 알림에 싣는다 (스펙 2026-08-14 §8.2) ─────────────────────
 
 _FUNNEL = {"selected": 13, "deduped": 13, "titled": 7, "passed": 3}
 
@@ -863,13 +863,13 @@ _FUNNEL = {"selected": 13, "deduped": 13, "titled": 7, "passed": 3}
 def test_cliff_shows_the_discovery_funnel_when_the_adapter_counts_it():
     alert = _fm_cliff(funnels={"fmkorea": _FUNNEL})
     value = _field(alert, "무슨 일이 있었나")
-    assert "- 발견 퍼널: 목록 13 → URL 13 → 제목 7 → 키워드 3" in value
+    assert "- 수집 단계 기록: 목록 13 → URL 13 → 제목 확인 7 → 키워드 3" in value
     assert "*단마다 남은 수" in value
 
 
 def test_cliff_omits_the_funnel_when_the_adapter_does_not_count_it():
     # 계수를 안 내놓는 어댑터 (rss · x_playwright) 는 그 줄이 빠진다
-    assert "발견 퍼널" not in str(_fm_cliff()["fields"])
+    assert "수집 단계 기록" not in str(_fm_cliff()["fields"])
 
 
 def test_freshness_shows_the_discovery_funnel_in_the_path_section():
@@ -881,7 +881,7 @@ def test_freshness_shows_the_discovery_funnel_in_the_path_section():
     alert = notify.build_freshness_alert(
         records, 48, targets=records, sources=_FRESH_SOURCES, run_id="3f2a9c12abcd",
         checked_at=checked, candidates={}, funnels={"bbc_sport": _FUNNEL})
-    assert "- 발견 퍼널: 목록 13 → URL 13 → 제목 7 → 키워드 3" \
+    assert "- 수집 단계 기록: 목록 13 → URL 13 → 제목 확인 7 → 키워드 3" \
         in _field(alert, "수집 경로는 살아 있나")
 
 
@@ -955,3 +955,54 @@ def test_build_dbt_gate_alert_clips_a_long_failure_to_discord_field_limit():
     value = next(f["value"] for f in payload["fields"] if f["name"] == "게이트 고장")
     assert len(value) <= 1024
     assert value.startswith("- 종료코드 -11")
+
+
+def _broken_rec(reason, miss=2, changed_h=10.0, sid="bbc_sport"):
+    checked = datetime(2026, 10, 2, 6, 0)
+    r = SourceFreshness(sid, checked - timedelta(hours=226), 96.0, 226.0, True)
+    r.state, r.reason, r.miss_streak, r.cap_hours = "broken", reason, miss, 48.0
+    r.list_changed_at = checked - timedelta(hours=changed_h)
+    return checked, r
+
+
+def test_broken_reason_title_ratio_spells_out_counts():
+    _, r = _broken_rec("title_ratio")
+    text = notify.broken_reason_text(r, {"deduped": 7, "titled": 1}, None)
+    assert text == "목록에서 기사 링크 7개를 찾았지만, 제목까지 확인된 것은 1개뿐 (14%) · 2회 연속"
+
+
+def test_broken_reason_no_record_points_at_the_monitor():
+    _, r = _broken_rec("no_record", miss=3)
+    assert notify.broken_reason_text(r, None, None) == \
+        "수집 단계 기록 없음 · 3회 연속 — 소스가 아니라 감시 기록이 고장 났을 수 있음"
+
+
+def test_broken_reason_list_unchanged_uses_hours_and_cap():
+    checked, r = _broken_rec("list_unchanged", miss=0, changed_h=52.0)
+    assert notify.broken_reason_text(r, {"deduped": 20, "titled": 20}, None, now=checked) == \
+        "목록은 응답하지만 52시간째 바뀌지 않음 (상한 48시간)"
+
+
+def test_broken_reason_error_quotes_the_error():
+    _, r = _broken_rec("error")
+    assert notify.broken_reason_text(r, None, "HTTP 403 Forbidden") == \
+        "목록이 2회 연속 응답하지 않음 · 오류: HTTP 403 Forbidden"
+
+
+def test_build_freshness_alert_broken_title_and_state_counts():
+    checked, r = _broken_rec("title_ratio")
+    quiet = SourceFreshness("guardian", checked - timedelta(hours=226), 192.0, 226.0, True)
+    quiet.state = "quiet"
+    alert = notify.build_freshness_alert(
+        [r, quiet], 48, targets=[r], sources=_FRESH_SOURCES, run_id="abcdef1234",
+        checked_at=checked, funnels={"bbc_sport": {"deduped": 7, "titled": 1}}, broken=True)
+    assert alert["title"].startswith("🔌 수집 끊김 — BBC Sport")
+    assert "끊김 1 · 응답 없음 0 · 조용함 1 · 정상 0" in alert["description"]
+    assert "제목까지 확인된 것은 1개뿐" in str(alert["fields"])
+
+
+def test_funnel_lines_for_x_and_fmkorea():
+    assert notify._funnel_lines({"scraped": 30, "passed": 2, "list_sig": "x"}) == \
+        ["수집 단계 기록: 타임라인 트윗 30 → 필터 통과 2"]
+    assert notify._funnel_lines({"keywords": 3, "searched": 2, "listed": 40, "passed": 5}) == \
+        ["수집 단계 기록: 검색어 2/3 · 결과 글 40 → 필터 통과 5"]

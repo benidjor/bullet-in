@@ -43,7 +43,7 @@ def test_payload_carries_the_funnel_from_adapters_that_count_it():
         adapters=[quiet, _Adapter("goal")],   # goal 은 funnel 속성이 아예 없다
         sources={"fmkorea": {"display_name": "fmkorea 축구 소식통"}},
         success_rate=1.0, run_id="3259230a")
-    assert "발견 퍼널: 목록 13 → URL 13 → 제목 7 → 키워드 3" in str(payload["fields"])
+    assert "수집 단계 기록: 목록 13 → URL 13 → 제목 확인 7 → 키워드 3" in str(payload["fields"])
 
 
 def test_payload_ignores_source_already_at_zero():
