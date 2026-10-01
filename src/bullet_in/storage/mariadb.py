@@ -224,12 +224,16 @@ class MartStore:
         with self.engine.begin() as c:
             c.execute(text(
                 "INSERT INTO source_freshness (run_id,checked_at,source_id,"
-                "last_fetched_at,age_hours,threshold_hours,stale,stored_fetched_at) "
-                "VALUES (:rid,:at,:sid,:wm,:age,:thr,:stale,:stored)"),
+                "last_fetched_at,age_hours,threshold_hours,stale,stored_fetched_at,"
+                "state,miss_streak,list_sig,list_changed_at,cap_hours) "
+                "VALUES (:rid,:at,:sid,:wm,:age,:thr,:stale,:stored,"
+                ":state,:miss,:sig,:changed,:cap)"),
                 [{"rid": run_id, "at": checked_at, "sid": r.source_id,
                   "wm": r.last_fetched_at, "age": r.age_hours,
                   "thr": r.threshold_hours, "stale": r.stale,
-                  "stored": r.stored_fetched_at}
+                  "stored": r.stored_fetched_at, "state": r.state,
+                  "miss": r.miss_streak, "sig": r.list_sig,
+                  "changed": r.list_changed_at, "cap": r.cap_hours}
                  for r in records])
 
     def previous_freshness(self) -> dict[str, dict]:
@@ -239,7 +243,8 @@ class MartStore:
         넣은 행이 '직전' 으로 잡혀 전이가 영영 안 생긴다."""
         with self.engine.connect() as c:
             rows = c.execute(text(
-                "SELECT source_id, age_hours, threshold_hours FROM source_freshness "
+                "SELECT source_id, age_hours, threshold_hours, state, miss_streak, "
+                "list_sig, list_changed_at, cap_hours, checked_at FROM source_freshness "
                 "WHERE run_id = (SELECT run_id FROM source_freshness "
                 "ORDER BY checked_at DESC LIMIT 1)")).mappings().all()
         return {r["source_id"]: dict(r) for r in rows}
@@ -260,7 +265,8 @@ class MartStore:
                 "ORDER BY started_at"), {"epoch": OPS_EPOCH}).mappings().all()]
             freshness = [dict(r) for r in c.execute(text(
                 "SELECT run_id,checked_at,source_id,last_fetched_at,"
-                "age_hours,threshold_hours,stale FROM source_freshness "
+                "age_hours,threshold_hours,stale,state,miss_streak,list_changed_at,cap_hours "
+                "FROM source_freshness "
                 "WHERE run_id IN (SELECT run_id FROM ("
                 " SELECT DISTINCT run_id, checked_at FROM source_freshness"
                 " ORDER BY checked_at DESC LIMIT :n) w) "
@@ -293,6 +299,12 @@ class MartStore:
                 "SELECT content_hash, outlet, rewrite_retention FROM articles "
                 "WHERE rewrite_retention > :thr ORDER BY rewrite_retention DESC"),
                 {"thr": RETENTION_THRESHOLD}).mappings().all()
+            detail = c.execute(text(
+                "SELECT fetch_detail FROM pipeline_runs WHERE finished_at IS NOT NULL "
+                "ORDER BY started_at DESC LIMIT 1")).scalar()
+            if isinstance(detail, (str, bytes)):
+                detail = json.loads(detail)
+            latest_funnels = dict((detail or {}).get("funnels") or {})
         for r in runs_all:
             r["source_counts"] = (json.loads(r["source_counts"])
                                   if r["source_counts"] else {})
@@ -302,7 +314,8 @@ class MartStore:
                 "high_retention": [{"content_hash": r["content_hash"],
                                     "outlet": r["outlet"],
                                     "retention": float(r["rewrite_retention"])}
-                                   for r in high_rows]}
+                                   for r in high_rows],
+                "latest_funnels": latest_funnels}
 
     def rows_for_hashes(self, hashes: list[str]) -> list[dict]:
         """확정 CLI 재검사 입력 — 대상 기사만 게이트 입력 컬럼으로 조회."""

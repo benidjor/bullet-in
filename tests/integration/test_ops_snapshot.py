@@ -128,7 +128,8 @@ def test_ops_snapshot_player_subjects_counts_subject_rows_of_squad_and_external_
 def test_ops_snapshot_cold_start_returns_empty_shapes(engine):
     snap = MartStore(engine).ops_snapshot()
     assert snap == {"runs_all": [], "freshness": [], "latency": [], "weekly_mix": [],
-                    "player_subjects": [], "articles_total": 0, "high_retention": []}
+                    "player_subjects": [], "articles_total": 0, "high_retention": [],
+                    "latest_funnels": {}}
 
 
 def test_ops_snapshot_includes_fetch_duration_with_nulls(engine):
@@ -161,3 +162,13 @@ def test_ops_snapshot_excludes_unfinished_runs(engine):
     run_ids = [r["run_id"] for r in MartStore(engine).ops_snapshot()["runs_all"]]
     assert "run-finished" in run_ids
     assert "run-unfinished" not in run_ids
+
+
+def test_ops_snapshot_returns_latest_run_funnels(engine):
+    with engine.begin() as c:
+        c.execute(text(
+            "INSERT INTO pipeline_runs (run_id, started_at, finished_at, fetch_detail) "
+            "VALUES ('r9', '2026-10-02 03:00:00', '2026-10-02 03:05:00', :d)"),
+            {"d": json.dumps({"errors": {}, "funnels": {"bbc_sport": {"deduped": 7, "titled": 1}}})})
+    snap = MartStore(engine).ops_snapshot()
+    assert snap["latest_funnels"]["bbc_sport"]["titled"] == 1

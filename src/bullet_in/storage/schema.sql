@@ -101,3 +101,10 @@ ALTER TABLE article_players ADD COLUMN IF NOT EXISTS role VARCHAR(16);
 -- 값을 만드는 규칙 (roster.decide_role) 이 항상 주역 · 언급 중 하나를 돌려주고
 -- 운영 2,889쌍에 미기입이 0 이라 이 제약은 기존 행을 건드리지 않는다.
 ALTER TABLE article_players MODIFY IF EXISTS role VARCHAR(16) NOT NULL;
+
+-- SLO-5 끊김 판정 (스펙 2026-10-02 §3.2) — 추가만 한다 · stale 의 뜻은 그대로
+ALTER TABLE source_freshness ADD COLUMN IF NOT EXISTS state VARCHAR(16) NULL;
+ALTER TABLE source_freshness ADD COLUMN IF NOT EXISTS miss_streak INT NULL;
+ALTER TABLE source_freshness ADD COLUMN IF NOT EXISTS list_sig VARCHAR(16) NULL;
+ALTER TABLE source_freshness ADD COLUMN IF NOT EXISTS list_changed_at DATETIME NULL;
+ALTER TABLE source_freshness ADD COLUMN IF NOT EXISTS cap_hours FLOAT NULL;
