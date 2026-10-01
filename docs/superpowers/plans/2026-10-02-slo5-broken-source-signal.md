@@ -31,6 +31,8 @@
 - **워터마크가 없는 소스** — `last_fetched_at` 이 없는 소스도 상태가 매겨지고 알림 문안이 깨지지 않아야 한다 (Task 3 · Task 6 테스트).
 - **제목 확인 비율의 경계** — 3/7 은 무응답, 4/7 은 응답이어야 한다 (Task 1 테스트).
 - **옛 행이 섞인 화면** — `state` 가 빈 행만 있으면 SLO-5 는 「—」 이고 화면이 깨지지 않아야 한다 (Task 7 테스트).
+- **수집 단계 기록이 없는 어댑터** — `arsenal_api` · `rss` 는 기록을 남기지 않아 `responded` 가 무응답으로 본다.
+  지금은 둘 다 `freshness_hours: 0` 이라 감시에서 빠지지만, 나중에 임계를 주면 2회 뒤 끊김이 된다 (dry run 확인 · Task 1 의 `test_responded_without_record_is_no_response` 가 이 동작을 고정한다).
 
 ---
 
@@ -71,7 +73,7 @@ uv sync --project . --extra dev
 uv run --project . --extra dev pytest -q 2>&1 | tail -3
 ```
 
-Expected: 수집 수 1,792 안팎 · 전부 통과 (통합 테스트는 MariaDB 가 없으면 skip).
+Expected: 수집 1,792 · 1,792 passed · 1 skipped (2026-10-02 dry run 실측 · 통합 테스트는 MariaDB 가 없으면 skip).
 수집 수를 적어 두고, 이후 전체 실행에서 이 수보다 줄면 수집 경로를 의심한다.
 
 - [ ] **Step 3: 통합 테스트용 MariaDB 가 떠 있는지 본다**
@@ -572,7 +574,16 @@ git commit -m "feat(quality): 끊김 소스를 발송분과 보류분으로 가�
 
 - [ ] **Step 1: HTML 테스트를 고치고 더한다**
 
-`tests/test_html_adapter.py` 의 기존 깔때기 테스트 (282행 머리 주석 아래) 에서 `assert a.funnel == {...}` 를 `list_sig` 를 포함하도록 고친다.
+`tests/test_html_adapter.py` 의 기존 깔때기 테스트 둘 (282행 머리 주석 아래) 의 기대값에 `list_sig` 를 더한다.
+`test_html_adapter_counts_each_discovery_stage` (304행) 는 아래처럼 바꾼다 (중복을 뺀 링크가 /a · /b · /c 셋이다).
+
+```python
+    assert a.funnel == {"selected": 5, "deduped": 3, "titled": 2, "passed": 1,
+                        "list_sig": list_signature(["https://a.test/a", "https://a.test/b",
+                                                    "https://a.test/c"])}
+```
+
+나머지 하나 (`shows_zero_at_the_top`) 는 아래 블록대로 바꾸고, 원래 있던 주석 줄과 `@respx.mock` 장식자는 그대로 둔다.
 머리 주석 「발견 퍼널 4단」 은 「수집 단계 기록」 으로 바꾼다.
 
 ```python
@@ -797,7 +808,15 @@ def test_previous_freshness_old_rows_return_none_for_new_columns(engine):
     assert prev["state"] is None and prev["miss_streak"] is None and prev["list_changed_at"] is None
 ```
 
-`tests/integration/test_ops_snapshot.py` 에 붙인다 (그 파일의 기존 픽스처로 `pipeline_runs` 한 행을 넣는 방식을 따른다).
+`tests/integration/test_ops_snapshot.py` 의 기존 테스트 `test_ops_snapshot_cold_start_returns_empty_shapes` (130행) 는 스냅샷 dict 를 통째로 비교하므로 새 키를 더한다.
+
+```python
+    assert snap == {"runs_all": [], "freshness": [], "latency": [], "weekly_mix": [],
+                    "player_subjects": [], "articles_total": 0, "high_retention": [],
+                    "latest_funnels": {}}
+```
+
+같은 파일 끝에 붙인다 (`json` · `text` import 가 없으면 더한다).
 
 ```python
 def test_ops_snapshot_returns_latest_run_funnels(engine):
@@ -944,7 +963,8 @@ def test_source_responses_reads_errors_and_funnels_per_adapter():
 
 - [ ] **Step 2: 알림 테스트를 고치고 더한다**
 
-`tests/test_notify.py` · `tests/test_run_cliff_alert.py` 에서 「발견 퍼널: 목록 13 → URL 13 → 제목 7 → 키워드 3」 을 「수집 단계 기록: 목록 13 → URL 13 → 제목 확인 7 → 키워드 3」 으로 바꾼다 (네 곳 · `grep -n "발견 퍼널" tests` 로 찾는다).
+`tests/test_notify.py` · `tests/test_run_cliff_alert.py` 에서 「발견 퍼널: 목록 13 → URL 13 → 제목 7 → 키워드 3」 을 「수집 단계 기록: 목록 13 → URL 13 → 제목 확인 7 → 키워드 3」 으로 바꾼다 (`test_run_cliff_alert.py:46` · `test_notify.py:866` · `:884`).
+`test_notify.py:872` 의 부정 단언 `assert "발견 퍼널" not in ...` 도 `assert "수집 단계 기록" not in ...` 으로 바꾼다 — 그대로 두면 아무것도 확인하지 않는 단언이 된다.
 `tests/test_notify.py` 858행 머리 주석의 「발견 퍼널 4단」 도 「수집 단계 기록」 으로 바꾼다.
 파일 끝에 붙인다.
 
@@ -1091,7 +1111,9 @@ def broken_reason_text(r, funnel: dict | None, error: str | None,
                 "footer": "bullet-in", "channel": CHANNEL_TREND}
 ```
 
-`_section_fields` 가 빈 줄 목록 (`_funnel_lines` 가 `[]`) 을 받으면 그 구획을 빼는지 기존 동작을 확인한다 (`test_freshness_omits_the_path_section_when_nothing_observed` 와 같은 규칙).
+`_section_fields` 는 줄이 없는 구획을 뺀다 (`notify.py:176` 의 「줄이 없는 구획은 빠진다」).
+
+같은 함수의 docstring 에 있는 `quality.freshness_alert_split` 을 `quality.broken_alert_split` 으로 바꾼다 (236행).
 
 - [ ] **Step 5: run.py 를 연결한다**
 
@@ -1123,6 +1145,8 @@ def source_responses(sources: dict, fetched: "FetchSummary") -> dict[str, tuple[
             records, default_hours, targets=fresh_targets, sources=sources,
             run_id=run_id, checked_at=checked_at, candidates=fetched.candidate_counts,
             fetch_errors=fetched.errors, funnels=fetched.funnels, broken=True))
+    # 안 보낸 이유를 남긴다 — 종전에는 대상이 비면 아무 기록 없이 넘어가 "왜 알림이
+    # 안 나갔는가" 를 저널로 답할 수 없었다 (스펙 2026-08-14 §5.4).
     by_state = Counter(r.state for r in records)
     logging.getLogger(__name__).info(
         "신선도 판정: 감시 %d소스 · 끊김 %d · 응답 없음 %d · 조용함 %d · 정상 %d · 발송 %d%s%s",
@@ -1137,6 +1161,7 @@ def source_responses(sources: dict, fetched: "FetchSummary") -> dict[str, tuple[
 
 이제 아무도 부르지 않는 옛 함수를 지운다.
 `quality.py` 에서 `freshness_alert_split` 과 `_realert_level` 을 지우고 (`FRESHNESS_REALERT_HOURS` · `FreshnessHold` 는 남긴다), `tests/test_quality.py` 에서 `freshness_alert_split` 을 부르는 테스트와 import 를 지운다.
+그 테스트들만 쓰던 도우미 `_stale` (288행) 도 함께 지운다.
 지운 테스트 이름은 커밋 본문에 적는다.
 
 - [ ] **Step 6: 통과를 확인한다**
@@ -1390,7 +1415,7 @@ from latest_fresh
 
 - [ ] **Step 2: 허용 값 테스트를 더한다**
 
-`sources.yml` 의 `models:` 목록 끝 (`stg_article_players` 항목 뒤) 에 붙인다.
+`sources.yml` 의 `models:` 목록 맨 끝 (마지막 gold 모델 항목 뒤 · 파일 끝) 에 붙인다.
 
 ```yaml
   - name: stg_source_freshness
@@ -1430,19 +1455,19 @@ git commit -m "feat(dbt): Gold SLO-5 를 끊김 상태 수로 바꾸고 state �
 
 - [ ] **Step 1: 절을 더한다**
 
-파일 끝에 붙인다 (마지막 절 번호가 다르면 다음 번호로).
+파일 끝에 붙인다 (지금 마지막 절이 `## 7.` 이므로 `## 8.` 로 단다).
 
 ```markdown
-## 상한과 제목 확인 비율 (2026-10-02 추가)
+## 8. 상한과 제목 확인 비율 (2026-10-02 추가)
 
-### 무엇이 바뀌었나
+### 8.1. 무엇이 바뀌었나
 
 SLO-5 는 이제 「끊긴 소스」 만 센다 (스펙 `docs/superpowers/specs/2026-10-02-slo5-broken-source-signal-design.md`).
 
 `freshness_hours` 는 끊김 판정에서 빠지고, 수집 현황 화면에서 「조용함」 을 표시하는 기준선이 됐다.
 이 런북의 재측정 절차는 조용함 표시선을 고를 때 그대로 쓴다.
 
-### 끊김을 정하는 값
+### 8.2. 끊김을 정하는 값
 
 | 값 | 위치 | 뜻 |
 | --- | --- | --- |
@@ -1450,7 +1475,7 @@ SLO-5 는 이제 「끊긴 소스」 만 센다 (스펙 `docs/superpowers/specs/
 | 제목 확인 비율 절반 | 코드 (`quality.responded`) | HTML 목록에서 제목까지 확인된 링크가 절반보다 적으면 무응답 |
 | `list_unchanged_cap_hours: 48` | `config/sources.yaml` | 목록이 48시간 넘게 그대로면 끊김 |
 
-### 상한을 다시 볼 때
+### 8.3. 상한을 다시 볼 때
 
 배포 뒤 「신선도 판정」 로그에서 소스마다 목록이 바뀐 간격을 모은다.
 어느 소스든 정상일 때 목록이 48시간 넘게 그대로인 일이 있으면, 그 근거를 적고 상한을 올린다.
@@ -1481,7 +1506,7 @@ cd /Users/aryijq/Documents/01_DE_project/bullet-in/.claude/worktrees/slo5-broken
 uv run --project . --extra dev pytest -q 2>&1 | tail -3
 ```
 
-Expected: 수집 수가 Task 0 기준선 + 새 테스트 수 · 전부 PASS.
+Expected: 수집 1,825 (기준선 1,792 + 33 · 2026-10-02 dry run 실측) · 1 skip (기준선과 같음) · 나머지 전부 PASS.
 
 - [ ] **Step 2: 과거 이력 대입 스크립트를 만든다**
 
