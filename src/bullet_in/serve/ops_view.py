@@ -136,8 +136,8 @@ def _tiles(runs_all, recent, stale_count, span_weeks, completion: dict | None = 
         {"label": f"Run Duration p50 · {n}회", "value": f"{_pctile(durs, .5):.0f}초",
          "sub": f"fetch {_pctile(fetch, .5):.0f}초" if fetch else "fetch 이력 없음",
          "spark": Markup(C.sparkline(durs))},
-        {"label": "Stale Sources", "value": "—" if stale_count is None else C.fmt(stale_count),
-         "sub": "임계 초과 소스 (SLO-5)", "spark": ""},
+        {"label": "Broken Sources", "value": "—" if stale_count is None else C.fmt(stale_count),
+         "sub": "끊긴 소스 (SLO-5)", "spark": ""},
         {"label": f"Runs · {span_weeks}주", "value": C.fmt(len(runs_all)),
          "sub": f"에러 실행 {C.fmt(errs)} · 기대 {EXPECTED_RUNS_PER_DAY}/일", "spark": ""},
     ]
@@ -177,7 +177,7 @@ def _slo_rows(recent, stale_count, anomaly_count, gate: GateTally | None, articl
         rows.append(row(4, "필수 필드 완전성", f"≥ {SLO4_TARGET * 100:.0f}%", f"{comp * 100:.1f}%", how4,
                         "ok" if comp >= SLO4_TARGET else "bad"))
     rows.append(row(5, "소스 신선도", "끊긴 소스 0", "—" if stale_count is None else C.fmt(stale_count),
-                    "source_freshness 워터마크 · 임계 초과 소스 수",
+                    "목록 응답 · 목록 변화 · 소스별 상태 (source_freshness.state)",
                     "info" if stale_count is None else ("ok" if not stale_count else "bad")))
     rows.append(row(6, "수집량 이상", "이상 소스 0", C.fmt(anomaly_count),
                     "직전 실행들 대비 ±2σ 드롭 · 스파이크 (quality.volume_anomalies)",
@@ -426,44 +426,77 @@ def _mix(weekly_mix, today: date):
     return _section("sec-credibility-mix-stage-mix", title, sub, q, body, ins)
 
 
-def _freshness(fresh_rows, sources):
-    """절과 함께 최신 회차의 stale 수를 돌려준다 (타일 · SLO-5 가 같은 값을 쓴다)."""
-    title, sub = "Source Freshness", "SLO-5 · 임계 대비 경과"
-    q = "소스마다 마지막 수집이 임계 시간의 어디까지 왔는지 미터로 본다. 미터가 다 차면 수집이 끊겼다."
+_STATE_PILL = {"broken": ("끊김", "bad"), "no_response": ("응답 없음 1회", "warn"),
+               "quiet": ("조용함", "warn"), "ok": ("정상", "ok")}
+
+
+def _stage_text(funnel: dict | None) -> str:
+    """수집 단계 칸 — 어댑터마다 응답 판정에 쓰는 숫자 (스펙 2026-10-02 §4.2.1)."""
+    f = funnel or {}
+    if "scraped" in f:
+        return f"트윗 {f.get('scraped', 0)}"
+    if "keywords" in f:
+        return f"검색어 {f.get('searched', 0)}/{f.get('keywords', 0)} · 글 {f.get('listed', 0)}"
+    if "deduped" in f:
+        return f"기사 링크 {f.get('deduped', 0)} · 제목 확인 {f.get('titled', 0)}"
+    return "—"
+
+
+def _freshness(fresh_rows, sources, latest_funnels=None):
+    """절과 함께 최신 실행의 끊김 수를 돌려준다 (타일 · SLO-5 가 같은 값을 쓴다)."""
+    title, sub = "Source Freshness", "SLO-5 · 목록 응답과 조용함"
+    q = ("소스마다 이번 실행의 목록 응답과 상태를 본다. 미터는 새 원본이 임계 시간의 "
+         "어디까지 왔는지, 곧 얼마나 조용한가를 보인다.")
     latest_run = fresh_rows[-1]["run_id"] if fresh_rows else None
     latest = {r["source_id"]: r for r in fresh_rows if r["run_id"] == latest_run}
     history = defaultdict(list)
-    for r in fresh_rows:                              # 부재 회차 없음 = 진짜 결측
+    for r in fresh_rows:
         if r["age_hours"] is not None:
             history[r["source_id"]].append(float(r["age_hours"]))
+    funnels = latest_funnels or {}
 
     def ratio(r):
         return (r["age_hours"] or 0) / (r["threshold_hours"] or 1)
 
+    def state_cell(r):
+        label, cls = _STATE_PILL.get(r.get("state"), ("판정 이전", ""))
+        pill = f'<span class="pill {cls}">{label}</span>' if cls else f'<span class="pill">{label}</span>'
+        changed, cap = r.get("list_changed_at"), r.get("cap_hours")
+        if changed is not None and cap:
+            hours = (r["checked_at"] - changed).total_seconds() / 3600
+            if hours > cap / 2:
+                pill += f' <span class="q">목록 그대로 {hours:.0f}시간</span>'
+        return pill
+
     rows = []
     for sid, r in sorted(latest.items(), key=lambda kv: -ratio(kv[1])):
         disp = C.E(_display(sources, sid))
+        stage = C.E(_stage_text(funnels.get(sid)))
         if r["age_hours"] is None:
             rows.append(f'<tr><td>{disp}</td><td>이력 없음</td><td>— / {r["threshold_hours"]:.0f}h</td>'
-                        f'<td></td><td></td><td><span class="pill">이력 없음</span></td></tr>')
+                        f'<td></td><td></td><td>{stage}</td><td>{state_cell(r)}</td></tr>')
             continue
-        pill = '<span class="pill bad">✕ 초과</span>' if r["stale"] else '<span class="pill ok">✓ 신선</span>'
         rows.append(f'<tr><td>{disp}</td><td>{r["last_fetched_at"]:%m-%d %H:%M}</td>'
                     f'<td>{r["age_hours"]:.1f}h / {r["threshold_hours"]:.0f}h</td>'
                     f'<td>{C.meter(r["age_hours"], r["threshold_hours"])}</td>'
-                    f'<td>{C.sparkline(history[sid], w=84, h=18)}</td><td>{pill}</td></tr>')
+                    f'<td>{C.sparkline(history[sid], w=84, h=18)}</td>'
+                    f'<td>{stage}</td><td>{state_cell(r)}</td></tr>')
     body = (('<table class="fresh"><thead><tr><th>소스</th><th>마지막 수집</th><th>경과 / 임계</th>'
-             '<th>임계 대비</th><th>최근 12회</th><th>상태</th></tr></thead><tbody>'
+             '<th>조용함</th><th>최근 12회</th><th>수집 단계</th><th>상태</th></tr></thead><tbody>'
              + "".join(rows) + "</tbody></table>") if rows else '<p class="q">이력 없음.</p>')
     ins = []
     thr = [r["threshold_hours"] for r in latest.values()]
     if thr and min(thr) != max(thr):
         ins.append((f"임계는 소스마다 다르다 ({min(thr):.0f}h 에서 {max(thr):.0f}h).", []))
-    stale = [_display(sources, s) for s, r in latest.items() if r["stale"]]
-    if stale:
-        ins.append((f"임계를 넘은 소스는 {' · '.join(stale)} 다.", []))
-    stale_count = sum(1 for r in latest.values() if r["stale"]) if latest else None
-    return _section("sec-source-freshness", title, sub, q, body, ins), stale_count
+    broken = [_display(sources, s) for s, r in latest.items() if r.get("state") == "broken"]
+    if broken:
+        ins.append((f"끊긴 소스는 {' · '.join(broken)} 다.", []))
+    quiet = [_display(sources, s) for s, r in latest.items() if r.get("state") == "quiet"]
+    if quiet:
+        ins.append((f"새 원본이 임계보다 오래 없는 조용한 소스는 {' · '.join(quiet)} 다.", []))
+    judged = [r for r in latest.values() if r.get("state") is not None]
+    broken_count = sum(1 for r in judged if r["state"] == "broken") if judged else None
+    return _section("sec-source-freshness", title, sub, q, body, ins), broken_count
 
 
 def _review(high, unmatched):
@@ -507,7 +540,8 @@ def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int, now: datet
     span_days = (today - OPS_EPOCH).days + 1
     span_weeks = span_days // 7
     articles_total = snapshot.get("articles_total") or 0
-    fresh_sec, stale_count = _freshness(snapshot.get("freshness") or [], sources)
+    fresh_sec, stale_count = _freshness(snapshot.get("freshness") or [], sources,
+                                        snapshot.get("latest_funnels"))
     slo = _slo_rows(recent, stale_count, anomaly_count, gate, articles_total)
     sections = [
         _slo(slo, gate, completion),
