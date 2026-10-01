@@ -207,7 +207,7 @@ def test_main_leaves_the_completion_file_alone_when_list_runs_fails(monkeypatch,
     assert (state / "completion.json").read_text() == before
 
 
-# ── 게이트 급사 계수기 (안건 2ν · 트러블슈팅 2026-09-18 재시도가 가린 코어 덤프) ────────
+# ── dbt 게이트 세그폴트 횟수 (안건 2ν · 트러블슈팅 2026-09-18 재시도가 가린 코어 덤프) ────────
 
 DEATH_LINE = ('{"timestamp":"2026-09-17T09:01:50.385438Z","level":"info",'
               '"event":"WARNING dbt 가 신호로 죽었다 (종료코드 -11 · 시도 1/2)","task_id":"gate",'

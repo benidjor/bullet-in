@@ -18,7 +18,7 @@ advance → collect → enrich → publish → gate → deploy_site → judge
 | `collect` | `run --stage collect` | 0 (재수집은 원본을 다시 훑는다 — 사람이 태스크 clear) | `all_success` |
 | `enrich` | `run --stage enrich` | 0 (429 는 다음 회차가 잇는다) | `all_success` |
 | `publish` | `run --stage publish` | 1 | `all_success` |
-| `gate` | `run --stage gate` | 0 (급사 재시도는 게이트 함수 안에서 이미 한 번) | `all_success` · `skip_on_exit_code=3` |
+| `gate` | `run --stage gate` | 0 (세그폴트 재시도는 게이트 함수 안에서 이미 한 번) | `all_success` · `skip_on_exit_code=3` |
 | `deploy_site` | `infra/deploy-site.sh` (끝에 공백 — `.sh` 로 끝나면 BashOperator 가 Jinja 템플릿 파일로 읽으려 든다) | 1 | `all_success` |
 | `judge` | `tasks states-for-dag-run` 뒤 `deploy judge --from-airflow` | 0 | `all_done` |
 | `warehouse_load` | `warehouse load` (전용 서비스 계정으로 감싼다) | 0 | `all_done` · `publish` 뒤 |
