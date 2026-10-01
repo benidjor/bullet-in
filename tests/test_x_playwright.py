@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from bullet_in.adapters.x_playwright import parse_afcstuff_tweets, _accumulate_tweets, XPlaywrightAdapter
+from bullet_in.adapters.x_playwright import tweet_list_urls
 
 NOW = datetime(2026, 7, 1, 3, 30, tzinfo=timezone.utc)
 
@@ -304,3 +305,9 @@ def test_no_own_source_config_keeps_everything():
     items = parse_afcstuff_tweets("x_afcstuff", "afcstuff",
                                   [_rt(text=_BREAKING, status_id="4")], NOW)
     assert len(items) == 1
+
+
+def test_tweet_list_urls_uses_author_and_status_id_and_skips_missing():
+    raw = [{"author": "afcstuff", "status_id": "1"}, {"author": "afcstuff", "status_id": ""},
+           {"author": "", "status_id": "2"}]
+    assert tweet_list_urls(raw) == ["afcstuff/status/1", "/status/2"]

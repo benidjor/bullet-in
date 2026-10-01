@@ -4,6 +4,7 @@ from urllib.parse import urljoin
 import httpx
 from bs4 import BeautifulSoup
 from bullet_in.models import RawItem
+from bullet_in.quality import list_signature
 
 class HtmlAdapter:
     source_type = "html"
@@ -30,6 +31,7 @@ class HtmlAdapter:
         else:
             self.title_keywords = [k.lower() for k in title_contains]
     async def fetch(self) -> list[RawItem]:
+        self.funnel = {}
         from bullet_in.adapters.meta import (extract_og_image, extract_body_images,
                                              extract_authors, extract_published_at)
         async with httpx.AsyncClient(timeout=20, follow_redirects=True,
@@ -69,6 +71,8 @@ class HtmlAdapter:
                     continue
                 self.funnel["passed"] += 1
                 matched.append((title, url))
+            # 목록 지문 — 키워드 필터 앞의 링크 묶음 (스펙 2026-10-02 §2.3.2)
+            self.funnel["list_sig"] = list_signature(seen)
             out = []
             for title, url in matched:
                 payload = {"title": title}

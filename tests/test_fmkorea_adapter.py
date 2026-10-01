@@ -19,8 +19,7 @@ FREE_ART = ('<html><body><article><p>Arsenal have secured a significant victory 
             'expressed satisfaction with the completed transfer. Fans have reacted positively to this news '
             'on social media platforms.</p></article></body></html>')
 
-@respx.mock
-def test_fmkorea_search_union_dedup():
+def _mock_search_and_bodies():
     respx.get("https://fm.test/s?t=title&kw=kw1").mock(return_value=httpx.Response(200, text=SEARCH_KW1))
     respx.get("https://fm.test/s?t=title_content&kw=kw2").mock(return_value=httpx.Response(200, text=SEARCH_KW2))
     respx.get("https://www.fmkorea.com/111").mock(return_value=httpx.Response(200, text=FREE_BODY))
@@ -28,10 +27,19 @@ def test_fmkorea_search_union_dedup():
     respx.get("https://www.fmkorea.com/333").mock(return_value=httpx.Response(200, text=FREE_BODY))
     respx.get("https://ex.test/a").mock(return_value=httpx.Response(200, text=FREE_ART))
     respx.get("https://www.nytimes.com/athletic/9/b").mock(return_value=httpx.Response(200, text=""))
-    a = FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
-                       search_keywords=[{"keyword": "kw1", "target": "title"},
-                                        {"keyword": "kw2", "target": "title_content"}],
-                       base_url="https://www.fmkorea.com")
+
+
+def _adapter():
+    return FmkoreaAdapter(source_id="fmkorea", search_url="https://fm.test/s?t={target}&kw={keyword}",
+                          search_keywords=[{"keyword": "kw1", "target": "title"},
+                                           {"keyword": "kw2", "target": "title_content"}],
+                          base_url="https://www.fmkorea.com")
+
+
+@respx.mock
+def test_fmkorea_search_union_dedup():
+    _mock_search_and_bodies()
+    a = _adapter()
     items = asyncio.run(a.fetch())
     assert len(items) == 3
     pay = next(i for i in items if "athletic" in i.url)
@@ -1422,3 +1430,22 @@ def test_known_titles_are_excluded_despite_highlight_whitespace():
                        base_url="https://www.fmkorea.com",
                        exclude_titles={"[BBC] 아스날과 알 힐랄,마르티넬리합의 임박"})
     assert asyncio.run(a.discover()) == []
+
+
+@respx.mock
+def test_fmkorea_funnel_counts_search_results_before_filters():
+    _mock_search_and_bodies()
+    a = _adapter()
+    items = asyncio.run(a.fetch())
+    # 검색 결과 글은 111 · 222 · 333 셋 (222 는 두 검색어에 겹친다)
+    assert a.funnel["keywords"] == 2 and a.funnel["searched"] == 2
+    assert a.funnel["listed"] == 3 and a.funnel["passed"] == len(items) == 3
+    assert len(a.funnel["list_sig"]) == 16
+
+
+@respx.mock
+def test_fmkorea_funnel_all_searches_430():
+    respx.get(url__regex=r"https://fm\.test/s\?.*").mock(return_value=httpx.Response(430))
+    a = _adapter()
+    assert asyncio.run(a.fetch()) == []
+    assert a.funnel == {"keywords": 2, "searched": 0, "listed": 0, "passed": 0, "list_sig": ""}

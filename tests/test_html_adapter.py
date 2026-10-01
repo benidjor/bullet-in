@@ -2,6 +2,7 @@ import asyncio, respx, httpx
 from pathlib import Path
 from bullet_in.adapters.html import HtmlAdapter
 from bullet_in.adapters.meta import extract_og_image  # noqa: F401 (의존 확인)
+from bullet_in.quality import list_signature
 
 HTML = (Path(__file__).parent / "fixtures" / "list.html").read_text()
 
@@ -279,7 +280,7 @@ def test_html_adapter_title_attr_missing_skips_item():
     assert [i.url for i in items] == ["https://g.test/a"]
 
 
-# ── 발견 퍼널 4단 (스펙 2026-08-14 §8.2) ─────────────────────────────────────
+# ── 수집 단계 기록 (스펙 2026-08-14 §8.2) ─────────────────────────────────────
 
 FUNNEL_HTML = (
     '<a class="card" href="/a"><h3>Arsenal sign Gyokeres</h3></a>'
@@ -301,7 +302,9 @@ def test_html_adapter_counts_each_discovery_stage():
         return_value=httpx.Response(200, text=FUNNEL_HTML))
     a = _funnel_adapter()
     asyncio.run(a.fetch())
-    assert a.funnel == {"selected": 5, "deduped": 3, "titled": 2, "passed": 1}
+    assert a.funnel == {"selected": 5, "deduped": 3, "titled": 2, "passed": 1,
+                        "list_sig": list_signature(["https://a.test/a", "https://a.test/b",
+                                                    "https://a.test/c"])}
 
 
 @respx.mock
@@ -311,7 +314,19 @@ def test_html_adapter_funnel_shows_zero_at_the_top_when_selector_breaks():
         return_value=httpx.Response(200, text="<div>개편된 페이지</div>"))
     a = _funnel_adapter()
     assert asyncio.run(a.fetch()) == []
-    assert a.funnel == {"selected": 0, "deduped": 0, "titled": 0, "passed": 0}
+    assert a.funnel == {"selected": 0, "deduped": 0, "titled": 0, "passed": 0, "list_sig": ""}
+
+
+@respx.mock
+def test_html_adapter_funnel_signature_follows_deduped_links():
+    page = ('<a class="card" href="/n/1"><h3>Arsenal sign</h3></a>'
+            '<a class="card" href="/n/1"><h3>Arsenal sign</h3></a>'
+            '<a class="card" href="/n/2">본문 속 링크</a>')
+    respx.get("https://a.test/news").mock(return_value=httpx.Response(200, text=page))
+    a = _funnel_adapter()
+    asyncio.run(a.fetch())
+    assert a.funnel["deduped"] == 2 and a.funnel["titled"] == 1
+    assert a.funnel["list_sig"] == list_signature(["https://a.test/n/1", "https://a.test/n/2"])
 
 
 def test_html_adapter_funnel_is_empty_before_first_fetch():

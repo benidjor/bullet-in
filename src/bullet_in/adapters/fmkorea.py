@@ -8,6 +8,7 @@ import logging
 import httpx
 from bs4 import BeautifulSoup
 from bullet_in.models import RawItem
+from bullet_in.quality import list_signature
 
 log = logging.getLogger(__name__)
 
@@ -371,6 +372,7 @@ class FmkoreaAdapter:
         self.search_failures = 0      # 이번 fetch 에서 실패한 키워드 검색 수
         self.search_failure_codes: Counter = Counter()   # 실패 사유 (HTTP 상태 코드 · 연결 오류)
         self.relevance_dropped = 0    # 무관 글 필터 탈락 수
+        self.funnel: dict = {}
 
     async def _gap(self) -> None:
         """fmkorea 요청 사이 간격 — 0 이면 대기 없음 (정기 회차 동작 불변)."""
@@ -383,8 +385,9 @@ class FmkoreaAdapter:
         self.search_failures = 0
         self.search_failure_codes = Counter()
         per_kw, seen, first = [], set(), True
+        searched, listed = 0, set()
         for kw in self.search_keywords:
-            results = []
+            results, kw_ok = [], False
             for page in range(1, self.pages + 1):
                 url = self.search_url.format(keyword=quote(kw["keyword"]),
                                              target=kw["target"], page=page)
@@ -410,10 +413,13 @@ class FmkoreaAdapter:
                     self.search_failures += 1
                     self.search_failure_codes["error"] += 1
                     break
+                kw_ok = True
                 soup = BeautifulSoup(r.text, "html.parser")
                 for a in soup.select(self.item_selector):
                     title = a.get_text(strip=True)
                     post_url = _post_url_from_href(a.get("href", ""), self.base_url)
+                    if post_url:
+                        listed.add(post_url)      # 필터 전 결과 글 (스펙 2026-10-02 §3.1)
                     if not title or not post_url or post_url in seen:
                         continue
                     seen.add(post_url)
@@ -436,7 +442,11 @@ class FmkoreaAdapter:
                     if must and _squash(must) not in _squash(title):
                         continue
                     results.append((title, post_url))
+            searched += kw_ok
             per_kw.append(results)
+        self.funnel = {"keywords": len(self.search_keywords), "searched": searched,
+                       "listed": len(listed), "passed": 0,
+                       "list_sig": list_signature(listed)}
         return _round_robin(per_kw, self.max_posts, self.round_robin_start)
 
     def _relevant(self, title: str, body: str) -> bool:
@@ -571,6 +581,9 @@ class FmkoreaAdapter:
             return await self._discover(c)
 
     async def fetch(self) -> list[RawItem]:
+        self.funnel = {}
         async with self._client() as c:
             matched = await self._discover(c)
-            return await self._process(c, matched)
+            items = await self._process(c, matched)
+        self.funnel["passed"] = len(items)
+        return items
