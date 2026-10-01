@@ -206,7 +206,8 @@ fmkorea 는 검색어 가운데 하나만 성공해도 응답으로 본다.
 - `miss_streak` 은 연속 무응답 횟수다.
   응답하면 0 으로 돌아가고, 응답하지 않으면 직전 행의 값에 1 을 더한다.
 - `list_changed_at` 은 응답한 실행에서 지문이 직전 행과 다르면 이번 실행 시각이 되고, 같으면 직전 값을 잇는다.
-  응답하지 않은 실행은 지문이 없으므로 직전 값을 그대로 잇는다.
+  응답하지 않은 실행은 지문이 없으므로 `list_sig` 와 `list_changed_at` 모두 직전 값을 그대로 잇는다.
+  지문을 비워 두면 다음 응답 실행이 빈 값과 비교해 목록이 그대로여도 「바뀜」 으로 판정하기 때문이다.
 - 직전 행은 지금처럼 `MartStore.previous_freshness` 가 읽는다 (이번 실행의 행을 넣기 전).
 
 #### 2.5.2. 배포 뒤 첫 실행
@@ -249,7 +250,7 @@ BBC Sport 처럼 지금 무응답 조건에 걸리는 소스는 둘째 실행 (3
 | --- | --- | --- |
 | `state` | `VARCHAR(16) NULL` | `ok` · `quiet` · `no_response` · `broken` |
 | `miss_streak` | `INT NULL` | 연속 무응답 횟수 |
-| `list_sig` | `VARCHAR(16) NULL` | 이번 실행 목록의 지문 (무응답이면 빈 값) |
+| `list_sig` | `VARCHAR(16) NULL` | 마지막으로 응답한 실행의 목록 지문 (무응답이면 직전 값을 이어 적음) |
 | `list_changed_at` | `DATETIME NULL` | 목록이 마지막으로 바뀐 시각 |
 | `cap_hours` | `FLOAT NULL` | 그 실행에서 쓴 상한 |
 
