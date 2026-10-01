@@ -1448,4 +1448,5 @@ def test_fmkorea_funnel_all_searches_430():
     respx.get(url__regex=r"https://fm\.test/s\?.*").mock(return_value=httpx.Response(430))
     a = _adapter()
     assert asyncio.run(a.fetch()) == []
-    assert a.funnel == {"keywords": 2, "searched": 0, "listed": 0, "passed": 0, "list_sig": ""}
+    assert a.funnel == {"keywords": 2, "searched": 0, "listed": 0, "passed": 0, "list_sig": "",
+                        "codes": {"430": 2}}

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
-from bullet_in.adapters.x_playwright import parse_afcstuff_tweets, _accumulate_tweets, XPlaywrightAdapter
-from bullet_in.adapters.x_playwright import tweet_list_urls
+from bullet_in.adapters.x_playwright import (parse_afcstuff_tweets, _accumulate_tweets,
+                                             XPlaywrightAdapter, tweet_list_urls)
 
 NOW = datetime(2026, 7, 1, 3, 30, tzinfo=timezone.utc)
 

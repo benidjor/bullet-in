@@ -493,6 +493,27 @@ def test_broken_alert_resends_when_reason_kind_changes():
     assert len(broken_alert_split([now_miss], prev, _T0 + timedelta(hours=3))[0]) == 1
 
 
+def test_broken_alert_resends_when_miss_turns_into_list_unchanged():
+    first = _broken(miss=2)                                       # 무응답
+    prev = _prev_of(first, _T0)
+    now_list = _broken(changed_h=52, now=_T0 + timedelta(hours=3))   # 응답은 돌아왔지만 목록 그대로
+    assert len(broken_alert_split([now_list], prev, _T0 + timedelta(hours=3))[0]) == 1
+
+
+def test_list_unchanged_exactly_at_cap_is_not_broken():
+    prev = {"state": "ok", "miss_streak": 0, "list_sig": "s1",
+            "list_changed_at": _T0 - timedelta(hours=48), "cap_hours": 48.0,
+            "checked_at": _T0 - timedelta(hours=3)}
+    r = _judge(_rec(age=2.0), sig="s1", prev=prev)
+    assert (r.state, r.reason) == ("ok", "")
+
+
+def test_quiet_source_that_stops_responding_is_no_response():
+    # 새 원본이 임계를 넘은 소스라도 이번 실행 무응답이면 조용함보다 응답 없음이 먼저다
+    r = _judge(_rec(age=200.0, thr=96.0), ok=False, reason="title_ratio", sig=None)
+    assert (r.stale, r.state, r.reason) == (True, "no_response", "title_ratio")
+
+
 def test_broken_alert_resends_when_cap_changes():
     first = _broken(changed_h=49)
     prev = _prev_of(first, _T0)

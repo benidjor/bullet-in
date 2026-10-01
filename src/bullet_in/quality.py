@@ -189,6 +189,7 @@ class FreshnessHold:
 
 # 무응답 끊김의 재알림 단위 — 3시간 실행 × 16 = 48시간 (스펙 2026-10-02 §4.1.2).
 REALERT_RUNS = 16
+RUN_INTERVAL_HOURS = 3.0          # DAG 스케줄 0 */3 * * * — 「다음 알림까지」 표시에만 쓴다
 
 
 def _broken_level(miss_streak, list_changed_at, cap_hours, at,
@@ -197,7 +198,7 @@ def _broken_level(miss_streak, list_changed_at, cap_hours, at,
     if (miss_streak or 0) >= 2:
         done = miss_streak - 2
         level = done // runs_per_interval
-        return "miss", level, ((level + 1) * runs_per_interval - done) * 3.0
+        return "miss", level, ((level + 1) * runs_per_interval - done) * RUN_INTERVAL_HOURS
     over = (at - list_changed_at).total_seconds() / 3600 - (cap_hours or 0.0)
     level = int(over // interval_hours)
     return "list", level, round((level + 1) * interval_hours - over, 1)

@@ -221,7 +221,10 @@ def broken_reason_text(r, funnel: dict | None, error: str | None,
     if r.reason == "no_tweets":
         return f"타임라인 트윗 0개 · {n}회 연속"
     if r.reason == "search_failed":
-        return f"검색어 {f.get('keywords', 0)}개 모두 실패 · {n}회 연속"
+        codes = sorted(f.get("codes") or {}, key=lambda k: (k == "error", k))
+        why = (" (" + " · ".join("연결 오류" if k == "error" else k for k in codes) + ")"
+               if codes else "")
+        return f"검색어 {f.get('keywords', 0)}개 모두 실패{why} · {n}회 연속"
     if r.reason == "no_results":
         return f"검색 결과 글 0개 · {n}회 연속"
     return f"수집 단계 기록 없음 · {n}회 연속 — 소스가 아니라 감시 기록이 고장 났을 수 있음"

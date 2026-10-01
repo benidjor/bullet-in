@@ -172,3 +172,27 @@ def test_ops_snapshot_returns_latest_run_funnels(engine):
             {"d": json.dumps({"errors": {}, "funnels": {"bbc_sport": {"deduped": 7, "titled": 1}}})})
     snap = MartStore(engine).ops_snapshot()
     assert snap["latest_funnels"]["bbc_sport"]["titled"] == 1
+
+
+def test_ops_snapshot_freshness_rows_carry_state_columns(engine):
+    # 화면은 이 넷으로 상태 칸과 「목록 그대로」 꼬리말을 그린다 — 빠지면 칸 전체가 「판정 이전」 이 된다
+    from bullet_in.quality import SourceFreshness
+    at = datetime(2026, 10, 2, 6, 2)
+    r = SourceFreshness("bbc_sport", at - timedelta(hours=200), 96.0, 200.0, True)
+    r.state, r.miss_streak, r.list_sig = "no_response", 1, "abcd"
+    r.list_changed_at, r.cap_hours = at - timedelta(hours=3), 48.0
+    MartStore(engine).record_freshness("r1", at, [r])
+    row = MartStore(engine).ops_snapshot()["freshness"][0]
+    assert (row["state"], row["miss_streak"], row["list_changed_at"], row["cap_hours"]) == \
+        ("no_response", 1, at - timedelta(hours=3), 48.0)
+
+
+def test_ops_snapshot_latest_run_without_fetch_detail_gives_empty_funnels(engine):
+    with engine.begin() as c:
+        c.execute(text(
+            "INSERT INTO pipeline_runs (run_id, started_at, finished_at, fetch_detail) "
+            "VALUES ('r8', '2026-10-02 00:00:00', '2026-10-02 00:05:00', :d), "
+            "('r9', '2026-10-02 03:00:00', '2026-10-02 03:05:00', NULL)"),
+            {"d": json.dumps({"errors": {}, "funnels": {"bbc_sport": {"deduped": 7, "titled": 1}}})})
+    # 가장 최근 실행만 본다 — 그 실행에 기록이 없으면 직전 실행 값으로 메우지 않는다
+    assert MartStore(engine).ops_snapshot()["latest_funnels"] == {}
