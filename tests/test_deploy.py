@@ -60,7 +60,7 @@ def test_decide_does_nothing_without_pending():
 
 @pytest.mark.parametrize("service_result,exit_status,action", [
     ("success", "0", "confirm"),
-    ("exit-code", "3", "hold"),        # 게이트 급사 (dbt 세그폴트) — 되돌리지 않는다
+    ("exit-code", "3", "hold"),        # dbt 게이트 세그폴트 — 되돌리지 않는다
     ("exit-code", "1", "rollback"),    # 예외 · 게이트 위반 · dbt 자체 실패
     ("timeout", "", "rollback"),
     ("signal", "9", "rollback"),

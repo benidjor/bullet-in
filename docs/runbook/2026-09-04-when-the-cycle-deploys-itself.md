@@ -67,7 +67,7 @@ ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 \
   'cat ~/bullet-in/state/airflow_states.json'
 ```
 
-`gate` 가 건너뜀 (skipped) 이면 `docs/runbook/2026-08-31-when-the-dbt-gate-blocks-a-deploy.md` §3 의 신호 종료 (급사) 이지 롤백 알림이 아니다.
+`gate` 가 건너뜀 (skipped) 이면 `docs/runbook/2026-08-31-when-the-dbt-gate-blocks-a-deploy.md` §3 의 신호 종료 (dbt 게이트 세그폴트) 이지 롤백 알림이 아니다.
 `collect` · `enrich` · `publish` · `gate` (위반) · `deploy_site` 중 하나가 `failed` 이면 그 태스크가 원인이다.
 
 - **코드 탓이면** — 고친 PR 을 머지한다.

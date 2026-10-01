@@ -288,7 +288,7 @@ def test_완주율_타일은_분모가_0_이면_대시다():
     assert tiles["완주율 · 07-20 이후"]["sub"] == "0/0 · 진행 중 제외 · 감시 08:37 UTC"
 
 
-def test_slo_절은_게이트_급사_계수를_한_줄로_적는다():
+def test_slo_절은_dbt_게이트_세그폴트_횟수를_한_줄로_적는다():
     comp = dict(COMPLETION, gate={"gate_runs": 118, "signal_deaths": 5,
                                   "last_at": "2026-09-17T09:01:50.385438Z", "last_run_id": "scheduled__2026-09-17T09:00:00+00:00"})
     slo = _flat(build_ops_view(SNAPSHOT, SOURCES, 0, NOW, gate=GATE, completion=comp))[0]

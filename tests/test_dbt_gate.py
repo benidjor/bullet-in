@@ -209,7 +209,7 @@ def test_run_gate_reports_exit_code_when_results_lack_blocking_rows(tmp_path, mo
 
 
 def test_run_gate_records_dbt_returncode(tmp_path, monkeypatch):
-    # 판정기는 저널을 안 읽는다 — 종료 코드가 결과에 실려 있어야 급사를 가른다.
+    # 판정기는 저널을 안 읽는다 — 종료 코드가 결과에 실려 있어야 세그폴트를 가른다.
     def fake_run(*args, **kwargs):
         return _FakeProc(-11, stdout="23 of 29 START ...")   # run_results.json 을 안 쓴다
 

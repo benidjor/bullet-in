@@ -206,7 +206,7 @@ def _slo(rows, gate, completion: dict | None = None):
                 else "SLO-3 · 4 는 게이트 결과 파일이 생기면 채워진다.", []))
     deaths = (completion or {}).get("gate")
     if deaths and deaths.get("gate_runs"):
-        # 안건 2ν — 재시도 1회가 성공으로 바꾼 급사는 여기 말고는 어디에도 안 보인다.
+        # 안건 2ν — 재시도 1회가 성공으로 덮은 세그폴트는 여기 말고는 어디에도 안 보인다.
         last = f" · 마지막 {deaths['last_at'][5:10]}" if deaths.get("last_at") else ""
         ins.append((f"게이트가 신호로 죽고 재시도로 지나간 실행은 {deaths['gate_runs']}회 중 "
                     f"{deaths['signal_deaths']} (2026-09-04 이후{last}) 이다.", []))

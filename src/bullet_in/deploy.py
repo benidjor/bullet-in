@@ -83,7 +83,7 @@ def decide(state: DeployState, service_result: str, exit_status: str) -> Verdict
     if service_result == "success":
         return Verdict("confirm", "회차 · 게이트 · 배포 통과")
     if service_result == "exit-code" and exit_status == str(GATE_CRASH_EXIT):
-        return Verdict("hold", "게이트 급사 (dbt 신호 종료) — 다음 회차에 다시 판정")
+        return Verdict("hold", "dbt 게이트 세그폴트 (신호 종료) — 다음 실행에서 다시 판정")
     return Verdict("rollback", f"유닛 결과 {service_result} · 종료 코드 {exit_status or '?'}")
 
 

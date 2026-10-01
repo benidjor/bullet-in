@@ -39,8 +39,8 @@ def test_collect_has_no_airflow_retry():
 def test_pipeline_tasks_use_all_success_trigger_rule():
     """다섯 태스크가 all_success 여야 앞이 실패했을 때 뒤가 skipped 가 아니라
     upstream_failed 로 뜬다 — deploy judge --from-airflow 가 gate == skipped 를
-    급사 판정으로 보고 그 뒤에야 태스크 실패를 순회하므로, 이 트리거 규칙이 깨지면
-    실패를 급사로 오판한다."""
+    세그폴트 판정으로 보고 그 뒤에야 태스크 실패를 순회하므로, 이 트리거 규칙이 깨지면
+    실패를 세그폴트로 오판한다."""
     dag = _dag()
     for name in ("collect", "enrich", "publish", "gate", "deploy_site"):
         assert dag.get_task(name).trigger_rule == "all_success"
