@@ -15,7 +15,7 @@ from recent
 union all
 select 'SLO-5',
        '수집 끊긴 소스 수 (최신 run)',
-       coalesce(sum(case when stale then 1 else 0 end), 0)
+       coalesce(sum(case when state = 'broken' then 1 else 0 end), 0)
 from latest_fresh
 union all
 select 'duration',

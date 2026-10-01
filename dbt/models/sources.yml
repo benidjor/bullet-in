@@ -115,3 +115,13 @@ models:
     columns:
       - name: slo_id
         tests: [unique, not_null]
+  - name: stg_source_freshness
+    columns:
+      - name: state
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['ok', 'quiet', 'no_response', 'broken']
+              config:
+                # 2026-10-02 배포 전 행은 state 가 비어 있다 — 판정된 행만 본다 (스펙 §4.3).
+                where: "state is not null"
