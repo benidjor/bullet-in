@@ -346,6 +346,19 @@ def test_responded_without_signature_is_no_record():
     assert responded("fmkorea", {"keywords": 3, "searched": 1, "listed": 12}, False) == (False, "no_record")
 
 
+_T0 = datetime(2026, 10, 2, 3, 0)
+
+
+def _rec(sid="bbc_sport", age=10.0, thr=96.0):
+    return SourceFreshness(sid, _T0 - timedelta(hours=age), thr, age, age > thr)
+
+
+def _judge(rec, ok=True, reason="", sig="s1", prev=None, now=_T0, cap=48.0):
+    evaluate_states([rec], {rec.source_id: (ok, reason)}, {rec.source_id: sig},
+                    cap, {rec.source_id: prev} if prev else {}, now)
+    return rec
+
+
 def test_broken_without_signature_never_reaches_list_unchanged():
     # 두 번 연속 무응답(지문 부재)이면 -> no_response, broken (no_record) 로 끝난다
     # list_unchanged 절대 아님 (목록 서명 없으므로)
@@ -363,19 +376,6 @@ def test_broken_without_signature_never_reaches_list_unchanged():
     evaluate_states([r], {r.source_id: (ok2, reason2)}, {r.source_id: None}, 48.0,
                     {r.source_id: first_prev}, _T0 + timedelta(hours=3))
     assert (r.state, r.miss_streak, r.reason) == ("broken", 2, "no_record")
-
-
-_T0 = datetime(2026, 10, 2, 3, 0)
-
-
-def _rec(sid="bbc_sport", age=10.0, thr=96.0):
-    return SourceFreshness(sid, _T0 - timedelta(hours=age), thr, age, age > thr)
-
-
-def _judge(rec, ok=True, reason="", sig="s1", prev=None, now=_T0, cap=48.0):
-    evaluate_states([rec], {rec.source_id: (ok, reason)}, {rec.source_id: sig},
-                    cap, {rec.source_id: prev} if prev else {}, now)
-    return rec
 
 
 def test_first_run_never_breaks_even_without_response():

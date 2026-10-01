@@ -983,6 +983,12 @@ def test_broken_reason_list_unchanged_uses_hours_and_cap():
         "목록은 응답하지만 52시간째 바뀌지 않음 (상한 48시간)"
 
 
+def test_broken_reason_list_unchanged_with_miss_says_no_response():
+    checked, r = _broken_rec("list_unchanged", miss=1, changed_h=52.0)
+    assert notify.broken_reason_text(r, None, None, now=checked) == \
+        "목록이 52시간째 바뀌지 않음 (이번 실행은 응답 없음 · 상한 48시간)"
+
+
 def test_broken_reason_error_quotes_the_error():
     _, r = _broken_rec("error")
     assert notify.broken_reason_text(r, None, "HTTP 403 Forbidden") == \

@@ -446,7 +446,7 @@ def _freshness(fresh_rows, sources, latest_funnels=None):
     """절과 함께 최신 실행의 끊김 수를 돌려준다 (타일 · SLO-5 가 같은 값을 쓴다)."""
     title, sub = "Source Freshness", "SLO-5 · 목록 응답과 조용함"
     q = ("소스마다 이번 실행의 목록 응답과 상태를 본다. 미터는 새 원본이 임계 시간의 "
-         "어디까지 왔는지, 곧 얼마나 조용한가를 보인다.")
+         "어디까지 왔는지를 보인다. 상태가 조용함이면 목록은 응답하는데 새 원본만 없는 것이다.")
     latest_run = fresh_rows[-1]["run_id"] if fresh_rows else None
     latest = {r["source_id"]: r for r in fresh_rows if r["run_id"] == latest_run}
     history = defaultdict(list)
@@ -482,7 +482,7 @@ def _freshness(fresh_rows, sources, latest_funnels=None):
                     f'<td>{C.sparkline(history[sid], w=84, h=18)}</td>'
                     f'<td>{stage}</td><td>{state_cell(r)}</td></tr>')
     body = (('<table class="fresh"><thead><tr><th>소스</th><th>마지막 수집</th><th>경과 / 임계</th>'
-             '<th>조용함</th><th>최근 12회</th><th>수집 단계</th><th>상태</th></tr></thead><tbody>'
+             '<th>새 원본 경과</th><th>최근 12회</th><th>수집 단계</th><th>상태</th></tr></thead><tbody>'
              + "".join(rows) + "</tbody></table>") if rows else '<p class="q">이력 없음.</p>')
     ins = []
     thr = [r["threshold_hours"] for r in latest.values()]

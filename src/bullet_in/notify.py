@@ -206,6 +206,9 @@ def broken_reason_text(r, funnel: dict | None, error: str | None,
     if r.reason == "list_unchanged":
         at = now or datetime.utcnow()
         hours = (at - r.list_changed_at).total_seconds() / 3600
+        if n >= 1:
+            return (f"목록이 {hours:.0f}시간째 바뀌지 않음 "
+                    f"(이번 실행은 응답 없음 · 상한 {r.cap_hours:g}시간)")
         return f"목록은 응답하지만 {hours:.0f}시간째 바뀌지 않음 (상한 {r.cap_hours:g}시간)"
     if r.reason == "error":
         return f"목록이 {n}회 연속 응답하지 않음 · 오류: {(error or '')[:120]}"
@@ -233,9 +236,10 @@ def build_freshness_alert(records, default_hours: float, *,
                           broken: bool = False) -> dict:
     """전체 판정 레코드를 받아 이번 회차 발송 대상만 필드로 펼친다.
 
-    targets 는 quality.broken_alert_split 이 고른 발송분이다 — stale 전부가 아니라
-    임계를 새로 넘었거나 재알림 간격이 돌아온 소스다. 나머지 stale 은 설명의 대기
-    계수로만 남긴다.
+    targets 는 quality.broken_alert_split 이 고른 발송분이다 — 새로 끊겼거나, 끊김 종류 ·
+    상한이 바뀌었거나, 48시간 재알림 간격이 돌아온 소스다.
+    broken=True 면 소스마다 왜 끊겼는지 사유를 설명한다.
+    broken=False 는 테스트용으로 남긴 옛 임계 알림 경로다.
     candidates 는 이번 회차에 어댑터가 찾은 소스별 후보 건수 (dedup 전) — 키 부재 = 0건.
     후보 계수는 발송 조건이 아니라 진단 재료다 (스펙 2026-08-14 §4.1): 후보가 있으면
     경로는 응답한다는 사실을 적고, 어댑터 힌트 (셀렉터 드리프트 등) 는 후보 0건일 때만
