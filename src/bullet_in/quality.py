@@ -93,14 +93,25 @@ def responded(adapter: str | None, funnel: dict | None,
             return False, "no_links"
         if titled * 2 < links:
             return False, "title_ratio"
+        # 수집 단계 기록이 없으면 목록 서명을 얻지 못했다 (스펙 2026-10-02 §2.2.4)
+        if not funnel.get("list_sig"):
+            return False, "no_record"
         return True, ""
     if adapter == "x_playwright":
-        return (True, "") if int(funnel.get("scraped", 0)) > 0 else (False, "no_tweets")
+        if int(funnel.get("scraped", 0)) == 0:
+            return False, "no_tweets"
+        # 수집 단계 기록이 없으면 목록 서명을 얻지 못했다 (스펙 2026-10-02 §2.2.4)
+        if not funnel.get("list_sig"):
+            return False, "no_record"
+        return True, ""
     if adapter == "fmkorea":
         if int(funnel.get("searched", 0)) == 0:
             return False, "search_failed"
         if int(funnel.get("listed", 0)) == 0:
             return False, "no_results"
+        # 수집 단계 기록이 없으면 목록 서명을 얻지 못했다 (스펙 2026-10-02 §2.2.4)
+        if not funnel.get("list_sig"):
+            return False, "no_record"
         return True, ""
     return True, ""
 

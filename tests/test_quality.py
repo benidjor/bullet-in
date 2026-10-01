@@ -378,23 +378,49 @@ def test_responded_html_title_ratio_boundary():
     # 2026-10-01 BBC Sport 실측은 7개 중 1개 (14%) 였다
     assert responded("html", {"deduped": 7, "titled": 1}, False) == (False, "title_ratio")
     assert responded("html", {"deduped": 7, "titled": 3}, False) == (False, "title_ratio")
-    assert responded("html", {"deduped": 7, "titled": 4}, False) == (True, "")
-    assert responded("html", {"deduped": 20, "titled": 20}, False) == (True, "")
+    assert responded("html", {"deduped": 7, "titled": 4, "list_sig": "s1"}, False) == (True, "")
+    assert responded("html", {"deduped": 20, "titled": 20, "list_sig": "s1"}, False) == (True, "")
 
 
 def test_responded_x_needs_scraped_tweets():
     assert responded("x_playwright", {"scraped": 0, "passed": 0}, False) == (False, "no_tweets")
-    assert responded("x_playwright", {"scraped": 30, "passed": 0}, False) == (True, "")
+    assert responded("x_playwright", {"scraped": 30, "passed": 0, "list_sig": "s1"}, False) == (True, "")
 
 
 def test_responded_fmkorea_partial_failure_still_responds():
     assert responded("fmkorea", {"keywords": 3, "searched": 0, "listed": 0}, False) == (False, "search_failed")
     assert responded("fmkorea", {"keywords": 3, "searched": 1, "listed": 0}, False) == (False, "no_results")
-    assert responded("fmkorea", {"keywords": 3, "searched": 1, "listed": 12}, False) == (True, "")
+    assert responded("fmkorea", {"keywords": 3, "searched": 1, "listed": 12, "list_sig": "s1"}, False) == (True, "")
 
 
 def test_responded_unknown_adapter_with_record_responds():
     assert responded("arsenal_api", {"anything": 1}, False) == (True, "")
+
+
+def test_responded_without_signature_is_no_record():
+    # 목록 지문이 없으면 수집 단계 기록이 깨진 것이다 — 세 모니터 어댑터는 응답 조건 미충족
+    assert responded("html", {"deduped": 7, "titled": 4}, False) == (False, "no_record")
+    assert responded("x_playwright", {"scraped": 30, "passed": 0}, False) == (False, "no_record")
+    assert responded("fmkorea", {"keywords": 3, "searched": 1, "listed": 12}, False) == (False, "no_record")
+
+
+def test_broken_without_signature_never_reaches_list_unchanged():
+    # 두 번 연속 무응답(지문 부재)이면 -> no_response, broken (no_record) 로 끝난다
+    # list_unchanged 절대 아님 (목록 서명 없으므로)
+    r = _rec()
+    # 첫 실행: 지문 없이 응답 시도 → no_record
+    ok1, reason1 = responded("html", {"deduped": 7, "titled": 4}, False)
+    assert (ok1, reason1) == (False, "no_record")
+    evaluate_states([r], {r.source_id: (ok1, reason1)}, {r.source_id: None}, 48.0, {}, _T0)
+    assert (r.state, r.miss_streak) == ("no_response", 1)
+    # 두 번째 실행: 역시 지문 없음 → 연속 무응답 2회 → broken (이유는 no_record)
+    first_prev = {"state": "no_response", "miss_streak": 1, "list_sig": None,
+                  "list_changed_at": _T0, "cap_hours": 48.0, "checked_at": _T0}
+    ok2, reason2 = responded("html", {"deduped": 7, "titled": 4}, False)
+    assert (ok2, reason2) == (False, "no_record")
+    evaluate_states([r], {r.source_id: (ok2, reason2)}, {r.source_id: None}, 48.0,
+                    {r.source_id: first_prev}, _T0 + timedelta(hours=3))
+    assert (r.state, r.miss_streak, r.reason) == ("broken", 2, "no_record")
 
 
 _T0 = datetime(2026, 10, 2, 3, 0)
