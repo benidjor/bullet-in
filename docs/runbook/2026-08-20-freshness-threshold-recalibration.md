@@ -108,3 +108,26 @@ GROUP BY source_id ORDER BY stale_n DESC;
 - 신호 교체 설계 — `docs/superpowers/specs/2026-08-20-absorbed-source-freshness-signal-design.md` (§5 가 마감 전 임시 임계와 그 근거).
 - 임계 · 재알림 규칙의 원 설계 — `docs/superpowers/specs/2026-08-14-slo5-freshness-alert-blind-spot-design.md`.
 - 알림 해석과 진단표 — `docs/runbook/2026-07-13-freshness-watermark-ops.md`.
+
+## 8. 상한과 제목 확인 비율 (2026-10-02 추가)
+
+### 8.1. 무엇이 바뀌었나
+
+SLO-5 는 이제 「끊긴 소스」 만 센다 (스펙 `docs/superpowers/specs/2026-10-02-slo5-broken-source-signal-design.md`).
+
+`freshness_hours` 는 끊김 판정에서 빠지고, 수집 현황 화면에서 「조용함」 을 표시하는 기준선이 됐다.
+이 런북의 재측정 절차는 조용함 표시선을 고를 때 그대로 쓴다.
+
+### 8.2. 끊김을 정하는 값
+
+| 값 | 위치 | 뜻 |
+| --- | --- | --- |
+| 무응답 2회 연속 | 코드 (`quality.evaluate_states`) | 목록이 응답하지 않으면 끊김 |
+| 제목 확인 비율 절반 | 코드 (`quality.responded`) | HTML 목록에서 제목까지 확인된 링크가 절반보다 적으면 무응답 |
+| `list_unchanged_cap_hours: 48` | `config/sources.yaml` | 목록이 48시간 넘게 그대로면 끊김 |
+
+### 8.3. 상한을 다시 볼 때
+
+배포 뒤 「신선도 판정」 로그에서 소스마다 목록이 바뀐 간격을 모은다.
+어느 소스든 정상일 때 목록이 48시간 넘게 그대로인 일이 있으면, 그 근거를 적고 상한을 올린다.
+상한을 소스마다 다르게 두는 것은 그런 근거가 생긴 뒤에 정한다.
