@@ -1015,6 +1015,12 @@ def test_broken_reason_search_failed_names_the_failure_codes():
     assert notify.broken_reason_text(r, {"keywords": 3}, None) == "검색어 3개 모두 실패 · 2회 연속"
 
 
+def test_broken_reason_blocked_says_430_and_hours():
+    _, r = _broken_rec("blocked", miss=8, sid="fmkorea")
+    assert notify.broken_reason_text(r, {"keywords": 5, "codes": {"430": 5}}, None) == \
+        "검색어 5개 모두 차단 (430) · 8회 연속 (24시간) — 일시 차단이면 저절로 풀리지만 이만큼 길면 영구 차단인지 확인"
+
+
 def test_build_freshness_alert_broken_lists_each_source_when_several():
     checked, bbc = _broken_rec("title_ratio")
     _, sky = _broken_rec("no_links", sid="sky_sports")

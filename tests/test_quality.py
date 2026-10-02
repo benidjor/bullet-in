@@ -526,3 +526,100 @@ def test_broken_alert_ignores_non_broken_and_holds_without_watermark():
     nowm = _broken(miss=2, sid="new_source"); nowm.age_hours = None
     send, hold = broken_alert_split([quiet, nowm], _prev_of(nowm, _T0), _T0)
     assert send == [] and hold[0].source_id == "new_source" and hold[0].age_hours == 0.0
+
+
+# ── fmkorea 430 차단 (스펙 2026-10-02 §8 · 2026-10-03 개정) ──────────────────
+
+def test_responded_fmkorea_all_430_is_blocked_not_search_failed():
+    f = {"keywords": 5, "searched": 0, "listed": 0, "codes": {"430": 5}}
+    assert responded("fmkorea", f, False) == (False, "blocked")
+    # 코드가 섞이거나 없으면 차단이 아니라 검색 실패다 — 사람이 볼 일이 있다
+    assert responded("fmkorea", dict(f, codes={"430": 4, "error": 1}), False) == (False, "search_failed")
+    assert responded("fmkorea", dict(f, codes={}), False) == (False, "search_failed")
+
+
+def _judge_fm(prev, reason="blocked", ok=False, runs=8, now=_T0):
+    r = _rec("fmkorea", thr=24.0)
+    evaluate_states([r], {"fmkorea": (ok, reason)}, {"fmkorea": "s1" if ok else None},
+                    48.0, {"fmkorea": prev} if prev else {}, now, blocked_runs={"fmkorea": runs})
+    return r
+
+
+def _prev_fm(miss, block, changed_h=3.0):
+    return {"state": "no_response", "miss_streak": miss, "block_streak": block, "list_sig": "s1",
+            "list_changed_at": _T0 - timedelta(hours=changed_h), "cap_hours": 48.0,
+            "checked_at": _T0 - timedelta(hours=3)}
+
+
+def test_blocked_seven_in_a_row_is_still_no_response():
+    r = _judge_fm(_prev_fm(6, 6))
+    assert (r.state, r.reason, r.miss_streak, r.block_streak) == ("no_response", "blocked", 7, 7)
+
+
+def test_blocked_eight_in_a_row_breaks():
+    r = _judge_fm(_prev_fm(7, 7))
+    assert (r.state, r.reason, r.miss_streak, r.block_streak) == ("broken", "blocked", 8, 8)
+
+
+def test_other_miss_after_blocks_uses_the_two_run_rule():
+    r = _judge_fm(_prev_fm(3, 3), reason="error")
+    assert (r.state, r.reason, r.miss_streak, r.block_streak) == ("broken", "error", 4, 0)
+
+
+def test_block_after_other_miss_is_mixed_and_breaks_at_two():
+    r = _judge_fm(_prev_fm(1, 0))
+    assert (r.state, r.miss_streak, r.block_streak) == ("broken", 2, 1)
+
+
+def test_one_response_resets_the_block_streak():
+    r = _judge_fm(_prev_fm(7, 7), reason="", ok=True)
+    assert (r.state, r.miss_streak, r.block_streak) == ("ok", 0, 0)
+
+
+def test_source_without_blocked_runs_setting_breaks_at_two_even_when_blocked():
+    r = _rec("fmkorea", thr=24.0)
+    evaluate_states([r], {"fmkorea": (False, "blocked")}, {"fmkorea": None}, 48.0,
+                    {"fmkorea": _prev_fm(1, 1)}, _T0)
+    assert (r.state, r.block_streak) == ("broken", 2)
+
+
+def test_rows_before_block_column_carry_their_misses_into_the_block_streak():
+    # 칼럼이 생기기 전 무응답은 이번과 같은 차단으로 이어 센다 — 228회차에서 fmkorea
+    # 무응답 사유는 430 뿐이었고, 섞임으로 보면 배포 첫 회차에 알림이 나간다.
+    r = _judge_fm(_prev_fm(2, None))
+    assert (r.state, r.miss_streak, r.block_streak) == ("no_response", 3, 3)
+
+
+def _broken_fm(miss, block, now=_T0):
+    r = _rec("fmkorea", thr=24.0)
+    r.state, r.miss_streak, r.block_streak, r.cap_hours = "broken", miss, block, 48.0
+    r.list_changed_at = now - timedelta(hours=3)
+    r.reason = "blocked" if block == miss else "error"
+    return r
+
+
+def _prev_fm_of(r, at):
+    return {r.source_id: {"state": r.state, "miss_streak": r.miss_streak,
+                          "block_streak": r.block_streak, "list_sig": None,
+                          "list_changed_at": r.list_changed_at, "cap_hours": r.cap_hours,
+                          "checked_at": at}}
+
+
+def test_blocked_alert_sends_at_eight_holds_then_realerts_after_48_hours():
+    first = _broken_fm(8, 8)
+    assert len(broken_alert_split([first], {}, _T0, blocked_runs={"fmkorea": 8})[0]) == 1
+    prev = _prev_fm_of(first, _T0)
+    later = _broken_fm(23, 23, now=_T0 + timedelta(hours=45))     # 8 + 15 → 같은 구간
+    assert broken_alert_split([later], prev, _T0 + timedelta(hours=45),
+                              blocked_runs={"fmkorea": 8})[0] == []
+    again = _broken_fm(24, 24, now=_T0 + timedelta(hours=48))     # 8 + 16 → 다음 구간
+    assert len(broken_alert_split([again], prev, _T0 + timedelta(hours=48),
+                                  blocked_runs={"fmkorea": 8})[0]) == 1
+
+
+def test_blocked_alert_resends_when_block_turns_into_other_miss():
+    first = _broken_fm(8, 8)
+    prev = _prev_fm_of(first, _T0)
+    now_err = _broken_fm(9, 0, now=_T0 + timedelta(hours=3))
+    assert len(broken_alert_split([now_err], prev, _T0 + timedelta(hours=3),
+                                  blocked_runs={"fmkorea": 8})[0]) == 1

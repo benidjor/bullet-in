@@ -212,6 +212,15 @@ def test_신선도_표는_소스_이름을_이스케이프한다():
     assert "&lt;b&gt;BBC&lt;/b&gt;" in body and "<b>BBC</b>" not in body
 
 
+def test_응답_없음은_횟수를_차단은_사유를_보인다():
+    rows = [dict(FRESH[3], miss_streak=3, block_streak=0),
+            dict(FRESH[2], state="no_response", miss_streak=3, block_streak=3)]
+    body = str(_sec(build_ops_view(dict(SNAPSHOT, freshness=rows), SOURCES, 0, NOW, gate=GATE,
+                                   unmatched=None), "sec-source-freshness")["body"])
+    assert '<span class="pill warn">응답 없음 3회</span>' in body
+    assert '<span class="pill warn">차단 3회 (430)</span>' in body
+
+
 def test_옛_행만_있으면_slo5_는_판정_이전이다():
     old = [dict(r, state=None) for r in FRESH]
     view = build_ops_view(dict(SNAPSHOT, freshness=old), SOURCES, 0, NOW, gate=GATE, unmatched=None)

@@ -3,7 +3,7 @@ import json, logging, os, re
 import httpx
 from datetime import datetime, timezone
 
-from bullet_in.quality import FRESHNESS_REALERT_HOURS
+from bullet_in.quality import FRESHNESS_REALERT_HOURS, RUN_INTERVAL_HOURS
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +220,10 @@ def broken_reason_text(r, funnel: dict | None, error: str | None,
         return f"목록에서 기사 링크를 찾지 못함 · {n}회 연속"
     if r.reason == "no_tweets":
         return f"타임라인 트윗 0개 · {n}회 연속"
+    if r.reason == "blocked":
+        return (f"검색어 {f.get('keywords', 0)}개 모두 차단 (430) · {n}회 연속 "
+                f"({n * RUN_INTERVAL_HOURS:g}시간) — 일시 차단이면 저절로 풀리지만 "
+                f"이만큼 길면 영구 차단인지 확인")
     if r.reason == "search_failed":
         codes = sorted(f.get("codes") or {}, key=lambda k: (k == "error", k))
         why = (" (" + " · ".join("연결 오류" if k == "error" else k for k in codes) + ")"

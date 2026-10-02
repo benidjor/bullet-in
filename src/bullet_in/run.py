@@ -280,6 +280,12 @@ def adapter_funnels(adapters) -> dict:
             if (f := getattr(a, "funnel", None))}
 
 
+def blocked_miss_runs(sources: dict) -> dict[str, int]:
+    """차단 (전부 430) 만 이어질 때 끊김까지 기다릴 소스별 회차 수 — 설정이 있는 소스만."""
+    return {sid: int(s["blocked_miss_runs"]) for sid, s in sources.items()
+            if "blocked_miss_runs" in s}
+
+
 def source_responses(sources: dict, fetched: "FetchSummary") -> dict[str, tuple[bool, str]]:
     """소스마다 이번 실행에 목록이 응답했는가 (스펙 2026-10-02 §2.2)."""
     return {sid: responded(s.get("adapter"), fetched.funnels.get(sid),
@@ -617,10 +623,12 @@ def publish(run_id: str) -> None:
         r.stored_fetched_at = stored_wm.get(r.source_id)
     cap = float(cfg.get("list_unchanged_cap_hours", LIST_UNCHANGED_CAP_HOURS))
     sigs = {sid: (fetched.funnels.get(sid) or {}).get("list_sig") for sid in sources}
+    blocked_runs = blocked_miss_runs(sources)
     evaluate_states(records, source_responses(sources, fetched), sigs, cap,
-                    prev_freshness, checked_at)
+                    prev_freshness, checked_at, blocked_runs=blocked_runs)
     mart.record_freshness(run_id, checked_at, records)
-    fresh_targets, fresh_holds = broken_alert_split(records, prev_freshness, checked_at)
+    fresh_targets, fresh_holds = broken_alert_split(records, prev_freshness, checked_at,
+                                                    blocked_runs=blocked_runs)
     if fresh_targets:
         notify.send_alert(**notify.build_freshness_alert(
             records, default_hours, targets=fresh_targets, sources=sources,
