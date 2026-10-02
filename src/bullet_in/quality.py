@@ -222,6 +222,7 @@ def _broken_level(miss_streak, list_changed_at, cap_hours, at,
     """끊긴 종류 · 재알림 구간 · 다음 구간까지 남은 시간 (시간)."""
     blk = block_streak or 0
     if block_runs and blk and blk == (miss_streak or 0):
+        # 차단만 이어지는데 아직 기준 아래라면 무응답으로는 안 끊겼다 — 끊겼다면 목록 그대로 (아래 list)
         if blk >= block_runs:
             done = blk - block_runs
             level = done // runs_per_interval

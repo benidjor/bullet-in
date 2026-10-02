@@ -623,3 +623,29 @@ def test_blocked_alert_resends_when_block_turns_into_other_miss():
     now_err = _broken_fm(9, 0, now=_T0 + timedelta(hours=3))
     assert len(broken_alert_split([now_err], prev, _T0 + timedelta(hours=3),
                                   blocked_runs={"fmkorea": 8})[0]) == 1
+
+
+def test_new_source_without_previous_row_starts_block_streak_at_one():
+    r = _judge_fm(None)
+    assert (r.state, r.miss_streak, r.block_streak) == ("no_response", 1, 1)
+
+
+def test_block_below_threshold_with_list_unchanged_alerts_as_list_kind():
+    r = _judge_fm(_prev_fm(4, 4, changed_h=50.0))
+    assert (r.state, r.reason, r.block_streak) == ("broken", "list_unchanged", 5)
+    send, _ = broken_alert_split([r], {}, _T0, blocked_runs={"fmkorea": 8})
+    assert send == [r]
+    # 같은 상태가 이어져도 list 종류로 보아 같은 구간이면 보류한다
+    prev = _prev_fm_of(r, _T0)
+    nxt = _judge_fm(prev["fmkorea"] | {"state": "broken"}, now=_T0 + timedelta(hours=3))
+    assert broken_alert_split([nxt], prev, _T0 + timedelta(hours=3),
+                              blocked_runs={"fmkorea": 8})[0] == []
+
+
+def test_pre_column_broken_row_resends_once_when_block_kind_takes_over():
+    old = {"state": "broken", "miss_streak": 8, "block_streak": None, "list_sig": None,
+           "list_changed_at": _T0 - timedelta(hours=3), "cap_hours": 48.0,
+           "checked_at": _T0 - timedelta(hours=3)}
+    now = _broken_fm(9, 9)
+    assert len(broken_alert_split([now], {"fmkorea": old}, _T0,
+                                  blocked_runs={"fmkorea": 8})[0]) == 1

@@ -222,7 +222,7 @@ def broken_reason_text(r, funnel: dict | None, error: str | None,
         return f"타임라인 트윗 0개 · {n}회 연속"
     if r.reason == "blocked":
         return (f"검색어 {f.get('keywords', 0)}개 모두 차단 (430) · {n}회 연속 "
-                f"({n * RUN_INTERVAL_HOURS:g}시간) — 일시 차단이면 저절로 풀리지만 "
+                f"(마지막 응답 뒤 {n * RUN_INTERVAL_HOURS:g}시간) — 일시 차단이면 저절로 풀리지만 "
                 f"이만큼 길면 영구 차단인지 확인")
     if r.reason == "search_failed":
         codes = sorted(f.get("codes") or {}, key=lambda k: (k == "error", k))
