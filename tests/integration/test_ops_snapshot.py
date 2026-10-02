@@ -196,3 +196,15 @@ def test_ops_snapshot_latest_run_without_fetch_detail_gives_empty_funnels(engine
             {"d": json.dumps({"errors": {}, "funnels": {"bbc_sport": {"deduped": 7, "titled": 1}}})})
     # 가장 최근 실행만 본다 — 그 실행에 기록이 없으면 직전 실행 값으로 메우지 않는다
     assert MartStore(engine).ops_snapshot()["latest_funnels"] == {}
+
+
+def test_block_streak_round_trips_through_record_previous_and_snapshot(engine):
+    from bullet_in.quality import SourceFreshness
+    at = datetime(2026, 10, 3, 3, 2)
+    r = SourceFreshness("fmkorea", at - timedelta(hours=10), 24.0, 10.0, False)
+    r.state, r.miss_streak, r.block_streak, r.list_sig = "no_response", 3, 3, "abcd"
+    r.list_changed_at, r.cap_hours = at - timedelta(hours=9), 48.0
+    store = MartStore(engine)
+    store.record_freshness("r1", at, [r])
+    assert store.previous_freshness()["fmkorea"]["block_streak"] == 3
+    assert store.ops_snapshot()["freshness"][0]["block_streak"] == 3

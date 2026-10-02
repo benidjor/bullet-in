@@ -108,3 +108,5 @@ ALTER TABLE source_freshness ADD COLUMN IF NOT EXISTS miss_streak INT NULL;
 ALTER TABLE source_freshness ADD COLUMN IF NOT EXISTS list_sig VARCHAR(16) NULL;
 ALTER TABLE source_freshness ADD COLUMN IF NOT EXISTS list_changed_at DATETIME NULL;
 ALTER TABLE source_freshness ADD COLUMN IF NOT EXISTS cap_hours FLOAT NULL;
+-- fmkorea 430 차단 (스펙 2026-10-02 §8 · 2026-10-03 개정) — 끝에서부터 이어진 차단 회차 수
+ALTER TABLE source_freshness ADD COLUMN IF NOT EXISTS block_streak INT NULL;

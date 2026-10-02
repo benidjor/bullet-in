@@ -61,6 +61,7 @@ class SourceFreshness:
     # SLO-5 끊김 판정 (스펙 2026-10-02 §2) — evaluate_states 가 채운다.
     state: str | None = None            # ok · quiet · no_response · broken
     miss_streak: int | None = None      # 연속 무응답 횟수
+    block_streak: int | None = None     # 그중 끝에서부터 이어진 차단 (전부 430) 횟수
     list_sig: str | None = None         # 마지막으로 응답한 실행의 목록 지문
     list_changed_at: datetime | None = None
     cap_hours: float | None = None
@@ -106,6 +107,10 @@ def responded(adapter: str | None, funnel: dict | None,
         return True, ""
     if adapter == "fmkorea":
         if int(funnel.get("searched", 0)) == 0:
+            # 전부 430 이면 상대 사이트의 일시 차단이다 — 회차마다 독립적으로 약 44% 걸리고
+            # 저절로 풀린다 (트러블슈팅 2026-10-03). 코드가 섞이거나 없으면 검색 실패로 둔다.
+            if set(funnel.get("codes") or {}) == {"430"}:
+                return False, "blocked"
             return False, "search_failed"
         if int(funnel.get("listed", 0)) == 0:
             return False, "no_results"
@@ -120,14 +125,25 @@ def responded(adapter: str | None, funnel: dict | None,
 LIST_UNCHANGED_CAP_HOURS = 48.0
 
 
+def _miss_runs_to_break(r: SourceFreshness, blocked_runs: dict[str, int] | None) -> int:
+    """끊김까지 필요한 연속 무응답 수 — 연속 무응답이 모두 차단이면 소스별 기준, 아니면 2."""
+    n = (blocked_runs or {}).get(r.source_id)
+    if n and r.block_streak and r.block_streak == r.miss_streak:
+        return n
+    return 2
+
+
 def evaluate_states(records: list[SourceFreshness],
                     responses: dict[str, tuple[bool, str]],
                     sigs: dict[str, str | None], cap_hours: float,
-                    previous: dict[str, dict], now: datetime) -> None:
+                    previous: dict[str, dict], now: datetime,
+                    blocked_runs: dict[str, int] | None = None) -> None:
     """소스마다 상태 넷 가운데 하나를 매기고 이어 적을 값을 채운다 (스펙 §2.1 · §2.5).
 
     무응답 실행은 지문과 바뀐 시각을 직전 값 그대로 잇는다 — 비워 두면 다음 응답
-    실행이 빈 값과 비교해 목록이 그대로여도 「바뀜」 으로 판정한다."""
+    실행이 빈 값과 비교해 목록이 그대로여도 「바뀜」 으로 판정한다.
+    blocked_runs 는 차단 (전부 430) 만 이어질 때 끊김까지 기다릴 소스별 회차 수다
+    (스펙 2026-10-02 §8 · 2026-10-03 개정)."""
     for r in records:
         ok, reason = responses.get(r.source_id, (False, "no_record"))
         prev = previous.get(r.source_id) or {}
@@ -141,9 +157,17 @@ def evaluate_states(records: list[SourceFreshness],
             r.miss_streak = int(prev.get("miss_streak") or 0) + 1
             r.list_sig = prev_sig
             r.list_changed_at = prev_changed or now
+        if ok or reason != "blocked":
+            r.block_streak = 0
+        elif prev.get("block_streak") is None:
+            # 칼럼이 생기기 전 행 — 그 무응답도 같은 차단으로 이어 센다. fmkorea 무응답 사유는
+            # 228회차 동안 430 뿐이었고, 섞임으로 보면 배포 첫 회차에 알림이 나간다.
+            r.block_streak = r.miss_streak
+        else:
+            r.block_streak = int(prev["block_streak"]) + 1
         r.cap_hours = cap_hours
         unchanged = (now - r.list_changed_at).total_seconds() / 3600
-        if not ok and r.miss_streak >= 2:
+        if not ok and r.miss_streak >= _miss_runs_to_break(r, blocked_runs):
             r.state, r.reason = "broken", reason
         elif unchanged > cap_hours:
             r.state, r.reason = "broken", "list_unchanged"
@@ -193,9 +217,17 @@ RUN_INTERVAL_HOURS = 3.0          # DAG 스케줄 0 */3 * * * — 「다음 알�
 
 
 def _broken_level(miss_streak, list_changed_at, cap_hours, at,
-                  interval_hours: float, runs_per_interval: int) -> tuple[str, int, float]:
+                  interval_hours: float, runs_per_interval: int,
+                  block_streak=None, block_runs: int | None = None) -> tuple[str, int, float]:
     """끊긴 종류 · 재알림 구간 · 다음 구간까지 남은 시간 (시간)."""
-    if (miss_streak or 0) >= 2:
+    blk = block_streak or 0
+    if block_runs and blk and blk == (miss_streak or 0):
+        # 차단만 이어지는데 아직 기준 아래라면 무응답으로는 안 끊겼다 — 끊겼다면 목록 그대로 (아래 list)
+        if blk >= block_runs:
+            done = blk - block_runs
+            level = done // runs_per_interval
+            return "block", level, ((level + 1) * runs_per_interval - done) * RUN_INTERVAL_HOURS
+    elif (miss_streak or 0) >= 2:
         done = miss_streak - 2
         level = done // runs_per_interval
         return "miss", level, ((level + 1) * runs_per_interval - done) * RUN_INTERVAL_HOURS
@@ -207,7 +239,8 @@ def _broken_level(miss_streak, list_changed_at, cap_hours, at,
 def broken_alert_split(records: list[SourceFreshness], previous: dict[str, dict],
                        now: datetime,
                        interval_hours: float = FRESHNESS_REALERT_HOURS,
-                       runs_per_interval: int = REALERT_RUNS
+                       runs_per_interval: int = REALERT_RUNS,
+                       blocked_runs: dict[str, int] | None = None
                        ) -> tuple[list[SourceFreshness], list[FreshnessHold]]:
     """끊김 소스를 이번 실행 발송분과 보류분으로 가른다 (스펙 2026-10-02 §4.1.2).
 
@@ -218,14 +251,17 @@ def broken_alert_split(records: list[SourceFreshness], previous: dict[str, dict]
     for r in records:
         if r.state != "broken":
             continue
+        n = (blocked_runs or {}).get(r.source_id)
         kind, level, to_next = _broken_level(r.miss_streak, r.list_changed_at, r.cap_hours,
-                                             now, interval_hours, runs_per_interval)
+                                             now, interval_hours, runs_per_interval,
+                                             r.block_streak, n)
         prev = previous.get(r.source_id) or {}
         if (prev.get("state") == "broken" and prev.get("cap_hours") == r.cap_hours
                 and prev.get("checked_at") is not None):
             p_kind, p_level, _ = _broken_level(
                 prev.get("miss_streak"), prev.get("list_changed_at"), prev.get("cap_hours"),
-                prev["checked_at"], interval_hours, runs_per_interval)
+                prev["checked_at"], interval_hours, runs_per_interval,
+                prev.get("block_streak"), n)
             if p_kind == kind and level <= p_level:
                 hold.append(FreshnessHold(r.source_id, r.age_hours or 0.0, to_next))
                 continue

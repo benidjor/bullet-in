@@ -426,7 +426,7 @@ def _mix(weekly_mix, today: date):
     return _section("sec-credibility-mix-stage-mix", title, sub, q, body, ins)
 
 
-_STATE_PILL = {"broken": ("끊김", "bad"), "no_response": ("응답 없음 1회", "warn"),
+_STATE_PILL = {"broken": ("끊김", "bad"), "no_response": ("응답 없음", "warn"),
                "quiet": ("조용함", "warn"), "ok": ("정상", "ok")}
 
 
@@ -460,6 +460,9 @@ def _freshness(fresh_rows, sources, latest_funnels=None):
 
     def state_cell(r):
         label, cls = _STATE_PILL.get(r.get("state"), ("판정 이전", ""))
+        if r.get("state") == "no_response":
+            label = (f"차단 {r['block_streak']}회 (430)" if r.get("block_streak")
+                     else f"응답 없음 {r.get('miss_streak') or 1}회")
         pill = f'<span class="pill {cls}">{label}</span>' if cls else f'<span class="pill">{label}</span>'
         changed, cap = r.get("list_changed_at"), r.get("cap_hours")
         if changed is not None and cap:

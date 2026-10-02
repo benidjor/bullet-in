@@ -225,15 +225,16 @@ class MartStore:
             c.execute(text(
                 "INSERT INTO source_freshness (run_id,checked_at,source_id,"
                 "last_fetched_at,age_hours,threshold_hours,stale,stored_fetched_at,"
-                "state,miss_streak,list_sig,list_changed_at,cap_hours) "
+                "state,miss_streak,list_sig,list_changed_at,cap_hours,block_streak) "
                 "VALUES (:rid,:at,:sid,:wm,:age,:thr,:stale,:stored,"
-                ":state,:miss,:sig,:changed,:cap)"),
+                ":state,:miss,:sig,:changed,:cap,:block)"),
                 [{"rid": run_id, "at": checked_at, "sid": r.source_id,
                   "wm": r.last_fetched_at, "age": r.age_hours,
                   "thr": r.threshold_hours, "stale": r.stale,
                   "stored": r.stored_fetched_at, "state": r.state,
                   "miss": r.miss_streak, "sig": r.list_sig,
-                  "changed": r.list_changed_at, "cap": r.cap_hours}
+                  "changed": r.list_changed_at, "cap": r.cap_hours,
+                  "block": r.block_streak}
                  for r in records])
 
     def previous_freshness(self) -> dict[str, dict]:
@@ -244,7 +245,8 @@ class MartStore:
         with self.engine.connect() as c:
             rows = c.execute(text(
                 "SELECT source_id, age_hours, threshold_hours, state, miss_streak, "
-                "list_sig, list_changed_at, cap_hours, checked_at FROM source_freshness "
+                "list_sig, list_changed_at, cap_hours, checked_at, block_streak "
+                "FROM source_freshness "
                 "WHERE run_id = (SELECT run_id FROM source_freshness "
                 "ORDER BY checked_at DESC LIMIT 1)")).mappings().all()
         return {r["source_id"]: dict(r) for r in rows}
@@ -265,7 +267,8 @@ class MartStore:
                 "ORDER BY started_at"), {"epoch": OPS_EPOCH}).mappings().all()]
             freshness = [dict(r) for r in c.execute(text(
                 "SELECT run_id,checked_at,source_id,last_fetched_at,"
-                "age_hours,threshold_hours,stale,state,miss_streak,list_changed_at,cap_hours "
+                "age_hours,threshold_hours,stale,state,miss_streak,list_changed_at,cap_hours,"
+                "block_streak "
                 "FROM source_freshness "
                 "WHERE run_id IN (SELECT run_id FROM ("
                 " SELECT DISTINCT run_id, checked_at FROM source_freshness"

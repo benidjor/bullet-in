@@ -128,9 +128,14 @@ SLO-5 는 이제 「끊긴 소스」 만 센다 (스펙 `docs/superpowers/specs/
 | 무응답 2회 연속 | 코드 (`quality.evaluate_states`) | 목록이 응답하지 않으면 끊김 |
 | 제목 확인 비율 절반 | 코드 (`quality.responded`) | HTML 목록에서 제목까지 확인된 링크가 절반보다 적으면 무응답 |
 | `list_unchanged_cap_hours: 48` | `config/sources.yaml` | 목록이 48시간 넘게 그대로면 끊김 |
+| `blocked_miss_runs: 8` | `config/sources.yaml` (fmkorea) | 검색 전부 430 (일시 차단) 만 이어지면 8회 (24시간) 째에 끊김 |
 
 무응답이 처음 한 번이면 화면에 「응답 없음 1회」 만 보이고 알림은 없다.
 연속 두 번째에 끊김이 되어 알림이 가고, 끊긴 동안은 48시간마다 다시 알린다.
+
+fmkorea 의 일시 차단은 화면에 「차단 N회 (430)」 으로 보이고, 8회째까지는 알림이 없다.
+차단 사이에 다른 사유 (연결 오류 · 검색 결과 0) 가 끼면 그 회차부터 2회 연속 규칙으로 돌아간다.
+8 을 고른 계산과 근거는 설계 문서 `docs/superpowers/specs/2026-10-02-slo5-broken-source-signal-design.md` §8.3 에 있다.
 
 ### 8.3. 상한을 다시 볼 때
 
