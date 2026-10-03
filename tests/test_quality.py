@@ -672,4 +672,4 @@ def test_per_source_cap_still_breaks_past_its_own_cap():
     r = _rec("skysports", age=300.0, thr=120.0)
     evaluate_states([r], {"skysports": (True, "")}, {"skysports": "s1"}, 48.0,
                     {"skysports": prev}, _T0, cap_overrides={"skysports": 288.0})
-    assert (r.state, r.reason) == ("broken", "list_unchanged")
+    assert (r.state, r.reason, r.cap_hours) == ("broken", "list_unchanged", 288.0)
