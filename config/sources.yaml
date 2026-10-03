@@ -1,7 +1,8 @@
 freshness_default_hours: 48   # SLO-5 신선도 전역 임계 (h)
 # 목록이 이만큼 바뀌지 않으면 「옛 글만 보이는」 고장으로 보고 끊김으로 센다 (스펙 2026-10-02 §2.3).
-# 기준은 키워드 필터 앞의 목록이다 — 팀 · 가십 페이지 · X 타임라인 · fmkorea 검색은 이적 기사가
-# 없어도 매일 바뀐다 (2026-10-01 실측 · Guardian 목록 20건 중 키워드 통과 1건). 모든 소스 같은 값.
+# 기준은 키워드 필터 앞의 목록이다 — 대부분의 목록은 이적 기사가 없어도 매일 바뀐다
+# (2026-10-01 실측 · Guardian 목록 20건 중 키워드 통과 1건). 이 값은 기본값이고, 소스 항목에 같은 키가
+# 있으면 그 값이 앞선다 — 아스날 팀 페이지 · 기자 한 명의 타임라인은 원문이 조용하면 통째로 멈춘다 (스펙 §9).
 list_unchanged_cap_hours: 48
 tone_backfill_limit: 20       # 말투 백필 회차 상한 (429 여유 내, 라이브 실측 후 조정)
 
@@ -123,6 +124,9 @@ sources:
       title_contains: *transfer_kw
       body_selector: "div.sdc-article-body"
     freshness_hours: 120   # 공백 95% 99h (21일 실측) — 48h 는 정상 소스를 회차의 27% 에서 stale 로 찍었다
+    # 목록이 아스날 팀 페이지라 아스날 기사가 없으면 목록 전체가 멈춘다 (2026-10-03 실측 · 09-25 뒤 8일 무변화).
+    # 원본 공백 최장 219h (09-09 ~ 19) · 진행 중 246h 가 이미 그보다 길어 여유를 둔 12일 (스펙 §9).
+    list_unchanged_cap_hours: 288
     enabled: true
   - source_id: x_afcstuff
     display_name: afcstuff (aggregator)
@@ -150,6 +154,9 @@ sources:
     # 공백 95% 111h (살아 있던 08-01 이전 구간 실측) — 24h 는 afcstuff (집계 계정) 에나
     # 맞는 값이었고, #AFC 필터가 걸린 본인 계정에는 정상 동작 중에도 112회 중 103회가 stale 이었다.
     freshness_hours: 120
+    # 기자 한 명의 타임라인이라 트윗을 안 하면 목록 전체가 멈춘다 (2026-10-03 실측 · 09-29 뒤 무트윗).
+    # 원본 공백 최장 228h (09-06 ~ 16) · 목록 침묵은 원본 공백보다 짧으므로 10일이면 지난 석 달 오탐 0 (스펙 §9).
+    list_unchanged_cap_hours: 240
     config: { handle: "David_Ornstein", max_tweets: 30, cookies_path: "x_cookies.json", self_source: true }
     enabled: true
   - source_id: fmkorea

@@ -465,7 +465,8 @@ def _freshness(fresh_rows, sources, latest_funnels=None):
                      else f"응답 없음 {r.get('miss_streak') or 1}회")
         pill = f'<span class="pill {cls}">{label}</span>' if cls else f'<span class="pill">{label}</span>'
         changed, cap = r.get("list_changed_at"), r.get("cap_hours")
-        if changed is not None and cap:
+        # 지문이 없으면 목록이 응답한 적이 없다 — 「그대로」 가 아니라 모르는 것이다
+        if changed is not None and cap and r.get("list_sig"):
             hours = (r["checked_at"] - changed).total_seconds() / 3600
             if hours > cap / 2:
                 pill += f' <span class="q">목록 그대로 {hours:.0f}시간</span>'

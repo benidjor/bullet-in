@@ -649,3 +649,27 @@ def test_pre_column_broken_row_resends_once_when_block_kind_takes_over():
     now = _broken_fm(9, 9)
     assert len(broken_alert_split([now], {"fmkorea": old}, _T0,
                                   blocked_runs={"fmkorea": 8})[0]) == 1
+
+
+# ── 소스별 「목록 그대로」 상한 (스펙 2026-10-02 §9 · 2026-10-03 개정) ─────────
+
+def test_per_source_cap_keeps_a_quiet_team_page_out_of_broken():
+    prev = {"state": "quiet", "miss_streak": 0, "block_streak": 0, "list_sig": "s1",
+            "list_changed_at": _T0 - timedelta(hours=100), "cap_hours": 48.0,
+            "checked_at": _T0 - timedelta(hours=3)}
+    sky, gdn = _rec("skysports", age=200.0, thr=120.0), _rec("guardian", age=200.0, thr=192.0)
+    evaluate_states([sky, gdn], {"skysports": (True, ""), "guardian": (True, "")},
+                    {"skysports": "s1", "guardian": "s1"}, 48.0,
+                    {"skysports": prev, "guardian": prev}, _T0, cap_overrides={"skysports": 288.0})
+    assert (sky.state, sky.cap_hours) == ("quiet", 288.0)
+    assert (gdn.state, gdn.reason, gdn.cap_hours) == ("broken", "list_unchanged", 48.0)
+
+
+def test_per_source_cap_still_breaks_past_its_own_cap():
+    prev = {"state": "quiet", "miss_streak": 0, "block_streak": 0, "list_sig": "s1",
+            "list_changed_at": _T0 - timedelta(hours=289), "cap_hours": 288.0,
+            "checked_at": _T0 - timedelta(hours=3)}
+    r = _rec("skysports", age=300.0, thr=120.0)
+    evaluate_states([r], {"skysports": (True, "")}, {"skysports": "s1"}, 48.0,
+                    {"skysports": prev}, _T0, cap_overrides={"skysports": 288.0})
+    assert (r.state, r.reason, r.cap_hours) == ("broken", "list_unchanged", 288.0)

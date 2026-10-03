@@ -198,11 +198,23 @@ def test_신선도_표는_상태와_수집_단계를_보인다():
 
 def test_목록이_상한의_절반을_넘게_그대로면_시간을_덧붙인다():
     from datetime import timedelta
-    rows = [dict(FRESH[1], list_changed_at=T - timedelta(hours=30)),     # 30 > 48 / 2
-            dict(FRESH[2], list_changed_at=T - timedelta(hours=24))]     # 24 = 48 / 2 → 안 붙임
+    rows = [dict(FRESH[1], list_sig="s1", list_changed_at=T - timedelta(hours=30)),     # 30 > 48 / 2
+            dict(FRESH[2], list_sig="s2", list_changed_at=T - timedelta(hours=24))]     # 24 = 48 / 2 → 안 붙임
     body = str(_sec(build_ops_view(dict(SNAPSHOT, freshness=rows), SOURCES, 0, NOW, gate=GATE,
                                    unmatched=None), "sec-source-freshness")["body"])
     assert body.count("목록 그대로") == 1 and '<span class="q">목록 그대로 30시간</span>' in body
+
+
+def test_목록_그대로는_지문이_있을_때만_소스_상한의_절반부터_보인다():
+    from datetime import timedelta
+    rows = [dict(FRESH[1], list_sig=None, list_changed_at=T - timedelta(hours=30)),          # 응답한 적 없음
+            dict(FRESH[2], list_sig="s1", list_changed_at=T - timedelta(hours=100),
+                 cap_hours=288.0),                                                       # 100 < 144
+            dict(FRESH[3], list_sig="s2", list_changed_at=T - timedelta(hours=150),
+                 cap_hours=288.0)]                                                       # 150 > 144
+    body = str(_sec(build_ops_view(dict(SNAPSHOT, freshness=rows), SOURCES, 0, NOW, gate=GATE,
+                                   unmatched=None), "sec-source-freshness")["body"])
+    assert body.count("목록 그대로") == 1 and "목록 그대로 150시간" in body
 
 
 def test_신선도_표는_소스_이름을_이스케이프한다():
