@@ -268,7 +268,7 @@ class MartStore:
             freshness = [dict(r) for r in c.execute(text(
                 "SELECT run_id,checked_at,source_id,last_fetched_at,"
                 "age_hours,threshold_hours,stale,state,miss_streak,list_changed_at,cap_hours,"
-                "block_streak "
+                "block_streak,list_sig "
                 "FROM source_freshness "
                 "WHERE run_id IN (SELECT run_id FROM ("
                 " SELECT DISTINCT run_id, checked_at FROM source_freshness"

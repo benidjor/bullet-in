@@ -137,13 +137,16 @@ def evaluate_states(records: list[SourceFreshness],
                     responses: dict[str, tuple[bool, str]],
                     sigs: dict[str, str | None], cap_hours: float,
                     previous: dict[str, dict], now: datetime,
-                    blocked_runs: dict[str, int] | None = None) -> None:
+                    blocked_runs: dict[str, int] | None = None,
+                    cap_overrides: dict[str, float] | None = None) -> None:
     """소스마다 상태 넷 가운데 하나를 매기고 이어 적을 값을 채운다 (스펙 §2.1 · §2.5).
 
     무응답 실행은 지문과 바뀐 시각을 직전 값 그대로 잇는다 — 비워 두면 다음 응답
     실행이 빈 값과 비교해 목록이 그대로여도 「바뀜」 으로 판정한다.
     blocked_runs 는 차단 (전부 430) 만 이어질 때 끊김까지 기다릴 소스별 회차 수다
-    (스펙 2026-10-02 §8 · 2026-10-03 개정)."""
+    (스펙 2026-10-02 §8 · 2026-10-03 개정).
+    cap_overrides 는 「목록 그대로」 상한의 소스별 값이다 — 팀 페이지 · 기자 한 명의
+    타임라인처럼 원문이 조용하면 목록 전체가 멈추는 소스에 둔다 (스펙 §9)."""
     for r in records:
         ok, reason = responses.get(r.source_id, (False, "no_record"))
         prev = previous.get(r.source_id) or {}
@@ -165,11 +168,11 @@ def evaluate_states(records: list[SourceFreshness],
             r.block_streak = r.miss_streak
         else:
             r.block_streak = int(prev["block_streak"]) + 1
-        r.cap_hours = cap_hours
+        r.cap_hours = (cap_overrides or {}).get(r.source_id, cap_hours)
         unchanged = (now - r.list_changed_at).total_seconds() / 3600
         if not ok and r.miss_streak >= _miss_runs_to_break(r, blocked_runs):
             r.state, r.reason = "broken", reason
-        elif unchanged > cap_hours:
+        elif unchanged > r.cap_hours:
             r.state, r.reason = "broken", "list_unchanged"
         elif not ok:
             r.state, r.reason = "no_response", reason

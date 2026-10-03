@@ -123,6 +123,9 @@ sources:
       title_contains: *transfer_kw
       body_selector: "div.sdc-article-body"
     freshness_hours: 120   # 공백 95% 99h (21일 실측) — 48h 는 정상 소스를 회차의 27% 에서 stale 로 찍었다
+    # 목록이 아스날 팀 페이지라 아스날 기사가 없으면 목록 전체가 멈춘다 (2026-10-03 실측 · 09-25 뒤 8일 무변화).
+    # 원본 공백 최장 219h (09-09 ~ 19) · 진행 중 246h 가 이미 그보다 길어 여유를 둔 12일 (스펙 §9).
+    list_unchanged_cap_hours: 288
     enabled: true
   - source_id: x_afcstuff
     display_name: afcstuff (aggregator)
@@ -150,6 +153,9 @@ sources:
     # 공백 95% 111h (살아 있던 08-01 이전 구간 실측) — 24h 는 afcstuff (집계 계정) 에나
     # 맞는 값이었고, #AFC 필터가 걸린 본인 계정에는 정상 동작 중에도 112회 중 103회가 stale 이었다.
     freshness_hours: 120
+    # 기자 한 명의 타임라인이라 트윗을 안 하면 목록 전체가 멈춘다 (2026-10-03 실측 · 09-29 뒤 무트윗).
+    # 원본 공백 최장 228h (09-06 ~ 16) · 목록 침묵은 원본 공백보다 짧으므로 10일이면 지난 석 달 오탐 0 (스펙 §9).
+    list_unchanged_cap_hours: 240
     config: { handle: "David_Ornstein", max_tweets: 30, cookies_path: "x_cookies.json", self_source: true }
     enabled: true
   - source_id: fmkorea

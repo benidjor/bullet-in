@@ -208,3 +208,4 @@ def test_block_streak_round_trips_through_record_previous_and_snapshot(engine):
     store.record_freshness("r1", at, [r])
     assert store.previous_freshness()["fmkorea"]["block_streak"] == 3
     assert store.ops_snapshot()["freshness"][0]["block_streak"] == 3
+    assert store.ops_snapshot()["freshness"][0]["list_sig"] == "abcd"

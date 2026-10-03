@@ -286,6 +286,12 @@ def blocked_miss_runs(sources: dict) -> dict[str, int]:
             if "blocked_miss_runs" in s}
 
 
+def list_unchanged_caps(sources: dict) -> dict[str, float]:
+    """「목록 그대로」 상한을 따로 둔 소스만 (스펙 2026-10-02 §9) — 나머지는 전역 값."""
+    return {sid: float(s["list_unchanged_cap_hours"]) for sid, s in sources.items()
+            if "list_unchanged_cap_hours" in s}
+
+
 def source_responses(sources: dict, fetched: "FetchSummary") -> dict[str, tuple[bool, str]]:
     """소스마다 이번 실행에 목록이 응답했는가 (스펙 2026-10-02 §2.2)."""
     return {sid: responded(s.get("adapter"), fetched.funnels.get(sid),
@@ -625,7 +631,8 @@ def publish(run_id: str) -> None:
     sigs = {sid: (fetched.funnels.get(sid) or {}).get("list_sig") for sid in sources}
     blocked_runs = blocked_miss_runs(sources)
     evaluate_states(records, source_responses(sources, fetched), sigs, cap,
-                    prev_freshness, checked_at, blocked_runs=blocked_runs)
+                    prev_freshness, checked_at, blocked_runs=blocked_runs,
+                    cap_overrides=list_unchanged_caps(sources))
     mart.record_freshness(run_id, checked_at, records)
     fresh_targets, fresh_holds = broken_alert_split(records, prev_freshness, checked_at,
                                                     blocked_runs=blocked_runs)

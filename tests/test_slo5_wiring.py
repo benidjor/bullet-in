@@ -38,3 +38,16 @@ def test_live_config_gives_fmkorea_eight_runs():
     from bullet_in.run import blocked_miss_runs
     from bullet_in.score import load_sources
     assert blocked_miss_runs(load_sources("config/sources.yaml")) == {"fmkorea": 8}
+
+
+def test_list_unchanged_caps_reads_the_per_source_setting():
+    from bullet_in.run import list_unchanged_caps
+    assert list_unchanged_caps({"skysports": {"list_unchanged_cap_hours": 288},
+                                "guardian": {}}) == {"skysports": 288.0}
+
+
+def test_live_config_caps_sky_and_ornstein_only():
+    from bullet_in.run import list_unchanged_caps
+    from bullet_in.score import load_sources
+    assert list_unchanged_caps(load_sources("config/sources.yaml")) == \
+        {"skysports": 288.0, "x_ornstein": 240.0}
