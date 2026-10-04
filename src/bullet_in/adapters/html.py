@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from urllib.parse import urljoin
 import httpx
 from bs4 import BeautifulSoup
+from bullet_in.adapters.detail import fetch_article_detail
 from bullet_in.models import RawItem
 from bullet_in.quality import list_signature
 
@@ -32,8 +33,7 @@ class HtmlAdapter:
             self.title_keywords = [k.lower() for k in title_contains]
     async def fetch(self) -> list[RawItem]:
         self.funnel = {}
-        from bullet_in.adapters.meta import (extract_og_image, extract_body_images,
-                                             extract_authors, extract_published_at)
+        from bullet_in.adapters.meta import extract_og_image, extract_published_at
         async with httpx.AsyncClient(timeout=20, follow_redirects=True,
                                      headers={"User-Agent": "bullet-in/0.1"}) as c:
             r = await c.get(self.list_url)
@@ -77,21 +77,7 @@ class HtmlAdapter:
             for title, url in matched:
                 payload = {"title": title}
                 if self.body_selector:
-                    try:
-                        rb = await c.get(url)
-                        rb.raise_for_status()
-                        el = BeautifulSoup(rb.text, "html.parser").select_one(self.body_selector)
-                        payload["body"] = el.get_text(" ", strip=True) if el else ""
-                        payload["image_url"] = extract_og_image(rb.text)
-                        payload["images"] = extract_body_images(
-                            rb.text, self.body_selector, base_url=url)
-                        payload["authors"] = extract_authors(rb.text)
-                        pub = extract_published_at(rb.text)
-                        if pub:
-                            payload["published"] = pub[0].isoformat()
-                            payload["published_precision"] = pub[1]
-                    except httpx.HTTPError:
-                        payload["body"] = ""  # 본문 실패 — 제목만 유지, 다음 회차 재시도
+                    payload.update(await fetch_article_detail(c, url, self.body_selector))
                 elif self.thumbnail_only:
                     # 경량 상세 방문 — og:image 만 (본문 · 저자 미추출 = 번역 비용 무변경)
                     try:
