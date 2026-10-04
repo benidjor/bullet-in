@@ -81,7 +81,7 @@ def decide(state: DeployState, service_result: str, exit_status: str) -> Verdict
     if not service_result:
         return Verdict("none", "SERVICE_RESULT 없음 — systemd 밖에서 부른 것 같다 · 아무것도 안 한다")
     if service_result == "success":
-        return Verdict("confirm", "회차 · 게이트 · 배포 통과")
+        return Verdict("confirm", "파이프라인 · 게이트 · 배포 통과")
     if service_result == "exit-code" and exit_status == str(GATE_CRASH_EXIT):
         return Verdict("hold", "dbt 게이트 세그폴트 (신호 종료) — 다음 실행에서 다시 판정")
     return Verdict("rollback", f"유닛 결과 {service_result} · 종료 코드 {exit_status or '?'}")
@@ -245,7 +245,7 @@ def advance(repo: Repo, state: DeployState, *,
     """회차 시작에 코드를 전진시킨다. 어느 경로로도 예외를 밖으로 내지 않는다 (스펙 §5)."""
     try:
         if not repo.fetch():
-            return "fetch 실패 — 현재 코드로 계속 (다음 회차에 다시)"
+            return "fetch 실패 — 현재 코드로 계속 (다음 실행에서 다시)"
         head, target = repo.head(), repo.remote_main()
         if target == head:
             return "변경 없음"
@@ -253,7 +253,7 @@ def advance(repo: Repo, state: DeployState, *,
             return f"{_short(target)} 은 차단 목록 — 새 커밋을 기다림"
         if not repo.ff_merge():
             _alert("🚧 코드 전진 — VM 트리가 갈라졌다",
-                   f"`origin/main` {_short(target)} 을 ff 로 못 얹는다 · 현재 {_short(head)} 로 회차를 돌린다 · "
+                   f"`origin/main` {_short(target)} 을 ff 로 못 얹는다 · 현재 {_short(head)} 로 이번 실행을 돌린다 · "
                    "자동으로 되돌리지 않는다 — 사람이 VM 에서 `git status` 를 본다",
                    incident=True, fields=[{"name": "git status", "value": repo.status_short() or "-"}])
             return "ff 거부 — 현재 코드로 계속"
@@ -262,7 +262,7 @@ def advance(repo: Repo, state: DeployState, *,
             state.blocked.append(target)
             repo.reset_hard(head)
             _alert("🚧 코드 전진 거부 — 사전 점검 실패",
-                   f"{_short(target)} 을 내려받았다가 {_short(head)} 로 되돌렸다 · 이번 회차는 직전 코드로 돈다 · "
+                   f"{_short(target)} 을 내려받았다가 {_short(head)} 로 되돌렸다 · 이번 실행은 직전 코드로 돈다 · "
                    "고친 커밋이 main 에 오면 다시 전진한다",
                    incident=True, fields=[{"name": "사유", "value": "\n".join(f"- {p}" for p in problems)[:1024]}])
             return "사전 점검 실패 — 되돌림"
@@ -270,7 +270,7 @@ def advance(repo: Repo, state: DeployState, *,
         state.previous = state.previous if state.pending else head
         state.current, state.pending = target, True
         state.advanced_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        return f"전진 {_short(head)} → {_short(target)} · 회차 끝에 판정"
+        return f"전진 {_short(head)} → {_short(target)} · 실행 끝에 판정"
     except Exception as e:  # noqa: BLE001 — 전진 실패로 회차를 잃지 않는다
         log.exception("advance 예외")
         _alert("🚧 코드 전진 — 예외", f"{type(e).__name__}: {e}"[:1000], incident=True)
@@ -289,7 +289,7 @@ def rollback(repo: Repo, state: DeployState, *, reason: str) -> str:
     subject, fields, url = _change_fields(repo, good, bad, label="되돌린 커밋")
     _alert(f"⏪ 코드 롤백 — {subject}" if subject else "⏪ 코드 롤백 — 직전 커밋으로 되돌렸다",
            f"{_short(bad)} → {_short(good)} · 사유: {reason}\n"
-           "**코드 탓이 아닐 수 있다** — DB 다운 · 데이터 부채로 실패한 회차도 같은 모양이다 · "
+           "**코드 탓이 아닐 수 있다** — DB 다운 · 데이터 부채로 실패한 실행도 같은 모양이다 · "
            "새 커밋이 main 에 오면 다시 전진한다 · 같은 커밋을 다시 보려면 "
            f"`uv run python -m bullet_in.deploy unblock {_short(bad)}`",
            incident=True, url=url,
@@ -338,7 +338,7 @@ def build_matches(sha: str, *, fetch=fetch_build, tries: int = 3,
         got = data.get("commit") if data else None
         if got == sha:
             run_id = str(data.get("run_id") or "?")
-            return True, f"{_short(sha)} · run {run_id[:8]}"
+            return True, f"{_short(sha)} · run {notify.run_label(run_id)}"
         if i < tries - 1:
             time.sleep(wait)
     if isinstance(got, str) and got:
@@ -396,13 +396,13 @@ def judge(repo: Repo, state: DeployState, *, service_result: str, exit_status: s
     state.pending = False
     if ok:
         subject, fields, url = _change_fields(repo, state.previous, state.current, label="반영된 커밋")
-        local_run = str((read_local_build() or {}).get("run_id") or "?")[:8]
+        local_run = notify.run_label(str((read_local_build() or {}).get("run_id") or "?"))
         live_run = detail.rsplit("run ", 1)[1] if "run " in detail else "?"
         fields += [_time_field(state.advanced_at),
-                   {"name": "회차", "value": f"run {local_run} · 라이브 표지 run {live_run}",
+                   {"name": "실행", "value": f"{local_run} · 라이브 표지 {live_run}",
                     "inline": True}]
         _alert(f"✅ 코드 반영 완료 — {subject}" if subject else "✅ 코드 반영 완료",
-               f"{_short(state.previous)} → {_short(state.current)} · 첫 회차 통과 · 라이브 표지 일치",
+               f"{_short(state.previous)} → {_short(state.current)} · 첫 실행 통과 · 라이브 표지 일치",
                incident=False, fields=fields, url=url)
         return "반영 완료"
     _alert("🚧 배포는 나갔는데 라이브 표지가 다르다",
@@ -431,8 +431,8 @@ def main(argv: list[str] | None = None) -> int:
     import argparse
     ap = argparse.ArgumentParser(description="머지된 코드의 자동 반영 · 판정 · 롤백")
     sub = ap.add_subparsers(dest="command", required=True)
-    sub.add_parser("advance", help="회차 시작 — origin/main 을 내려받는다 (ExecStartPre)")
-    jd = sub.add_parser("judge", help="회차 끝 — $SERVICE_RESULT · $EXIT_STATUS 로 판정 (ExecStopPost) "
+    sub.add_parser("advance", help="실행 시작 — origin/main 을 내려받는다 (ExecStartPre)")
+    jd = sub.add_parser("judge", help="실행 끝 — $SERVICE_RESULT · $EXIT_STATUS 로 판정 (ExecStopPost) "
                                       "· --from-airflow 면 태스크 상태 JSON 으로")
     jd.add_argument("--from-airflow", metavar="PATH",
                     help="airflow tasks states-for-dag-run -o json 의 출력 파일 (- 는 stdin)")

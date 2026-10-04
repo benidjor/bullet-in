@@ -137,7 +137,7 @@ def test_build_freshness_alert_common_fields():
                                          sources=_FRESH_SOURCES,
                                          run_id="3f2a9c12abcd", checked_at=checked)
     assert {"name": "기본 임계", "value": "전역 48h", "inline": True} in alert["fields"]
-    assert {"name": "회차", "value": "run 3f2a9c12", "inline": True} in alert["fields"]
+    assert {"name": "실행", "value": "run 3f2a9c12", "inline": True} in alert["fields"]
     assert [f["name"] for f in alert["fields"] if f["inline"] is False] \
         == ["얼마나 오래됐나", "수집 경로는 살아 있나", "다음 알림"]
 
@@ -210,7 +210,7 @@ def test_build_anomaly_alert_drop_field_sequence_and_hint():
     assert "- ▼ 0건 (평소 ~14)" in field["value"]
     assert "- 최근: 14 → 12 → 15 → 13 → 14 → (오늘) 0" in field["value"]
     assert "- 원인 후보: 검색 URL 변경 · 자동 수집 차단" in field["value"]
-    assert alert["fields"][-1] == {"name": "회차",
+    assert alert["fields"][-1] == {"name": "실행",
                                    "value": "최근 12회 기준 · run 3f2a9c12",
                                    "inline": True}
 
@@ -250,7 +250,7 @@ def test_build_freshness_alert_zero_candidates_keeps_hint():
                                          run_id="3f2a9c12abcd", checked_at=checked,
                                          candidates={}, fetch_errors={})
     path = _field(alert, "수집 경로는 살아 있나")
-    assert "- 이번 회차 후보 0건" in path
+    assert "- 이번 실행 후보 0건" in path
     assert "수집 끊김 의심" not in path
     assert "- 원인 후보: 셀렉터 드리프트 · 사이트 개편" in path
 
@@ -267,7 +267,7 @@ def test_build_freshness_alert_candidates_present_is_diagnosis_not_suppression()
     path = _field(alert, "수집 경로는 살아 있나")
     # 판정이 원본 수집으로 옮겨간 뒤로는 stale = 후보가 전부 이미 받은 글이라는 뜻이다.
     # 옛 문안 ("새 글이 없습니다") 은 저장 기준일 때 거짓이었다 (설계 2026-08-20 §3.5).
-    assert "- 이번 회차 후보 **4건** — 전부 이미 받은 글입니다" in path
+    assert "- 이번 실행 후보 **4건** — 전부 이미 받은 글입니다" in path
     assert "원인 후보" not in path   # 후보가 있으면 셀렉터 힌트는 근거가 없다
 
 
@@ -328,7 +328,7 @@ def test_build_freshness_alert_fetch_error_shows_error_not_hint():
                                          candidates={},
                                          fetch_errors={"bbc_sport": "HTTP 503"})
     path = _field(alert, "수집 경로는 살아 있나")
-    assert "- 이번 회차 fetch 오류: HTTP 503" in path
+    assert "- 이번 실행 fetch 오류: HTTP 503" in path
     assert "원인 후보" not in path
     assert "후보 0건" not in path  # 오류면 후보 수는 미지 — 0 으로 단정 금지
 
@@ -701,7 +701,7 @@ def test_anomaly_description_says_what_the_count_means():
                                        run_id="3f2a9c12abcd")
     assert alert["description"] == (
         "최근 12회 대비 소스별 수집량 이상 — 「수집량」 은 중복 · 필터를 지나 "
-        "이번 회차에 새로 담은 글 수입니다")
+        "이번 실행에서 새로 담은 글 수입니다")
 
 
 def test_anomaly_drop_keeps_adapter_hint_when_no_candidates():
@@ -710,7 +710,7 @@ def test_anomaly_drop_keeps_adapter_hint_when_no_candidates():
                                        hist=_HIST, sources=_FM,
                                        run_id="3f2a9c12abcd", candidates={})
     value = alert["fields"][0]["value"]
-    assert "- 이번 회차 후보 0건 중 새로 담은 글 0건" in value
+    assert "- 이번 실행 후보 0건 중 새로 담은 글 0건" in value
     assert "- 원인 후보: 검색 URL 변경 · 자동 수집 차단" in value
 
 
@@ -721,7 +721,7 @@ def test_anomaly_drop_omits_adapter_hint_when_candidates_found():
                                        run_id="3f2a9c12abcd",
                                        candidates={"fmkorea": 12})
     value = alert["fields"][0]["value"]
-    assert "- 이번 회차 후보 12건 중 새로 담은 글 2건" in value
+    assert "- 이번 실행 후보 12건 중 새로 담은 글 2건" in value
     assert "원인 후보" not in value
 
 
@@ -732,7 +732,7 @@ def test_anomaly_spike_states_counts_instead_of_guessing_cause():
                                        run_id="3f2a9c12abcd",
                                        candidates={"bbc_sport": 33})
     value = alert["fields"][0]["value"]
-    assert "- 이번 회차 후보 33건 중 새로 담은 글 30건" in value
+    assert "- 이번 실행 후보 33건 중 새로 담은 글 30건" in value
     assert "원인 후보" not in value
     assert not hasattr(notify, "SPIKE_HINT")
 
@@ -771,7 +771,7 @@ def test_cliff_title_counts_the_rest_when_several_sources():
         ["fmkorea", "guardian"], history=[{"fmkorea": 12, "guardian": 8}],
         sources=_FM_CFG, failure_codes={}, success_rate=1.0,
         run_id="3f2a9c12abcd")
-    assert alert["title"] == "🚨 이번 회차 수집 0건 — fmkorea 축구 소식통 외 1개 소스"
+    assert alert["title"] == "🚨 이번 실행 수집 0건 — fmkorea 축구 소식통 외 1개 소스"
 
 
 def test_cliff_lists_the_search_keywords_from_config():
@@ -794,7 +794,7 @@ def test_cliff_says_what_the_found_count_counts():
 
 def test_cliff_explains_why_no_failure_alert_was_sent():
     value = _field(_fm_cliff(), "지금 어떤 상태인가")
-    assert "- 회차는 실패로 끝나지 않았습니다 (`success_rate 1`)" in value
+    assert "- 실행은 실패로 끝나지 않았습니다 (`success_rate 1`)" in value
     assert "- *어댑터가 예외를 던지지 않아 실패 알림이 따로 가지 않았습니다*" in value
 
 
@@ -803,7 +803,7 @@ def test_cliff_advises_waiting_only_when_the_block_code_is_present():
     without = _field(_fm_cliff(failure_codes={"fmkorea": {503: 2}}), "무엇을 하나")
     assert "- 차단은 보통 저절로 풀립니다 — 지금은 조치하지 않습니다" in with_block
     assert "차단은 보통 저절로 풀립니다" not in without
-    assert "- 회차가 계속 0이면 런북 (제목 클릭) 의 절차를 따릅니다" in without
+    assert "- 이후 실행에서도 계속 0이면 런북 (제목 클릭) 의 절차를 따릅니다" in without
 
 
 def test_cliff_omits_the_what_happened_section_without_keywords_or_codes():
@@ -819,7 +819,7 @@ def test_single_source_puts_each_section_in_its_own_field():
     # 필드 이름은 디스코드가 직접 굵게 · 여백까지 그려 주는 자리다 (2026-08-23 실물 비교)
     names = [f["name"] for f in _fm_cliff()["fields"]]
     assert names == ["무슨 일이 있었나", "평소와 비교", "지금 어떤 상태인가",
-                     "무엇을 하나", "회차"]
+                     "무엇을 하나", "실행"]
 
 
 def test_sections_are_spaced_apart_except_the_last_one():
@@ -836,7 +836,7 @@ def test_several_sources_fall_back_to_one_field_each():
         ["fmkorea", "guardian"], history=[{"fmkorea": 12, "guardian": 8}],
         sources=_FM_CFG, failure_codes={}, success_rate=1.0, run_id="3f2a9c12abcd")
     names = [f["name"] for f in alert["fields"]]
-    assert names == ["fmkorea 축구 소식통 (fmkorea)", "The Guardian (guardian)", "회차"]
+    assert names == ["fmkorea 축구 소식통 (fmkorea)", "The Guardian (guardian)", "실행"]
     assert "**▸ 무슨 일이 있었나**" not in names[0]
     assert "**▸ 평소와 비교**" in alert["fields"][0]["value"]
 
@@ -852,7 +852,7 @@ def test_cliff_states_the_count_plainly_without_history():
     alert = notify.build_cliff_alert(
         ["fmkorea"], history=[], sources=_FM_CFG,
         failure_codes={}, success_rate=1.0, run_id="3f2a9c12abcd")
-    assert "- 찾은 글: **0건** (이번 회차)" in _field(alert, "평소와 비교")
+    assert "- 찾은 글: **0건** (이번 실행)" in _field(alert, "평소와 비교")
 
 
 # ── 수집 단계 기록을 알림에 싣는다 (스펙 2026-08-14 §8.2) ─────────────────────
@@ -1028,7 +1028,7 @@ def test_build_freshness_alert_broken_lists_each_source_when_several():
         [bbc, sky], 48, targets=[bbc, sky], sources=_FRESH_SOURCES, run_id="abcdef1234",
         checked_at=checked, funnels={"bbc_sport": {"deduped": 7, "titled": 1}}, broken=True)
     assert alert["description"].startswith("감시 2소스: 끊김 2 · ")
-    source_fields = [f for f in alert["fields"] if f["name"] != "회차"]
+    source_fields = [f for f in alert["fields"] if f["name"] != "실행"]
     assert len(source_fields) == 2
     assert "제목까지 확인된 것은 1개뿐" in source_fields[0]["value"]
     assert "기사 링크를 찾지 못함" in source_fields[1]["value"]
@@ -1051,3 +1051,22 @@ def test_funnel_lines_for_x_and_fmkorea():
         ["수집 단계 기록: 타임라인 트윗 30 → 필터 통과 2"]
     assert notify._funnel_lines({"keywords": 3, "searched": 2, "listed": 40, "passed": 5}) == \
         ["수집 단계 기록: 검색어 2/3 · 결과 글 40 → 필터 통과 5"]
+
+
+# ── 알림의 「실행」 칸 (2026-10-05) — Airflow 실행 ID 를 앞 8자리로 자르면 전부 「run schedule」 이었다 ──
+
+@pytest.mark.parametrize("run_id, label", [
+    # 정규 실행 — 실행 ID 의 시각은 UTC 다 · 읽는 시각은 KST 로, 로그를 찾을 UTC 를 괄호에
+    ("scheduled__2026-10-04T15:00:00+00:00", "10-05 00:00 (UTC 10-04 15:00)"),
+    ("scheduled__2026-10-04T12:00:00+00:00", "10-04 21:00 (UTC 10-04 12:00)"),
+    # 손으로 시작한 실행 — 초 · 마이크로초가 붙는다
+    ("manual__2026-10-04T15:12:34.567890+00:00", "10-05 00:12 수동 (UTC 10-04 15:12)"),
+    # 그 밖의 실행 종류는 이름을 그대로 붙인다
+    ("backfill__2026-10-04T15:00:00+00:00", "10-05 00:00 backfill (UTC 10-04 15:00)"),
+    # systemd 시절의 uuid · 일회성 스크립트 이름 · 빈 값은 종전처럼 앞 8자리
+    ("3f2a9c12abcd", "run 3f2a9c12"),
+    ("backfill", "run backfill"),
+    ("?", "run ?"),
+])
+def test_run_label(run_id, label):
+    assert notify.run_label(run_id) == label

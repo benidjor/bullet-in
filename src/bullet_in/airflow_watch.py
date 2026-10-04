@@ -184,10 +184,10 @@ def main(argv: list[str] | None = None) -> int:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     STATE_PATH.write_text(json.dumps(new_state))
     if send:
-        notify.send_alert("🚨 Airflow 가 회차를 안 돌리고 있다",
+        notify.send_alert("🚨 Airflow 가 파이프라인을 안 돌리고 있다",
                           "\n".join(f"- {p}" for p in problems) + "\n"
                           "`systemctl status airflow-scheduler airflow-dag-processor airflow-api-server` · "
-                          "`airflow dags state bullet_in_cycle` · 되돌리려면 런북 (Airflow 아래에서 회차 돌리기) §5",
+                          "`airflow dags state bullet_in_cycle` · 되돌리려면 런북 (Airflow 아래에서 파이프라인 돌리기) §5",
                           color=notify.COLOR_FAILURE, channel=notify.CHANNEL_INCIDENT)
     log.info("airflow watch — 심박 %s · 마지막 성공 %s시간 전 · 문제 %d · 발송 %s",
              "OK" if hb.returncode == 0 else "없음", f"{age:.1f}" if age is not None else "?",

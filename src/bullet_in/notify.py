@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json, logging, os, re
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from bullet_in.quality import FRESHNESS_REALERT_HOURS, RUN_INTERVAL_HOURS
 
@@ -25,6 +25,25 @@ class _WebhookRedactFilter(logging.Filter):
 
 
 logging.getLogger("httpx").addFilter(_WebhookRedactFilter())
+
+# Airflow 실행 ID = `<종류>__<UTC 시각>` (예: scheduled__2026-10-04T15:00:00+00:00).
+# 앞 8자리로 자르면 모든 실행이 「schedule」 이 되어 (2026-09-04 이관 뒤 한 달) 실행을 가를 수 없었다.
+_AIRFLOW_RUN_ID = re.compile(r"^([a-z_]+?)__(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?\+00:00)$")
+_RUN_KIND = {"scheduled": "", "manual": " 수동"}
+_KST = timezone(timedelta(hours=9))
+
+
+def run_label(run_id: str) -> str:
+    """알림의 「실행」 칸 값 — 읽는 시각은 KST, 로그 폴더 · 실행 ID 를 찾을 시각은 UTC 를 괄호에.
+
+    systemd 시절의 uuid 와 일회성 스크립트 이름은 종전처럼 앞 8자리를 쓴다."""
+    m = _AIRFLOW_RUN_ID.match(run_id)
+    if not m:
+        return f"run {run_id[:8]}"
+    kind, stamp = m.groups()
+    utc = datetime.fromisoformat(stamp)
+    suffix = _RUN_KIND.get(kind, f" {kind}")
+    return f"{utc.astimezone(_KST):%m-%d %H:%M}{suffix} (UTC {utc:%m-%d %H:%M})"
 
 # 알림 채널 (스펙 2026-08-14 §7) — 급한 것이 안 급한 것에 묻히지 않게 셋으로 가른다.
 # 장애 = 고쳐야 하는 것 · 관측 = 결정해야 하는 것 · 경향 = 당장 할 일이 없을 때가 많은 것.
@@ -123,15 +142,15 @@ def build_anomaly_alert(anomalies, history_count: int, *,
             lines.append(f"최근: {seq} → (오늘) {a.today}")
         found = None if candidates is None else candidates.get(a.source_id, 0)
         if found is not None:
-            lines.append(f"이번 회차 후보 {found}건 중 새로 담은 글 {a.today}건")
+            lines.append(f"이번 실행 후보 {found}건 중 새로 담은 글 {a.today}건")
         hint = ADAPTER_HINTS.get((sources.get(a.source_id) or {}).get("adapter"))
         if a.direction == "drop" and hint and not found:
             lines.append(f"원인 후보: {hint}")
         fields.append({"name": _source_field_name(a.source_id, sources),
                        "value": "\n".join(f"- {ln}" for ln in lines),
                        "inline": False})
-    fields.append({"name": "회차",
-                   "value": f"최근 {history_count}회 기준 · run {run_id[:8]}",
+    fields.append({"name": "실행",
+                   "value": f"최근 {history_count}회 기준 · {run_label(run_id)}",
                    "inline": True})
     subject = _title_subject([_source_label(a.source_id, sources)
                               for a in anomalies])
@@ -142,7 +161,7 @@ def build_anomaly_alert(anomalies, history_count: int, *,
                       f"⚠️ 수집량 이상 — {subject} "
                       f"(드롭 {drops} · 스파이크 {len(anomalies) - drops})"),
             "description": (f"최근 {history_count}회 대비 소스별 수집량 이상 — "
-                            "「수집량」 은 중복 · 필터를 지나 이번 회차에 새로 담은 "
+                            "「수집량」 은 중복 · 필터를 지나 이번 실행에서 새로 담은 "
                             "글 수입니다"),
             "color": COLOR_ANOMALY, "fields": fields, "url": RUNBOOK_ANOMALY,
             "channel": CHANNEL_TREND}
@@ -270,7 +289,7 @@ def build_freshness_alert(records, default_hours: float, *,
             fields = [{"name": _source_field_name(sid, sources),
                        "value": _sectioned(sections), "inline": False}
                       for sid, sections in per_source]
-        fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+        fields.append({"name": "실행", "value": run_label(run_id), "inline": True})
         subject = _title_subject([_source_label(b.source_id, sources) for b in targets])
         return {"title": f"🔌 수집 끊김 — {subject}",
                 "description": (f"감시 {len(records)}소스: 끊김 {counts['broken']} · "
@@ -297,13 +316,13 @@ def build_freshness_alert(records, default_hours: float, *,
         hint = ADAPTER_HINTS.get((sources.get(b.source_id) or {}).get("adapter"))
         path: list[str] = []
         if (fetch_errors or {}).get(b.source_id):
-            path.append(f"이번 회차 fetch 오류: {fetch_errors[b.source_id][:120]}")
+            path.append(f"이번 실행 fetch 오류: {fetch_errors[b.source_id][:120]}")
         else:
             n = None if candidates is None else candidates.get(b.source_id, 0)
             if n:
-                path.append(f"이번 회차 후보 **{n}건** — 전부 이미 받은 글입니다")
+                path.append(f"이번 실행 후보 **{n}건** — 전부 이미 받은 글입니다")
             elif n is not None:
-                path.append("이번 회차 후보 0건")
+                path.append("이번 실행 후보 0건")
             if hint and not n:
                 path.append(f"원인 후보: {hint}")
         path += _funnel_lines((funnels or {}).get(b.source_id))
@@ -321,7 +340,7 @@ def build_freshness_alert(records, default_hours: float, *,
                   for sid, sections in per_source]
     fields.append({"name": "기본 임계", "value": f"전역 {default_hours:g}h",
                    "inline": True})
-    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    fields.append({"name": "실행", "value": run_label(run_id), "inline": True})
     subject = _title_subject([_source_label(b.source_id, sources) for b in targets])
     return {"title": (f"🕰️ 신선도 경고 — {subject} "
                       f"{targets[0].age_hours / 24:.1f}일째 조용합니다"
@@ -354,7 +373,7 @@ def build_task_failure_alert(payload: dict) -> dict:
     ]
     exc = payload.get("exception")
     return {"title": f"❌ 파이프라인 실패 — {task}",
-            "description": f"회차 태스크가 예외로 중단되었습니다.\n```\n{str(exc)[:400] if exc else '-'}\n```",
+            "description": f"파이프라인 태스크가 예외로 중단되었습니다.\n```\n{str(exc)[:400] if exc else '-'}\n```",
             "color": COLOR_FAILURE, "fields": fields,
             "channel": CHANNEL_INCIDENT}
 
@@ -384,7 +403,7 @@ def build_coverage_alert(breaches: list[str], coverage: dict, *, run_id: str) ->
                              f"Men {coverage.get('men_tagged', 0)} · "
                              f"accept {coverage.get('accepted', 0)}"),
                    "inline": True})
-    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    fields.append({"name": "실행", "value": run_label(run_id), "inline": True})
     return {"title": "🏟️ 공홈 커버리지 경고 — arsenal_official",
             "description": "수집 창 퍼널 불변식 위반 — 조용한 기아 신호",
             "color": COLOR_ANOMALY, "fields": fields,
@@ -410,10 +429,10 @@ def build_filter_miss_alert(suspects: list[dict], *, run_id: str) -> dict:
             lines.append(f"- [기사]({s['url']})")
         fields.append({"name": s.get("title") or "(제목 없음)",
                        "value": "\n".join(lines), "inline": False})
-    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    fields.append({"name": "실행", "value": run_label(run_id), "inline": True})
     return {"title": (f"🔍 공홈 이적 관련 기사 미수집 — {len(suspects)}건"),
             "description": ("arsenal.com 새 기사 제목에 이적 관련 표현이 있는데 "
-                            "이번 회차에 수집되지 않았습니다.\n"
+                            "이번 실행에서 수집되지 않았습니다.\n"
                             "현재 수집 기준은 기사 태그 (Transfer news · Contract news) 입니다."),
             "color": COLOR_ANOMALY, "fields": fields, "url": RUNBOOK_ANOMALY,
             "channel": CHANNEL_REVIEW}
@@ -444,7 +463,7 @@ def build_candidate_alert(candidates: list[dict], *, run_id: str) -> dict:
         fields.append({"name": "그 외",
                        "value": f"- 후보 {len(candidates) - 10}명 추가 — DB 확인",
                        "inline": False})
-    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    fields.append({"name": "실행", "value": run_label(run_id), "inline": True})
     return {"title": f"🆕 링크 선수 후보 {len(candidates)}명 등재",
             "description": "확정 전에는 게이트 · 서빙 사전에 실리지 않는다 — 확정 CLI 로 승격",
             "color": COLOR_CANDIDATE, "fields": fields,
@@ -531,21 +550,21 @@ def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
         # 마지막 자리가 이번 회차임을 화살표 사슬 안에서 보여 준다 — 종전에는 계수와
         # 추이를 따로 적어 어느 숫자가 이번 것인지 한눈에 안 보였다.
         compared = [(" → ".join(str(c) for c in reversed(recent))
-                     + " → **0 (이번)**" if recent else "**0건** (이번 회차)"),
+                     + " → **0 (이번)**" if recent else "**0건** (이번 실행)"),
                     "*「찾은 글」 은 중복을 포함한 발견 결과 수이고 저장된 글 수가 "
                     "아닙니다*"]
         compared[0] = ("찾은 글 추이: " if recent else "찾은 글: ") + compared[0]
         # "정상 종료" 라고 쓰면 success_rate 가 1 미만일 때 숫자와 말이 어긋난다
         # (실사례 2026-08-04 06:04 — arsenal_official 503 으로 0.889).
         # 실패 알림이 왜 따로 안 왔는지만 사실로 적고 판단은 숫자에 맡긴다.
-        state = ["이번 회차에 새 글이 없습니다",
-                 "*다음 회차에 풀리면 대개 놓치는 글이 없습니다 — 발견이 최근 글 "
+        state = ["이번 실행에서 새 글이 없습니다",
+                 "*다음 실행에서 풀리면 대개 놓치는 글이 없습니다 — 발견이 최근 글 "
                  "목록을 매번 다시 훑습니다*",
-                 f"회차는 실패로 끝나지 않았습니다 (`success_rate {success_rate:g}`)",
+                 f"실행은 실패로 끝나지 않았습니다 (`success_rate {success_rate:g}`)",
                  "*어댑터가 예외를 던지지 않아 실패 알림이 따로 가지 않았습니다*"]
         todo = ["차단은 보통 저절로 풀립니다 — 지금은 조치하지 않습니다"] if blocked else []
-        todo += ["확인할 때 사이트에 직접 접속하지 말고 다음 회차 로그를 보십시오",
-                 "회차가 계속 0이면 런북 (제목 클릭) 의 절차를 따릅니다"]
+        todo += ["확인할 때 사이트에 직접 접속하지 말고 다음 실행의 로그를 보십시오",
+                 "이후 실행에서도 계속 0이면 런북 (제목 클릭) 의 절차를 따릅니다"]
         per_source.append((sid, [("무슨 일이 있었나", happened),
                                  ("평소와 비교", compared),
                                  ("지금 어떤 상태인가", state),
@@ -559,9 +578,9 @@ def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
         fields = [{"name": _source_field_name(sid, sources),
                    "value": _sectioned(sections), "inline": False}
                   for sid, sections in per_source]
-    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    fields.append({"name": "실행", "value": run_label(run_id), "inline": True})
     return {"title": _cliff_title(cliffs, sources, failure_codes),
-            "description": "직전 회차까지 글을 가져오던 소스가 이번 회차에 한 건도 못 가져왔습니다.",
+            "description": "직전 실행까지 글을 가져오던 소스가 이번 실행에서 한 건도 못 가져왔습니다.",
             "color": COLOR_BLOCK, "fields": fields, "url": RUNBOOK_ANOMALY,
             "channel": CHANNEL_INCIDENT}
 
@@ -569,7 +588,7 @@ def build_cliff_alert(cliffs: list[str], *, history: list[dict], sources: dict,
 def _cliff_title(cliffs: list[str], sources: dict, failure_codes: dict) -> str:
     """소스 이름을 제목에 올린다 (스펙 2026-08-14 §6.1) — 실패 계수는 있을 때만."""
     if len(cliffs) > 1:
-        return ("🚨 이번 회차 수집 0건 — "
+        return ("🚨 이번 실행 수집 0건 — "
                 + _title_subject([_source_label(c, sources) for c in cliffs]))
     sid = cliffs[0]
     failed = sum((failure_codes.get(sid) or {}).values())
@@ -624,12 +643,12 @@ def build_roster_staleness_alert(cases: list[dict], *, run_id: str) -> dict:
             f"{_STAGE_LABELS.get(s, s)} {n}건"
             for s, n in sorted(c["new_stages"].items()))
         lines = [f"명단 값: {_AXIS_LABELS.get(c['transfer_status'], c['transfer_status'])}",
-                 f"이번 회차 새 기사 단계: {new_txt}",
+                 f"이번 실행 새 기사 단계: {new_txt}",
                  f"최근 7일 같은 계열 기사: {c['recent_total']}건"]
         fields.append({"name": c["ko_name"],
                        "value": "\n".join(f"- {ln}" for ln in lines),
                        "inline": False})
-    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    fields.append({"name": "실행", "value": run_label(run_id), "inline": True})
     return {"title": f"📋 선수 명단 확인 — 이적 상태 값이 낡았을 수 있음 ({len(cases)}명)",
             "description": ("확정 선수의 이적 상태 값과 새로 수집된 기사의 단계가 "
                             "어긋난다. 명단 런북 §6 절차로 값을 확인한다."),
@@ -647,7 +666,7 @@ def build_missing_club_alert(cands: list[dict], *, run_id: str) -> dict:
                                    f"- 예: {c['example'][:80]}"]),
                "inline": False}
               for c in cands]
-    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    fields.append({"name": "실행", "value": run_label(run_id), "inline": True})
     return {"title": f"🏟️ 구단 목록 확인 — 등재 안 된 이름 {len(cands)}종",
             "description": ("제목 앞머리에 되풀이해 나오는데 `config/club_map.yaml` 에 "
                             "없는 이름입니다. 구단이면 등재하고, 사람 · 문구면 두면 "
@@ -681,9 +700,9 @@ def build_dbt_gate_alert(result, *, run_id: str) -> dict:
                        "value": "\n".join(f"- {t.name} — {t.failures}행"
                                           for t in result.warned),
                        "inline": False})
-    fields.append({"name": "회차", "value": f"run {run_id[:8]}", "inline": True})
+    fields.append({"name": "실행", "value": run_label(run_id), "inline": True})
     return {"title": "🚧 dbt 품질 게이트 — 배포를 세웠습니다",
-            "description": "회차는 끝났지만 배포가 나가지 않았다 · 화면은 직전 산출물 그대로다",
+            "description": "실행은 끝났지만 배포가 나가지 않았다 · 화면은 직전 산출물 그대로다",
             "color": COLOR_FAILURE, "fields": fields,
             "channel": CHANNEL_INCIDENT}
 

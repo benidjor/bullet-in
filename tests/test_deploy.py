@@ -437,13 +437,28 @@ def test_judge_confirm_alert_carries_commit_detail(repos, quiet_alerts, monkeypa
     alert = quiet_alerts[0]
     assert alert["title"].startswith("✅ 코드 반영 완료 — c2")          # 무엇이 나갔나가 제목에
     names = [f["name"] for f in alert["fields"]]
-    assert names == ["반영된 커밋", "변경 규모", "시간", "회차"]
+    assert names == ["반영된 커밋", "변경 규모", "시간", "실행"]
     values = {f["name"]: f["value"] for f in alert["fields"]}
     assert f"{new[:7]} c2" in values["반영된 커밋"]
     assert "1 file changed" in values["변경 규모"]
     assert "전진" in values["시간"] and "판정" in values["시간"]
-    assert "run localrun" in values["회차"] and "liverun1" in values["회차"]   # 이 회차 · 라이브 표지
+    assert "run localrun" in values["실행"] and "liverun1" in values["실행"]   # 이 회차 · 라이브 표지
     assert alert.get("url") is None                                       # 로컬 원격은 링크 없음
+
+
+def test_judge_confirm_alert_labels_airflow_runs(repos, quiet_alerts, monkeypatch):
+    """Airflow 실행 ID 는 앞 8자리로 자르면 「schedule」 뿐이다 — 표지 두 장 모두 실행 시각으로 읽혀야 한다."""
+    vm, state, old, new = _advanced(repos)
+    (vm / "site").mkdir()
+    rid = "scheduled__2026-10-04T15:00:00+00:00"
+    (vm / "site" / "build.json").write_text(json.dumps({"commit": new, "run_id": rid}))
+    monkeypatch.chdir(vm)
+    live = {"commit": new, "run_id": rid}
+    judge(Repo(vm), state, service_result="success", exit_status="0",
+          matches=lambda sha: build_matches(sha, fetch=lambda: (live, ""), tries=1))
+    values = {f["name"]: f["value"] for f in quiet_alerts[0]["fields"]}
+    assert values["실행"] == ("10-05 00:00 (UTC 10-04 15:00) · "
+                             "라이브 표지 10-05 00:00 (UTC 10-04 15:00)")
 
 
 def test_rollback_alert_carries_commit_detail(repos, quiet_alerts):
