@@ -22,7 +22,9 @@ def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None) -> l
         c = s.get("config", {})
         kind, sid = s["adapter"], s["source_id"]
         if kind == "rss":
-            out.append(RssAdapter(sid, c["feed_url"]))
+            out.append(RssAdapter(sid, c["feed_url"],
+                                  title_contains=c.get("title_contains"),
+                                  body_selector=c.get("body_selector")))
         elif kind == "guardian_api":
             key = os.environ.get("GUARDIAN_API_KEY")
             if not key:
