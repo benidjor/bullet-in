@@ -412,6 +412,46 @@ def build_coverage_alert(breaches: list[str], coverage: dict, *, run_id: str) ->
             "channel": CHANNEL_TREND}
 
 
+# httpx 상태 오류 문자열 — 「Server error '503 Service Unavailable' for url '…'」
+_HTTP_STATUS_IN_ERROR = re.compile(r"'(\d{3}) ")
+
+
+def _short_fetch_error(err: str) -> str:
+    """수집 오류 문자열을 짧은 사유로 — httpx 상태 오류는 코드만, 나머지는 첫 줄 80자."""
+    if not err:
+        return "알 수 없음"
+    m = _HTTP_STATUS_IN_ERROR.search(err)
+    return m.group(1) if m else err.splitlines()[0][:80]
+
+
+def build_sitemap_failure_alert(funnel: dict, error: str | None, *, failed_runs: int,
+                                allowed_runs: int, window: int, run_id: str) -> dict | None:
+    """공식 소스 사이트맵이 끝내 실패한 실행의 알림 (설계 2026-10-05 §4.2).
+
+    재시도로 구했거나 사이트맵 첫 시도가 성공했으면 None — 앞의 것은 받는 사람이 할 일이
+    없어 수집 현황 화면 한 줄에서 세고, 뒤의 것은 사이트맵 장애가 아니다.
+    SLO-2 여유를 함께 실어 「이번 실패로 미달이 되는가」 를 알림만 보고 판단하게 한다."""
+    first = funnel.get("sitemap_first_error")
+    if not error or not first:
+        return None
+    if int(funnel.get("sitemap_attempts", 1)) >= 2:
+        reason = f"{first} → 재시도도 {_short_fetch_error(error)}"
+        todo = "아스날 공식 사이트 쪽 일시 장애로 보입니다 — 다음 실행에서 대개 풀립니다"
+    else:
+        reason = f"{first} (재시도 안 함)"
+        todo = ("사이트맵 주소가 바뀌었을 수 있습니다 — 주소를 확인해 주세요" if first == "404"
+                else "재시도하지 않는 응답입니다 — 접근이 막혔는지 확인해 주세요")
+    return {"title": "⚠️ 공식 소스 사이트맵 수집 실패 — 이번 실행 공식 기사 0건",
+            "description": f"사유: {reason}\n{todo}",
+            "color": COLOR_FAILURE,
+            "fields": [{"name": "SLO-2 여유",
+                        "value": f"최근 {window}회 중 소스 실패 {failed_runs}회 "
+                                 f"({allowed_runs}회까지 충족)",
+                        "inline": False},
+                       {"name": "실행", "value": run_label(run_id), "inline": True}],
+            "channel": CHANNEL_TREND}
+
+
 def build_filter_miss_alert(suspects: list[dict], *, run_id: str) -> dict:
     """공홈 창 후보 중 이적 관련 제목인데 수집되지 않은 기사 알림 (스펙 2026-08-07 §3.3).
 
@@ -500,9 +540,15 @@ _FUNNEL_STAGES = [("selected", "목록"), ("deduped", "URL"),
 def _funnel_lines(funnel: dict | None) -> list[str]:
     """수집 단계 기록을 줄로 (스펙 2026-08-14 §8.2 · 2026-10-02 §3.1).
 
-    어댑터마다 키가 다르다 — HTML 은 네 단계, X 는 타임라인 트윗, fmkorea 는 검색."""
+    어댑터마다 키가 다르다 — HTML 은 네 단계, X 는 타임라인 트윗, fmkorea 는 검색. 공식 소스는 사이트맵 시도."""
     if not funnel:
         return []
+    if "sitemap_attempts" in funnel:
+        line = (f"수집 단계 기록: 사이트맵 시도 {funnel['sitemap_attempts']} · "
+                f"{funnel.get('sitemap_sec', 0)}초")
+        if funnel.get("sitemap_first_error"):
+            line += f" · 1차 실패 {funnel['sitemap_first_error']}"
+        return [line]
     if "scraped" in funnel:
         return [f"수집 단계 기록: 타임라인 트윗 {funnel.get('scraped', 0)} "
                 f"→ 필터 통과 {funnel.get('passed', 0)}"]

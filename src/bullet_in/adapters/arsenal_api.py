@@ -8,9 +8,11 @@
 — 두 경로의 구분은 단계 규칙이 쓴다 (스펙 2026-08-12 §3.2).
 """
 from __future__ import annotations
+import asyncio
 from datetime import datetime, timedelta, timezone
 import logging
 import re
+import time
 import httpx
 from bullet_in.models import RawItem
 from bullet_in.quality import TRANSFER_TITLE_RE
@@ -20,6 +22,27 @@ log = logging.getLogger(__name__)
 GRAPHQL_URL = "https://afc-prd.graph.arsenal.com/graphql"
 SITEMAP_URL = "https://www.arsenal.com/sitemaps/articles/1/sitemap.xml"
 WINDOW_HOURS = 48.0
+
+# 사이트맵이 가끔 20초를 넘기거나 503 · 404 를 준다 (설계 2026-10-05 §1.3 · 627회 중 8회).
+# 일시 장애만 한 번 더 묻는다 — 최악 소요 20 + 10 + 20 = 50초 (설계 §2.2).
+# 바꾸면 _sitemap 의 경고 문구 「10초 뒤 재시도」 도 함께 바꾼다.
+SITEMAP_RETRY_WAIT_SEC = 10.0
+
+
+def _error_label(e: httpx.HTTPError) -> str:
+    """기록 · 로그용 짧은 사유 — 상태 오류는 코드 (`503`), 전송 오류는 예외 이름 (`ReadTimeout`)."""
+    if isinstance(e, httpx.HTTPStatusError):
+        return str(e.response.status_code)
+    return type(e).__name__
+
+
+def _retryable(e: httpx.HTTPError) -> bool:
+    """시간 초과 · 연결 오류와 5xx 만 다시 묻는다.
+
+    4xx 는 주소가 바뀐 구조적 신호일 수 있어 재시도로 덮지 않는다 (설계 §2.1)."""
+    if isinstance(e, httpx.HTTPStatusError):
+        return e.response.status_code >= 500
+    return isinstance(e, httpx.TransportError)
 
 # <loc>·<lastmod> 인접 쌍 — 실측 sitemap 구조 (2026-07-24). 구조가 바뀌면 후보 0 알림으로 드러난다.
 _LOC_RE = re.compile(r"<loc>([^<]+)</loc>\s*<lastmod>([^<]+)</lastmod>")
@@ -100,6 +123,7 @@ class ArsenalApiAdapter:
         self.window_hours = window_hours
         self.coverage: dict = {}
         self.men_news_rejects: list[dict] = []   # 관측용 — Men + News 인데 비채택 (스펙 2026-08-07 §3.3)
+        self.funnel: dict = {}   # 사이트맵 시도 기록 — run.adapter_funnels 가 실행 행에 남긴다 (설계 §3.1)
 
     async def _gql(self, client: httpx.AsyncClient, operation: str,
                    query: str, variables: dict) -> dict:
@@ -107,6 +131,42 @@ class ArsenalApiAdapter:
             "operationName": operation, "query": query, "variables": variables})
         r.raise_for_status()
         return r.json()["data"]
+
+    async def _get_sitemap(self, client: httpx.AsyncClient) -> str:
+        r = await client.get(SITEMAP_URL)
+        r.raise_for_status()
+        return r.text
+
+    async def _sitemap(self, client: httpx.AsyncClient) -> str:
+        """사이트맵 본문 — 일시 장애면 10초 뒤 한 번 더 묻는다.
+
+        끝내 실패하면 예외를 그대로 낸다 (조용한 폴백 없음). 기록은 예외를 내기 전에
+        채워 실패한 실행에도 남는다 (설계 §3.1)."""
+        t0 = time.perf_counter()
+        self.funnel = {"sitemap_attempts": 1}
+        ok = False
+        try:
+            try:
+                text = await self._get_sitemap(client)
+                ok = True
+                return text
+            except httpx.HTTPError as e:
+                self.funnel["sitemap_first_error"] = _error_label(e)
+                if not _retryable(e):
+                    raise
+                # 문구는 리터럴이다 — 테스트가 대기를 0 으로 바꿔도 설계 §3.2 문구를 검사할 수 있게
+                log.warning("%s: 사이트맵 1차 실패 (%s) — 10초 뒤 재시도", self.source_id,
+                            self.funnel["sitemap_first_error"])
+            await asyncio.sleep(SITEMAP_RETRY_WAIT_SEC)
+            self.funnel["sitemap_attempts"] = 2
+            text = await self._get_sitemap(client)
+            ok = True
+            return text
+        finally:
+            self.funnel["sitemap_sec"] = round(time.perf_counter() - t0, 1)
+            log.info("%s: 사이트맵 %.1f초 · 시도 %d%s", self.source_id,
+                     self.funnel["sitemap_sec"], self.funnel["sitemap_attempts"],
+                     "" if ok else " · 실패")
 
     async def fetch(self) -> list[RawItem]:
         now = datetime.now(timezone.utc)
@@ -116,9 +176,8 @@ class ArsenalApiAdapter:
         self.men_news_rejects = []
         async with httpx.AsyncClient(timeout=20,
                                      headers={"User-Agent": "bullet-in/0.1"}) as c:
-            r = await c.get(SITEMAP_URL)
-            r.raise_for_status()  # sitemap 장애 = 에러로 전파 (조용한 폴백 없음)
-            urls = _sitemap_candidates(r.text, now, self.window_hours)
+            # sitemap 장애 = 일시 장애면 한 번 더, 그래도 실패면 에러로 전파 (조용한 폴백 없음)
+            urls = _sitemap_candidates(await self._sitemap(c), now, self.window_hours)
             for url in urls:
                 gid = _glide_id(url)
                 if gid is None:

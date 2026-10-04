@@ -11,6 +11,8 @@ from bullet_in.fidelity import RETENTION_THRESHOLD
 
 # 수집 현황 화면의 창 셋 (런북 2026-09-04-measuring-visitors-funnel-and-retention-from-bronze.md §8).
 OPS_EPOCH = datetime(2026, 6, 12)        # 첫 라이브 실행 · 회차 전체의 시작 (UTC)
+# 사이트맵 재시도 기록을 남기는 소스 (설계 2026-10-05 §3.1) — 수집 현황 화면이 실행마다 읽는다.
+SITEMAP_SOURCE = "arsenal_official"
 LATENCY_SINCE = datetime(2026, 7, 14)    # 발행 → 수집 지연 · 그 전 행은 backfill 로 fetched_at 이 옮겨졌다
 LATENCY_MAX_DAYS = 30
 MIX_SINCE = datetime(2026, 7, 13)        # 주별 구성 · 월요일
@@ -262,7 +264,9 @@ class MartStore:
             # 뷰모델이 duration_sec 을 합산하는데 빈 행은 오류가 된다.
             runs_all = [dict(r) for r in c.execute(text(
                 "SELECT run_id,started_at,duration_sec,fetch_duration_sec,"
-                "source_counts,new_count,dup_count,error_count,success_rate "
+                "source_counts,new_count,dup_count,error_count,success_rate,"
+                f"JSON_VALUE(fetch_detail,'$.funnels.{SITEMAP_SOURCE}.sitemap_attempts') AS sitemap_attempts,"
+                f"JSON_VALUE(fetch_detail,'$.errors.{SITEMAP_SOURCE}') AS official_error "
                 "FROM pipeline_runs WHERE finished_at IS NOT NULL AND started_at >= :epoch "
                 "ORDER BY started_at"), {"epoch": OPS_EPOCH}).mappings().all()]
             freshness = [dict(r) for r in c.execute(text(
@@ -311,6 +315,8 @@ class MartStore:
         for r in runs_all:
             r["source_counts"] = (json.loads(r["source_counts"])
                                   if r["source_counts"] else {})
+            r["sitemap_attempts"] = (int(r["sitemap_attempts"])
+                                     if r["sitemap_attempts"] is not None else None)
         return {"runs_all": runs_all, "freshness": freshness, "latency": latency,
                 "weekly_mix": weekly_mix, "player_subjects": player_subjects,
                 "articles_total": int(articles_total),

@@ -2,7 +2,7 @@
 
 픽스처는 작게 잡았다. 기대값은 전부 주석의 셈으로 따라갈 수 있다.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from bullet_in.dbt_gate import GateTally, TestOutcome
 from bullet_in.serve.ops_view import NO_GATE, UNNAMED, build_ops_view
@@ -342,3 +342,35 @@ def test_stage_text_reads_rss_funnel():
     from bullet_in.serve.ops_view import _stage_text
     assert _stage_text({"entries": 24, "deduped": 24, "passed": 5, "list_sig": "x"}) == \
         "피드 항목 24 · 키워드 5"
+
+
+def _slo_texts(snapshot):
+    return [t for t, _ in _flat(_view(snapshot))[0]["insights"]]
+
+
+def _sm(run, attempts, error=None):
+    return dict(run, sitemap_attempts=attempts, official_error=error)
+
+
+def test_slo_절은_사이트맵_재시도로_구한_실행_수를_적는다():
+    runs = [_run("e", datetime(2026, 9, 3, 21, 0), 1, 0),                              # 기록 없는 옛 행
+            _sm(_run("a", datetime(2026, 9, 4, 0, 0), 1, 0), 2),                       # 구함
+            _sm(_run("b", datetime(2026, 9, 4, 3, 0), 1, 0), 2),                       # 구함
+            _sm(_run("c", datetime(2026, 9, 4, 6, 0), 1, 0, err=1, sr=0.875), 2, "ReadTimeout"),  # 재시도도 실패
+            _sm(_run("d", datetime(2026, 9, 4, 9, 0), 1, 0), 1)]                       # 첫 시도에 받음
+    assert "SLO-2 최근 5회 가운데 사이트맵 재시도로 구한 실행은 2회다." in _slo_texts(dict(SNAPSHOT, runs_all=runs))
+
+
+def test_slo_절은_재시도가_없어도_0회_줄을_그린다():
+    assert "SLO-2 최근 4회 가운데 사이트맵 재시도로 구한 실행은 0회다." in _slo_texts(SNAPSHOT)
+
+
+def test_slo_절은_창_밖의_재시도를_세지_않는다():
+    base = datetime(2026, 8, 30, 0, 0)
+    runs = [_sm(_run("old", base, 1, 0), 2)]                                           # 31번째 전 · 창 밖
+    runs += [_sm(_run(f"r{i}", base + timedelta(hours=3 * (i + 1)), 1, 0), 1) for i in range(30)]
+    assert "SLO-2 최근 30회 가운데 사이트맵 재시도로 구한 실행은 0회다." in _slo_texts(dict(SNAPSHOT, runs_all=runs))
+
+
+def test_빈_스냅샷이면_사이트맵_줄이_없다():
+    assert not any("사이트맵" in t for t in _slo_texts(EMPTY))

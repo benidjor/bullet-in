@@ -145,6 +145,14 @@ def _tiles(runs_all, recent, broken_count, span_weeks, completion: dict | None =
 
 # --- SLO ----------------------------------------------------------------------
 
+def _sitemap_rescued(recent) -> int:
+    """SLO-2 창에서 사이트맵 재시도로 구한 실행 수 (설계 2026-10-05 §4.1).
+
+    시도 2 이고 공식 소스 오류가 없는 실행이다. 기록 키가 없는 옛 실행은 세지 않는다."""
+    return sum(1 for r in recent
+               if r.get("sitemap_attempts") == 2 and not r.get("official_error"))
+
+
 def _slo_rows(recent, broken_count, anomaly_count, gate: GateTally | None, articles_total: int) -> list[dict]:
     def row(i, name, target, value, how, status):
         return {"slo_id": f"SLO-{i}", "name": name, "target": target, "value": value, "how": how, "status": status}
@@ -189,7 +197,7 @@ _PILL = {"ok": '<span class="pill ok">✓ 충족</span>', "bad": '<span class="p
          "info": '<span class="pill">참고</span>'}
 
 
-def _slo(rows, gate, completion: dict | None = None):
+def _slo(rows, gate, completion: dict | None = None, recent=None):
     q = ("실행 성공률 · 중복 적재율 · 필수 필드 완전성 · 소스 신선도 · 수집량 이상 · 병렬화 여섯 지표가 각자의 목표치를 지금 지키는지 확인한다. "
          "2 · 5 · 6 은 실행마다 코드가 직접 재고 3 · 4 는 실행 끝 dbt 게이트가 낸 테스트 결과에서 읽으며 1 은 벤치마크로 잰 값이다.")
     body = ('<table class="fresh"><thead><tr><th>#</th><th>지표</th><th>목표</th><th class="num">현재</th>'
@@ -202,6 +210,10 @@ def _slo(rows, gate, completion: dict | None = None):
     bad = [r["slo_id"] for r in rows if r["status"] == "bad"]
     if bad:
         ins.append((f"미달은 {' · '.join(bad)} 이다.", []))
+    if recent:
+        # 재시도가 가린 실패 — SLO-2 숫자가 좋아 보여도 무엇이 가려졌는지 같은 화면에서 읽힌다.
+        ins.append((f"SLO-2 최근 {len(recent)}회 가운데 사이트맵 재시도로 구한 실행은 "
+                    f"{_sitemap_rescued(recent)}회다.", []))
     ins.append((f"SLO-3 · 4 는 직전 실행의 게이트 ({_gate_at(gate.generated_at)}) 의 값이다." if gate
                 else "SLO-3 · 4 는 게이트 결과 파일이 생기면 채워진다.", []))
     deaths = (completion or {}).get("gate")
@@ -550,7 +562,7 @@ def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int, now: datet
                                         snapshot.get("latest_funnels"))
     slo = _slo_rows(recent, broken_count, anomaly_count, gate, articles_total)
     sections = [
-        _slo(slo, gate, completion),
+        _slo(slo, gate, completion, recent),
         _volume(runs_all, today, span_weeks),
         _coverage(runs_all, sources, today, span_weeks),
         _throughput(runs_all, today, span_weeks),
