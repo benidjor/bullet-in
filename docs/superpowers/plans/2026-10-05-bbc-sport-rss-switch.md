@@ -597,7 +597,7 @@ git commit -m "feat(slo5): 수집 현황 화면 · 끊김 알림이 RSS 수집 �
 - Modify: `README.md` (`collect` 행 · §3.4 BBC Sport 행)
 - Modify: `docs/superpowers/specs/2026-10-02-slo5-broken-source-signal-design.md` (§9.2 소스별 상한)
 - Modify: `docs/runbook/2026-08-20-freshness-threshold-recalibration.md` (§8.2 상한 표)
-- Test: `tests/test_freshness_config.py`
+- Test: `tests/test_freshness_config.py` · `tests/test_slo5_wiring.py:49-53`
 
 - [ ] **Step 1: 실패 테스트 쓰기** — `tests/test_freshness_config.py` 끝에 더한다
 
@@ -615,10 +615,21 @@ def test_bbc_sport_reads_the_arsenal_rss():
     assert "list_url" not in s["config"] and "item_selector" not in s["config"]
 ```
 
+`tests/test_slo5_wiring.py` 의 실제 설정 상한 테스트 (49 ~ 53행) 를 아래로 바꾼다.
+이 테스트는 「소스별 상한은 Sky · Ornstein 둘뿐」 이라고 못 박고 있어, 설정만 바꾸면 깨진다 (계획서 시험 적용에서 발견).
+
+```python
+def test_live_config_caps_list_unchanged_per_source():
+    from bullet_in.run import list_unchanged_caps
+    from bullet_in.score import load_sources
+    assert list_unchanged_caps(load_sources("config/sources.yaml")) == \
+        {"bbc_sport": 240.0, "skysports": 288.0, "x_ornstein": 240.0}
+```
+
 - [ ] **Step 2: 실패 확인**
 
-Run: `.venv/bin/python -m pytest -q tests/test_freshness_config.py`
-Expected: FAIL — `adapter` 가 `html`
+Run: `.venv/bin/python -m pytest -q tests/test_freshness_config.py tests/test_slo5_wiring.py`
+Expected: FAIL — `adapter` 가 `html` · 상한에 `bbc_sport` 가 없음
 
 - [ ] **Step 3: 설정 바꾸기** — `config/sources.yaml` 의 `bbc_sport` 블록 전체
 
@@ -642,7 +653,7 @@ Expected: FAIL — `adapter` 가 `html`
 
 - [ ] **Step 4: 통과 확인**
 
-Run: `.venv/bin/python -m pytest -q tests/test_freshness_config.py`
+Run: `.venv/bin/python -m pytest -q tests/test_freshness_config.py tests/test_slo5_wiring.py`
 Expected: 전부 PASS
 
 - [ ] **Step 5: 문서 넷 고치기**
@@ -673,7 +684,7 @@ README 는 훅 대상이 아니라 손으로 `python3 .claude/hooks/check-doc-fo
 - [ ] **Step 6: 전체 테스트**
 
 Run: `cd <워크트리> && .venv/bin/python -m pytest --co -q | tail -1 && .venv/bin/python -m pytest -q`
-Expected: 수집 1,870 + 이 계획이 더한 수 (Task 1 = 2 · Task 2 = 2 · Task 3 = 7 + 공장 1 (종전 1개는 교체) · Task 4 = 1 · Task 5 = 3 · Task 6 = 1 → 1,887) · 전부 PASS
+Expected: 수집 1,887 (1,870 + Task 1 둘 · Task 2 둘 · Task 3 여덟 · Task 4 하나 · Task 5 셋 · Task 6 하나 · 이름만 바꾼 테스트는 수 불변 · 2026-10-05 계획서 시험 적용에서 실측) · 전부 PASS
 
 - [ ] **Step 7: 머지 전 라이브 검증 (한 번만 접속 · 출력은 파일로)**
 
@@ -698,7 +709,7 @@ Expected: `entries` 20 이상 · `passed` 1 이상 · 통과한 항목마다 본
 - [ ] **Step 8: 커밋**
 
 ```bash
-git add config/sources.yaml tests/test_freshness_config.py README.md docs/superpowers/specs/2026-10-02-slo5-broken-source-signal-design.md docs/runbook/2026-08-20-freshness-threshold-recalibration.md
+git add config/sources.yaml tests/test_freshness_config.py tests/test_slo5_wiring.py README.md docs/superpowers/specs/2026-10-02-slo5-broken-source-signal-design.md docs/runbook/2026-08-20-freshness-threshold-recalibration.md
 git commit -m "feat(sources): BBC Sport 를 아스날 RSS 로 전환 · 목록 상한 240시간"
 ```
 
