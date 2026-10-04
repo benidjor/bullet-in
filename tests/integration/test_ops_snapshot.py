@@ -209,3 +209,23 @@ def test_block_streak_round_trips_through_record_previous_and_snapshot(engine):
     assert store.previous_freshness()["fmkorea"]["block_streak"] == 3
     assert store.ops_snapshot()["freshness"][0]["block_streak"] == 3
     assert store.ops_snapshot()["freshness"][0]["list_sig"] == "abcd"
+
+
+def test_ops_snapshot_reads_sitemap_attempts_and_official_error(engine):
+    """실행마다 공식 소스 사이트맵 시도 수와 공식 소스 오류를 읽는다 (설계 2026-10-05 §4.1).
+    fetch_detail 이 NULL 이거나 공식 소스 기록이 없는 행은 둘 다 None."""
+    _seed_runs(engine, 4)
+    details = {
+        "run-000": None,
+        "run-001": {"errors": {}, "funnels": {"bbc_sport": {"entries": 3}}},
+        "run-002": {"errors": {}, "funnels": {"arsenal_official": {
+            "sitemap_attempts": 2, "sitemap_sec": 10.4, "sitemap_first_error": "ReadTimeout"}}},
+        "run-003": {"errors": {"arsenal_official": "ReadTimeout"}, "funnels": {"arsenal_official": {
+            "sitemap_attempts": 2, "sitemap_sec": 50.1, "sitemap_first_error": "ReadTimeout"}}}}
+    with engine.begin() as c:
+        for rid, d in details.items():
+            c.execute(text("UPDATE pipeline_runs SET fetch_detail=:d WHERE run_id=:rid"),
+                      {"d": json.dumps(d) if d is not None else None, "rid": rid})
+    runs = MartStore(engine).ops_snapshot()["runs_all"]
+    assert [(r["sitemap_attempts"], r["official_error"]) for r in runs] == [
+        (None, None), (None, None), (2, None), (2, "ReadTimeout")]
