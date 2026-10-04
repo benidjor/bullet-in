@@ -3,6 +3,15 @@ import httpx, respx
 from bullet_in.adapters.arsenal_api import ArsenalApiAdapter, GRAPHQL_URL, SITEMAP_URL
 from datetime import datetime, timezone
 from bullet_in.adapters.arsenal_api import _sitemap_candidates, _glide_id
+import pytest
+from bullet_in.adapters import arsenal_api
+
+
+@pytest.fixture(autouse=True)
+def _no_retry_wait(monkeypatch):
+    """재시도 대기 10초를 테스트에서는 0초로 (설계 2026-10-05 §5.1)."""
+    monkeypatch.setattr(arsenal_api, "SITEMAP_RETRY_WAIT_SEC", 0)
+
 
 def _sitemap_entry(slug, lastmod="2026-07-23T12:10:38.401Z"):
     return (f"<url><loc>https://www.arsenal.com/news/{slug}</loc>"
@@ -179,3 +188,97 @@ def test_glide_id_extraction():
     assert _glide_id("https://www.arsenal.com/news/"
                      "christos-tzolis-signs-for-arsenal-axDM85b0dBUW") == "axDM85b0dBUW"
     assert _glide_id("https://www.arsenal.com/news/no-token") is None
+
+
+# --- 사이트맵 재시도 (설계 2026-10-05) ----------------------------------------
+
+def _wide():
+    return ArsenalApiAdapter("arsenal_official", window_hours=24 * 365)
+
+
+def _articles_ok():
+    respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"getArticle":
+        _gql_article("Christos Tzolis signs", ["Men", "Transfer news"])}}))
+
+
+@respx.mock
+def test_sitemap_ok_records_one_attempt():
+    _mock_backend(_sitemap(FIXED_NOW_ENTRIES), {"axDM85b0dBUW": _gql_article(
+        "Christos Tzolis signs", ["Men", "Transfer news"])})
+    a = _wide()
+    items = asyncio.run(a.fetch())
+    assert len(items) == 1
+    assert a.funnel["sitemap_attempts"] == 1
+    assert isinstance(a.funnel["sitemap_sec"], float)
+    assert "sitemap_first_error" not in a.funnel
+
+
+@respx.mock
+def test_sitemap_timeout_then_ok_retries_once(caplog):
+    route = respx.get(SITEMAP_URL).mock(side_effect=[
+        httpx.ReadTimeout("timed out"),
+        httpx.Response(200, text=_sitemap(FIXED_NOW_ENTRIES))])
+    _articles_ok()
+    a = _wide()
+    with caplog.at_level("INFO"):
+        items = asyncio.run(a.fetch())
+    assert route.call_count == 2
+    assert len(items) == 1
+    assert a.funnel["sitemap_attempts"] == 2
+    assert a.funnel["sitemap_first_error"] == "ReadTimeout"
+    assert any("사이트맵 1차 실패 (ReadTimeout) — 10초 뒤 재시도" in r.message
+               and r.levelname == "WARNING" for r in caplog.records)
+    assert any("사이트맵" in r.message and "시도 2" in r.message
+               and r.levelname == "INFO" for r in caplog.records)
+
+
+@respx.mock
+def test_sitemap_503_then_ok_records_status_code():
+    respx.get(SITEMAP_URL).mock(side_effect=[
+        httpx.Response(503), httpx.Response(200, text=_sitemap(FIXED_NOW_ENTRIES))])
+    _articles_ok()
+    a = _wide()
+    items = asyncio.run(a.fetch())
+    assert len(items) == 1
+    assert a.funnel["sitemap_attempts"] == 2
+    assert a.funnel["sitemap_first_error"] == "503"
+
+
+@respx.mock
+def test_sitemap_404_fails_without_retry():
+    route = respx.get(SITEMAP_URL).mock(return_value=httpx.Response(404))
+    a = _wide()
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(a.fetch())
+    assert route.call_count == 1
+    assert a.funnel["sitemap_attempts"] == 1
+    assert a.funnel["sitemap_first_error"] == "404"
+    assert "sitemap_sec" in a.funnel
+
+
+@respx.mock
+def test_sitemap_timeout_twice_raises_and_keeps_the_record():
+    route = respx.get(SITEMAP_URL).mock(side_effect=[
+        httpx.ReadTimeout("timed out"), httpx.ReadTimeout("timed out")])
+    a = _wide()
+    with pytest.raises(httpx.ReadTimeout):
+        asyncio.run(a.fetch())
+    assert route.call_count == 2
+    assert a.funnel["sitemap_attempts"] == 2
+    assert a.funnel["sitemap_first_error"] == "ReadTimeout"
+
+
+@respx.mock
+def test_funnel_resets_between_fetches():
+    """같은 인스턴스를 다시 부르면 지난 호출의 첫 실패 사유를 끌고 오지 않는다."""
+    respx.get(SITEMAP_URL).mock(side_effect=[
+        httpx.ReadTimeout("timed out"),
+        httpx.Response(200, text=_sitemap(FIXED_NOW_ENTRIES)),
+        httpx.Response(200, text=_sitemap(FIXED_NOW_ENTRIES))])
+    _articles_ok()
+    a = _wide()
+    asyncio.run(a.fetch())
+    assert a.funnel["sitemap_attempts"] == 2
+    asyncio.run(a.fetch())
+    assert a.funnel["sitemap_attempts"] == 1
+    assert "sitemap_first_error" not in a.funnel
