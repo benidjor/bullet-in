@@ -1080,3 +1080,73 @@ def test_broken_reason_no_entries():
 def test_funnel_lines_rss_three_stages():
     assert notify._funnel_lines({"entries": 24, "deduped": 24, "passed": 5, "list_sig": "x"}) == \
         ["수집 단계 기록: 피드 항목 24 → URL 24 → 키워드 5"]
+
+
+from bullet_in.notify import (build_sitemap_failure_alert, _short_fetch_error, _funnel_lines,
+                              CHANNEL_TREND)
+
+RID = "scheduled__2026-10-04T18:00:00+00:00"
+
+
+def test_short_fetch_error_takes_the_status_code_from_httpx_message():
+    err = ("Server error '503 Service Unavailable' for url "
+           "'https://www.arsenal.com/sitemaps/articles/1/sitemap.xml'\n"
+           "For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503")
+    assert _short_fetch_error(err) == "503"
+
+
+def test_short_fetch_error_keeps_exception_name_and_cuts_long_lines():
+    assert _short_fetch_error("ReadTimeout") == "ReadTimeout"
+    assert _short_fetch_error("x" * 200 + "\nsecond") == "x" * 80
+    assert _short_fetch_error("") == "알 수 없음"
+
+
+def test_sitemap_alert_when_retry_also_failed():
+    p = build_sitemap_failure_alert(
+        {"sitemap_attempts": 2, "sitemap_sec": 50.1, "sitemap_first_error": "ReadTimeout"},
+        "ReadTimeout", failed_runs=3, allowed_runs=2, window=30, run_id=RID)
+    assert p["title"] == "⚠️ 공식 소스 사이트맵 수집 실패 — 이번 실행 공식 기사 0건"
+    assert "사유: ReadTimeout → 재시도도 ReadTimeout" in p["description"]
+    assert p["channel"] == CHANNEL_TREND
+    fields = {f["name"]: f["value"] for f in p["fields"]}
+    assert fields["SLO-2 여유"] == "최근 30회 중 소스 실패 3회 (2회까지 충족)"
+    assert fields["실행"] == "10-05 03:00 (UTC 10-04 18:00)"
+    assert "회차" not in str(p)
+
+
+def test_alert_reason_when_retry_failed_differently():
+    p = build_sitemap_failure_alert(
+        {"sitemap_attempts": 2, "sitemap_first_error": "503"},
+        "Client error '404 Not Found' for url 'https://www.arsenal.com/sitemaps/articles/1/sitemap.xml'",
+        failed_runs=1, allowed_runs=2, window=30, run_id=RID)
+    assert "사유: 503 → 재시도도 404" in p["description"]
+
+
+def test_sitemap_alert_for_404_without_retry():
+    p = build_sitemap_failure_alert(
+        {"sitemap_attempts": 1, "sitemap_first_error": "404"},
+        "Client error '404 Not Found' for url 'https://www.arsenal.com/sitemaps/articles/1/sitemap.xml'",
+        failed_runs=1, allowed_runs=2, window=30, run_id=RID)
+    assert "사유: 404 (재시도 안 함)" in p["description"]
+    assert "주소" in p["description"]
+    assert p["channel"] == CHANNEL_TREND
+
+
+def test_no_sitemap_alert_when_retry_rescued_or_never_failed():
+    rescued = {"sitemap_attempts": 2, "sitemap_first_error": "ReadTimeout"}
+    assert build_sitemap_failure_alert(rescued, None, failed_runs=0, allowed_runs=2,
+                                       window=30, run_id=RID) is None
+    clean = {"sitemap_attempts": 1, "sitemap_sec": 0.4}
+    assert build_sitemap_failure_alert(clean, None, failed_runs=0, allowed_runs=2,
+                                       window=30, run_id=RID) is None
+    # 사이트맵은 첫 시도에 받았는데 다른 이유로 소스가 실패 — 사이트맵 알림이 아니다
+    assert build_sitemap_failure_alert(clean, "KeyError", failed_runs=1, allowed_runs=2,
+                                       window=30, run_id=RID) is None
+
+
+def test_funnel_lines_reads_sitemap_record():
+    assert _funnel_lines({"sitemap_attempts": 2, "sitemap_sec": 10.4,
+                          "sitemap_first_error": "ReadTimeout"}) == [
+        "수집 단계 기록: 사이트맵 시도 2 · 10.4초 · 1차 실패 ReadTimeout"]
+    assert _funnel_lines({"sitemap_attempts": 1, "sitemap_sec": 0.4}) == [
+        "수집 단계 기록: 사이트맵 시도 1 · 0.4초"]

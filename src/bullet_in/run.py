@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse, asyncio, json, logging, os, time, uuid, yaml
+import argparse, asyncio, json, logging, math, os, time, uuid, yaml
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
@@ -26,6 +26,7 @@ from bullet_in import roster
 from bullet_in.serve.render import (write_site, write_ops, write_behavior,
                                     unmatched_articles,
                                     mask_other_people, mask_ambiguous)
+from bullet_in.serve.ops_view import RECENT_RUNS, SLO2_TARGET
 from bullet_in.quality import (success_rate, volume_anomalies, evaluate_freshness,
                                evaluate_coverage, candidate_cliffs, filter_miss_suspects,
                                roster_axis_staleness, evaluate_states, broken_alert_split,
@@ -73,6 +74,9 @@ RUN_SELECT_SQL = (
 # SLO-6 이력 — 이번 행이 이미 들어가 있으므로 자기 run_id 를 뺀다.
 VOLUME_HISTORY_SQL = ("SELECT source_counts FROM pipeline_runs WHERE run_id <> :rid "
                       "ORDER BY started_at DESC LIMIT 12")
+# SLO-2 여유 — 이번 행은 collect 끝에 들어가므로 직전 마감된 실행만 읽고 이번 실행을 더한다.
+RECENT_RATES_SQL = ("SELECT success_rate FROM pipeline_runs WHERE finished_at IS NOT NULL "
+                    "AND run_id <> :rid ORDER BY started_at DESC LIMIT :n")
 
 # 후보 절벽 판정 재료 (차단 알림 스펙 §3.1): [0] 이 직전 회차 · 나머지는 알림 표시용.
 # 이번 회차 행은 파이프라인 마지막에 적재되므로 이 시점의 최신 행이 곧 직전 회차다.
@@ -316,6 +320,36 @@ def cliff_alert_payload(candidate_counts: dict, history: list[dict], *,
         funnels=adapter_funnels(adapters))
 
 
+def slo2_margin(previous_rates: list[float], current_rate: float,
+                n_sources: int) -> tuple[int, int, int]:
+    """(소스 실패 실행 수, 충족 한도, 창 길이) — 수집 현황 화면의 SLO-2 와 같은 창 (설계 2026-10-05 §4.2).
+
+    창 = 이번 실행 + 직전 29회. 「소스 실패」 는 성공률이 1 보다 작은 실행이다.
+    한도는 실행마다 소스 하나가 실패한다고 보고 센다 — 30 × (1 − 0.99) × 8 = 2.4 → 2."""
+    window = [current_rate, *previous_rates[:RECENT_RUNS - 1]]
+    failed = sum(1 for r in window if r < 1)
+    allowed = math.floor(round(RECENT_RUNS * (1 - SLO2_TARGET) * n_sources, 6))
+    return failed, allowed, len(window)
+
+
+def sitemap_alert_payloads(adapters, errors: dict, *, previous_rates: list[float],
+                           run_id: str) -> list[dict]:
+    """사이트맵 시도 기록을 내놓는 어댑터 가운데 사이트맵이 끝내 실패한 것만 알림으로."""
+    failed, allowed, window = slo2_margin(
+        previous_rates, success_rate(len(adapters), len(errors)), len(adapters))
+    out = []
+    for a in adapters:
+        funnel = getattr(a, "funnel", None) or {}
+        if "sitemap_attempts" not in funnel:
+            continue
+        p = notify.build_sitemap_failure_alert(
+            funnel, errors.get(a.source_id), failed_runs=failed, allowed_runs=allowed,
+            window=window, run_id=run_id)
+        if p:
+            out.append(p)
+    return out
+
+
 def _materials():
     """단계마다 자기 재료를 만든다 (스펙 §5.1). 지금 main 의 첫 아홉 줄과 같다."""
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
@@ -366,6 +400,20 @@ async def collect(run_id: str, concurrency: int) -> FetchSummary:
         if breaches:
             notify.send_alert(**notify.build_coverage_alert(
                 breaches, a.coverage, run_id=run_id))
+
+    # 공식 소스 사이트맵이 재시도까지 실패하거나 404 면 알림 (설계 2026-10-05 §4.2).
+    # 재시도로 구한 실행은 알림 없이 수집 현황 화면 한 줄에서 센다. 판정 · 발송 실패가
+    # 실행을 멈추지 않게 감싼다 (후보 절벽 알림과 같은 격리).
+    try:
+        with engine.connect() as c:
+            prev_rates = [float(r) for r in c.execute(
+                text(RECENT_RATES_SQL), {"rid": run_id, "n": RECENT_RUNS - 1}).scalars().all()]
+        for p in sitemap_alert_payloads(adapters, errors, previous_rates=prev_rates,
+                                        run_id=run_id):
+            notify.send_alert(**p)
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "사이트맵 실패 알림 판정 실패 — 이번 실행 건너뜀 (수집에는 영향 없음)", exc_info=True)
 
     # 채택 누락 관측 (스펙 2026-08-07 §3.3): 이적 관련 제목인데 비채택이면 알림만 —
     # 수집 · 필터 판단은 바꾸지 않는다 (제품 결정 대기). 판정 · 발송 실패가 회차를

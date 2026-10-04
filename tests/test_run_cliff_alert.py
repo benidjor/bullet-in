@@ -310,3 +310,16 @@ def test_serving_rows_keeps_ambiguous_surname_backed_by_the_body():
                                "가브리엘 제주스는 아스날을 떠날 수 있다",
                                ko="나폴리, 제주스 영입 관심 표명")])
     assert len(keep) == 1 and hidden == 0
+
+
+def test_cliff_payload_draws_the_sitemap_record_not_the_html_chain():
+    """공식 소스가 절벽에 걸려도 수집 단계 기록이 HTML 4단 사슬 (목록 0 → …) 로 그려지지 않는다."""
+    off = _Adapter("arsenal_official")
+    off.funnel = {"sitemap_attempts": 2, "sitemap_sec": 50.1, "sitemap_first_error": "ReadTimeout"}
+    payload = cliff_alert_payload(
+        {}, [{"arsenal_official": 1}], adapters=[off],
+        sources={"arsenal_official": {"display_name": "Arsenal.com"}},
+        success_rate=0.875, run_id="r")
+    text = str(payload["fields"])
+    assert "사이트맵 시도 2" in text
+    assert "목록 0" not in text
