@@ -681,6 +681,8 @@ def test_responded_rss_needs_entries_and_signature():
     assert responded("rss", {**ok, "passed": 0}, errored=False) == (True, "")   # 키워드 0 은 조용함의 몫
     assert responded("rss", {"entries": 0, "deduped": 0, "passed": 0, "list_sig": ""},
                      errored=False) == (False, "no_entries")
+    assert responded("rss", {"entries": 3, "deduped": 0, "passed": 0, "list_sig": ""},
+                     errored=False) == (False, "no_links")
     assert responded("rss", {**ok, "list_sig": ""}, errored=False) == (False, "no_record")
     assert responded("rss", ok, errored=True) == (False, "error")
     assert responded("rss", None, errored=False) == (False, "no_record")

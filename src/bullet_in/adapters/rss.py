@@ -67,8 +67,13 @@ class RssAdapter:
                     payload["published"] = pub[0].isoformat()
                     payload["published_precision"] = pub[1]
                 if self.body_selector:
-                    # 상세 페이지의 발행 시각이 있으면 그 값이 피드 값을 덮는다 (§2.1)
-                    payload.update(await fetch_article_detail(c, url, self.body_selector))
+                    # 상세 페이지의 발행 시각이 더 정밀할 때만 피드 값을 덮는다 (§2.1)
+                    detail = await fetch_article_detail(c, url, self.body_selector)
+                    if (detail.get("published_precision") == "day"
+                            and payload.get("published_precision") == "time"):
+                        detail = {k: v for k, v in detail.items()
+                                  if k not in ("published", "published_precision")}
+                    payload.update(detail)
                 out.append(RawItem(source_id=self.source_id, source_type="rss",
                                    url=url, fetched_at=now, raw_payload=payload))
         return out

@@ -84,6 +84,20 @@ def test_rss_fetches_article_body_when_selector_set():
 
 
 @respx.mock
+def test_rss_day_precision_detail_does_not_override_feed_time():
+    respx.get(FEED).mock(return_value=httpx.Response(200, content=BBC))
+    respx.get(DEAL).mock(return_value=httpx.Response(
+        200, text='<html><head><meta property="article:published_time" content="2026-09-25">'
+                  '</head><body><article><p>Arteta has agreed a new deal.</p></article></body></html>'))
+    respx.get(LOAN).mock(return_value=httpx.Response(500))
+    items = asyncio.run(RssAdapter("bbc_sport", FEED, title_contains=KW,
+                                   body_selector="article").fetch())
+    assert items[0].raw_payload["published"] == "2026-09-22T11:48:23+00:00"
+    assert items[0].raw_payload["published_precision"] == "time"
+    assert items[0].raw_payload["body"] == "Arteta has agreed a new deal."
+
+
+@respx.mock
 def test_rss_http_error_raises_and_leaves_no_funnel():
     respx.get(FEED).mock(return_value=httpx.Response(503))
     a = RssAdapter("bbc_sport", FEED, title_contains=KW)
