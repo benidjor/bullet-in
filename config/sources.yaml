@@ -29,14 +29,14 @@ sources:
     tier: 1.5   # 비전담 기준선 — 전담 (Mokbel) 은 min 가드로 기자 tier 1 승격
     outlet: BBC
     medium: newspaper
-    adapter: html
+    adapter: rss   # 2026-10-05 팀 페이지 (피드 모양 · 제목 확인 1/5) 에서 아스날 RSS 로 (설계 2026-10-05)
     config:
-      list_url: "https://www.bbc.com/sport/football/teams/arsenal"
-      item_selector: "[data-testid='main-content'] a[href*='/sport/football/articles/']"
-      title_selector: "span[class*='LinkPostHeadline']"
+      feed_url: "https://feeds.bbci.co.uk/sport/football/teams/arsenal/rss.xml"
       title_contains: *transfer_kw
       body_selector: "article"
     freshness_hours: 96    # 공백 95% 75h (21일 실측) — 48h 는 정상 소스를 회차의 22% 에서 stale 로 찍었다
+    # RSS 항목 사이 최장 공백 135.2h (09-10 ~ 10-03) · A매치 휴식기 미포함이라 넉넉히 · 휴식기 뒤 재측정 (설계 §3.2 · §5)
+    list_unchanged_cap_hours: 240
     enabled: true
   - source_id: bbc_gossip
     display_name: BBC Football Gossip

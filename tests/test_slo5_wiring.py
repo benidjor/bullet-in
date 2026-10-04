@@ -46,8 +46,8 @@ def test_list_unchanged_caps_reads_the_per_source_setting():
                                 "guardian": {}}) == {"skysports": 288.0}
 
 
-def test_live_config_caps_sky_and_ornstein_only():
+def test_live_config_caps_list_unchanged_per_source():
     from bullet_in.run import list_unchanged_caps
     from bullet_in.score import load_sources
     assert list_unchanged_caps(load_sources("config/sources.yaml")) == \
-        {"skysports": 288.0, "x_ornstein": 240.0}
+        {"bbc_sport": 240.0, "skysports": 288.0, "x_ornstein": 240.0}
