@@ -237,6 +237,8 @@ def broken_reason_text(r, funnel: dict | None, error: str | None,
                 f"{titled}개뿐 ({titled * 100 // max(links, 1)}%) · {n}회 연속")
     if r.reason == "no_links":
         return f"목록에서 기사 링크를 찾지 못함 · {n}회 연속"
+    if r.reason == "no_entries":
+        return f"피드 항목 0개 · {n}회 연속"
     if r.reason == "no_tweets":
         return f"타임라인 트윗 0개 · {n}회 연속"
     if r.reason == "blocked":
@@ -507,6 +509,9 @@ def _funnel_lines(funnel: dict | None) -> list[str]:
     if "keywords" in funnel:
         return [f"수집 단계 기록: 검색어 {funnel.get('searched', 0)}/{funnel.get('keywords', 0)} · "
                 f"결과 글 {funnel.get('listed', 0)} → 필터 통과 {funnel.get('passed', 0)}"]
+    if "entries" in funnel:
+        return [f"수집 단계 기록: 피드 항목 {funnel.get('entries', 0)} "
+                f"→ URL {funnel.get('deduped', 0)} → 키워드 {funnel.get('passed', 0)}"]
     chain = " → ".join(f"{label} {funnel.get(key, 0)}"
                        for key, label in _FUNNEL_STAGES)
     return [f"수집 단계 기록: {chain}",

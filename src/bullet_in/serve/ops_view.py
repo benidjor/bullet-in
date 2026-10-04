@@ -437,6 +437,8 @@ def _stage_text(funnel: dict | None) -> str:
         return f"트윗 {f.get('scraped', 0)}"
     if "keywords" in f:
         return f"검색어 {f.get('searched', 0)}/{f.get('keywords', 0)} · 글 {f.get('listed', 0)}"
+    if "entries" in f:
+        return f"피드 항목 {f.get('entries', 0)} · 키워드 {f.get('passed', 0)}"
     if "deduped" in f:
         return f"기사 링크 {f.get('deduped', 0)} · 제목 확인 {f.get('titled', 0)}"
     return "—"
