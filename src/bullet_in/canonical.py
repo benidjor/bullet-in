@@ -3,7 +3,9 @@ import re
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 _TRACKING_PREFIXES = ("utm_", "fbclid", "gclid", "smid", "source",
-                      "unlocked_article_code")
+                      "unlocked_article_code",
+                      # BBC 아스날 RSS 의 link 에 붙는다 (설계 2026-10-05 §2.5 · 저장 주소 0건이라 기존 해시 불변)
+                      "at_medium", "at_campaign")
 
 # 같은 기사가 주소만 갈려 두 행이 되던 자리 (안건 ρ · 920행 전량 대조 · 과잉 병합 0).
 #

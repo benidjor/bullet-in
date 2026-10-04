@@ -41,3 +41,15 @@ def test_canonical_drops_added_tracking_params():
     b = canonical_url("https://www.nytimes.com/athletic/7460471/2026/07/21/x"
                       "?source=articleShare&unlocked_article_code=abc")
     assert a == b == "https://www.nytimes.com/athletic/7460471/2026/07/21"
+
+
+def test_canonical_strips_bbc_rss_tracking_and_folds_host():
+    # BBC 아스날 RSS 의 link 그대로 (2026-10-04 실측) — 팀 페이지 시절 저장 주소와 같은 키가 돼야 한다
+    rss = canonical_url("https://www.bbc.co.uk/sport/football/articles/ckd68e40ze3jo"
+                        "?at_medium=RSS&at_campaign=rss")
+    assert rss == "https://www.bbc.com/sport/football/articles/ckd68e40ze3jo"
+
+
+def test_canonical_keeps_other_params_starting_with_at():
+    # 두 이름만 지운다 — 다른 사이트의 정상 인자는 남긴다 (설계 §2.5)
+    assert canonical_url("https://x.test/a?at=1&atlas=2") == "https://x.test/a?at=1&atlas=2"
