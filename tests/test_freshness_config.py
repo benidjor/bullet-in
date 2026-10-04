@@ -32,3 +32,16 @@ def test_stopped_source_is_excluded_from_watch():
     assert stopped, "수집 중단 소스가 없으면 이 계약을 검사할 대상도 없다"
     for sid in stopped:
         assert _sources()[sid].get("freshness_hours") == 0, sid
+
+
+def test_bbc_sport_reads_the_arsenal_rss():
+    """팀 페이지가 피드 모양으로 바뀌어 RSS 로 옮겼다 (설계 2026-10-05).
+
+    RSS 는 조용한 주에 135시간 넘게 그대로라 전역 상한 48h 로는 거짓 끊김이 난다."""
+    s = _sources()["bbc_sport"]
+    assert s["adapter"] == "rss"
+    assert s["config"]["feed_url"] == "https://feeds.bbci.co.uk/sport/football/teams/arsenal/rss.xml"
+    assert s["config"]["body_selector"] == "article"
+    assert "transfer" in s["config"]["title_contains"]
+    assert s["list_unchanged_cap_hours"] == 240
+    assert "list_url" not in s["config"] and "item_selector" not in s["config"]

@@ -1070,3 +1070,13 @@ def test_funnel_lines_for_x_and_fmkorea():
 ])
 def test_run_label(run_id, label):
     assert notify.run_label(run_id) == label
+
+
+def test_broken_reason_no_entries():
+    _, r = _broken_rec("no_entries")
+    assert notify.broken_reason_text(r, {"entries": 0}, None) == "피드 항목 0개 · 2회 연속"
+
+
+def test_funnel_lines_rss_three_stages():
+    assert notify._funnel_lines({"entries": 24, "deduped": 24, "passed": 5, "list_sig": "x"}) == \
+        ["수집 단계 기록: 피드 항목 24 → URL 24 → 키워드 5"]

@@ -136,3 +136,12 @@ def test_sources_marked_not_to_collect_stay_in_the_display_config():
             {"source_id": "stopped", "adapter": "rss", "collect": False,
              "outlet": "Goal.com", "serving": "full", "tier": 4}]}))
         assert "stopped" in load_sources(p)
+
+
+def test_rss_adapter_gets_keywords_and_body_selector():
+    cfg = {"sources": [{"source_id": "bbc_sport", "adapter": "rss",
+                        "config": {"feed_url": "https://feeds.test/a.xml",
+                                   "title_contains": ["deal"], "body_selector": "article"}}]}
+    a = build_adapters(cfg)[0]
+    assert (a.feed_url, a.title_keywords, a.body_selector) == \
+        ("https://feeds.test/a.xml", ["deal"], "article")

@@ -336,3 +336,9 @@ def test_slo_절은_dbt_게이트_세그폴트_횟수를_한_줄로_적는다():
 def test_slo_절은_계수가_없으면_그_줄을_안_적는다():
     slo = _flat(_view())[0]
     assert not any("재시도로 지나간" in t for t, _ in slo["insights"])
+
+
+def test_stage_text_reads_rss_funnel():
+    from bullet_in.serve.ops_view import _stage_text
+    assert _stage_text({"entries": 24, "deduped": 24, "passed": 5, "list_sig": "x"}) == \
+        "피드 항목 24 · 키워드 5"

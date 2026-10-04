@@ -127,8 +127,9 @@ SLO-5 는 이제 「끊긴 소스」 만 센다 (스펙 `docs/superpowers/specs/
 | --- | --- | --- |
 | 무응답 2회 연속 | 코드 (`quality.evaluate_states`) | 목록이 응답하지 않으면 끊김 |
 | 제목 확인 비율 절반 | 코드 (`quality.responded`) | HTML 목록에서 제목까지 확인된 링크가 절반보다 적으면 무응답 |
+| 피드 항목 0개 (`no_entries`) · 링크 0개 (`no_links`) | 코드 (`quality.responded` 의 rss 분기) | RSS 소스 (BBC Sport) 는 이때 그 실행을 무응답으로 본다 |
 | `list_unchanged_cap_hours: 48` | `config/sources.yaml` (맨 위 · 전역) | 목록이 48시간 넘게 그대로면 끊김 |
-| `list_unchanged_cap_hours: 288` · `240` | `config/sources.yaml` (Sky Sports · Ornstein 항목) | 그 소스만 상한을 12일 · 10일로 |
+| `list_unchanged_cap_hours: 288` · `240` · `240` | `config/sources.yaml` (Sky Sports · Ornstein · BBC Sport 항목) | 그 소스만 상한을 12일 · 10일 · 10일로 |
 | `blocked_miss_runs: 8` | `config/sources.yaml` (fmkorea) | 검색 전부 430 (일시 차단) 만 이어지면 8회 (24시간) 째에 끊김 |
 
 무응답이 처음 한 번이면 화면에 「응답 없음 1회」 만 보이고 알림은 없다.

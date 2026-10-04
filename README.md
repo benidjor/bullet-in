@@ -76,7 +76,7 @@ advance -> collect -> enrich -> publish -> gate -> deploy_site -> judge
 | 태스크 | 하는 일 |
 |---|---|
 | `advance` | `origin/main` 내려받기 (사람이 운영 서버에서 pull 하지 않는 구조) |
-| `collect` | 수집 소스 8종을 어댑터 4종으로 `asyncio` 병렬 수집 → 정규화 → URL · `content_hash` 기준 중복 제거 → 공신력 tier 산출 → Bronze · Silver 적재 |
+| `collect` | 수집 소스 8종을 어댑터 5종으로 `asyncio` 병렬 수집 → 정규화 → URL · `content_hash` 기준 중복 제거 → 공신력 tier 산출 → Bronze · Silver 적재 |
 | `enrich` | Gemini API 로 번역 · 요약 · 영입 단계 분류 (신규 행만 처리하는 멱등 설계) |
 | `publish` | 정적 HTML 렌더 (기사 · 선수 · 대시보드 2종) · 실행 기록 · 신선도 판정 |
 | `gate` | `dbt build` 와 테스트 22종 (DuckDB 가 MariaDB 를 attach) · 실패 시 배포 중단 |
@@ -128,7 +128,7 @@ systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 �
 | 소스 | tier | 어댑터 | 비고 |
 |---|---|---|---|
 | Arsenal.com | 0 | arsenal_api | 공식: 공홈 GraphQL API, taxonomy 필터 (이적 · 1군 재계약) |
-| BBC Sport | 1.5 | html | 비전담 기준선: 전담 기자 (Mokbel) 는 tier 1 로 상향 |
+| BBC Sport | 1.5 | rss | 아스날 RSS (2026-10 팀 페이지에서 전환) · 비전담 기준선: 전담 기자 (Mokbel) 는 tier 1 로 상향 |
 | Sky Sports | 2 | html | 비전담 기준선: 전담 기자 (Sheth) 는 tier 1.5 로 상향 |
 | The Guardian | 3 | guardian_api | Open Platform API (`GUARDIAN_API_KEY` 필요) |
 | Goal.com | 4 | html | 정적 서빙 확인 후 playwright → html 전환 (2026-07) |
