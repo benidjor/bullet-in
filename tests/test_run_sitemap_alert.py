@@ -21,8 +21,13 @@ def test_margin_counts_the_current_run_and_the_29_before_it():
 
 
 def test_margin_with_short_history():
-    assert slo2_margin([1.0, 0.875], 0.875, 8) == (2, 2, 3)
-    assert slo2_margin([], 1.0, 8) == (0, 2, 1)
+    assert slo2_margin([1.0, 0.875], 0.875, 8) == (2, 0, 3)
+    assert slo2_margin([], 1.0, 8) == (0, 0, 1)
+
+
+def test_margin_counts_each_failed_source_not_each_failed_run():
+    # 실행 둘이 각각 소스 둘을 잃음 (0.75) — 실패한 실행은 2회지만 소스 실패는 4 · 한도 2 를 넘는다
+    assert slo2_margin([0.75] + [1.0] * 28, 0.75, 8) == (4, 2, 30)
 
 
 def test_payload_when_official_sitemap_failed_after_retry():

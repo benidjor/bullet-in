@@ -230,6 +230,7 @@ def test_sitemap_timeout_then_ok_retries_once(caplog):
                and r.levelname == "WARNING" for r in caplog.records)
     assert any("사이트맵" in r.message and "시도 2" in r.message
                and r.levelname == "INFO" for r in caplog.records)
+    assert not any("· 실패" in r.message for r in caplog.records)
 
 
 @respx.mock
@@ -245,11 +246,12 @@ def test_sitemap_503_then_ok_records_status_code():
 
 
 @respx.mock
-def test_sitemap_404_fails_without_retry():
+def test_sitemap_404_fails_without_retry(caplog):
     route = respx.get(SITEMAP_URL).mock(return_value=httpx.Response(404))
     a = _wide()
-    with pytest.raises(httpx.HTTPStatusError):
+    with caplog.at_level("INFO"), pytest.raises(httpx.HTTPStatusError):
         asyncio.run(a.fetch())
+    assert any("시도 1 · 실패" in r.message and r.levelname == "INFO" for r in caplog.records)
     assert route.call_count == 1
     assert a.funnel["sitemap_attempts"] == 1
     assert a.funnel["sitemap_first_error"] == "404"
@@ -257,12 +259,13 @@ def test_sitemap_404_fails_without_retry():
 
 
 @respx.mock
-def test_sitemap_timeout_twice_raises_and_keeps_the_record():
+def test_sitemap_timeout_twice_raises_and_keeps_the_record(caplog):
     route = respx.get(SITEMAP_URL).mock(side_effect=[
         httpx.ReadTimeout("timed out"), httpx.ReadTimeout("timed out")])
     a = _wide()
-    with pytest.raises(httpx.ReadTimeout):
+    with caplog.at_level("INFO"), pytest.raises(httpx.ReadTimeout):
         asyncio.run(a.fetch())
+    assert any("시도 2 · 실패" in r.message and r.levelname == "INFO" for r in caplog.records)
     assert route.call_count == 2
     assert a.funnel["sitemap_attempts"] == 2
     assert a.funnel["sitemap_first_error"] == "ReadTimeout"

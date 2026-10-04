@@ -1150,3 +1150,13 @@ def test_funnel_lines_reads_sitemap_record():
         "수집 단계 기록: 사이트맵 시도 2 · 10.4초 · 1차 실패 ReadTimeout"]
     assert _funnel_lines({"sitemap_attempts": 1, "sitemap_sec": 0.4}) == [
         "수집 단계 기록: 사이트맵 시도 1 · 0.4초"]
+
+
+def test_sitemap_alert_for_other_4xx_does_not_blame_the_address():
+    p = build_sitemap_failure_alert(
+        {"sitemap_attempts": 1, "sitemap_first_error": "403"},
+        "Client error '403 Forbidden' for url 'https://www.arsenal.com/sitemaps/articles/1/sitemap.xml'",
+        failed_runs=1, allowed_runs=2, window=30, run_id=RID)
+    assert "사유: 403 (재시도 안 함)" in p["description"]
+    assert "주소" not in p["description"]
+    assert "접근이 막혔는지" in p["description"]

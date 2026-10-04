@@ -439,7 +439,8 @@ def build_sitemap_failure_alert(funnel: dict, error: str | None, *, failed_runs:
         todo = "아스날 공식 사이트 쪽 일시 장애로 보입니다 — 다음 실행에서 대개 풀립니다"
     else:
         reason = f"{first} (재시도 안 함)"
-        todo = "사이트맵 주소가 바뀌었을 수 있습니다 — 주소를 확인해 주세요"
+        todo = ("사이트맵 주소가 바뀌었을 수 있습니다 — 주소를 확인해 주세요" if first == "404"
+                else "재시도하지 않는 응답입니다 — 접근이 막혔는지 확인해 주세요")
     return {"title": "⚠️ 공식 소스 사이트맵 수집 실패 — 이번 실행 공식 기사 0건",
             "description": f"사유: {reason}\n{todo}",
             "color": COLOR_FAILURE,

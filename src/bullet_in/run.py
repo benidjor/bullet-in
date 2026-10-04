@@ -322,13 +322,14 @@ def cliff_alert_payload(candidate_counts: dict, history: list[dict], *,
 
 def slo2_margin(previous_rates: list[float], current_rate: float,
                 n_sources: int) -> tuple[int, int, int]:
-    """(소스 실패 실행 수, 충족 한도, 창 길이) — 수집 현황 화면의 SLO-2 와 같은 창 (설계 2026-10-05 §4.2).
+    """(소스 실패, 충족 한도, 창 길이) — 수집 현황 화면의 SLO-2 와 같은 창 (설계 2026-10-05 §4.2).
 
-    창 = 이번 실행 + 직전 29회. 「소스 실패」 는 성공률이 1 보다 작은 실행이다.
-    한도는 실행마다 소스 하나가 실패한다고 보고 센다 — 30 × (1 − 0.99) × 8 = 2.4 → 2."""
+    창 = 이번 실행 + 직전 29회. 「소스 실패」 는 창 안에서 실패한 소스 수의 합이다
+    (실행마다 (1 − 성공률) × 소스 수) — 한 실행에 소스 하나만 실패하면 실패한 실행 수와 같다.
+    한도 = 창 길이 × (1 − 0.99) × 소스 수 를 내림 (30회 · 8개면 2.4 → 2)."""
     window = [current_rate, *previous_rates[:RECENT_RUNS - 1]]
-    failed = sum(1 for r in window if r < 1)
-    allowed = math.floor(round(RECENT_RUNS * (1 - SLO2_TARGET) * n_sources, 6))
+    failed = round(sum(1 - r for r in window) * n_sources)
+    allowed = math.floor(round(len(window) * (1 - SLO2_TARGET) * n_sources, 6))
     return failed, allowed, len(window)
 
 

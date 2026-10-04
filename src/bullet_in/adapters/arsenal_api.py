@@ -144,9 +144,12 @@ class ArsenalApiAdapter:
         채워 실패한 실행에도 남는다 (설계 §3.1)."""
         t0 = time.perf_counter()
         self.funnel = {"sitemap_attempts": 1}
+        ok = False
         try:
             try:
-                return await self._get_sitemap(client)
+                text = await self._get_sitemap(client)
+                ok = True
+                return text
             except httpx.HTTPError as e:
                 self.funnel["sitemap_first_error"] = _error_label(e)
                 if not _retryable(e):
@@ -156,11 +159,14 @@ class ArsenalApiAdapter:
                             self.funnel["sitemap_first_error"])
             await asyncio.sleep(SITEMAP_RETRY_WAIT_SEC)
             self.funnel["sitemap_attempts"] = 2
-            return await self._get_sitemap(client)
+            text = await self._get_sitemap(client)
+            ok = True
+            return text
         finally:
             self.funnel["sitemap_sec"] = round(time.perf_counter() - t0, 1)
-            log.info("%s: 사이트맵 %.1f초 · 시도 %d", self.source_id,
-                     self.funnel["sitemap_sec"], self.funnel["sitemap_attempts"])
+            log.info("%s: 사이트맵 %.1f초 · 시도 %d%s", self.source_id,
+                     self.funnel["sitemap_sec"], self.funnel["sitemap_attempts"],
+                     "" if ok else " · 실패")
 
     async def fetch(self) -> list[RawItem]:
         now = datetime.now(timezone.utc)
