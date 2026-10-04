@@ -118,6 +118,14 @@ def responded(adapter: str | None, funnel: dict | None,
         if not funnel.get("list_sig"):
             return False, "no_record"
         return True, ""
+    if adapter == "rss":
+        # 피드가 200 이어도 피드가 아닌 페이지면 항목이 0개다 (설계 2026-10-05 §3.1)
+        if int(funnel.get("entries", 0)) == 0:
+            return False, "no_entries"
+        # 수집 단계 기록이 없으면 목록 서명을 얻지 못했다 (스펙 2026-10-02 §2.2.4)
+        if not funnel.get("list_sig"):
+            return False, "no_record"
+        return True, ""
     return True, ""
 
 

@@ -673,3 +673,14 @@ def test_per_source_cap_still_breaks_past_its_own_cap():
     evaluate_states([r], {"skysports": (True, "")}, {"skysports": "s1"}, 48.0,
                     {"skysports": prev}, _T0, cap_overrides={"skysports": 288.0})
     assert (r.state, r.reason, r.cap_hours) == ("broken", "list_unchanged", 288.0)
+
+
+def test_responded_rss_needs_entries_and_signature():
+    ok = {"entries": 24, "deduped": 24, "passed": 5, "list_sig": "abc"}
+    assert responded("rss", ok, errored=False) == (True, "")
+    assert responded("rss", {**ok, "passed": 0}, errored=False) == (True, "")   # 키워드 0 은 조용함의 몫
+    assert responded("rss", {"entries": 0, "deduped": 0, "passed": 0, "list_sig": ""},
+                     errored=False) == (False, "no_entries")
+    assert responded("rss", {**ok, "list_sig": ""}, errored=False) == (False, "no_record")
+    assert responded("rss", ok, errored=True) == (False, "error")
+    assert responded("rss", None, errored=False) == (False, "no_record")
