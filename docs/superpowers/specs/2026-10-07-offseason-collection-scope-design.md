@@ -67,7 +67,7 @@ BBC Gossip · X 두 계정 · fmkorea 는 이적 키워드를 쓰지 않는다.
 ### 2.2. 이름 재료
 
 명단 (`players` 표) 에서 `status='confirmed'` 이고 `category` 가 `squad` 또는 `manager` 인 사람의 `full_name` 과 `surname` 을 쓴다.
-2026-10-06 기준 1군 41명과 감독 1명이다.
+2026-10-06 기준 1군 40명과 감독 1명, 모두 41명이다.
 
 명단에는 별칭 칸이 없어서, 설정 두 줄을 `config/sources.yaml` 에 둔다.
 
