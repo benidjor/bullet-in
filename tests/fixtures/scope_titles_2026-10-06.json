@@ -1,0 +1,674 @@
+{
+ "_note": "2026-10-06 실측 · 목록 제목 (상세 미수집) · 명단 = players confirmed squad + manager · 설계 2026-10-07 §2.3 · §3.4",
+ "roster": [
+  [
+   "Mikel Arteta",
+   "Arteta"
+  ],
+  [
+   "Riccardo Calafiori",
+   "Calafiori"
+  ],
+  [
+   "Jaden Dixon",
+   "Dixon"
+  ],
+  [
+   "Axel Donczew",
+   "Donczew"
+  ],
+  [
+   "Max Dowman",
+   "Dowman"
+  ],
+  [
+   "Eberechi Eze",
+   "Eze"
+  ],
+  [
+   "Bruno Guimaraes",
+   "Guimaraes"
+  ],
+  [
+   "Viktor Gyokeres",
+   "Gyokeres"
+  ],
+  [
+   "Kai Havertz",
+   "Havertz"
+  ],
+  [
+   "Piero Hincapie",
+   "Hincapie"
+  ],
+  [
+   "Gabriel Jesus",
+   "Jesus"
+  ],
+  [
+   "Ismeal Kabia",
+   "Kabia"
+  ],
+  [
+   "Kepa Arrizabalaga",
+   "Kepa"
+  ],
+  [
+   "Ezri Konsa",
+   "Konsa"
+  ],
+  [
+   "Myles Lewis-Skelly",
+   "Lewis-Skelly"
+  ],
+  [
+   "Noni Madueke",
+   "Madueke"
+  ],
+  [
+   "Gabriel Magalhaes",
+   "Magalhaes"
+  ],
+  [
+   "Gabriel Martinelli",
+   "Martinelli"
+  ],
+  [
+   "Mikel Merino",
+   "Merino"
+  ],
+  [
+   "Illan Meslier",
+   "Meslier"
+  ],
+  [
+   "Cristhian Mosquera",
+   "Mosquera"
+  ],
+  [
+   "Eddie Nketiah",
+   "Nketiah"
+  ],
+  [
+   "Ethan Nwaneri",
+   "Nwaneri"
+  ],
+  [
+   "Martin Odegaard",
+   "Odegaard"
+  ],
+  [
+   "Habeeb Ogunneye",
+   "Ogunneye"
+  ],
+  [
+   "David Raya",
+   "Raya"
+  ],
+  [
+   "Declan Rice",
+   "Rice"
+  ],
+  [
+   "Charles Sagoe Jr",
+   "Sagoe"
+  ],
+  [
+   "Bukayo Saka",
+   "Saka"
+  ],
+  [
+   "William Saliba",
+   "Saliba"
+  ],
+  [
+   "Marli Salmon",
+   "Salmon"
+  ],
+  [
+   "James Scanlon",
+   "Scanlon"
+  ],
+  [
+   "Tommy Setford",
+   "Setford"
+  ],
+  [
+   "Jurrien Timber",
+   "Timber"
+  ],
+  [
+   "Igor Tyjon",
+   "Tyjon"
+  ],
+  [
+   "Christos Tzolis",
+   "Tzolis"
+  ],
+  [
+   "Elijah Upson",
+   "Upson"
+  ],
+  [
+   "Fabio Vieira",
+   "Vieira"
+  ],
+  [
+   "Ben White",
+   "White"
+  ],
+  [
+   "Oleksandr Zinchenko",
+   "Zinchenko"
+  ],
+  [
+   "Martin Zubimendi",
+   "Zubimendi"
+  ]
+ ],
+ "press": {
+  "bbc_sport": [
+   "Arteta helped me understand the game - Wilshere",
+   "Whittaker wants his next opponent to be... Arsenal?",
+   "Arsenal should have won Premier League sooner - Wilshere",
+   "How should Man City be punished? Fans have their say!",
+   "'I see Arsenal winning the league despite Brighton blip'",
+   "Bournemouth to resist interest in Scott until the summer",
+   "Man Utd and Arsenal wins among 'best in Brighton's history'",
+   "Award winner to fourth choice - what has gone wrong for Ramsdale?",
+   "Carsley urges patience over Dowman and England",
+   "Arteta agrees new deal with champions Arsenal",
+   "Brighton humbling 'a big lesson' for Arsenal - Arteta",
+   "Arsenal open to Dowman loan in right circumstances",
+   "Arteta responds to journalist's wishes over new contract",
+   "'This player should be in the next England squad...'",
+   "League Two Fleetwood host Arsenal in EFL Cup",
+   "What are the Premier League rules for academy players?",
+   "'Superstar' Dowman shows his class - but Arsenal know caution is needed",
+   "Is the Premier League already a two-team title race?",
+   "Arsenal to contact Pro Ref over Konsa penalty",
+   "'Today the game was unprotected' - Arteta fumes but Arsenal survive",
+   "Guimaraes and Raya crucial - Sunderland v Arsenal player ratings",
+   "I disrupted pre-season travel plans to prepare players - Arteta",
+   "Arteta's suprise tactics to deal with travel issues",
+   "Arsenal close to finalising new contract for Arteta"
+  ],
+  "skysports": [
+   "Havertz returning to Arsenal after suffering injury with Germany",
+   "Can Arteta turn champions into serial winners?",
+   "Arteta agrees new Arsenal contract",
+   "Premier League so far: Writers' verdicts on Man Utd, Spurs and more",
+   "'It's absolutely crazy!' The tiny club that made Arteta, Alonso and Iraola",
+   "Liverpool vs Man Utd, Arsenal vs Man City live on Sky - November fixtures here",
+   "Merson: There's no way Man City win the league",
+   "Arteta: We didn't respect the game against Brighton",
+   "Hits and misses: Spurs hit self-destruct again as Arsenal prove imperfect",
+   "Papers: Mudryk preferred Arsenal before Chelsea move",
+   "Arteta: Dowman could go out on loan in future"
+  ],
+  "guardian": [
+   "Arsenal shelve plans for major expansion of Emirates Stadium",
+   "How important is a fast start for teams chasing the Premier League title?",
+   "Arsène Wenger and Arsenal: 30 years on from appointment that changed English football",
+   "Have Arsenal been figured out? Three big questions after Brighton’s upset",
+   "Slip sliding away: football season-ticket holders fear falling down pecking order",
+   "Mikel Arteta agrees contract extension expected to keep him at Arsenal until 2030",
+   "Premier League: 10 talking points from the weekend’s action",
+   "‘They deserved to win’: Mikel Arteta left humbled by Brighton defeat",
+   "Brighton demolish champions Arsenal 3-0 to mark anniversary in style",
+   "Premier League today: How to watch Brighton v Arsenal, TV channels & live stream Saturday 19 September",
+   "Premier League news: Carrick brushes aside questions over future, Arteta salutes ‘extraordinary’ Dowman",
+   "We wanted to let Max Dowman bloom in the shadows but he has become hard to ignore",
+   "Premier League: 10 things to look out for this weekend",
+   "‘They are very similar’: Arsenal’s Dowman reminds Merino of Lamine Yamal",
+   "Ipswich Town 2-4 Arsenal: Carabao Cup third round – as it happened",
+   "Max Dowman doubles up for Arsenal’s back-ups to beat Ipswich in Carabao Cup",
+   "VAR controversy decides Manchester derby as City keep pace with Arsenal – Football Weekly",
+   "Arsenal demand meeting with Pro Ref over penalty decision at Sunderland",
+   "Premier League: 10 talking points from the weekend’s action",
+   "Arteta embraces perfect storm to play the victim in game of his own making"
+  ]
+ },
+ "official": [
+  {
+   "title": "Myles Lewis-Skelly nominated for Golden Boy Award",
+   "articleType": "News",
+   "taxonomies": [
+    "News",
+    "Main",
+    "Men",
+    "Text Article",
+    "2026-2027",
+    "Awards",
+    "Know",
+    "Hygiene",
+    "Myles Lewis-Skelly",
+    "Arsenal (internal)"
+   ]
+  },
+  {
+   "title": "Pictures: Jack Wilshere through the years",
+   "articleType": "News",
+   "taxonomies": [
+    "Men",
+    "Hygiene",
+    "Main",
+    "News",
+    "Text Article",
+    "Arsenal (internal)",
+    "Feel",
+    "2017-2018"
+   ]
+  },
+  {
+   "title": "Wrighty's Arsenal career in pictures",
+   "articleType": "News",
+   "taxonomies": [
+    "Main",
+    "Photos",
+    "Hygiene",
+    "From the vault",
+    "Men",
+    "Arsenal (internal)",
+    "News",
+    "Photos",
+    "Feel"
+   ]
+  },
+  {
+   "title": "71 incredible photos from our win over Real Madrid",
+   "articleType": "News",
+   "taxonomies": [
+    "Main",
+    "Match gallery",
+    "Win",
+    "News",
+    "Photos",
+    "Real Madrid CF",
+    "Know",
+    "Men",
+    "Hygiene",
+    "2024-2025",
+    "Arsenal (internal)",
+    "UEFA Champions League"
+   ]
+  },
+  {
+   "title": "William Saliba takes on AMA on our Reddit channel",
+   "articleType": "News",
+   "taxonomies": [
+    "Arsenal (internal)",
+    "Main",
+    "Know",
+    "Text Article",
+    "Men",
+    "2025-2026",
+    "Hygiene",
+    "News",
+    "William Saliba"
+   ]
+  },
+  {
+   "title": "Odegaard assists as Norway lose in Porto",
+   "articleType": "News",
+   "taxonomies": [
+    "Main",
+    "Hygiene",
+    "Arsenal (internal)",
+    "Know",
+    "Text Article",
+    "News",
+    "Internationals",
+    "Men"
+   ]
+  },
+  {
+   "title": "Saka at the double and Merino scores for Spain",
+   "articleType": "News",
+   "taxonomies": [
+    "Internationals",
+    "Know",
+    "News",
+    "Hygiene",
+    "Arsenal (internal)",
+    "Main",
+    "Text Article",
+    "Men"
+   ]
+  },
+  {
+   "title": "Watch every Premier League goal scored under Arsene Wenger!",
+   "articleType": "News",
+   "taxonomies": [
+    "Compilation",
+    "Know",
+    "Hygiene",
+    "Text Article",
+    "Main",
+    "Premier League",
+    "News",
+    "Arsenal (internal)",
+    "Men"
+   ]
+  },
+  {
+   "title": "Gyokeres makes Nations League history for Sweden",
+   "articleType": "News",
+   "taxonomies": [
+    "News",
+    "Hygiene",
+    "Men",
+    "Arsenal (internal)",
+    "Text Article",
+    "Main",
+    "Internationals",
+    "2026-2027",
+    "Know"
+   ]
+  },
+  {
+   "title": "Raya wins Premier League Save of the Month",
+   "articleType": "News",
+   "taxonomies": [
+    "Know",
+    "Hygiene",
+    "Men",
+    "News",
+    "Arsenal (internal)",
+    "Premier League",
+    "Text Article",
+    "David Raya",
+    "2026-2027",
+    "Main",
+    "Awards"
+   ]
+  },
+  {
+   "title": "Disabled Supporters' Ticket Information | Fleetwood Town (A)",
+   "articleType": "News",
+   "taxonomies": [
+    "Know",
+    "Main",
+    "EFL Cup",
+    "Hygiene",
+    "Text Article",
+    "Fleetwood Town FC",
+    "Men",
+    "Arsenal (internal)",
+    "News"
+   ]
+  },
+  {
+   "title": "Inside Training: Building over the break",
+   "articleType": "News",
+   "taxonomies": [
+    "Main",
+    "Hygiene",
+    "Know",
+    "Text Article",
+    "Inside Training",
+    "Arsenal (internal)",
+    "Men",
+    "News",
+    "2026-2027"
+   ]
+  },
+  {
+   "title": "Help Arteta win Premier League Manager of the Season",
+   "articleType": "News",
+   "taxonomies": [
+    "News",
+    "2025-2026",
+    "Know",
+    "Text Article",
+    "Awards",
+    "Hygiene",
+    "Main",
+    "Men",
+    "Premier League",
+    "Arsenal (internal)"
+   ]
+  },
+  {
+   "title": "Kai Havertz takes on Ask Me Anything",
+   "articleType": "News",
+   "taxonomies": [
+    "Main",
+    "Know",
+    "Text Article",
+    "News",
+    "Men",
+    "Arsenal (internal)",
+    "Hygiene",
+    "Kai Havertz",
+    "2026-2027"
+   ]
+  },
+  {
+   "title": "Scanlon scores and Odegaard assists in Nations League",
+   "articleType": "News",
+   "taxonomies": [
+    "Main",
+    "Internationals",
+    "News",
+    "Hygiene",
+    "2026-2027",
+    "Know",
+    "Arsenal (internal)",
+    "Men",
+    "Text Article"
+   ]
+  },
+  {
+   "title": "Match of the Week: Wenger's first Arsenal game",
+   "articleType": "News",
+   "taxonomies": [
+    "Hygiene",
+    "Blackburn Rovers",
+    "Men",
+    "Arsenal (internal)",
+    "Know",
+    "Premier League",
+    "Main",
+    "Full match",
+    "News",
+    "Text Article",
+    "Win"
+   ]
+  },
+  {
+   "title": "All Or Nothing: Arteta's motivational team talk",
+   "articleType": "News",
+   "taxonomies": [
+    "News",
+    "Mikel Arteta",
+    "Feel",
+    "2021-2022",
+    "Text Article",
+    "Men",
+    "3rd Party",
+    "Hub",
+    "Behind the Scenes",
+    "Main"
+   ]
+  },
+  {
+   "title": "Disabled Supporters' Ticket Information | Real Madrid (H)",
+   "articleType": "News",
+   "taxonomies": [
+    "News",
+    "Text Article",
+    "Know",
+    "Real Madrid CF",
+    "Main",
+    "Hygiene",
+    "Men",
+    "Arsenal (internal)",
+    "UEFA Champions League"
+   ]
+  },
+  {
+   "title": "22 stats for 22 years of Arsène Wenger at Arsenal",
+   "articleType": "News",
+   "taxonomies": [
+    "News",
+    "Understand",
+    "Men",
+    "Hygiene",
+    "Text Article",
+    "Stats"
+   ]
+  },
+  {
+   "title": "Vote for your men's Player of the Month for September",
+   "articleType": "News",
+   "taxonomies": [
+    "Do Something",
+    "Main",
+    "Men's Player of the Month",
+    "Men",
+    "2025-2026",
+    "Arsenal (internal)",
+    "News",
+    "Gamification",
+    "Hygiene"
+   ]
+  },
+  {
+   "title": "Disabled Supporters' Ticket Information | Liverpool (A)",
+   "articleType": "News",
+   "taxonomies": [
+    "Men",
+    "Hygiene",
+    "Liverpool",
+    "Premier League",
+    "Know",
+    "Arsenal (internal)",
+    "Text Article",
+    "News",
+    "Main"
+   ]
+  },
+  {
+   "title": "Bruno scores for Brazil and Merino assists in Spain win",
+   "articleType": "News",
+   "taxonomies": [
+    "Arsenal (internal)",
+    "Men",
+    "Hygiene",
+    "Internationals",
+    "Main",
+    "Text Article",
+    "News",
+    "Know"
+   ]
+  },
+  {
+   "title": "Access All Areas on our big night against Madrid",
+   "articleType": "News",
+   "taxonomies": [
+    "UEFA Champions League",
+    "Main",
+    "Real Madrid CF",
+    "Feel",
+    "Video",
+    "2024-2025",
+    "Hygiene",
+    "News",
+    "Men",
+    "Win"
+   ]
+  },
+  {
+   "title": "Our best men's goals from 2024!",
+   "articleType": "News",
+   "taxonomies": [
+    "Main",
+    "Compilation",
+    "Hygiene",
+    "Arsenal (internal)",
+    "Text Article",
+    "Know",
+    "Men",
+    "2024-2025",
+    "News"
+   ]
+  },
+  {
+   "title": "Watch the best men’s skills from 2024!",
+   "articleType": "News",
+   "taxonomies": [
+    "Know",
+    "News",
+    "Hygiene",
+    "Main",
+    "Compilation",
+    "2024-2025",
+    "Text Article",
+    "Men",
+    "Arsenal (internal)"
+   ]
+  },
+  {
+   "title": "Raya talks all things goalkeeping with Seaman",
+   "articleType": "News",
+   "taxonomies": [
+    "Main",
+    "Text Article",
+    "Know",
+    "News",
+    "Men",
+    "Hygiene",
+    "David Raya",
+    "Interview",
+    "Arsenal (internal)"
+   ]
+  },
+  {
+   "title": "Mikel Merino stars in Colney Carpool!",
+   "articleType": "News",
+   "taxonomies": [
+    "Main",
+    "News",
+    "Text Article",
+    "Arsenal (internal)",
+    "Mikel Merino",
+    "Hygiene",
+    "2024-2025",
+    "Colney Carpool",
+    "Know",
+    "Men"
+   ]
+  },
+  {
+   "title": "Watch a decade's worth of great derby day goals!",
+   "articleType": "News",
+   "taxonomies": [
+    "News",
+    "Know",
+    "Main",
+    "Text Article",
+    "Hygiene",
+    "Tottenham Hotspur",
+    "Men",
+    "Arsenal (internal)",
+    "Compilation"
+   ]
+  },
+  {
+   "title": "Gyokeres scores again in Sweden win",
+   "articleType": "News",
+   "taxonomies": [
+    "News",
+    "Arsenal (internal)",
+    "Main",
+    "Text Article",
+    "Know",
+    "Hygiene",
+    "Men",
+    "Internationals",
+    "2026-2027"
+   ]
+  }
+ ]
+}
