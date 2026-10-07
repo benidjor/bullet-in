@@ -157,7 +157,8 @@ sources:
     # 맞는 값이었고, #AFC 필터가 걸린 본인 계정에는 정상 동작 중에도 112회 중 103회가 stale 이었다.
     freshness_hours: 120
     # 기자 한 명의 타임라인이라 트윗을 안 하면 목록 전체가 멈춘다 (2026-10-03 실측 · 09-29 뒤 무트윗).
-    # 원본 공백 최장 228h (09-06 ~ 16) · 목록 침묵은 원본 공백보다 짧으므로 10일이면 지난 석 달 오탐 0 (스펙 §9).
+    # 원본 공백 최장 228h (09-06 ~ 16 · 수집 시각 기준) · 발행 시각으로 재면 저장된 트윗 사이 공백이 513h 까지 있어
+    # 「10일이면 지난 석 달 오탐 0」 은 성립하지 않는다 (스펙 §9.5.3 · 목록의 실제 침묵은 그보다 짧을 수 있다).
     list_unchanged_cap_hours: 240
     config: { handle: "David_Ornstein", max_tweets: 30, cookies_path: "x_cookies.json", self_source: true }
     enabled: true
