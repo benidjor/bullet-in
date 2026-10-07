@@ -136,6 +136,27 @@ def test_소스_커버리지는_회차_기록의_소스별_건수를_주로_묶�
     assert body.index(">BBC Sport<") < body.index(">fmkorea<") < body.index(">Dead<")   # 합 내림차순
 
 
+STOPPED = {"dead": {"display_name": "Dead", "stopped": {"date": "2026-08-15", "reason": "다른 소스와 중복"}},
+           "gone": {"display_name": "Gone.com", "stopped": {"date": "2026-07-30", "reason": "저품질 비중"}}}
+# gone 은 08/17 주에만 1건 — 멈춘 소스로 알리지 않으면 「살아난 뒤 빈 주」 로 잡힌다
+RUNS_GONE = {**SNAPSHOT, "runs_all": RUNS + [_run("g0", datetime(2026, 8, 20, 0, 0), 1, 0, counts={"gone": 1})]}
+
+
+def test_소스_커버리지는_멈춘_소스를_모르면_빈_주로_잡는다():
+    s = _sec(build_ops_view(RUNS_GONE, SOURCES, 0, NOW, gate=GATE), "sec-source-coverage")
+    assert ("살아난 뒤 빈 주가 있는 소스는 gone 다.", []) in s["insights"]   # 설정에 없어 원래 ID 로 찍힌다
+
+
+def test_소스_커버리지는_수집을_멈춘_소스를_이름과_결론에_따로_적는다():
+    s = _sec(build_ops_view(RUNS_GONE, SOURCES, 0, NOW, gate=GATE, stopped=STOPPED), "sec-source-coverage")
+    body = str(s["body"])
+    assert ">Gone.com (07-30 수집 중단)<" in body and ">Dead (08-15 수집 중단)<" in body
+    assert not any(i[0].startswith("살아난 뒤") for i in s["insights"])       # 멈춘 소스는 빈 주로 세지 않는다
+    assert ("수집을 멈춘 소스는 Gone.com (2026-07-30 · 저품질 비중) · "
+            "Dead (2026-08-15 · 다른 소스와 중복) 이다.", []) in s["insights"]  # 행 순서 (합 내림차순)
+    assert "수집을 멈춘 소스가 아닌데 빈 칸이 이어지면" in str(s["question"])
+
+
 def test_처리량은_주별_합과_중복률이다():
     s = _sec(_view(), "sec-throughput")
     body = str(s["body"])

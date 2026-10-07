@@ -88,3 +88,9 @@ def test_write_ops_는_완주율_파일이_없어도_그린다(tmp_path):
     write_ops(SNAPSHOT, SOURCES, tmp_path, anomaly_count=0, now=NOW, completion_path=tmp_path / "missing.json")
     html = (tmp_path / "ops.html").read_text()
     assert "감시 기록 없음" in html
+
+
+def test_write_ops_는_멈춘_소스를_수집_현황에_넘긴다(tmp_path):
+    stopped = {"gone": {"display_name": "Gone.com", "stopped": {"date": "2026-07-30", "reason": "저품질"}}}
+    write_ops(SNAPSHOT, SOURCES, tmp_path, anomaly_count=0, now=NOW, stopped=stopped)
+    assert "Gone.com (07-30 수집 중단)" in (tmp_path / "ops.html").read_text(encoding="utf-8")
