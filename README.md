@@ -468,7 +468,7 @@ Gold
 
 ```bash
 # 0. 환경
-cp .env.example .env          # 값 채우기 (Mongo · MariaDB · Gemini · Guardian · X)
+cp .env.example .env          # 값 채우기 (Mongo · MariaDB · Gemini · X)
 uv sync --extra dev
 uv run playwright install chromium
 
@@ -587,7 +587,7 @@ Airflow DAG 임포트는 별도 venv 에서 검증합니다 ([docs/MIGRATION.md]
 - X (ITK) 는 ToS 그레이존이라 버너 계정을 사용하고 자격증명은 `.env` 로 분리해 커밋하지 않습니다.
   개인 학습 용도입니다.
 - 모든 기사에 매체명과 원문 링크를 붙이고, 매체가 요청하면 해당 기사의 본문을 내리고 제목과 링크만 남깁니다.
-- 현재 10개 소스 모두 본문 전체를 한국어로 싣습니다 (`config/sources.yaml` 의 `serving: full`).
+- 설정에 등재된 10개 소스 모두 본문 전체를 한국어로 싣습니다 (`config/sources.yaml` 의 `serving: full` · 지금 수집하는 소스는 8종).
   번역 전문은 출처 표기 · 링크 · 비영리만으로 면책되지 않는다는 위험을 알고 받아들인 결정이며, 소스 단위로 요약과 앞부분 발췌만 싣도록 되돌리는 설정 (`serving: excerpt`) 이 준비돼 있습니다 ([결정 기록](docs/superpowers/specs/2026-07-20-deployment-mvp-track-design.md)).
 - 에펨코리아 경유 글은 원문 기사에 접속되면 원문을 번역하고, 유료 매체 (The Athletic) 이거나 원문 접속이 막히면 게시자가 옮긴 본문을 다시 써서 싣습니다.
   게시자가 퍼가기를 금지한 글은 게시글 이미지를 복제하지 않습니다 (본문은 다시 쓸 수 있지만 이미지는 그대로 옮기는 것이 되기 때문입니다).
