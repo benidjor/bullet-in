@@ -2048,7 +2048,8 @@ def write_ops(snapshot: dict, sources: dict, out_dir: str | Path,
               anomaly_count: int, now: datetime,
               unmatched: list[dict] | None = None,
               gate_path: str | Path | None = None,
-              completion_path: str | Path | None = None) -> None:
+              completion_path: str | Path | None = None,
+              stopped: dict | None = None) -> None:
     """수집 현황 site/ops.html 생성. 실패 격리는 호출부 (run.py) 책임.
 
     gate_path 는 직전 회차 게이트의 `dbt/target/run_results.json` 이다 — 회차의 gate
@@ -2056,6 +2057,7 @@ def write_ops(snapshot: dict, sources: dict, out_dir: str | Path,
     SLO-3 · 4 가 「게이트 결과 없음」 으로 그려진다.
     completion_path 는 매시 감시 타이머가 쓰는 `state/completion.json` 이다 (완주율 타일).
     없거나 깨져 있으면 타일은 「감시 기록 없음」 이다.
+    stopped 는 수집을 멈춘 소스 (`score.load_stopped_sources`) 다 — Source Coverage 가 따로 적는다.
     """
     import json
     from bullet_in.dbt_gate import gate_tally
@@ -2068,7 +2070,7 @@ def write_ops(snapshot: dict, sources: dict, out_dir: str | Path,
         except (OSError, ValueError):
             completion = None
     view = build_ops_view(snapshot, sources, anomaly_count, now, gate=gate, unmatched=unmatched,
-                          completion=completion)
+                          completion=completion, stopped=stopped)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "ops.html").write_text(render_ops(view), encoding="utf-8")

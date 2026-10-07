@@ -12,7 +12,7 @@ from bullet_in.ingest import gather_all
 from bullet_in.adapters.fmkorea import is_arsenal_relevant
 from bullet_in.canonical import content_hash, canonical_url
 from bullet_in.pipeline import to_articles
-from bullet_in.score import load_sources
+from bullet_in.score import load_sources, load_stopped_sources
 from bullet_in.credibility import load_registry, journalist_directory, outlet_directory
 from bullet_in.storage.mongo import RawStore
 from bullet_in.storage.mariadb import MartStore
@@ -724,7 +724,8 @@ def publish(run_id: str) -> None:
                   anomaly_count=len(anomalies), now=mart.db_now(),
                   unmatched=unmatched_articles(rows, pstore.linked_hashes()),
                   gate_path=Path("dbt") / "target" / "run_results.json",
-                  completion_path=Path("state") / "completion.json")
+                  completion_path=Path("state") / "completion.json",
+                  stopped=load_stopped_sources("config/sources.yaml"))
     except Exception:
         logging.getLogger(__name__).warning(
             "ops 뷰 생성 실패 — 파이프라인은 계속 진행", exc_info=True)

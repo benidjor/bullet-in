@@ -254,27 +254,37 @@ def _volume(runs_all, today: date, span_weeks: int):
     return _section("sec-ingestion-volume", title, sub, q, body, ins)
 
 
-def _coverage(runs_all, sources, today: date, span_weeks: int):
+def _coverage(runs_all, sources, today: date, span_weeks: int, stopped=None):
     title, sub = "Source Coverage", "소스 × 주 신규 기사"
     q = ("소스마다 주 단위로 새 기사 수를 보고 어느 소스가 언제 살아 있었는지 확인한다. "
          "실행 기록에 남은 소스별 건수라 재수집으로 날짜가 옮겨진 것과는 상관이 없다. "
-         "빈 칸이 이어지면 셀렉터가 깨졌거나 차단당한 구간이다.")
+         "수집을 멈춘 소스가 아닌데 빈 칸이 이어지면 셀렉터가 깨졌거나 차단당한 구간이다.")
+    stopped = stopped or {}
+
+    def name(s):
+        return (stopped.get(s) or {}).get("display_name") or _display(sources, s)
+
+    def label(s):
+        d = (stopped.get(s) or {}).get("stopped", {}).get("date")
+        return f"{name(s)} ({str(d)[5:]} 수집 중단)" if d else name(s)
+
     weeks = _weeks(OPS_EPOCH, today)
     cells = defaultdict(int)
     for r in runs_all:
         wk = _monday(r["started_at"].date())
         for sid, n in r["source_counts"].items():
             cells[(sid, wk)] += n
-    sids = set(sources or {}) | {sid for sid, _ in cells}
+    sids = set(sources or {}) | set(stopped) | {sid for sid, _ in cells}
     total = {sid: sum(v for (s, _), v in cells.items() if s == sid) for sid in sids}
     rows = sorted(sids, key=lambda s: (-total[s], s))
     full = {(s, w): cells.get((s, w), 0) for s in rows for w in weeks}
-    body = C.heatmap(rows, weeks, full, w=980, unit="건", rowlab=lambda s: _display(sources, s), collab=_wl)
+    # 이름 칸 210px — 「football.london (07-30 수집 중단)」 · 「afcstuff (aggregator)」 가 96px 에서 잘렸다
+    body = C.heatmap(rows, weeks, full, w=980, unit="건", rowlab=label, collab=_wl, label_w=210)
     ins = []
     if rows and total[rows[0]]:
-        ins.append((f"{span_weeks}주 합이 가장 큰 소스는 {_display(sources, rows[0])} {C.fmt(total[rows[0]])}건이다.", []))
+        ins.append((f"{span_weeks}주 합이 가장 큰 소스는 {name(rows[0])} {C.fmt(total[rows[0]])}건이다.", []))
         gappy = []
-        for s in rows:
+        for s in (s for s in rows if s not in stopped):
             seen = False
             for w in weeks[:-1]:                     # 이번 주는 아직 진행 중이라 안 센다
                 if full[(s, w)]:
@@ -283,7 +293,12 @@ def _coverage(runs_all, sources, today: date, span_weeks: int):
                     gappy.append(s)
                     break
         if gappy:
-            ins.append((f"살아난 뒤 빈 주가 있는 소스는 {' · '.join(_display(sources, s) for s in gappy)} 다.", []))
+            ins.append((f"살아난 뒤 빈 주가 있는 소스는 {' · '.join(name(s) for s in gappy)} 다.", []))
+    halted = [s for s in rows if s in stopped]
+    if halted:
+        ins.append(("수집을 멈춘 소스는 " + " · ".join(
+            f"{name(s)} ({stopped[s]['stopped']['date']} · {stopped[s]['stopped']['reason']})" for s in halted)
+            + " 이다.", []))
     return _section("sec-source-coverage", title, sub, q, body, ins)
 
 
@@ -550,7 +565,8 @@ def _overview(articles_total: int, span_weeks: int, span_days: int):
 
 
 def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int, now: datetime, *,
-                   gate: GateTally | None = None, unmatched=None, completion: dict | None = None) -> dict:
+                   gate: GateTally | None = None, unmatched=None, completion: dict | None = None,
+                   stopped: dict | None = None) -> dict:
     """스냅샷 · 게이트 집계를 화면이 그릴 dict 로. 키가 비어도 절은 전부 그린다."""
     runs_all = snapshot.get("runs_all") or []
     recent = runs_all[-RECENT_RUNS:]
@@ -564,7 +580,7 @@ def build_ops_view(snapshot: dict, sources: dict, anomaly_count: int, now: datet
     sections = [
         _slo(slo, gate, completion, recent),
         _volume(runs_all, today, span_weeks),
-        _coverage(runs_all, sources, today, span_weeks),
+        _coverage(runs_all, sources, today, span_weeks, stopped),
         _throughput(runs_all, today, span_weeks),
         _duration(runs_all, today),
         {"pair": [_latency(snapshot.get("latency") or [], sources),

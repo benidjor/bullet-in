@@ -112,3 +112,10 @@ def test_빈_입력이면_빈_svg_를_돌려주고_예외를_안_낸다():
                 C.heatmap(["a"], [], {})):
         assert svg.startswith('<svg class="chart"')
         assert "<rect" not in svg and "<path" not in svg and "<polyline" not in svg
+
+
+def test_heatmap_은_이름_칸_폭을_받고_기본은_96():
+    cells = {("a", 0): 1}
+    assert '<rect class="cell' in C.heatmap(["a"], [0], cells) and 'x="96.0"' in C.heatmap(["a"], [0], cells)
+    svg = C.heatmap(["a"], [0], cells, label_w=200)
+    assert 'x="200.0"' in svg and '<text class="cat" x="192"' in svg   # 이름은 칸 8px 앞에서 끝난다

@@ -273,9 +273,10 @@ def funnel(steps, *, w=520, sides=()) -> str:
 
 def heatmap(rows, cols, cells, *, w=640, cell=None, unit="명", marks=(),
             rowlab=lambda r: r, collab=lambda c: c, show_text=False,
-            scale_exclude_col=None) -> str:
-    """cells = {(row, col): 값 | None}. None 은 「아직 없는 칸」 이라 따로 그린다."""
-    L, T, R = 96, 22, 8
+            scale_exclude_col=None, label_w=96) -> str:
+    """cells = {(row, col): 값 | None}. None 은 「아직 없는 칸」 이라 따로 그린다.
+    label_w 는 행 이름 칸 폭이다 — 이름이 길면 왼쪽이 잘리므로 부르는 쪽이 넓힌다."""
+    L, T, R = label_w, 22, 8
     if not rows or not cols:
         return svg(w, T, "")
     cw = cell or (w - L - R) / len(cols)
