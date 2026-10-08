@@ -324,7 +324,7 @@ LLM 이 만든 산출물을 LLM 없이 규칙 코드로 검사합니다.
 | 레이크하우스 | **Apache Iceberg on GCS + Google Lakehouse runtime catalog** | 변경 이력 · 스냅샷 · 행동 로그처럼 append 위주 데이터를 서빙 DB 외부에 적재 · PyIceberg 로 직접 쓰고 카탈로그만 매니지드 서비스를 사용해 운영할 서버가 없음 ([§8](#8-설계-결정과-트레이드오프)) |
 | 스크래핑 | **Playwright / httpx** | 소스 난이도 (정적 · 쿠키 인증 · 안티봇) 에 맞춰 도구를 선택 · X 는 쿠키 주입 Playwright |
 | 스케줄 · 배포 | **Airflow 3 (LocalExecutor) + wrangler** | 실행을 태스크 8개로 분리해 3시간마다 수행 · 실패한 태스크만 식별되고 판정 태스크가 배포를 롤백 ([§8](#8-설계-결정과-트레이드오프)) · 실행 종료 시 Pages 직접 업로드 |
-| LLM 번역 · 요약 | **Gemini 3.1 Flash-Lite** | 새 기사 하루 15 ~ 17건 규모 (설계 당시) · 단순 번역에 맞는 단가 · `response_mime_type` 으로 JSON 출력 강제. **유료 (Tier 1 선불)** 이며 월 요금은 GCP 결제 보고서에서 조회 (문서에 금액을 고정하면 값이 낡음) |
+| LLM 번역 · 요약 | **Gemini 3.1 Flash-Lite** | 새 기사 하루 15 ~ 17건 규모 (이적 기간) · 단순 번역에 맞는 단가 · `response_mime_type` 으로 JSON 출력 강제. **유료 (Tier 1 선불)** 이며 월 요금은 GCP 결제 보고서에서 조회 (문서에 금액을 고정하면 값이 낡음) |
 
 ## 8. 설계 결정과 트레이드오프
 
@@ -332,7 +332,7 @@ LLM 이 만든 산출물을 LLM 없이 규칙 코드로 검사합니다.
 
 - **CDC 를 사용하지 않았습니다**
   - 배경: CDC (Debezium · binlog) 는 상류 트랜잭션 DB 의 변경을 캡처하는 기술인데, 이 파이프라인의 소스는 웹 · API · X 라 읽을 binlog 가 없습니다.
-  - 선택: 새 기사가 하루 15 ~ 17건 (설계 당시) 인 배치에 Kafka + Debezium 은 과설계라, 애플리케이션 레벨 변경 감지 (`content_hash` 비교 + `revision` 증가) 를 사용했습니다.
+  - 선택: 새 기사가 하루 15 ~ 17건 (이적 기간) 인 배치에 Kafka + Debezium 은 과설계라, 애플리케이션 레벨 변경 감지 (`content_hash` 비교 + `revision` 증가) 를 사용했습니다.
   - 감수한 것: 소스가 조용히 수정한 기사는 다음 수집 시점까지 감지하지 못합니다.
     변경 이력은 실행마다 Iceberg `articles_changes` 에 적재합니다.
 
