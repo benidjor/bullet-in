@@ -14,6 +14,8 @@
 **Spec:** `docs/superpowers/specs/2026-10-07-offseason-collection-scope-design.md`
 
 **Dry run:** 2026-10-07 에 이 계획서의 코드 블록을 워크트리에 그대로 적용해 전체 테스트를 돌렸고 (1,942 통과 · 1 skip · 새 테스트 28 = 작업 1 의 8 · 작업 2 의 11 · 작업 3 의 6 · 작업 4 의 3) 되돌렸다.
+2026-10-11 에 `origin/main` `058f1b6` 위로 rebase 한 뒤 다시 적용했다 (기준 1,919 통과 · 1 skip → 1,947 통과 · 1 skip · 새 테스트 28 그대로 · 로컬 MariaDB · Mongo 포함).
+그대로 들어가지 않은 자리는 README 의 Arsenal.com 행 하나였고 작업 3 에 지금 문구로 고쳐 두었다.
 dry run 은 「도는가」 만 본다.
 값이 맞는지는 작업 리뷰가 본다.
 
@@ -47,7 +49,7 @@ dry run 은 「도는가」 만 본다.
 
 ## Global Constraints
 
-- 파이썬은 워크트리의 3.11 가상환경으로 돌린다 (`uv venv --python 3.11 --project .` 뒤 `uv run --project . --extra dev pytest`) · 전체 테스트는 워크트리 디렉터리에서 돌리고 수집 수를 먼저 본다 (기준 1,914 통과 + 1 skip · `origin/main` `78a6265`)
+- 파이썬은 워크트리의 3.11 가상환경으로 돌린다 (`uv venv --python 3.11 --project .` 뒤 `uv run --project . --extra dev pytest`) · 전체 테스트는 워크트리 디렉터리에서 돌리고 수집 수를 먼저 본다 (기준 1,919 통과 + 1 skip · `origin/main` `058f1b6` · 2026-10-11 재측정)
 - 통합 테스트는 로컬 MariaDB (`docker compose up -d`) 가 있으면 돈다
 - 갈래 이름은 `keyword` · `extra` · `name` · `team` (언론사) · 공식 소스 채택 경로는 `tag` · `title` · `scope` (설계 §2.1 · §3)
 - 추가 낱말 `interest` · `ratings` · 팀 낱말 `Emirates` · `stadium` · `Pro Ref` · `referee` · `academy` · `injury` · `fitness` (설계 §2.1)
@@ -917,13 +919,13 @@ def _accept(article: dict, scope: ScopeRule | None = None) -> str | None:
 `README.md` 소스 표의
 
 ```
-| Arsenal.com | 0 | arsenal_api | 공식: 공홈 GraphQL API, taxonomy 필터 (이적 · 1군 재계약) |
+| Arsenal.com | 0 | arsenal_api | 공식: 공홈 사이트맵으로 후보 발견 + GraphQL 로 본문 조회, taxonomy 필터 (이적 · 1군 재계약) |
 ```
 
 를
 
 ```
-| Arsenal.com | 0 | arsenal_api | 공식: 공홈 GraphQL API, taxonomy 필터 (이적 · 1군 재계약) · 2026-10 부터 1군 선수 · 팀 소식 (대표팀 · 수상 · 인터뷰) |
+| Arsenal.com | 0 | arsenal_api | 공식: 공홈 사이트맵으로 후보 발견 + GraphQL 로 본문 조회, taxonomy 필터 (이적 · 1군 재계약) · 2026-10 부터 1군 선수 · 팀 소식 (대표팀 · 수상 · 인터뷰) |
 ```
 
 로 바꾼다.
@@ -1043,7 +1045,7 @@ git commit -m "feat(serve): 홈 대표 기사 · 주요 소식을 이적 우선�
 
 ## 마무리 (컨트롤러가 직접)
 
-- [ ] 전체 테스트 — 워크트리 디렉터리에서 `uv run --project . --extra dev pytest -q` · 기대 1,942 통과 + 1 skip (머리의 Dry run 줄 · `origin/main` 이 그사이 움직였으면 다시 잰다)
+- [ ] 전체 테스트 — 워크트리 디렉터리에서 `uv run --project . --extra dev pytest -q` · 기대 1,947 통과 + 1 skip (머리의 Dry run 줄 · `origin/main` 이 그사이 움직였으면 다시 잰다)
 - [ ] 머지 전 라이브 확인 — 네 소스를 한 번씩 실제로 받아 `passed_by` · `dropped` 가 남는지 · 받은 수가 설계 §2.3 · §3.4 와 크게 어긋나지 않는지 (출력은 파일로 · 다시 돌리지 않는다)
 - [ ] 최종 전체 리뷰 · PR (본문 humanize-korean fast 1회 → `check-pr-format.py` → 통과에 묶어 push · PR 생성)
 - [ ] 머지 · 배포는 2026-10-07 18:00 KST 실행 뒤
