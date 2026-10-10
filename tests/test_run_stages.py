@@ -81,3 +81,28 @@ def test_cli_requires_run_id_with_stage():
     ns = run_mod.parse_args(["--stage", "collect", "--run-id", "abc"])
     assert (ns.stage, ns.run_id, ns.concurrency) == ("collect", "abc", 8)
     assert run_mod.parse_args([]).stage is None
+
+
+import logging
+
+from bullet_in.run import scope_roster_or_none
+
+
+class _Store:
+    def __init__(self, rows=None, boom=False):
+        self.rows, self.boom = rows or [], boom
+
+    def scope_roster(self):
+        if self.boom:
+            raise RuntimeError("db down")
+        return self.rows
+
+
+def test_scope_roster_or_none_returns_rows():
+    assert scope_roster_or_none(_Store([("Bukayo Saka", "Saka")])) == [("Bukayo Saka", "Saka")]
+
+
+def test_scope_roster_or_none_logs_and_returns_none(caplog):
+    with caplog.at_level(logging.WARNING):
+        assert scope_roster_or_none(_Store(boom=True)) is None
+    assert any("이름 갈래" in r.message for r in caplog.records)

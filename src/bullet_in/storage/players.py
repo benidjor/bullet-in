@@ -151,6 +151,13 @@ class PlayerStore:
                 "SELECT ko_name FROM players WHERE status='confirmed' "
                 "AND ko_name IS NOT NULL")).all()}
 
+    def scope_roster(self) -> list[tuple[str, str]]:
+        """수집 범위 판정의 이름 재료 (설계 2026-10-07 §2.2) — 확정 1군 선수 · 감독."""
+        with self.engine.connect() as c:
+            return [(r[0], r[1]) for r in c.execute(text(
+                "SELECT full_name, surname FROM players WHERE status='confirmed' "
+                "AND category IN ('squad','manager') ORDER BY id")).all()]
+
     def active_link_players(self) -> list[tuple[int, str]]:
         """워치리스트 로테이션 명단 (스펙 §3.1) — 활성 이적축 · id 순."""
         with self.engine.connect() as c:

@@ -124,10 +124,11 @@ systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 �
 활성 소스는 9종이며 고정 tier 7종과 항목별 동적 tier 2종으로 구성했습니다 (X 와 커뮤니티는 게시물에 언급된 기자 · 매체의 공신력으로 tier 를 산출합니다).
 아래 표에는 2026-07 에 비활성으로 돌린 1종 (football.london) 과 2026-08-15 에 수집을 멈춘 1종 (Goal.com) 을 포함해 10종을 싣습니다.
 언론 5종은 공통 이적 키워드 필터를 공유합니다 (`config/sources.yaml`).
+그중 수집 중인 3종 (BBC Sport · Sky Sports · The Guardian) 은 명단의 선수 · 감독 이름과 팀 낱말로 선수 · 팀 소식과 경기 평점까지 받습니다 (2026-10 개정).
 
 | 소스 | tier | 어댑터 | 비고 |
 |---|---|---|---|
-| Arsenal.com | 0 | arsenal_api | 공식: 공홈 사이트맵으로 후보 발견 + GraphQL 로 본문 조회, taxonomy 필터 (이적 · 1군 재계약) |
+| Arsenal.com | 0 | arsenal_api | 공식: 공홈 사이트맵으로 후보 발견 + GraphQL 로 본문 조회, taxonomy 필터 (이적 · 1군 재계약) · 2026-10 부터 1군 선수 · 팀 소식 (대표팀 · 수상 · 인터뷰) |
 | BBC Sport | 1.5 | rss | 아스날 RSS (2026-10 팀 페이지에서 전환) · 비전담 기준선: 전담 기자 (Mokbel) 는 tier 1 로 상향 |
 | Sky Sports | 2 | html | 비전담 기준선: 전담 기자 (Sheth) 는 tier 1.5 로 상향 |
 | The Guardian | 3 | html | 2026-07 에 Open Platform API 에서 전환 (무료 등급 API 가 독점 기사를 제외) |

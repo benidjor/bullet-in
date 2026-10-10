@@ -70,9 +70,11 @@ def rule_stage(source_id: str | None,
     'title' 이면 고정하지 않는다 — 이 규칙이 실질적으로 뜻하는 것은 "공홈에서 왔다"
     가 아니라 "구단이 이적 뉴스 태그를 붙였다" 이고, 우리 제목 추측으로 주워 온
     기사에는 그 근거가 없다. 개정 전 적재분은 값이 없고 전건 태그 채택이었다.
+    'scope' (선수 · 팀 소식 · 설계 2026-10-07 §3.3) 도 고정하지 않는다 — 대표팀 활약 기사에
+    오피셜이 붙지 않게. promote_official 은 'title' 에만 적용한다.
     고정에서 빠진 뒤 모델 판정을 받는 경로는 promote_official 이 잇는다."""
     if source_id == "arsenal_official":
-        return (None, None) if accept_path == "title" else ("official", None)
+        return (None, None) if accept_path in ("title", "scope") else ("official", None)
     if source_id == "bbc_gossip":
         return "rumour", "none"
     return None, None
