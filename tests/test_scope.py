@@ -67,7 +67,7 @@ def test_record_counts_passed_and_caps_dropped():
     record(f, "a", "name")
     record(f, "b", "name")
     record(f, "c", "keyword")
-    for i in range(DROPPED_MAX + 5):
+    for _ in range(DROPPED_MAX + 5):
         record(f, "x" * (DROPPED_CHARS + 30), None)
     assert f["passed_by"] == {"name": 2, "keyword": 1}
     assert len(f["dropped"]) == DROPPED_MAX
