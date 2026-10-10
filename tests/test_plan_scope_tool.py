@@ -115,3 +115,36 @@ def test_a_missing_plan_is_a_failure(tmp_path):
     r = _run(repo, repo / "docs" / "없는계획.md")
     assert r.returncode == 2
     assert "파일이 없다" in r.stderr
+
+
+def test_running_from_a_subdirectory_sees_the_whole_repo(tmp_path):
+    repo, plan = _repo(tmp_path)
+    _touch(repo, "src/app/scope.py")
+    _touch(repo, "top_stray.py")                 # 루트의 범위 밖 새 파일
+    r = subprocess.run([sys.executable, str(TOOL), "--plan", str(plan), "--base", "base"],
+                       cwd=repo / "src", capture_output=True, text=True)
+    assert r.returncode == 1
+    assert "top_stray.py" in r.stdout and "src/app/scope.py" not in r.stdout.split("목록에 있는데")[0].split("범위 밖")[1]
+
+
+def test_a_rename_shows_the_old_path_too(tmp_path):
+    repo, plan = _repo(tmp_path)
+    _git(repo, "mv", "src/app/other.py", "src/app/scope.py")   # 목록에 있는 이름으로 옮긴다
+    r = _run(repo, plan)
+    assert r.returncode == 1
+    assert "src/app/other.py" in r.stdout
+
+
+def test_a_step_bullet_after_the_files_block_is_not_a_listed_path(tmp_path):
+    repo, plan = _repo(tmp_path)
+    plan.write_text(PLAN + "\n### Task 3\n\n**Files:**\n- Modify: `src/app/run.py`\n\n"
+                    "- [ ] **Step 1** `src/app/other.py` 를 읽는다\n", encoding="utf-8")
+    _touch(repo, "src/app/other.py")
+    assert _run(repo, plan).returncode == 1
+
+
+def test_an_unknown_base_is_exit_2_not_1(tmp_path):
+    repo, plan = _repo(tmp_path)
+    r = subprocess.run([sys.executable, str(TOOL), "--plan", str(plan), "--base", "nope"],
+                       cwd=repo, capture_output=True, text=True)
+    assert r.returncode == 2

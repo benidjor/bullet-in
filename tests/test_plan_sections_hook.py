@@ -114,11 +114,56 @@ def test_hook_ignores_other_docs(tmp_path):
     assert _run([], stdin=json.dumps({"tool_input": {"file_path": str(f)}})).returncode == 0
 
 
-def test_the_offseason_plan_shape_passes():
-    """2026-10-07 비수기 수집 범위 계획서가 이 꼴의 첫 실물이다 — 같은 꼴이면 통과해야 한다."""
-    root = Path(__file__).resolve().parents[1]
-    p = root / "docs" / "superpowers" / "plans" / "2026-10-07-offseason-collection-scope.md"
-    if not p.exists():
-        import pytest
-        pytest.skip("계획서가 이 브랜치에 없다")
-    assert _run([str(p)]).returncode == 0
+def test_backticks_outside_the_files_block_do_not_count(tmp_path):
+    """Files 블록이 비었는데 뒤 Step 불릿의 백틱으로 통과하던 꼴 (리뷰 2026-10-11)."""
+    task = ("### Task 1: 판정 모듈\n\n**Files:**\n- Modify: 없음\n\n"
+            "- [ ] **Step 1** run `pytest tests/x.py`\n")
+    body = "# 계획\n\n" + PRINCIPLES + ASSUMPTIONS + SIMPLER + task
+    r = _run([str(_write(tmp_path, "plans", "2026-10-12-x.md", body))])
+    assert r.returncode == 2
+    assert "백틱 경로" in r.stderr
+
+
+def test_symbol_backticks_are_not_paths(tmp_path):
+    task = "### Task 1: 판정\n\n**Files:**\n- Modify: `__init__` 한 줄\n"
+    body = "# 계획\n\n" + PRINCIPLES + ASSUMPTIONS + SIMPLER + task
+    assert _run([str(_write(tmp_path, "plans", "2026-10-12-x.md", body))]).returncode == 2
+
+
+def test_tilde_fences_are_code_too(tmp_path):
+    body = "# 계획\n\n" + PRINCIPLES + "~~~markdown\n" + ASSUMPTIONS + "~~~\n\n" + SIMPLER + TASK
+    r = _run([str(_write(tmp_path, "plans", "2026-10-12-x.md", body))])
+    assert r.returncode == 2 and "가정과 확인" in r.stderr
+
+
+def test_a_longer_fence_can_hold_a_shorter_one(tmp_path):
+    """네 백틱 블록 안의 세 백틱 줄을 닫는 줄로 읽으면, 블록 안 예시 절이 진짜 절이 된다."""
+    inner = "````markdown\n```\n" + ASSUMPTIONS + "```\n````\n\n"
+    body = "# 계획\n\n" + PRINCIPLES + inner + SIMPLER + TASK
+    r = _run([str(_write(tmp_path, "plans", "2026-10-12-x.md", body))])
+    assert r.returncode == 2 and "가정과 확인" in r.stderr
+
+
+def test_a_table_without_a_separator_row_fails(tmp_path):
+    body = PLAN_OK.replace("| --- | --- |\n| 명단은", "| 명단은")
+    r = _run([str(_write(tmp_path, "plans", "2026-10-12-x.md", body))])
+    assert r.returncode == 2 and "구분 행" in r.stderr
+
+
+def test_a_trailing_empty_cell_is_caught(tmp_path):
+    body = PLAN_OK.replace("| 명단은 41명이다 | 운영 DB 조회 |", "| 명단은 41명이다 | 운영 DB 조회 ||")
+    r = _run([str(_write(tmp_path, "plans", "2026-10-12-x.md", body))])
+    assert r.returncode == 2 and "빈 칸" in r.stderr
+
+
+def test_a_repeated_section_adds_rather_than_replaces(tmp_path):
+    body = PLAN_OK + "## 가정과 확인 (추가)\n\n"
+    r = _run([str(_write(tmp_path, "plans", "2026-10-12-x.md", body))])
+    assert r.returncode == 0, r.stderr
+
+
+def test_hook_accepts_a_relative_path(tmp_path, monkeypatch):
+    _write(tmp_path, "plans", "2026-10-12-x.md", "# 계획\n")
+    payload = json.dumps({"tool_input": {"file_path": "docs/superpowers/plans/2026-10-12-x.md"}})
+    r = subprocess.run([sys.executable, str(HOOK)], input=payload, capture_output=True, text=True, cwd=tmp_path)
+    assert r.returncode == 2

@@ -13,7 +13,7 @@
   Task 머리글 (`### Task N`) 마다 백틱 경로가 든 `**Files:**` 블록 (범위 검사 `.claude/tools/check-plan-scope.py` 의 입력)
 - 스펙 (`docs/superpowers/specs/`) — `## 가정과 확인` · `## 더 단순한 꼴과 버린 이유` 절 (`## 2. 가정과 확인` 처럼 번호가 붙어도 된다)
 - 「가정과 확인」 · 「더 단순한 꼴」 은 표가 있어야 하고, 표의 데이터 행에 빈 칸 (`-` · `—` 만 있는 칸 포함) 이 없어야 한다
-- 코드 블록 안의 `#` 줄은 머리글로 읽지 않는다
+- 코드 블록 (``` · ~~~ · 더 긴 펜스 안의 짧은 펜스 포함) 안의 `#` 줄은 머리글로 읽지 않는다
 
 ## 쓰는 법
 
@@ -26,6 +26,7 @@
 - 「추정」 표시가 필요한 행에 붙었는지
 - 표 밖 산문의 단정 · Files 목록이 실제 변경과 맞는지 (그건 범위 검사의 몫)
 - START 전 문서 — 2026-10-07 스펙까지는 이 절 없이 머지됐다
+- 훅 · CI 는 파일 이름의 날짜로 START 를 가른다 — 날짜를 빼거나 옛 날짜로 새 문서를 만들면 검사를 안 탄다 (경로를 손으로 주면 본다)
 
 **통과했다고 근거가 맞는 것은 아니다** — 칸이 비지 않았다는 것만 안다.
 """
@@ -38,6 +39,9 @@ TABLE_SECTIONS = {"가정과 확인", "더 단순한 꼴과 버린 이유"}
 H2 = re.compile(r"^##\s+(?:\d+\.\s*)?(.+?)\s*$")
 TASK = re.compile(r"^#{2,3}\s+(Task\s+\d+)")
 EMPTY_CELL = {"", "-", "—"}
+FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
+SEPARATOR = re.compile(r"^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?$")
+TICK = re.compile(r"`([^`]+)`")
 
 
 def kind_of(path: str):
@@ -50,14 +54,26 @@ def kind_of(path: str):
 
 
 def headings(lines):
-    """코드 블록 밖의 줄만 (번호, 줄) 로 — 계획서는 yaml · 마크다운 블록에 `#` 줄을 담는다."""
-    fence = False
+    """코드 블록 밖의 줄만 (번호, 줄) 로 — 계획서는 yaml · 마크다운 블록에 `#` 줄을 담는다.
+
+    블록은 여는 줄과 같은 글자 (` 또는 ~) 가 같은 개수 이상 올 때 닫힌다 — 네 백틱 블록 안의 세 백틱은 내용이다.
+    """
+    fence = None
     for i, ln in enumerate(lines):
-        if ln.lstrip().startswith("```"):
-            fence = not fence
+        m = FENCE.match(ln)
+        if m:
+            mark = m.group(1)
+            if fence is None:
+                fence = mark
+            elif mark[0] == fence[0] and len(mark) >= len(fence) and not ln.strip()[len(mark):]:
+                fence = None
             continue
-        if not fence:
+        if fence is None:
             yield i, ln
+
+
+def looks_like_path(tok: str) -> bool:
+    return "/" in tok or bool(re.search(r"\.[A-Za-z0-9]+$", tok))
 
 
 def sections(lines):
@@ -70,7 +86,7 @@ def sections(lines):
             if m:
                 cur = next((s for s in PLAN_SECTIONS if m.group(1).startswith(s)), None)
                 if cur:
-                    out[cur] = []
+                    out.setdefault(cur, [])        # 같은 절이 다시 나오면 이어 붙인다
             continue
         if cur:
             out[cur].append(ln)
@@ -79,20 +95,41 @@ def sections(lines):
 
 def table_problems(name, body):
     rows = [ln.strip() for ln in body if ln.strip().startswith("|")]
+    if len(rows) >= 2 and not SEPARATOR.match(rows[1]):
+        return [f"「{name}」 표의 둘째 줄이 구분 행 (`| --- | --- |`) 이 아니다"]
     data = rows[2:]                                # 머리 행과 구분 행 다음
     if not data:
         return [f"「{name}」 에 표가 없다 (데이터 행 1개 이상)"]
     out = []
     for r in data:
-        cells = [c.strip() for c in r.strip("|").split("|")]
+        inner = r[1:-1] if r.endswith("|") and len(r) > 1 else r[1:]   # 바깥 파이프 하나씩만 뗀다
+        cells = [c.strip() for c in inner.split("|")]
         if any(c in EMPTY_CELL for c in cells):
             out.append(f"「{name}」 표에 빈 칸: {r[:60]}")
     return out
 
 
+def files_block_lines(lines, start):
+    """`**Files:**` 다음 줄부터 이어지는 불릿 줄 — 첫 불릿 앞 빈 줄은 건너뛰고, 그 뒤 빈 줄이나 불릿 아닌 줄에서 끝난다.
+
+    범위 검사 (.claude/tools/check-plan-scope.py) 의 같은 이름 함수와 같은 규칙이다.
+    """
+    out = []
+    for ln in lines[start:]:
+        s = ln.strip()
+        if not s:
+            if out:
+                break
+            continue
+        if not s.startswith(("- ", "* ")):
+            break
+        out.append(s)
+    return out
+
+
 def task_problems(lines):
     out, tasks, cur = [], [], None
-    for _, ln in headings(lines):
+    for i, ln in headings(lines):
         m = TASK.match(ln)
         if m:
             cur = [m.group(1), False, False]       # 이름 · Files 블록 · 백틱 경로
@@ -102,8 +139,9 @@ def task_problems(lines):
             continue
         if ln.strip() in ("**Files:**", "**Files**"):
             cur[1] = True
-        elif cur[1] and ln.lstrip().startswith("- ") and "`" in ln:
-            cur[2] = True
+            block = files_block_lines(lines, i + 1)
+            if any(looks_like_path(t) for b in block for t in TICK.findall(b)):
+                cur[2] = True
     if not tasks:
         out.append("Task 머리글 (`### Task N`) 이 없다")
     for name, has_block, has_path in tasks:
@@ -170,7 +208,7 @@ def main() -> int:
         data = json.load(sys.stdin)
     except Exception:
         return 0
-    f = data.get("tool_input", {}).get("file_path", "")
+    f = os.path.abspath(data.get("tool_input", {}).get("file_path", "") or ".")
     kind = kind_of(f)
     m = re.match(r"(\d{4}-\d{2}-\d{2})-", os.path.basename(f))
     if not kind or not f.endswith(".md") or not m or m.group(1) < START or not os.path.isfile(f):
