@@ -261,13 +261,15 @@ Discord 채널 2개 (사고 · 리뷰) 를 운영합니다.
 **수집 현황의 출처 (MariaDB Silver → 화면)**
 
 행동 지표와 달리 별도의 집계 저장소를 두지 않고 서빙 DB 를 직접 읽습니다.
+완주율 타일만 예외로, 감시 타이머가 남기는 상태 파일을 읽습니다.
 
 - **`pipeline_runs`**: 실행마다 한 행 · 신규 · 중복 · 에러 · 소요 시간 · 소스별 건수
 - **`articles`**: 등급 · 이적 단계 · 발행 시각
 - **`source_freshness`**: 실행 × 소스의 마지막 수집 시각과 임계
 - **dbt 게이트 결과 파일**: 직전 실행의 `unique` · `not_null` 테스트 결과 (SLO-3 과 SLO-4 의 값)
+- **완주율 상태 파일 (`state/completion.json`)**: 매시 감시 타이머가 Airflow 실행 목록과 이전 systemd 실행 기록에서 센 완주 · 시작 수 (「완주율」 타일의 값)
 
-화면 맨 위의 「데이터 원천」 절이 같은 내용을 밝히고 있어 열어서 대조할 수 있습니다.
+화면 맨 위의 「데이터 원천」 절이 앞의 네 가지를 밝히고 있어 열어서 대조할 수 있습니다 (완주율 상태 파일은 그 절에 없습니다).
 
 ## 6. 데이터 품질
 
@@ -444,7 +446,7 @@ Gold
 | 경로 | 내용 |
 |---|---|
 | `src/bullet_in/run.py` · `pipeline.py` | 실행 1회의 진입점과 항목 판정 (여성 축구 제외 · 본문 등급 · 기자 선택) |
-| `src/bullet_in/adapters/` | 소스별 수집기 (`rss` · `html` · `playwright_news` · `x_playwright` · `arsenal_api` · `guardian_api` · `fmkorea`) |
+| `src/bullet_in/adapters/` | 소스별 수집기 · 설정이 쓰는 5종 (`arsenal_api` · `rss` · `html` · `x_playwright` · `fmkorea`) · 코드만 있고 쓰는 소스가 없는 2종 (`playwright_news` · `guardian_api`) |
 | `src/bullet_in/ingest.py` · `canonical.py` · `dedup.py` | 병렬 수집 · URL 정본화와 `content_hash` · 신규 · 변경 · 중복 분류 |
 | `src/bullet_in/credibility.py` · `score.py` | 기자 · 매체 레지스트리 조회와 `tier` · `confidence` 산출 |
 | `src/bullet_in/enrich.py` · `fidelity.py` | LLM 번역 · 요약과 번역 품질 게이트 ([§6](#6-데이터-품질)) |
@@ -485,7 +487,7 @@ Airflow DAG 임포트는 별도 venv 에서 검증합니다 ([docs/MIGRATION.md]
 
 ## 12. 문서 구성
 
-설계 (`docs/superpowers/specs/` 75편) · 계획 (`docs/superpowers/plans/` 64편) · 런북 (`docs/runbook/` 89편) · 트러블슈팅 (`docs/troubleshooting/` 190편) 이 있습니다 (2026-10-07 기준).
+설계 (`docs/superpowers/specs/` 75편) · 계획 (`docs/superpowers/plans/` 64편) · 런북 (`docs/runbook/` 89편) · 트러블슈팅 (`docs/troubleshooting/` 189편 · 폴더 안내문 `README.md` 제외) 이 있습니다 (2026-10-07 기준).
 아래 5편을 먼저 읽는 것을 권장합니다.
 
 1. [파이프라인 실행을 Airflow 로 이관한 설계](docs/superpowers/specs/2026-09-04-airflow-migration-design.md): 이관 시점의 판단 근거 · 태스크 8개 구성 · 실패 유형 3종 (프로세스 종료 · 건너뜀 · 차단) · 롤백 경로.
