@@ -15,7 +15,7 @@
     python3 .claude/tools/check-plan-scope.py --plan <계획서> --base origin/main   # 기본값
 
 바뀐 파일 = `git merge-base <base> HEAD` 와 작업 트리의 차이 (커밋 · 미커밋 모두) + 추적 안 된 새 파일.
-목록 = 계획서의 `**Files:**` 블록 불릿마다 첫 백틱 경로 (`:40-52` · `::test_x` 꼬리는 뗀다 ·
+목록 = 계획서의 `**Files:**` 블록 불릿마다 설명 (첫 ` (` · ` — `) 앞의 백틱 경로 전부 (`:40-52` · `::test_x` 꼬리는 뗀다 ·
 `/` 로 끝나면 그 아래 전부 · `*` 가 있으면 glob) + 계획서 자신.
 
 종료 코드: 0 = 범위 밖 없음 · 1 = 범위 밖 있음 · 2 = 계획서가 없거나 Files 목록이 비었거나 git 이 실패했다 (기준을 못 찾음 등).
@@ -39,6 +39,7 @@ import sys
 
 TICK = re.compile(r"`([^`]+)`")
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
+DESC = re.compile(r"\s\(|\s—\s")
 TAIL = re.compile(r"(::.*|:\d+(-\d+)?)$")
 
 
@@ -79,9 +80,10 @@ def listed_paths(plan: str) -> list[str]:
             continue
         if fence is None and ln.strip() in ("**Files:**", "**Files**"):
             for b in files_block_lines(lines, i + 1):
-                tok = next((t for t in TICK.findall(b) if looks_like_path(t)), None)
-                if tok:
-                    out.append(TAIL.sub("", tok.strip()))
+                tick = b.find("`")                   # 라벨에도 괄호가 있다 (`- Use (이미 있음): ...`)
+                m = DESC.search(b, max(tick, 0))
+                head = b[:m.start()] if m else b       # 설명 (괄호 · 줄표) 앞에 나열된 경로만 목록이다
+                out += [TAIL.sub("", t.strip()) for t in TICK.findall(head) if looks_like_path(t)]
     return out
 
 

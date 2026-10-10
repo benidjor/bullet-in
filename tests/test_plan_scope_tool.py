@@ -148,3 +148,19 @@ def test_an_unknown_base_is_exit_2_not_1(tmp_path):
     r = subprocess.run([sys.executable, str(TOOL), "--plan", str(plan), "--base", "nope"],
                        cwd=repo, capture_output=True, text=True)
     assert r.returncode == 2
+
+
+def test_every_path_before_the_description_is_listed(tmp_path):
+    """2026-10-07 계획서의 `- Test: `a` · `b` · `c` (각각 끝에 더함)` 꼴 — 첫 경로만 읽어 나머지가 범위 밖으로 나왔다."""
+    repo, plan = _repo(tmp_path)
+    plan.write_text("# 계획\n\n### Task 1\n\n**Files:**\n"
+                    "- Test: `tests/a.py` · `tests/b.py` (각각 끝에 더함 · `src/app/other.py` 참고)\n"
+                    "- Use (이미 있음 · 계획 커밋에 포함): `tests/fx.json` — 키 `roster`\n",
+                    encoding="utf-8")
+    _touch(repo, "tests/a.py")
+    _touch(repo, "tests/b.py")
+    _touch(repo, "tests/fx.json")                # 라벨에 괄호가 있어도 경로는 목록이다
+    assert _run(repo, plan).returncode == 0
+    _touch(repo, "src/app/other.py")             # 설명 괄호 안 경로는 목록이 아니다
+    r = _run(repo, plan)
+    assert r.returncode == 1 and "src/app/other.py" in r.stdout
