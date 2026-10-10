@@ -398,3 +398,26 @@ def test_recent_stage_counts_excludes_mention(engine):
     _article(engine, "h_s0")
     store.link_article("h_s0", pid, "done", "subject")
     assert store.recent_stage_counts([pid]) == {(pid, "done"): 1}
+
+
+def test_scope_roster_is_confirmed_squad_and_manager_only(engine):
+    from datetime import datetime
+    from sqlalchemy import text
+    from bullet_in.storage.players import PlayerStore
+    rows = [{"id": 9001, "fn": "Scope Squadman", "sn": "Squadman", "cat": "squad", "st": "confirmed"},
+            {"id": 9002, "fn": "Scope Bossman", "sn": "Bossman", "cat": "manager", "st": "confirmed"},
+            {"id": 9003, "fn": "Scope Outsider", "sn": "Outsider", "cat": "external", "st": "confirmed"},
+            {"id": 9004, "fn": "Scope Prospect", "sn": "Prospect", "cat": "squad", "st": "candidate"}]
+    with engine.begin() as c:
+        c.execute(text("DELETE FROM players WHERE id BETWEEN 9001 AND 9004"))
+        c.execute(text(
+            "INSERT INTO players (id,full_name,surname,category,status,transfer_status,origin,added_at) "
+            "VALUES (:id,:fn,:sn,:cat,:st,'none','seed',:at)"),
+            [dict(r, at=datetime(2026, 10, 1)) for r in rows])
+    try:
+        got = PlayerStore(engine).scope_roster()
+        assert ("Scope Squadman", "Squadman") in got and ("Scope Bossman", "Bossman") in got
+        assert ("Scope Outsider", "Outsider") not in got and ("Scope Prospect", "Prospect") not in got
+    finally:
+        with engine.begin() as c:
+            c.execute(text("DELETE FROM players WHERE id BETWEEN 9001 AND 9004"))

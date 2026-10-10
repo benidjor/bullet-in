@@ -8,6 +8,10 @@ tone_backfill_limit: 20       # 말투 백필 회차 상한 (429 여유 내, 라
 
 # 이적 키워드 공통 리스트 — 각 소스의 title_contains 에서 *transfer_kw 로 참조
 transfer_keywords: &transfer_kw ["transfer", "sign", "signed", "signing", "deal", "loan", "bid", "fee", "medical", "agree", "agreed", "join", "joins", "target", "linked", "links", "contract", "swap", "move", "talks"]
+# 수집 범위 판정의 이름 재료 (설계 2026-10-07 §2.2) — 명단 (players) 에 별칭 칸이 없어 여기에 둔다
+scope_name_extras: ["Gabriel", "Bruno", "Ødegaard"]
+# 성만으로는 인정하지 않는 이름 — 흔한 낱말 · 다른 고유명사와 겹친다 (「White Hart Lane」)
+scope_name_full_only: ["White", "Rice", "Jesus", "Timber", "Salmon"]
 
 sources:
   - source_id: arsenal_official
@@ -33,6 +37,7 @@ sources:
     config:
       feed_url: "https://feeds.bbci.co.uk/sport/football/teams/arsenal/rss.xml"
       title_contains: *transfer_kw
+      title_scope: true   # 이적 + 선수 · 팀 소식 + 경기 평점 (설계 2026-10-07 §2)
       body_selector: "article"
     freshness_hours: 96    # 공백 95% 75h (21일 실측) — 48h 는 정상 소스를 회차의 22% 에서 stale 로 찍었다
     # RSS 항목 사이 최장 공백 135.2h (09-10 ~ 10-03) · A매치 휴식기 미포함이라 넉넉히 · 휴식기 뒤 재측정 (설계 §3.2 · §5)
@@ -109,6 +114,7 @@ sources:
       body_selector: "div[data-gu-name='body']"
       base_url: "https://www.theguardian.com"
       title_contains: *transfer_kw
+      title_scope: true   # 이적 + 선수 · 팀 소식 + 경기 평점 (설계 2026-10-07 §2)
     freshness_hours: 192   # 공백 95% 168h (21일 실측) — 저빈도 소스 (아스날 태그 주 2~3건)
     enabled: true
   - source_id: skysports
@@ -124,6 +130,7 @@ sources:
       item_selector: "h3.sdc-site-tile__headline a[href*='/football/news/']"
       base_url: "https://www.skysports.com"
       title_contains: *transfer_kw
+      title_scope: true   # 이적 + 선수 · 팀 소식 + 경기 평점 (설계 2026-10-07 §2)
       body_selector: "div.sdc-article-body"
     freshness_hours: 120   # 공백 95% 99h (21일 실측) — 48h 는 정상 소스를 회차의 27% 에서 stale 로 찍었다
     # 목록이 아스날 팀 페이지라 아스날 기사가 없으면 목록 전체가 멈춘다 (2026-10-03 실측 · 09-25 뒤 8일 무변화).

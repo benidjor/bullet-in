@@ -6,13 +6,15 @@ from bs4 import BeautifulSoup
 from bullet_in.adapters.detail import fetch_article_detail
 from bullet_in.models import RawItem
 from bullet_in.quality import list_signature
+from bullet_in.scope import ScopeRule, record
 
 class HtmlAdapter:
     source_type = "html"
     def __init__(self, source_id: str, list_url: str, item_selector: str,
                  base_url: str | None = None, title_contains: str | list[str] | None = None,
                  body_selector: str | None = None, title_selector: str | None = None,
-                 thumbnail_only: bool = False, title_attr: str | None = None):
+                 thumbnail_only: bool = False, title_attr: str | None = None,
+                 scope: ScopeRule | None = None):
         self.source_id = source_id
         self.list_url = list_url
         self.item_selector = item_selector
@@ -21,10 +23,11 @@ class HtmlAdapter:
         self.title_selector = title_selector
         self.title_attr = title_attr
         self.thumbnail_only = thumbnail_only
+        self.scope = scope   # 수집 범위 판정 (설계 2026-10-07 §2) — 있으면 키워드 필터를 대신한다
         # 발견 4단 계수 (스펙 2026-08-14 §8.2) — 어댑터 인스턴스 속성이라 DB 에 안 남는다.
         # 기록되는 후보 계수는 마지막 단계뿐이라, 셀렉터가 깨져 첫 단이 0 이 된 것과
         # 사이트가 조용해 마지막 단이 0 이 된 것이 구분되지 않았다 (§2.5 실측).
-        self.funnel: dict[str, int] = {}
+        self.funnel: dict = {}
         if title_contains is None:
             self.title_keywords: list[str] | None = None
         elif isinstance(title_contains, str):
@@ -66,7 +69,12 @@ class HtmlAdapter:
                 else:
                     title = a.get_text(strip=True)
                 self.funnel["titled"] += 1
-                if self.title_keywords and not any(
+                if self.scope is not None:
+                    reason = self.scope.match(title)
+                    record(self.funnel, title, reason)
+                    if reason is None:
+                        continue
+                elif self.title_keywords and not any(
                         k in title.lower() for k in self.title_keywords):
                     continue
                 self.funnel["passed"] += 1

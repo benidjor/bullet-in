@@ -275,6 +275,16 @@ def serving_rows(rows: list[dict], *, relevance_terms, player_names,
     return keep, hidden, stale
 
 
+def scope_roster_or_none(pstore) -> list[tuple[str, str]] | None:
+    """수집 범위 판정의 명단 — 못 읽으면 이름 갈래만 빠지고 수집은 계속한다 (설계 2026-10-07 §2.2)."""
+    try:
+        return pstore.scope_roster()
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "명단을 못 읽어 수집 범위 판정에서 이름 갈래를 뺌 (수집은 계속)", exc_info=True)
+        return None
+
+
 def adapter_funnels(adapters) -> dict:
     """발견 4단 계수를 내놓는 어댑터만 걷는다 (스펙 2026-08-14 §8.2).
 
@@ -367,7 +377,8 @@ async def collect(run_id: str, concurrency: int) -> FetchSummary:
     """수집 · 원본 저장 · 마트 upsert · 회차 행 삽입 (§3.2 표의 첫 행)."""
     cfg, sources, registry, engine, mart, pstore = _materials()
     # fmkorea 무관 글 필터 인정 집합 주입 (워치리스트 스펙 §3.2) — 배치와 동일 집합
-    adapters = build_adapters(cfg, fmkorea_player_names=pstore.confirmed_ko_names())
+    adapters = build_adapters(cfg, fmkorea_player_names=pstore.confirmed_ko_names(),
+                              scope_roster=scope_roster_or_none(pstore))
 
     t0 = time.perf_counter()
     started_at_utc = datetime.now(timezone.utc).replace(tzinfo=None)

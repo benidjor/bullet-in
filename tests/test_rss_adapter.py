@@ -129,3 +129,22 @@ def test_rss_skips_missing_link_dedups_and_counts_untitled():
     assert a.funnel["deduped"] == 2          # 링크 없는 항목은 빠지고 같은 링크는 한 번
     assert a.funnel["passed"] == 1           # 제목 없는 항목은 키워드에 못 닿는다
     assert a.funnel["list_sig"] == list_signature(["https://a.test/1", "https://a.test/2"])
+
+
+from bullet_in.scope import ScopeRule
+
+
+@respx.mock
+def test_rss_scope_records_passed_by_and_dropped():
+    items = ("<item><title>Arteta agrees new deal</title><link>https://b.test/1</link></item>"
+             "<item><title>Guimaraes and Raya crucial - player ratings</title>"
+             "<link>https://b.test/2</link></item>"
+             "<item><title>Is it a two-team title race?</title><link>https://b.test/3</link></item>")
+    respx.get(FEED).mock(return_value=httpx.Response(200, content=_mini(items)))
+    a = RssAdapter("bbc_sport", FEED, scope=ScopeRule(["deal"], {"Raya"}))
+    out = asyncio.run(a.fetch())
+    assert [i.raw_payload["title"] for i in out] == [
+        "Arteta agrees new deal", "Guimaraes and Raya crucial - player ratings"]
+    assert a.funnel["passed"] == 2
+    assert a.funnel["passed_by"] == {"keyword": 1, "extra": 1}
+    assert a.funnel["dropped"] == ["Is it a two-team title race?"]
