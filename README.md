@@ -128,7 +128,7 @@ systemd 는 파이프라인 외부의 부가 작업만 담당합니다: 선수 �
 
 | 소스 | tier | 어댑터 | 비고 |
 |---|---|---|---|
-| Arsenal.com | 0 | arsenal_api | 공식: 공홈 사이트맵으로 후보 발견 + GraphQL 로 본문 조회, taxonomy 필터 (이적 · 1군 재계약) |
+| Arsenal.com | 0 | arsenal_api | 공식: 공홈 사이트맵으로 후보 발견 + GraphQL 로 본문 조회, taxonomy 필터 (이적 · 1군 재계약) · 2026-10 부터 1군 선수 · 팀 소식 (대표팀 · 수상 · 인터뷰) |
 | BBC Sport | 1.5 | rss | 아스날 RSS (2026-10 팀 페이지에서 전환) · 비전담 기준선: 전담 기자 (Mokbel) 는 tier 1 로 상향 |
 | Sky Sports | 2 | html | 비전담 기준선: 전담 기자 (Sheth) 는 tier 1.5 로 상향 |
 | The Guardian | 3 | html | 2026-07 에 Open Platform API 에서 전환 (무료 등급 API 가 독점 기사를 제외) |

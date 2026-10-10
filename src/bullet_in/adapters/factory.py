@@ -48,7 +48,8 @@ def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None,
                                        tag=c.get("tag", "football/arsenal"),
                                        title_contains=c.get("title_contains")))
         elif kind == "arsenal_api":
-            out.append(ArsenalApiAdapter(sid))
+            out.append(ArsenalApiAdapter(
+                sid, scope=official_scope if c.get("title_scope") else None))
         elif kind == "html":
             out.append(HtmlAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url"),
                                    title_contains=c.get("title_contains"),

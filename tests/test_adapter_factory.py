@@ -197,4 +197,13 @@ def test_sources_yaml_scope_settings():
     assert cfg["scope_name_full_only"] == ["White", "Rice", "Jesus", "Timber", "Salmon"]
     scoped = sorted(s["source_id"] for s in cfg["sources"]
                     if (s.get("config") or {}).get("title_scope"))
-    assert scoped == ["bbc_sport", "guardian", "skysports"]
+    assert scoped == ["arsenal_official", "bbc_sport", "guardian", "skysports"]
+
+
+def test_official_source_gets_official_rule_when_title_scope():
+    cfg = {"transfer_keywords": ["deal"], "sources": [
+        {"source_id": "arsenal_official", "adapter": "arsenal_api", "config": {"title_scope": True}},
+        {"source_id": "other_official", "adapter": "arsenal_api", "config": {}}]}
+    on, off = build_adapters(cfg, scope_roster=[("Bukayo Saka", "Saka")])
+    assert on.scope.match("Saka talks a deal") == "name"
+    assert off.scope is None
