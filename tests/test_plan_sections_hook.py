@@ -167,3 +167,66 @@ def test_hook_accepts_a_relative_path(tmp_path, monkeypatch):
     payload = json.dumps({"tool_input": {"file_path": "docs/superpowers/plans/2026-10-12-x.md"}})
     r = subprocess.run([sys.executable, str(HOOK)], input=payload, capture_output=True, text=True, cwd=tmp_path)
     assert r.returncode == 2
+
+
+# --changed BASE (CI) — 파일 이름 날짜가 아니라 「이 PR 에서 새로 생겼나」 로 대상을 고른다 (리뷰 2026-10-11 M-2).
+def _git(repo, *args):
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True)
+
+
+def _repo(tmp_path):
+    repo = tmp_path / "r"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@example.com")
+    _git(repo, "config", "user.name", "t")
+    _write(repo, "plans", "2026-10-07-old.md", "# 옛 계획\n")       # 시작일 전에 머지된 문서
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "base")
+    _git(repo, "tag", "base")
+    return repo
+
+
+def _changed(repo, base="base"):
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "pr")
+    return subprocess.run([sys.executable, str(HOOK), "--changed", base], cwd=repo, capture_output=True, text=True)
+
+
+def test_changed_checks_new_docs_whatever_their_name(tmp_path):
+    repo = _repo(tmp_path)
+    _write(repo, "plans", "no-date.md", "# 계획\n")
+    _write(repo, "specs", "2026-01-01-backdated-design.md", "# 설계\n")
+    r = _changed(repo)
+    assert r.returncode == 2
+    assert "no-date.md" in r.stderr and "2026-01-01-backdated-design.md" in r.stderr
+
+
+def test_changed_skips_edits_to_docs_merged_before_the_start(tmp_path):
+    repo = _repo(tmp_path)
+    (repo / "docs/superpowers/plans/2026-10-07-old.md").write_text("# 옛 계획 · 고침\n", encoding="utf-8")
+    r = _changed(repo)
+    assert r.returncode == 0
+    assert "검사할 계획서 · 스펙 없음" in r.stdout
+
+
+def test_changed_catches_an_old_doc_moved_to_a_new_name(tmp_path):
+    repo = _repo(tmp_path)
+    _git(repo, "mv", "docs/superpowers/plans/2026-10-07-old.md", "docs/superpowers/plans/2026-10-13-moved.md")
+    r = _changed(repo)
+    assert r.returncode == 2                      # 이름을 옮겨도 새 문서로 본다
+    assert "2026-10-13-moved.md" in r.stderr
+
+
+def test_changed_passes_a_complete_new_plan(tmp_path):
+    repo = _repo(tmp_path)
+    _write(repo, "plans", "2026-10-13-x.md", PLAN_OK)
+    r = _changed(repo)
+    assert r.returncode == 0
+    assert "위반 없음" in r.stdout
+
+
+def test_changed_fails_when_the_base_is_unknown(tmp_path):
+    r = _changed(_repo(tmp_path), base="no-such-ref")
+    assert r.returncode == 2
+    assert "git 실패" in r.stderr                 # 기준을 못 찾은 것을 「검사할 것 없음」 으로 넘기지 않는다

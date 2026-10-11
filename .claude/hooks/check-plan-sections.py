@@ -18,7 +18,11 @@
 ## 쓰는 법
 
     python3 .claude/hooks/check-plan-sections.py <계획서 또는 스펙 경로> ...   # 날짜와 관계없이 검사
+    python3 .claude/hooks/check-plan-sections.py --changed <기준 커밋>         # CI · 기준 이후 새로 생긴 문서는 이름과 관계없이
     (인자 없이 부르면 stdin 의 훅 JSON 을 읽고, 파일 이름 날짜가 START 이후인 문서만 본다)
+
+`--changed` 는 기준과 HEAD 사이에서 새로 생긴 계획서 · 스펙을 이름과 관계없이 보고 (옮긴 것도 새 문서로 본다),
+바뀐 문서는 파일 이름 날짜가 START 이후인 것만 본다 (그전 문서에는 이 절이 없다).
 
 ## 이 검사가 안 보는 것
 
@@ -26,11 +30,11 @@
 - 「추정」 표시가 필요한 행에 붙었는지
 - 표 밖 산문의 단정 · Files 목록이 실제 변경과 맞는지 (그건 범위 검사의 몫)
 - START 전 문서 — 2026-10-07 스펙까지는 이 절 없이 머지됐다
-- 훅 · CI 는 파일 이름의 날짜로 START 를 가른다 — 날짜를 빼거나 옛 날짜로 새 문서를 만들면 검사를 안 탄다 (경로를 손으로 주면 본다)
+- 훅은 파일 이름의 날짜로 START 를 가른다 — 날짜를 빼거나 옛 날짜로 새 문서를 만들면 저장 때는 안 걸리고 CI (`--changed`) 에서 걸린다
 
 **통과했다고 근거가 맞는 것은 아니다** — 칸이 비지 않았다는 것만 안다.
 """
-import json, os, re, sys
+import json, os, re, subprocess, sys
 
 START = "2026-10-12"
 PLAN_SECTIONS = ["작업 원칙", "가정과 확인", "더 단순한 꼴과 버린 이유"]
@@ -196,12 +200,41 @@ def check_files(paths):
     return 2 if bad else 0
 
 
+def dated_after_start(path: str) -> bool:
+    m = re.match(r"(\d{4}-\d{2}-\d{2})-", os.path.basename(path))
+    return bool(m) and m.group(1) >= START
+
+
+def check_changed(base: str) -> int:
+    """기준 이후 새로 생긴 계획서 · 스펙은 모두, 바뀐 것은 START 이후 날짜만 검사한다."""
+    r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    top = r.stdout.strip()
+    if r.returncode == 0:
+        r = subprocess.run(["git", "-C", top, "diff", "--no-renames", "--name-status", "--diff-filter=AM", base, "HEAD",
+                            "--", ":(glob)docs/superpowers/plans/*.md", ":(glob)docs/superpowers/specs/*.md"],
+                           capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"git 실패 (기준 {base}): {r.stderr.strip()}", file=sys.stderr)
+        return 2
+    paths = []
+    for ln in r.stdout.splitlines():
+        status, rel = ln.split("\t", 1)
+        if status == "A" or dated_after_start(rel):
+            paths.append(os.path.join(top, rel))
+    if not paths:
+        print("검사할 계획서 · 스펙 없음")
+        return 0
+    return check_files(paths)
+
+
 def main() -> int:
+    if sys.argv[1:2] == ["--changed"] and len(sys.argv) == 3:
+        return check_changed(sys.argv[2])
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     if args:
         return check_files(args)
     if sys.argv[1:]:
-        print("사용법: check-plan-sections.py <문서 경로> ...  (인자 없이 부르면 stdin 의 훅 JSON 을 읽는다)",
+        print("사용법: check-plan-sections.py <문서 경로> ... | --changed <기준 커밋>  (인자 없이 부르면 stdin 의 훅 JSON 을 읽는다)",
               file=sys.stderr)
         return 2
     try:
@@ -210,8 +243,7 @@ def main() -> int:
         return 0
     f = os.path.abspath(data.get("tool_input", {}).get("file_path", "") or ".")
     kind = kind_of(f)
-    m = re.match(r"(\d{4}-\d{2}-\d{2})-", os.path.basename(f))
-    if not kind or not f.endswith(".md") or not m or m.group(1) < START or not os.path.isfile(f):
+    if not kind or not f.endswith(".md") or not dated_after_start(f) or not os.path.isfile(f):
         return 0
     v = violations(f, kind)
     if not v:
