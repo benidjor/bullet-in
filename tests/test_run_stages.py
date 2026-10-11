@@ -106,3 +106,13 @@ def test_scope_roster_or_none_logs_and_returns_none(caplog):
     with caplog.at_level(logging.WARNING):
         assert scope_roster_or_none(_Store(boom=True)) is None
     assert any("이름 갈래" in r.message for r in caplog.records)
+
+
+def test_scope_roster_or_none_warns_on_an_empty_roster(caplog):
+    """조회는 됐는데 0행이면 DB 오류처럼 이름 갈래가 빠진다 — 그때도 경고를 남긴다."""
+    with caplog.at_level(logging.WARNING):
+        scope_roster_or_none(_Store([("Bukayo Saka", "Saka")]))
+    assert not caplog.records                      # 명단이 있으면 경고하지 않는다
+    with caplog.at_level(logging.WARNING):
+        assert scope_roster_or_none(_Store([])) == []
+    assert any("명단이 비어" in r.message for r in caplog.records)

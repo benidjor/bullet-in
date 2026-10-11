@@ -276,13 +276,17 @@ def serving_rows(rows: list[dict], *, relevance_terms, player_names,
 
 
 def scope_roster_or_none(pstore) -> list[tuple[str, str]] | None:
-    """수집 범위 판정의 명단 — 못 읽으면 이름 갈래만 빠지고 수집은 계속한다 (설계 2026-10-07 §2.2)."""
+    """수집 범위 판정의 명단 — 못 읽거나 비었으면 이름 갈래만 빠지고 수집은 계속한다 (설계 2026-10-07 §2.2)."""
     try:
-        return pstore.scope_roster()
+        rows = pstore.scope_roster()
     except Exception:
         logging.getLogger(__name__).warning(
             "명단을 못 읽어 수집 범위 판정에서 이름 갈래를 뺌 (수집은 계속)", exc_info=True)
         return None
+    if not rows:
+        logging.getLogger(__name__).warning(
+            "명단이 비어 수집 범위 판정에서 이름 갈래를 뺌 (확정 1군 · 감독 0명 · 수집은 계속)")
+    return rows
 
 
 def adapter_funnels(adapters) -> dict:
