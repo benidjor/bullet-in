@@ -8,6 +8,11 @@
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-doc-format.py\"",
             "statusMessage": "문서 서식 검사 (§2.2)"
+          },
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-plan-sections.py\"",
+            "statusMessage": "계획서 · 스펙 절 검사"
           }
         ]
       }

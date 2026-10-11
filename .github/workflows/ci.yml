@@ -120,6 +120,15 @@ jobs:
           done
           exit $fail
 
+      # 훅은 Write · Edit 만 보고 파일 이름 날짜로 대상을 고른다 — Bash 로 쓴 문서 · 날짜를 뺀 새 문서는 여기서 잡는다.
+      # 새로 생긴 계획서 · 스펙은 이름과 관계없이, 바뀐 문서는 시작일 (2026-10-12) 이후 날짜만 본다.
+      - name: 바뀐 계획서 · 스펙의 가정과 확인 절 검사
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python3 .claude/hooks/check-plan-sections.py --changed "$BASE_SHA" \
+            || { echo "::error::계획서 · 스펙 절 누락 (docs/conventions/2026-10-11-review-instructions.md §5)"; exit 1; }
+
   pr-format:
     name: PR 규약
     if: github.event_name == 'pull_request'
