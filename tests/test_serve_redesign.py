@@ -499,3 +499,36 @@ def test_mask_ambiguous_needs_the_full_name_in_the_body():
 def test_mask_ambiguous_leaves_unlisted_names_alone():
     t = "나폴리, 래시포드 영입 관심"
     assert R.mask_ambiguous(t, "본문에 풀네임 없음") == t
+
+
+def test_top_story_puts_transfer_first():
+    """설계 2026-10-07 §4 — 이적 단계가 있는 기사가 대표 자리를 먼저 차지한다."""
+    now = datetime(2026, 10, 7, 12, 0)
+    injury = _row(content_hash="I", tier=0.0, title_ko="아스날, 사카 부상 복귀",
+                  transfer_stage="other", published_at=datetime(2026, 10, 7, 9, 0),
+                  fetched_at=datetime(2026, 10, 7, 9, 0))
+    rumour = _row(content_hash="R", tier=1.5, title_ko="아스날, 요케레스 영입 관심",
+                  transfer_stage="interest", published_at=datetime(2026, 10, 5, 9, 0),
+                  fetched_at=datetime(2026, 10, 5, 9, 0))
+    assert R.pick_top_stories([injury, rumour], now)["lead"]["content_hash"] == "R"
+
+
+def test_top_story_fills_with_other_news_when_transfer_is_short():
+    now = datetime(2026, 10, 7, 12, 0)
+    rows = [_row(content_hash=f"O{h}", tier=0.0, transfer_stage="other",
+                 published_at=datetime(2026, 10, 7, h), fetched_at=datetime(2026, 10, 7, h))
+            for h in range(4)]
+    rows.append(_row(content_hash="T", tier=1.5, transfer_stage="rumour",
+                     published_at=datetime(2026, 10, 6), fetched_at=datetime(2026, 10, 6)))
+    picks = R.pick_top_stories(rows, now)
+    assert picks["lead"]["content_hash"] == "T"
+    assert len(picks["mains"]) == 4                                  # 자리가 비지 않는다
+    assert {m["content_hash"] for m in picks["mains"]} == {"O0", "O1", "O2", "O3"}
+
+
+def test_top_story_unstaged_counts_as_other_news():
+    now = datetime(2026, 10, 7, 12, 0)
+    when = {"published_at": datetime(2026, 10, 6), "fetched_at": datetime(2026, 10, 6)}
+    none_stage = _row(content_hash="N", tier=0.0, transfer_stage=None, **when)
+    staged = _row(content_hash="S", tier=1.5, transfer_stage="negotiating", **when)
+    assert R.pick_top_stories([none_stage, staged], now)["lead"]["content_hash"] == "S"

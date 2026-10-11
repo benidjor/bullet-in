@@ -77,3 +77,10 @@ def test_normalize_direction_keeps_valid_else_none():
     assert ts.normalize_direction("none") == "none"
     assert ts.normalize_direction("bogus") == "none"
     assert ts.normalize_direction(None) == "none"
+
+
+def test_scope_path_is_never_official():
+    """설계 2026-10-07 §3.3 — 대표팀 활약 기사에 오피셜이 붙지 않게."""
+    assert ts.rule_stage("arsenal_official", "scope") == (None, None)
+    assert ts.promote_official("done", "arsenal_official", "scope") == "done"
+    assert ts.promote_official("done", "arsenal_official", "title") == "official"   # 종전 그대로

@@ -331,3 +331,31 @@ def test_html_adapter_funnel_signature_follows_deduped_links():
 
 def test_html_adapter_funnel_is_empty_before_first_fetch():
     assert _funnel_adapter().funnel == {}
+
+
+from bullet_in.scope import ScopeRule
+
+
+@respx.mock
+def test_html_adapter_scope_records_passed_by_and_dropped():
+    html = ('<a class="i" href="/1">Arteta agrees new deal</a>'
+            '<a class="i" href="/2">Saka returns from injury</a>'
+            '<a class="i" href="/3">Fans have their say</a>')
+    respx.get("https://a.test/news").mock(return_value=httpx.Response(200, text=html))
+    a = HtmlAdapter("x", "https://a.test/news", "a.i", scope=ScopeRule(["deal"], {"Saka"}))
+    items = asyncio.run(a.fetch())
+    assert [i.raw_payload["title"] for i in items] == ["Arteta agrees new deal",
+                                                       "Saka returns from injury"]
+    assert a.funnel["passed"] == 2
+    assert a.funnel["passed_by"] == {"keyword": 1, "name": 1}
+    assert a.funnel["dropped"] == ["Fans have their say"]
+
+
+@respx.mock
+def test_html_adapter_without_scope_keeps_keyword_filter():
+    html = '<a class="i" href="/1">Arteta agrees new deal</a><a class="i" href="/2">Saka returns</a>'
+    respx.get("https://a.test/news").mock(return_value=httpx.Response(200, text=html))
+    a = HtmlAdapter("x", "https://a.test/news", "a.i", title_contains=["deal"])
+    items = asyncio.run(a.fetch())
+    assert [i.raw_payload["title"] for i in items] == ["Arteta agrees new deal"]
+    assert "passed_by" not in a.funnel and "dropped" not in a.funnel

@@ -9,9 +9,22 @@ from bullet_in.adapters.playwright_news import PlaywrightAdapter
 from bullet_in.adapters.x_playwright import XPlaywrightAdapter
 from bullet_in.adapters.fmkorea import FmkoreaAdapter
 
+from bullet_in.scope import ScopeRule, scope_names
+
 log = logging.getLogger(__name__)
 
-def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None) -> list:
+def scope_rules(cfg: dict, roster) -> tuple[ScopeRule, ScopeRule]:
+    """(언론사용, 공식 소스용) 수집 범위 판정 규칙 (설계 2026-10-07 §2 · §3.2).
+
+    공식 소스는 이적 낱말을 이미 자기 경로 (`tag` · `title`) 로 보므로 키워드 갈래를
+    빼고 이름 · 추가 낱말 · 팀 낱말만 쓴다. 명단이 없으면 이름 갈래만 빠진다."""
+    names = (scope_names(roster, cfg.get("scope_name_extras") or (),
+                         cfg.get("scope_name_full_only") or ()) if roster else set())
+    return ScopeRule(cfg.get("transfer_keywords") or (), names), ScopeRule((), names)
+
+def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None,
+                   scope_roster: list[tuple[str, str]] | None = None) -> list:
+    press_scope, official_scope = scope_rules(cfg, scope_roster)
     out = []
     for s in cfg["sources"]:
         # enabled 는 소스를 통째로 없앤다 — load_sources 도 걸러서 언론사 이름 · 공신력 ·
@@ -24,7 +37,8 @@ def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None) -> l
         if kind == "rss":
             out.append(RssAdapter(sid, c["feed_url"],
                                   title_contains=c.get("title_contains"),
-                                  body_selector=c.get("body_selector")))
+                                  body_selector=c.get("body_selector"),
+                                  scope=press_scope if c.get("title_scope") else None))
         elif kind == "guardian_api":
             key = os.environ.get("GUARDIAN_API_KEY")
             if not key:
@@ -34,14 +48,16 @@ def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None) -> l
                                        tag=c.get("tag", "football/arsenal"),
                                        title_contains=c.get("title_contains")))
         elif kind == "arsenal_api":
-            out.append(ArsenalApiAdapter(sid))
+            out.append(ArsenalApiAdapter(
+                sid, scope=official_scope if c.get("title_scope") else None))
         elif kind == "html":
             out.append(HtmlAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url"),
                                    title_contains=c.get("title_contains"),
                                    body_selector=c.get("body_selector"),
                                    title_selector=c.get("title_selector"),
                                    thumbnail_only=c.get("thumbnail_only", False),
-                                   title_attr=c.get("title_attr")))
+                                   title_attr=c.get("title_attr"),
+                                   scope=press_scope if c.get("title_scope") else None))
         elif kind == "playwright":
             out.append(PlaywrightAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url")))
         elif kind == "x_playwright":

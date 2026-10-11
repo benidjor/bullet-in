@@ -381,9 +381,13 @@ def arsenal_subject(row: dict) -> bool:
 
 
 def top_story_key(row: dict) -> tuple:
-    """정렬 키 (내림차순 = 우선). 이미지 유무는 신뢰도를 밀지 않게 최하위 (spec2 §5.1)."""
+    """정렬 키 (내림차순 = 우선). 이미지 유무는 신뢰도를 밀지 않게 최하위 (spec2 §5.1).
+
+    맨 앞은 이적 단계 유무다 (설계 2026-10-07 §4 「이적 우선」) — 선수 · 팀 소식을 받기
+    시작해도 이적 기사가 대표 자리를 먼저 차지하고, 모자라면 나머지가 채운다."""
     tier = row.get("tier")
     return (
+        1 if _stage.is_displayable(row.get("transfer_stage")) else 0,
         1 if arsenal_subject(row) else 0,
         -float(tier) if tier is not None else -99.0,
         _LEAD_STAGE_RANK.get(row.get("transfer_stage") or "", 0),

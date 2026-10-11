@@ -145,3 +145,65 @@ def test_rss_adapter_gets_keywords_and_body_selector():
     a = build_adapters(cfg)[0]
     assert (a.feed_url, a.title_keywords, a.body_selector) == \
         ("https://feeds.test/a.xml", ["deal"], "article")
+
+
+from bullet_in.adapters.factory import scope_rules
+
+ROSTER = [("Declan Rice", "Rice"), ("Bukayo Saka", "Saka")]
+
+
+def _scope_cfg(title_scope: bool):
+    conf = {"list_url": "https://a.test/l", "item_selector": "a", "title_contains": ["deal"]}
+    if title_scope:
+        conf["title_scope"] = True
+    return {"transfer_keywords": ["deal"], "scope_name_extras": ["Gabriel"],
+            "scope_name_full_only": ["Rice"],
+            "sources": [{"source_id": "s", "adapter": "html", "config": conf}]}
+
+
+def test_title_scope_source_gets_press_rule_with_roster_names():
+    a = build_adapters(_scope_cfg(True), scope_roster=ROSTER)[0]
+    assert a.scope.match("Saka at the double") == "name"
+    assert a.scope.match("Gabriel heads in") == "name"
+    assert a.scope.match("Declan Rice scores") == "name"
+    assert a.scope.match("Rice scores") is None
+    assert a.scope.match("Arteta agrees new deal") == "keyword"
+
+
+def test_source_without_title_scope_keeps_keyword_filter():
+    a = build_adapters(_scope_cfg(False), scope_roster=ROSTER)[0]
+    assert a.scope is None
+    assert a.title_keywords == ["deal"]
+
+
+def test_scope_without_roster_drops_only_names():
+    a = build_adapters(_scope_cfg(True))[0]
+    assert a.scope.match("Saka at the double") is None
+    assert a.scope.match("Arteta agrees new deal") == "keyword"
+
+
+def test_scope_rules_official_rule_has_no_keywords():
+    press, official = scope_rules(_scope_cfg(True), ROSTER)
+    assert press.match("Saka talks a deal") == "keyword"
+    assert official.match("Saka talks a deal") == "name"     # 이적 키워드 갈래 없음
+    assert official.match("Arteta agrees new deal") is None
+
+
+def test_sources_yaml_scope_settings():
+    import yaml
+    from pathlib import Path
+    cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
+    assert cfg["scope_name_extras"] == ["Gabriel", "Bruno", "Ødegaard"]
+    assert cfg["scope_name_full_only"] == ["White", "Rice", "Jesus", "Timber", "Salmon"]
+    scoped = sorted(s["source_id"] for s in cfg["sources"]
+                    if (s.get("config") or {}).get("title_scope"))
+    assert scoped == ["arsenal_official", "bbc_sport", "guardian", "skysports"]
+
+
+def test_official_source_gets_official_rule_when_title_scope():
+    cfg = {"transfer_keywords": ["deal"], "sources": [
+        {"source_id": "arsenal_official", "adapter": "arsenal_api", "config": {"title_scope": True}},
+        {"source_id": "other_official", "adapter": "arsenal_api", "config": {}}]}
+    on, off = build_adapters(cfg, scope_roster=[("Bukayo Saka", "Saka")])
+    assert on.scope.match("Saka talks a deal") == "name"
+    assert off.scope is None

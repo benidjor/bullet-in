@@ -13,6 +13,7 @@ from bullet_in.adapters.detail import fetch_article_detail
 from bullet_in.adapters.meta import _parse_published
 from bullet_in.models import RawItem
 from bullet_in.quality import list_signature
+from bullet_in.scope import ScopeRule, record
 
 
 class RssAdapter:
@@ -20,10 +21,12 @@ class RssAdapter:
 
     def __init__(self, source_id: str, feed_url: str,
                  title_contains: str | list[str] | None = None,
-                 body_selector: str | None = None):
+                 body_selector: str | None = None,
+                 scope: ScopeRule | None = None):
         self.source_id = source_id
         self.feed_url = feed_url
         self.body_selector = body_selector
+        self.scope = scope   # 수집 범위 판정 (설계 2026-10-07 §2) — 있으면 키워드 필터를 대신한다
         # 수집 단계 기록 — SLO-5 응답 판정 (quality.responded) 이 읽는다 (§3.1).
         self.funnel: dict = {}
         if title_contains is None:
@@ -51,7 +54,12 @@ class RssAdapter:
                 title = (e.get("title") or "").strip()
                 if not title:
                     continue
-                if self.title_keywords and not any(
+                if self.scope is not None:
+                    reason = self.scope.match(title)
+                    record(funnel, title, reason)
+                    if reason is None:
+                        continue
+                elif self.title_keywords and not any(
                         k in title.lower() for k in self.title_keywords):
                     continue
                 funnel["passed"] += 1

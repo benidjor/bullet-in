@@ -1,4 +1,5 @@
 import asyncio, json
+from pathlib import Path
 import httpx, respx
 from bullet_in.adapters.arsenal_api import ArsenalApiAdapter, GRAPHQL_URL, SITEMAP_URL
 from datetime import datetime, timezone
@@ -285,3 +286,60 @@ def test_funnel_resets_between_fetches():
     asyncio.run(a.fetch())
     assert a.funnel["sitemap_attempts"] == 1
     assert "sitemap_first_error" not in a.funnel
+
+
+# --- 수집 범위 확대 (설계 2026-10-07 §3) ---------------------------------------
+from bullet_in.adapters.arsenal_api import _accept
+from bullet_in.scope import ScopeRule, scope_names
+
+SCOPE_FX = json.loads((Path(__file__).parent / "fixtures" / "scope_titles_2026-10-06.json").read_text())
+OFFICIAL_RULE = ScopeRule((), scope_names([tuple(r) for r in SCOPE_FX["roster"]],
+                                          ["Gabriel", "Bruno", "Ødegaard"],
+                                          ["White", "Rice", "Jesus", "Timber", "Salmon"]))
+
+
+def _art(title, tax, kind="News"):
+    return {"title": title, "articleType": kind, "taxonomies": tax}
+
+
+def test_official_titles_measured_on_2026_10_06():
+    """설계 §3.4 — 1군 뉴스 29건 중 10건이 scope 경로로 채택된다."""
+    got = [(a["title"], _accept(a, OFFICIAL_RULE)) for a in SCOPE_FX["official"]]
+    accepted = [t for t, p in got if p]
+    assert len(accepted) == 10
+    assert {p for _, p in got if p} == {"scope"}
+    assert "Raya talks all things goalkeeping with Seaman" in accepted      # talks 가 아니라 이름
+    assert "Kai Havertz takes on Ask Me Anything" not in accepted
+    assert "Mikel Merino stars in Colney Carpool!" not in accepted
+
+
+def test_scope_path_needs_scope_rule_and_respects_exclusions():
+    saka = _art("Saka at the double", ["Men", "News", "Internationals"])
+    assert _accept(saka) is None                                   # 규칙이 없으면 종전 그대로
+    assert _accept(saka, OFFICIAL_RULE) == "scope"
+    assert _accept(_art("Gyokeres scores again", ["Men", "News", "Video"]), OFFICIAL_RULE) is None
+    assert _accept(_art("William Saliba takes on AMA", ["Men", "News"]), OFFICIAL_RULE) is None
+    assert _accept(_art("Scotland v Norway report", ["Men", "News", "Internationals"]),
+                   OFFICIAL_RULE) == "scope"                       # 대표팀 태그만으로도
+    assert _accept(_art("Saka at the double", ["Women", "News"]), OFFICIAL_RULE) is None
+
+
+def test_tag_and_title_paths_win_over_scope():
+    assert _accept(_art("Saka signs new deal", ["Men", "News", "Contract news"]),
+                   OFFICIAL_RULE) == "tag"
+    assert _accept(_art("Saka joins on loan", ["Men", "News"]), OFFICIAL_RULE) == "title"
+
+
+@respx.mock
+def test_fetch_records_passed_by_and_dropped_for_men_news():
+    entries = [_sitemap_entry("saka-at-the-double-aSAKA0000001"),
+               _sitemap_entry("ticket-information-aTICK0000001")]
+    _mock_backend(_sitemap(entries), {
+        "aSAKA0000001": _gql_article("Saka at the double", ["Men", "Internationals"]),
+        "aTICK0000001": _gql_article("Disabled Supporters' Ticket Information", ["Men"])})
+    a = ArsenalApiAdapter("arsenal_official", window_hours=24 * 365, scope=OFFICIAL_RULE)
+    items = asyncio.run(a.fetch())
+    assert [i.raw_payload["accept_path"] for i in items] == ["scope"]
+    assert a.funnel["passed_by"] == {"scope": 1}
+    assert a.funnel["dropped"] == ["Disabled Supporters' Ticket Information"]
+    assert a.funnel["sitemap_attempts"] == 1                        # 사이트맵 기록은 그대로

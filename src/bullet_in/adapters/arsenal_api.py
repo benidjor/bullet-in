@@ -16,6 +16,7 @@ import time
 import httpx
 from bullet_in.models import RawItem
 from bullet_in.quality import TRANSFER_TITLE_RE
+from bullet_in.scope import ScopeRule, record
 
 log = logging.getLogger(__name__)
 
@@ -79,21 +80,39 @@ ARTICLE_QUERY = """query GetArticle($articleId: String = "", $glideId: String = 
 REQUIRED_TAXONOMY = "Men"
 ANY_TAXONOMIES = {"Transfer news", "Contract news"}
 
+# 수집 범위 확대 (설계 2026-10-07 §3.2) — 1군 뉴스 중 이적 경로 밖의 선수 · 팀 소식.
+# 제외는 사진 모음 · 영상 · 옛 경기 · 투표 · 다큐 · 선수 차 안 인터뷰 영상이고,
+# 선수의 팬 질의응답 (AMA) 은 태그로 구별되지 않아 제목으로 거른다.
+SCOPE_TAG = "Internationals"
+EXCLUDE_TAGS = {"Compilation", "Photos", "Match gallery", "Video", "Full match",
+                "From the vault", "Gamification", "Behind the Scenes", "3rd Party",
+                "Colney Carpool"}
+_EXCLUDE_TITLE_RE = re.compile(r"Ask Me Anything|\bAMA\b")
+
 _TAG_RE = re.compile(r"<[^>]+>")
 
-def _accept(article: dict) -> str | None:
-    """채택 경로 — 'tag' (구단이 이적 태그를 붙임) · 'title' (제목 어휘) · None (비채택).
+def _accept(article: dict, scope: ScopeRule | None = None) -> str | None:
+    """채택 경로 — 'tag' (구단이 이적 태그를 붙임) · 'title' (제목 어휘) ·
+    'scope' (선수 · 팀 소식) · None (비채택).
 
     구단이 이적 태그를 빠뜨린 발표가 실재해 (2026-08-05 뇌르고르) 제목 갈래를 둔다.
     두 경로를 구분해 두는 것은 단계 규칙이 태그 채택분에만 official 을 고정하기
-    때문이다 (공홈 수집 개정 스펙 2026-08-12 §3.2 · §3.3)."""
+    때문이다 (공홈 수집 개정 스펙 2026-08-12 §3.2 · §3.3).
+
+    scope 는 규칙을 받았을 때만 본다 (설계 2026-10-07 §3.2) — 백필처럼 규칙 없이
+    만든 어댑터는 종전 두 경로만 쓴다."""
     tax = set(article.get("taxonomies") or [])
     if article.get("articleType") != "News" or REQUIRED_TAXONOMY not in tax:
         return None
     if ANY_TAXONOMIES & tax:
         return "tag"
-    if TRANSFER_TITLE_RE.search(article.get("title") or ""):
+    title = article.get("title") or ""
+    if TRANSFER_TITLE_RE.search(title):
         return "title"
+    if scope is None or EXCLUDE_TAGS & tax or _EXCLUDE_TITLE_RE.search(title):
+        return None
+    if SCOPE_TAG in tax or scope.match(title):
+        return "scope"
     return None
 
 def _block_text(block: dict) -> str:
@@ -118,9 +137,11 @@ def _body_payload(blocks: list[dict]) -> dict:
 class ArsenalApiAdapter:
     source_type = "api"
 
-    def __init__(self, source_id: str, window_hours: float = WINDOW_HOURS):
+    def __init__(self, source_id: str, window_hours: float = WINDOW_HOURS,
+                 scope: ScopeRule | None = None):
         self.source_id = source_id
         self.window_hours = window_hours
+        self.scope = scope   # 수집 범위 판정 (설계 2026-10-07 §3) — 없으면 종전 두 경로만
         self.coverage: dict = {}
         self.men_news_rejects: list[dict] = []   # 관측용 — Men + News 인데 비채택 (스펙 2026-08-07 §3.3)
         self.funnel: dict = {}   # 사이트맵 시도 기록 — run.adapter_funnels 가 실행 행에 남긴다 (설계 §3.1)
@@ -195,9 +216,12 @@ class ArsenalApiAdapter:
                     continue
                 if "Men" in (art.get("taxonomies") or []):
                     men += 1
-                accept_path = _accept(art)
+                accept_path = _accept(art, self.scope)
+                tax = art.get("taxonomies") or []
+                if art.get("articleType") == "News" and "Men" in tax:
+                    # 1군 뉴스만 기록한다 — 받은 경로 수와 버린 제목 (설계 2026-10-07 §5.1)
+                    record(self.funnel, art.get("title") or "", accept_path)
                 if accept_path is None:
-                    tax = art.get("taxonomies") or []
                     if art.get("articleType") == "News" and "Men" in tax:
                         self.men_news_rejects.append({
                             "title": art.get("title"), "url": url,
