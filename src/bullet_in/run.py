@@ -319,11 +319,13 @@ def source_responses(sources: dict, fetched: "FetchSummary") -> dict[str, tuple[
 
 def cliff_alert_payload(candidate_counts: dict, history: list[dict], *,
                         adapters, sources: dict, success_rate: float,
-                        run_id: str) -> dict | None:
-    """절벽이 있으면 알림 payload · 없으면 None (차단 알림 스펙 §3.1 · §5.1)."""
+                        run_id: str, skip=frozenset()) -> dict | None:
+    """절벽이 있으면 알림 payload · 없으면 None (차단 알림 스펙 §3.1 · §5.1).
+
+    skip = 이번 실행에 사이트맵 실패 알림이 이미 간 소스 — 같은 사건을 두 채널로 보내지 않는다."""
     if not history:
         return None
-    cliffs = candidate_cliffs(candidate_counts, history[0])
+    cliffs = [s for s in candidate_cliffs(candidate_counts, history[0]) if s not in skip]
     if not cliffs:
         return None
     failure_codes = {a.source_id: dict(getattr(a, "search_failure_codes", {}) or {})
@@ -348,11 +350,11 @@ def slo2_margin(previous_rates: list[float], current_rate: float,
 
 
 def sitemap_alert_payloads(adapters, errors: dict, *, previous_rates: list[float],
-                           run_id: str) -> list[dict]:
-    """사이트맵 시도 기록을 내놓는 어댑터 가운데 사이트맵이 끝내 실패한 것만 알림으로."""
+                           run_id: str) -> dict[str, dict]:
+    """사이트맵 시도 기록을 내놓는 어댑터 가운데 사이트맵이 끝내 실패한 것만 알림으로 (소스별)."""
     failed, allowed, window = slo2_margin(
         previous_rates, success_rate(len(adapters), len(errors)), len(adapters))
-    out = []
+    out = {}
     for a in adapters:
         funnel = getattr(a, "funnel", None) or {}
         if "sitemap_attempts" not in funnel:
@@ -361,7 +363,7 @@ def sitemap_alert_payloads(adapters, errors: dict, *, previous_rates: list[float
             funnel, errors.get(a.source_id), failed_runs=failed, allowed_runs=allowed,
             window=window, run_id=run_id)
         if p:
-            out.append(p)
+            out[a.source_id] = p
     return out
 
 
@@ -395,6 +397,24 @@ async def collect(run_id: str, concurrency: int) -> FetchSummary:
     logging.getLogger(__name__).info(
         "소스별 후보 계수: %s", json.dumps(candidate_counts, ensure_ascii=False))
 
+    # 공식 소스 사이트맵이 재시도까지 실패하거나 404 면 알림 (설계 2026-10-05 §4.2).
+    # 재시도로 구한 실행은 알림 없이 수집 현황 화면 한 줄에서 센다. 판정 · 발송 실패가
+    # 실행을 멈추지 않게 감싼다 (후보 절벽 알림과 같은 격리).
+    # 절벽 알림보다 먼저 판정한다 — 알림이 간 소스는 절벽 알림에서 뺀다. 여기서 실패하면
+    # 집합이 비어 절벽 알림은 전처럼 간다.
+    sitemap_alerted: set[str] = set()
+    try:
+        with engine.connect() as c:
+            prev_rates = [float(r) for r in c.execute(
+                text(RECENT_RATES_SQL), {"rid": run_id, "n": RECENT_RUNS - 1}).scalars().all()]
+        for sid, p in sitemap_alert_payloads(adapters, errors, previous_rates=prev_rates,
+                                             run_id=run_id).items():
+            notify.send_alert(**p)
+            sitemap_alerted.add(sid)
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "사이트맵 실패 알림 판정 실패 — 이번 실행 건너뜀 (수집에는 영향 없음)", exc_info=True)
+
     # 수집 후보 절벽 알림 (차단 알림 스펙 §3.1): 번역 · 렌더를 기다리지 않고 먼저 보낸다.
     # 판정 · 발송 실패가 회차를 멈추지 않게 감싼다 (ops 뷰 생성과 같은 격리).
     try:
@@ -403,7 +423,8 @@ async def collect(run_id: str, concurrency: int) -> FetchSummary:
                          c.execute(text(CANDIDATE_HISTORY_SQL), {"rid": run_id}).scalars().all() if s]
         payload = cliff_alert_payload(
             candidate_counts, cand_hist, adapters=adapters, sources=sources,
-            success_rate=success_rate(len(adapters), len(errors)), run_id=run_id)
+            success_rate=success_rate(len(adapters), len(errors)), run_id=run_id,
+            skip=sitemap_alerted)
         if payload:
             notify.send_alert(**payload)
     except Exception:
@@ -416,20 +437,6 @@ async def collect(run_id: str, concurrency: int) -> FetchSummary:
         if breaches:
             notify.send_alert(**notify.build_coverage_alert(
                 breaches, a.coverage, run_id=run_id))
-
-    # 공식 소스 사이트맵이 재시도까지 실패하거나 404 면 알림 (설계 2026-10-05 §4.2).
-    # 재시도로 구한 실행은 알림 없이 수집 현황 화면 한 줄에서 센다. 판정 · 발송 실패가
-    # 실행을 멈추지 않게 감싼다 (후보 절벽 알림과 같은 격리).
-    try:
-        with engine.connect() as c:
-            prev_rates = [float(r) for r in c.execute(
-                text(RECENT_RATES_SQL), {"rid": run_id, "n": RECENT_RUNS - 1}).scalars().all()]
-        for p in sitemap_alert_payloads(adapters, errors, previous_rates=prev_rates,
-                                        run_id=run_id):
-            notify.send_alert(**p)
-    except Exception:
-        logging.getLogger(__name__).warning(
-            "사이트맵 실패 알림 판정 실패 — 이번 실행 건너뜀 (수집에는 영향 없음)", exc_info=True)
 
     # 채택 누락 관측 (스펙 2026-08-07 §3.3): 이적 관련 제목인데 비채택이면 알림만 —
     # 수집 · 필터 판단은 바꾸지 않는다 (제품 결정 대기). 판정 · 발송 실패가 회차를

@@ -35,18 +35,18 @@ def test_payload_when_official_sitemap_failed_after_retry():
                                         "sitemap_first_error": "ReadTimeout"})
     out = sitemap_alert_payloads(SEVEN + [off], {"arsenal_official": "ReadTimeout"},
                                  previous_rates=[1.0] * 29, run_id=RID)
-    assert len(out) == 1
-    fields = {f["name"]: f["value"] for f in out[0]["fields"]}
+    assert list(out) == ["arsenal_official"]          # 소스별로 — 절벽 알림에서 뺄 소스를 안다
+    fields = {f["name"]: f["value"] for f in out["arsenal_official"]["fields"]}
     assert fields["SLO-2 여유"] == "최근 30회 중 소스 실패 1회 (2회까지 충족)"
 
 
 def test_no_payload_when_retry_rescued():
     off = _Adapter("arsenal_official", {"sitemap_attempts": 2, "sitemap_first_error": "503"})
-    assert sitemap_alert_payloads(SEVEN + [off], {}, previous_rates=[1.0] * 29, run_id=RID) == []
+    assert sitemap_alert_payloads(SEVEN + [off], {}, previous_rates=[1.0] * 29, run_id=RID) == {}
 
 
 def test_other_sources_errors_do_not_make_a_sitemap_alert():
     """funnel 이 없거나 사이트맵 키가 없는 어댑터는 건너뛴다."""
     html = _Adapter("goal", {"selected": 3, "deduped": 3, "titled": 3, "passed": 1})
     assert sitemap_alert_payloads(SEVEN + [html], {"goal": "boom", "s0": "x"},
-                                  previous_rates=[1.0] * 29, run_id=RID) == []
+                                  previous_rates=[1.0] * 29, run_id=RID) == {}
