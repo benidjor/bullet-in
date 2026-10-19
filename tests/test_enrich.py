@@ -1794,6 +1794,38 @@ def test_enrich_rows_appends_the_retry_reason_to_the_prompt():
     assert seen["contents"].endswith("[구단 주입] 사유")
 
 
+# --- 안건 3δ · 입력 차단은 다시 부르지 않는다 ---------------------------------------
+
+def test_enrich_rows_gives_up_at_once_on_a_blocked_prompt():
+    # 같은 입력이면 매번 같은 차단이다 — 10-06 부터 108 실행 동안 실행마다 3번씩 불렀다
+    from types import SimpleNamespace
+    calls = []
+
+    class _BlockedModels:
+        def generate_content(self, **kw):
+            calls.append(kw)
+            return SimpleNamespace(text="", prompt_feedback=SimpleNamespace(
+                block_reason=SimpleNamespace(name="PROHIBITED_CONTENT")))
+
+    class _BlockedClient:
+        def __init__(self): self.models = _BlockedModels()
+
+    blocked = {}
+    out = enrich_rows([{"content_hash": "hb", "title_original": "T", "body_source": "B"}],
+                      _BlockedClient(), "m", blocked=blocked)
+    assert out == {}
+    assert len(calls) == 1
+    assert blocked == {"hb": "PROHIBITED_CONTENT"}
+
+
+def test_enrich_rows_records_nothing_when_the_prompt_is_not_blocked():
+    blocked = {}
+    out = enrich_rows([{"content_hash": "h1", "title_original": "T", "body_excerpt": "B"}],
+                      FakeClient(), "m", blocked=blocked)
+    assert out["h1"]["title_ko"] == "제목"
+    assert blocked == {}
+
+
 # --- 안건 2η · 재작성 잔존은 다음 회차에 한 번 더 -----------------------------------
 
 def test_already_generated_counts_a_row_that_has_only_a_body():

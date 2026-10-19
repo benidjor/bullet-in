@@ -58,6 +58,14 @@ def test_rows_missing_translation_includes_outlet_and_body_source(engine):
     row = next(r for r in store.rows_missing_translation() if r["content_hash"] == "hm")
     assert row["outlet"] == "The Athletic" and row["body_source"] == "원문"
 
+def test_rows_missing_translation_skips_a_blocked_row(engine):
+    # 안건 3δ — 입력이 차단된 행은 다음 실행이 다시 고르지 않는다
+    store = MartStore(engine)
+    store.upsert([_art("hx", "https://x.test/blocked"), _art("hy", "https://x.test/open")])
+    store.mark_enrich_blocked("hx", "PROHIBITED_CONTENT")
+    missing = {r["content_hash"] for r in store.rows_missing_translation()}
+    assert "hx" not in missing and "hy" in missing
+
 def test_changed_url_updates_hash_and_resets_translation(engine):
     from bullet_in.models import Article
     from datetime import datetime, timezone
