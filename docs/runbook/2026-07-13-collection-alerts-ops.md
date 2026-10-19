@@ -15,8 +15,11 @@
 | 채널 | 환경변수 | 실리는 알림 | 받는 사람이 할 일 |
 | --- | --- | --- | --- |
 | 장애 | `DISCORD_WEBHOOK_INCIDENT` | 파이프라인 실패 · 수집 0건 ( 절벽 ) · 선수 검색 배치 전멸 | 원인을 좁히고 고친다 |
-| 관측 | `DISCORD_WEBHOOK_REVIEW` | 링크 선수 후보 등재 · 명단 이적 상태 낡음 · 공홈 채택 누락 | 확정 CLI · 명단 런북으로 결정한다 |
-| 경향 | `DISCORD_WEBHOOK_TREND` | 수집량 이상 · 신선도 · 공홈 커버리지 | 당장 할 일이 없을 때가 많다 |
+| 확인요청 | `DISCORD_WEBHOOK_REVIEW` | 링크 선수 후보 등재 · 명단 이적 상태 낡음 · 공홈 채택 누락 | 확정 CLI · 명단 런북으로 결정한다 |
+| 추이 | `DISCORD_WEBHOOK_TREND` | 수집량 이상 · 신선도 · 공홈 커버리지 | 당장 할 일이 없을 때가 많다 |
+
+채널 칸은 디스코드 서버에 보이는 이름이다 (2026-10-20 확인).
+스펙 §7 은 확인요청을 「관측」, 추이를 「경향」 으로 부른다.
 
 - **webhook URL 발급** — Discord 서버 → 서버 설정 → 연동 (Integrations) → 웹후크 → 새 웹후크 → 채널 선택 → 웹후크 URL 복사.
   채널을 셋으로 쓰려면 채널마다 한 번씩 발급한다.
@@ -219,12 +222,12 @@ notify.send_alert(**notify.build_cliff_alert(
     ["fmkorea"], history=[{"fmkorea": 12}] * 4, sources=sources,
     failure_codes={"fmkorea": {430: 4}}, success_rate=1.0, run_id="smoke-test-0000"))
 
-# 관측 채널 — 링크 선수 후보 등재
+# 확인요청 채널 — 링크 선수 후보 등재
 notify.send_alert(**notify.build_candidate_alert(
     [{"ko": "스모크", "full_name": "Smoke Test", "stage": "rumour",
       "title": "실발송 스모크"}], run_id="smoke-test-0000"))
 
-# 경향 채널 — 신선도 · 수집량
+# 추이 채널 — 신선도 · 수집량
 records = [SourceFreshness("x_ornstein", now - timedelta(hours=291), 120.0, 291.0, True)]
 notify.send_alert(**notify.build_freshness_alert(
     records, 48, targets=records, sources=sources, run_id="smoke-test-0000",
@@ -237,7 +240,7 @@ EOF
 ```
 
 - **판독** — WARNING 없이 끝나면 Discord 2xx 수락 · 채널에서 불릿 · 상대시간 · 시퀀스 렌더링을 눈으로 확인.
-- **채널 판정** — 네 건이 **어느 채널에 떨어졌는지**로 본다 ( 장애 1 · 관측 1 · 경향 2 ) .
+- **채널 판정** — 네 건이 **어느 채널에 떨어졌는지**로 본다 ( 장애 1 · 확인요청 1 · 추이 2 ) .
   넷이 한 채널에 모였으면 채널 변수가 안 주입된 것이다.
   코드가 아니라 `.env` · 프로세스 환경을 본다.
   발송 성공만으로는 갈렸는지 알 수 없다 — 폴백이 조용히 받아 주기 때문이다.
