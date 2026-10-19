@@ -1,8 +1,8 @@
 // Bullet-in 서빙 인터랙션 — 필터 · 정렬 · 공신력 연동 · 테마.
-// DOM 계약: a.item[data-hash][data-stage][data-dir][data-tier][data-outlet][data-journalist][data-published][data-confidence][data-text]
+// DOM 계약: a.item[data-hash][data-stage][data-kind][data-dir][data-tier][data-outlet][data-journalist][data-published][data-confidence][data-text]
 //   data-journalist 는 공저 저자 전원을 '|' 로 이은 다중 값이다 (단독 기사면 값 하나).
 //           사이드바 옵션 input[data-group][data-value][data-tier]
-// URL 계약: ?outlet=&journalist=&tier=&stage=&bucket=other&sort=confidence|views&q=  (다중 선택은 키 반복)
+// URL 계약: ?outlet=&journalist=&tier=&stage=&kind=transfer|team&sort=confidence|views&q=  (다중 선택은 키 반복 · 옛 bucket=other 는 kind=team 으로 읽음)
 // 결합 규칙 (§8): (소스 OR 기자) AND 공신력 AND 영입 단계 AND 검색어
 
 // ── 계측 (공개 준비 2026-08-23) ─────────────────────────────────────
@@ -285,53 +285,110 @@ if (gossipMore) gossipMore.onclick = () =>
   gossipHiddenCount() ? gossipReveal() : gossipCollapse();
 if (gossipMore) gossipSync();
 
-// ── 최신 소식 · 전체 기사 — 주 단위 더보기 · 접기 (spec §4) ─────────
-const latestWrap = document.querySelector('.latest');
-const latestMore = document.getElementById('latestMore');
-const dayGroups = latestWrap ? [...latestWrap.querySelectorAll('.daygroup')] : [];
-const LATEST_INIT = 3;
-function latestHiddenCount() {
-  if (latestWrap?.classList.contains('latestcut'))
-    return dayGroups.filter(g => g.classList.contains('dg-extra')).length;
-  return dayGroups.filter(g => g.classList.contains('wcut')).length;
-}
-function latestSync() {
-  if (!latestMore) return;
-  const n = latestHiddenCount();
-  latestMore.textContent = n
-    ? (latestWrap.classList.contains('latestcut')
-        ? `이전 날짜 더보기 · ${n}개 날짜` : `이전 7일 더보기 · ${n}개 날짜`)
-    : '접기';
-}
-function latestReveal() {
-  const hidden = dayGroups.filter(g => latestWrap.classList.contains('latestcut')
-    ? g.classList.contains('dg-extra') : g.classList.contains('wcut'));
-  if (!hidden.length) return;
-  const anchor = new Date(hidden[0].dataset.date);          // 가장 최신의 숨은 그룹부터 7일 창
-  anchor.setDate(anchor.getDate() - 6);
-  if (latestWrap.classList.contains('latestcut')) {
-    latestWrap.classList.remove('latestcut');
-    dayGroups.forEach((g, i) => { if (i >= LATEST_INIT) g.classList.add('wcut'); });
-  }
-  dayGroups.forEach(g => { if (new Date(g.dataset.date) >= anchor) g.classList.remove('wcut'); });
-  latestSync();
-}
-function latestCollapse() {
-  dayGroups.forEach(g => g.classList.remove('wcut'));
-  latestWrap.classList.add('latestcut');
-  latestSync();
-  latestWrap.previousElementSibling?.scrollIntoView({ behavior: 'smooth', block: 'start' });  // 구역 상단 (sechead) 보정
-}
-function expandLatest() {                                  // 필터 활성 시 전체 전개 (기존 계약)
-  latestWrap?.classList.remove('latestcut');
-  dayGroups.forEach(g => g.classList.remove('wcut'));
-  if (latestMore) latestMore.hidden = true;
-}
-if (latestMore) latestMore.onclick = () =>
-  latestHiddenCount() ? latestReveal() : latestCollapse();
-if (latestMore) latestSync();
+// ── 최신 소식 · 전체 기사 — 날짜 더보기 · 접기 (spec §4) ──────────────
+// 홈은 구역이 둘이라 (설계 2026-10-20 §3) 날짜 목록 (.latest) 마다 따로 단다. 버튼은
+// 그 목록 뒤 형제 가운데 처음 만나는 것이다 (다음 .latest 앞까지만 본다).
+const nextSib = (el, cls) => {
+  for (let n = el.nextElementSibling; n && !n.classList.contains('latest'); n = n.nextElementSibling)
+    if (n.classList.contains(cls)) return n;
+  return null;
+};
+const dayCuts = [...document.querySelectorAll('.latest')].map(wrap => {
+  const more = nextSib(wrap, 'latestmore');
+  const cutAtLoad = wrap.classList.contains('latestcut');   // 필터를 풀면 이 첫 화면으로 돌아간다
+  const groups = [...wrap.querySelectorAll('.daygroup')];
+  // 위쪽 띠 기사만 있는 날짜는 머리글도 숨으므로 세지 않는다 (render.mark_day_cut 과 같은 규칙)
+  const real = g => g.querySelector('.item:not(.dupcard)');
+  const hiddenCount = () => wrap.classList.contains('latestcut')
+    ? groups.filter(g => g.classList.contains('dg-extra') && real(g)).length
+    : groups.filter(g => g.classList.contains('wcut') && real(g)).length;
+  const sync = () => {
+    if (!more) return;
+    const n = hiddenCount();
+    more.textContent = n
+      ? (wrap.classList.contains('latestcut') ? `이전 날짜 더보기 · ${n}개 날짜` : `이전 7일 더보기 · ${n}개 날짜`)
+      : '접기';
+  };
+  const reveal = () => {
+    const hidden = groups.filter(g => wrap.classList.contains('latestcut')
+      ? g.classList.contains('dg-extra') : g.classList.contains('wcut'));
+    if (!hidden.length) return;
+    const anchor = new Date(hidden[0].dataset.date);          // 가장 최신의 숨은 그룹부터 7일 창
+    anchor.setDate(anchor.getDate() - 6);
+    if (wrap.classList.contains('latestcut')) {
+      wrap.classList.remove('latestcut');
+      groups.forEach(g => { if (g.classList.contains('dg-extra')) g.classList.add('wcut'); });
+    }
+    groups.forEach(g => { if (new Date(g.dataset.date) >= anchor) g.classList.remove('wcut'); });
+    sync();
+  };
+  const collapse = () => {
+    groups.forEach(g => g.classList.remove('wcut'));
+    wrap.classList.add('latestcut');
+    sync();
+    wrap.previousElementSibling?.scrollIntoView({ behavior: 'smooth', block: 'start' });  // 구역 상단 (sechead) 보정
+  };
+  if (more) more.onclick = () => hiddenCount() ? reveal() : collapse();
+  sync();
+  return {
+    expand() {                                             // 필터 활성 시 전체 전개 (기존 계약)
+      wrap.classList.remove('latestcut');
+      groups.forEach(g => g.classList.remove('wcut'));
+      if (more) more.hidden = true;
+    },
+    // 필터를 풀면 날짜 펼침을 첫 화면으로 되돌린다 — 펼친 채로 두면 상한 (capApply) 이
+    // 앞 날짜에만 걸려 뒤 날짜가 통째로 보이는 어긋남이 생겼다 (최종 리뷰 2026-10-20).
+    restore() {
+      groups.forEach(g => g.classList.remove('wcut'));
+      wrap.classList.toggle('latestcut', cutAtLoad);
+      if (more) { more.hidden = false; sync(); }
+    },
+  };
+});
+const expandLatest = () => dayCuts.forEach(c => c.expand());
 
-const URL_GROUPS = ['outlet', 'journalist', 'tier', 'stage', 'bucket'];
+// ── 첫 화면 카드 상한 (설계 2026-10-20 §3.2) ───────────────────────
+// 펼친 날짜 안의 카드를 data-cap 장까지만 보이고 나머지는 「…더보기」 버튼 뒤로 둔다.
+// 상한을 풀어야 「이전 날짜 더보기」 가 나온다. 정렬 · 필터 해제 뒤에 다시 센다.
+const capWraps = [...document.querySelectorAll('.latest[data-cap]')];
+const shownBlocks = (scope) => [...scope.querySelectorAll('.block')]
+  .filter(b => b.style.display !== 'none' && !b.querySelector('.dupcard'));
+function capApply(wrap) {
+  const cap = parseInt(wrap.dataset.cap, 10);
+  const btn = nextSib(wrap, 'capmore');
+  const more = nextSib(wrap, 'latestmore');
+  wrap.querySelectorAll('.capcut').forEach(e => e.classList.remove('capcut'));
+  if (!btn || wrap.dataset.capOff) {
+    wrap.classList.remove('capon');
+    if (btn) btn.hidden = true;
+    return;
+  }
+  const open = [...wrap.querySelectorAll('.daygroup:not(.dg-extra)')];
+  const rest = open.flatMap(g => shownBlocks(g)).slice(cap);
+  rest.forEach(b => b.classList.add('capcut'));
+  open.forEach(g => {
+    const bl = shownBlocks(g);
+    if (bl.length && bl.every(b => b.classList.contains('capcut'))) g.classList.add('capcut');
+  });
+  wrap.classList.toggle('capon', rest.length > 0);
+  btn.hidden = rest.length === 0;
+  if (more && rest.length) more.hidden = true;
+  const title = wrap.closest('.sect')?.querySelector('.sechead h2')?.textContent || '';
+  btn.textContent = `${title} 더보기 · ${rest.length}건`;
+  btn.onclick = () => {
+    wrap.dataset.capOff = '1';
+    capApply(wrap);
+    if (more) more.hidden = false;
+  };
+}
+let filtering = false;                                     // 필터가 걸려 있으면 상한을 걸지 않는다
+function capOff(wrap) {                                    // 필터 활성 — 상한 없이 전부
+  wrap.classList.remove('capon');
+  const btn = nextSib(wrap, 'capmore');
+  if (btn) btn.hidden = true;
+}
+
+const URL_GROUPS = ['outlet', 'journalist', 'tier', 'stage', 'kind'];
 const box = (g) => [...side.querySelectorAll(`input[data-group="${g}"]`)];
 const boxesOf = (g) => box(g).filter(c => !c.disabled);
 const checkedVals = (g) => boxesOf(g).filter(c => c.checked).map(c => c.dataset.value);
@@ -378,15 +435,15 @@ function trackFilterApply() {
   const journalists = checkedVals('journalist');
   const tiers = checkedVals('tier').filter(v => v !== 'all');
   const stages = checkedVals('stage');
-  const other = boxesOf('bucket').some(c => c.checked);
+  const kinds = checkedVals('kind');
   track('bi_filter_apply', {
     n_outlet: outlets.length, n_journalist: journalists.length,
     n_tier: tiers.length, n_stage: stages.length,
-    has_other: other ? 1 : 0, has_query: q ? 1 : 0,
+    n_kind: kinds.length, has_query: q ? 1 : 0,
     // 어느 축을 실제로 쓰는지 한 칸에 모아 둔다 — 조합을 세기 쉽게
     axes: [outlets.length && 'outlet', journalists.length && 'journalist',
            tiers.length && 'tier', stages.length && 'stage',
-           other && 'other', q && 'query'].filter(Boolean).join('+') || '(none)',
+           kinds.length && 'kind', q && 'query'].filter(Boolean).join('+') || '(none)',
   });
 }
 
@@ -401,20 +458,20 @@ function applyFilters() {
   const tiers = checkedVals('tier').filter(v => v !== 'all');
   const stageSel = checkedVals('stage');                 // 각 값은 콤마로 이은 enum 집합
   const stageEnums = new Set(stageSel.flatMap(v => v.split(',')));
-  const showOther = boxesOf('bucket').some(c => c.checked);
+  const kinds = checkedVals('kind');                     // 뉴스 종류 (설계 2026-10-20 §4.2)
   // 공신력을 고르면 그 등급의 소스 · 기자가 자동으로 체크되는데 (UI 스펙 07-21 §7.2) 그 체크는
   // 「무엇이 들어가는지 보여 주는 출발점」 이지 조건이 아니다. 조건으로 세면 등급은 최상인데
   // 체크된 기자가 없는 기사 (기자 미상 · 미등재 공저) 가 빠져 사이드바 건수 (125) 와 결과 (123) 가
   // 갈린다 (2026-09-19 실측). 사용자가 소스 · 기자를 직접 손댔을 때만 조건이 된다.
   const srcActive = userTouchedSrc && (outlets.length || journalists.length);
   const conds = (userTouchedSrc ? outlets.length + journalists.length : 0) + tiers.length
-    + stageSel.length + (showOther ? 1 : 0) + (q ? 1 : 0);
+    + stageSel.length + kinds.length + (q ? 1 : 0);
   const active = conds > 0;
   if (active) {
     expandGossip();                                      // 필터가 걸리면 가십 전체를 대상으로
     expandLatest();                                       // 이전 날짜 그룹도 필터 대상으로 편다
   } else {
-    if (latestMore) { latestMore.hidden = false; latestSync(); }
+    dayCuts.forEach(c => c.restore());
     if (gossipMore) { gossipMore.hidden = false; gossipSync(); }
   }
 
@@ -426,23 +483,18 @@ function applyFilters() {
       // 걸리면 참 (render.article_journalists 와 같은 계약).
       || (d.journalist || '').split('|').some(j => journalists.includes(j));
     const okTier = tiers.length === 0 || tiers.includes(d.tier);
-    // 링크 선수 배지 (data-ctx) 예외는 2026-08-27 에 배지와 함께 걷어냈다 —
-    // 서버 렌더 (_cards.html.j2) 와 같은 규칙을 여기서도 쓴다.
-    const isOther = (!d.stage || d.stage === 'other');
     // 단계 필터는 방향 in·out (아스날 주체) 한정 — 타 구단 딜 (none) 은 필터 체크 시
-    // 제외되고, 필터가 없을 때의 노출 · 기타 토글 분모는 그대로다 (단계 재정의 스펙 §8).
-    // 무산 (collapsed) 은 방향을 보지 않는다 (§8 개정) — 잔류 확정 · 재계약 체결이
-    // 방향 none 이라 걸러지면 무산 필터가 제 내용물을 잃는다. render.in_stage_filter 와 같은 규칙.
+    // 제외된다 (단계 재정의 스펙 §8). 무산 (collapsed) 은 방향을 보지 않는다 (§8 개정)
+    // — 잔류 확정 · 재계약 체결이 방향 none 이라 걸러지면 무산 필터가 제 내용물을 잃는다.
+    // render.in_stage_filter 와 같은 규칙.
     const dirOk = d.stage === 'collapsed' || d.dir === 'in' || d.dir === 'out';
-    // 언론사 · 기자 · 공신력으로 좁히면 기타도 함께 연다 — 사이드바가 적어 둔 건수에는
-    // 기타 기사가 들어 있는데 기타 토글 말고는 그것을 열 수단이 없었다 (사이드바 계수
-    // 설계 §5.1). 공신력 축은 그 예외에서 빠져 있어 사이드바 숫자와 필터 결과가 갈렸다
-    // (2026-08-28 실측 — 「최상 94」 를 누르면 91건 · 그 차이의 일부가 기타 6건이다).
-    // 단계를 함께 고른 경우는 그대로 뺀다 — 기타는 어느 단계에도 안 속한다.
-    const narrowed = srcActive || tiers.length > 0;
-    const okStage = isOther ? (showOther || (narrowed && stageEnums.size === 0))
+    // 단계가 없는 선수 · 팀 뉴스는 어느 단계에도 속하지 않는다 — 단계를 고르면 빠진다.
+    // 옛 「기타」 칸과 「좁히면 기타도 연다」 예외는 걷었다 (설계 2026-10-20 §4.3) — 선수 ·
+    // 팀 뉴스가 늘 보이므로 둘 다 할 일이 없다.
+    const okStage = d.kind === 'team' ? stageEnums.size === 0
       : (stageEnums.size === 0 || (stageEnums.has(d.stage) && dirOk));
-    return okText && okSrc && okTier && okStage;
+    const okKind = kinds.length === 0 || kinds.includes(d.kind);
+    return okText && okSrc && okTier && okStage && okKind;
   };
 
   let shown = 0;
@@ -455,8 +507,10 @@ function applyFilters() {
       it.style.display = vis ? '' : 'none';
       if (vis) shown++;
     } else if (!it.closest('.block')) {                  // 가십 등 낱개 카드
-      it.style.display = m ? '' : 'none';
-      if (m) shown++;
+      // 가십 구역은 이 설계 범위 밖 — 조건이 없을 때는 서버 렌더처럼 배지 없는 카드를 숨긴다
+      const vis = m && (active || it.dataset.kind !== 'team');
+      it.style.display = vis ? '' : 'none';
+      if (vis) shown++;
     }
   }
   for (const bl of document.querySelectorAll('.block')) {
@@ -467,7 +521,7 @@ function applyFilters() {
     const blockHit = cards.some(c => selfHit.get(c)) || lineHits.length > 0;
     shown += cards.filter(c => selfHit.get(c)).length + lineHits.length;
     for (const c of cards) {
-      // 조건 없음 = 기존 카드 단위 (기타 단계 숨김 유지) · 조건 있음 = 블록 단위
+      // 조건 없음 = 카드 단위 · 조건 있음 = 블록 단위
       c.style.display = (active ? blockHit : selfHit.get(c)) ? '' : 'none';
       c.classList.toggle('ctxdim', active && blockHit && !selfHit.get(c));
     }
@@ -482,6 +536,8 @@ function applyFilters() {
   if (bandwrap) bandwrap.style.display = active ? 'none' : '';
   sortBlocks();
   hideEmpty();
+  filtering = active;
+  capWraps.forEach(active ? capOff : capApply);
 
   const touched = userTouchedSrc ? ' · 직접 고름' : '';
   if (fstatus) fstatus.textContent = active
@@ -506,6 +562,11 @@ function soloWidth(list) {
 }
 
 function hideEmpty() {
+  // 구역 — 보이는 카드가 없으면 머리글 · 버튼까지 감춘다 (뉴스 종류 · 영입 단계 필터)
+  document.querySelectorAll('.sect').forEach(sec => {
+    const vis = [...sec.querySelectorAll('.item')].some(i => i.style.display !== 'none');
+    sec.style.display = vis ? '' : 'none';
+  });
   // 사건 블록 — 보이는 카드가 없으면 블록째 숨김
   document.querySelectorAll('.block').forEach(bl => {
     const vis = [...bl.querySelectorAll('.item')].some(i => i.style.display !== 'none');
@@ -562,7 +623,9 @@ function restoreFromQuery() {
   if (![...p.keys()].length) return false;
   const want = {};
   for (const g of URL_GROUPS) want[g] = p.getAll(g);
-  boxesOf('outlet').concat(boxesOf('journalist'), boxesOf('stage'), boxesOf('bucket'))
+  // 옛 「기타」 칸 주소 (?bucket=other) 는 「선수 · 팀 뉴스」 로 읽는다 (설계 2026-10-20 §4.3)
+  if (p.getAll('bucket').includes('other') && !want.kind.includes('team')) want.kind.push('team');
+  boxesOf('outlet').concat(boxesOf('journalist'), boxesOf('stage'), boxesOf('kind'))
     .forEach(c => { c.checked = want[c.dataset.group].includes(c.dataset.value); });
   // 주소에 적힌 소스 · 기자는 사용자가 고른 것이다 — 자동 체크와 구분해 조건으로 센다
   userTouchedSrc = want.outlet.length > 0 || want.journalist.length > 0;
@@ -577,11 +640,12 @@ function restoreFromQuery() {
 
 // ── 배선 ──────────────────────────────────────────────────────────
 function resetAll() {
-  boxesOf('outlet').concat(boxesOf('journalist'), boxesOf('stage'), boxesOf('bucket'))
+  boxesOf('outlet').concat(boxesOf('journalist'), boxesOf('stage'), boxesOf('kind'))
     .forEach(c => { c.checked = false; c.closest('.opt').classList.remove('auto'); });
   box('tier').forEach(c => { c.checked = c.dataset.value === 'all'; });
   box('team').forEach(c => { c.checked = c.dataset.value === 'arsenal'; });
   userTouchedSrc = false;
+  capWraps.forEach(w => { delete w.dataset.capOff; });   // 초기화 = 첫 화면 · 푼 상한도 다시 건다
   if (searchInput) searchInput.value = '';
   const js = document.getElementById('jSearch');       // 기자 검색칸도 함께 되돌린다
   if (js && js.value) { js.value = ''; js.dispatchEvent(new Event('input')); }
@@ -605,7 +669,8 @@ if (items.length && side) {                               // 인덱스
   });
   if (applyBtn) applyBtn.onclick = () => { trackFilterApply(); applyFilters(); };
   if (resetBtn) resetBtn.onclick = () => { resetAll(); applyFilters(); };
-  if (sortSel) sortSel.onchange = () => { sortBlocks(); const qs = filterParams().toString();
+  if (sortSel) sortSel.onchange = () => { sortBlocks(); if (!filtering) capWraps.forEach(capApply);
+    const qs = filterParams().toString();
     history.replaceState(null, '', qs ? `?${qs}` : location.pathname); };
   if (searchInput) {
     // 입력할 때마다 목록이 튀지 않게 — 엔터 · 돋보기 버튼 · 「필터 적용」 에서만 반영한다.
@@ -623,7 +688,7 @@ if (items.length && side) {                               // 인덱스
     });
   }
   if (restoreFromQuery()) applyFilters();
-  else { sortBlocks(); hideEmpty(); }
+  else { sortBlocks(); hideEmpty(); capWraps.forEach(capApply); }
 } else if (side) {                                         // 상세 — 필터는 인덱스로 이동
   const indexHref = document.querySelector('.logo')?.getAttribute('href') || 'index.html';
   side.addEventListener('change', (e) => {

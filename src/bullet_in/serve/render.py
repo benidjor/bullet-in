@@ -141,6 +141,21 @@ def group_blocks_by_day(blocks: list[dict], now: datetime) -> list[dict]:
     return out
 
 
+def mark_day_cut(days: list[dict], n: int = 3) -> bool:
+    """첫 화면에 펼칠 날짜 n개를 정해 각 날짜에 extra 를 단다 (설계 2026-10-20 §3.2).
+
+    카드가 보이는 날짜만 센다 — 위쪽 띠 기사만 있는 날짜 (all_dup) 는 머리글도 카드도
+    숨으므로 펼칠 자리를 차지하지 않는다. 접힌 날짜가 하나라도 있으면 True."""
+    seen = 0
+    for d in days:
+        if d.get("all_dup"):
+            d["extra"] = seen >= n
+            continue
+        seen += 1
+        d["extra"] = seen > n
+    return seen > n
+
+
 def time_in_group(row: dict) -> str:
     """날짜 그룹 안 항목의 시각 표시 (spec1 §6.2 · §12). day 정밀도는 지어내지 않고 빈 문자열."""
     if row.get("published_precision") == "day":
@@ -826,6 +841,8 @@ def facet_counts(articles: list[dict], sources: dict, directory: dict | None = N
     return {"total": len(articles), "team": dict(teams),
             "tiers": tiers, "stage": stage_counts, "stage_groups": stage_groups,
             "other": other_count,
+            # 「뉴스 종류」 필터 건수 (설계 2026-10-20 §4.2) — 선수 · 팀 뉴스는 위 「기타」 와 같은 규칙
+            "kinds": {"transfer": len(articles) - other_count, "team": other_count},
             "outlets": _facet_rows(o_ctr, {}, o_tier),
             "journalists": _facet_rows(j_ctr, j_labels, j_tier,
                                        initial_min=INITIAL_MIN_COUNT, extra=j_extra)}
@@ -1008,6 +1025,8 @@ def _decorate(row: dict, sources: dict, now: datetime,
     # 단계 필터의 in · out 한정 (스펙 §8) 판정 키 — 카드 data-dir 로 나간다
     a["_dir"] = row.get("transfer_direction") or ""
     a["_stage_badge"] = _stage.is_displayable(st)
+    # 홈 구역 · 「뉴스 종류」 필터 키 (설계 2026-10-20 §3.1 · §4.4) — 표시하는 단계가 있으면 이적
+    a["_kind"] = "transfer" if a["_stage_badge"] else "team"
     a["_stage_label"] = _stage.label_for(st)
     a["_stage_class"] = _stage.css_for(st)
     entries = article_journalists(row, sources, directory, outlet_dir)
@@ -1101,8 +1120,6 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
     def _is_today(a):
         ts = _group_ts(a)
         return ts is not None and to_kst(ts).date() == today
-    news_today = len({a["content_hash"] for a in
-                      [b["rep"] for b in blocks if b.get("rep")] + band if _is_today(a)})
     gossip_today = sum(1 for g in gossip if _is_today(g))
 
     # 카드마다 그 선수 페이지로 가는 줄을 단다 (2026-08-28 사용자 확정) — 카드 안의
@@ -1115,15 +1132,32 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
         if a["content_hash"] in top_hashes:
             blocks.append({"rep": a, "same": [], "count": 1, "_articles": [a],
                            "band_dup": True, "key": None, "stage_group": None})
-    day_blocks = group_blocks_by_day(blocks, now)
+    # 두 구역으로 가른다 (설계 2026-10-20 §3.1) — 묶음은 단계를 섞지 않으므로 (cluster_events)
+    # 대표의 단계가 곧 묶음의 단계다. 머리글 「오늘 N건」 은 그 구역 카드 + 위쪽 띠 기사로 센다
+    # — 그전 「오늘 뉴스」 는 숨긴 「기타」 까지 셌다.
+    sections = []
+    for kind, title in (("transfer", "이적 뉴스"), ("team", "선수 · 팀 뉴스")):
+        mine = [b for b in blocks if b["rep"]["_kind"] == kind]
+        days = group_blocks_by_day(mine, now)
+        today_n = len({b["rep"]["content_hash"] for b in mine
+                       if not b.get("band_dup") and _is_today(b["rep"])}
+                      | {a["content_hash"] for a in band if a["_kind"] == kind and _is_today(a)})
+        sections.append({"kind": kind, "title": title, "days": days,
+                         "cut": mark_day_cut(days), "today": today_n,
+                         "hidden_days": sum(1 for d in days if d["extra"] and not d["all_dup"]),
+                         # 위쪽 띠 기사만 있는 구역 — 숨김 카드 (필터 도달용) 만 내보내고 머리글은 안 단다
+                         "empty": all(d["all_dup"] for d in days)})
+    # 가십 바로가기 · 「전체 기사 보기」 는 카드가 보이는 첫 구역 머리글에 단다 — 이적 기사가
+    # 전부 위쪽 띠로 올라간 날 이적 구역이 숨으면 링크도 함께 사라졌다 (최종 리뷰 2026-10-20).
+    head_kind = next((s["kind"] for s in sections if s["days"] and not s["empty"]), None)
 
     facets = facet_counts(articles, sources, directory=directory, registry=registry,
                           outlet_dir=outlet_dir)
     return _env().get_template("index.html.j2").render(
-        lead=top["lead"], mains=top["mains"], day_blocks=day_blocks,
+        lead=top["lead"], mains=top["mains"], sections=sections, head_kind=head_kind,
         gossip=gossip, gossip_hidden=gossip_hidden, gossip_days=GOSSIP_DAYS,
         gossip_shown=len(gossip) - gossip_hidden, gossip_total=len(gossip),
-        news_today=news_today, gossip_today=gossip_today,
+        gossip_today=gossip_today,
         facets=facets, active="home", root="",
         meta=page_meta("Bullet-in · 아스날 이적 뉴스", _SITE_DESC,
                        image=(top["lead"] or {}).get("image_url")))
@@ -1807,7 +1841,8 @@ def _mid_tier_rank(row: dict) -> int:
 
 
 def _stage_visible(row: dict) -> bool:
-    """카드가 화면에 남는 단계인가 — 기타 · 미상은 app.js 의 isOther 가 숨긴다."""
+    """가십에서 꺼내 세울 수 있는 단계인가 — 단계가 없는 최하 카드는 가십에서 숨으므로
+    (카드 매크로 hide_other · 설계 2026-10-20) 꺼내지 않는다."""
     stage = row.get("transfer_stage")
     return bool(stage) and stage != "other"
 
@@ -1887,7 +1922,8 @@ def render_article(article: dict, neighbors: list[dict], current_hash: str,
     # facets=None이면 빈 구조로 폴백 (하위 호환 유지)
     if facets is None:
         facets = {"team": {}, "tiers": [], "total": 0, "stage": {}, "stage_groups": [],
-                  "other": 0, "outlets": {"initial": [], "stages": []},
+                  "other": 0, "kinds": {"transfer": 0, "team": 0},
+                  "outlets": {"initial": [], "stages": []},
                   "journalists": {"initial": [], "stages": []}}
     article = dict(article)
     paras = [p for p in (article.get("body_ko") or "").split("\n") if p.strip()]
