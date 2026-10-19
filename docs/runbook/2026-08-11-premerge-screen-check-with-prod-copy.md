@@ -98,6 +98,32 @@ print(len(diff), diff)
 - **새 컬럼을 넣는 변경이면 두 벌이 아니라 세 벌을 렌더한다** — 배포 구간과 소급 구간을 갈라야 한다.
 절차와 실패 사례는 `docs/troubleshooting/2026-08-14-transition-rule-does-not-cover-the-template.md` §4 에 있다.
 
+### 2.5. 지난 시점을 재현해 렌더한다 (2026-10-20 추가)
+
+화면 규칙이 시기에 따라 다르게 보일 때는 (이적시장 기간에는 이적 기사가 몰린다) 지금 화면만 봐서는 안 된다.
+같은 사본에서 그 시점까지 들어온 기사만 남기고, 렌더의 「지금」 을 그 시각으로 둔다.
+
+```python
+# 서빙 경로는 publish 와 같게 (SERVING_SELECT_SQL → serving_rows) 만든 rows 를 쓴다
+from datetime import datetime
+from bullet_in.serve.render import write_site, _group_ts
+now = datetime(2026, 9, 2, 14, 0)                        # 09-02 23:00 KST 를 「지금」 으로 (naive UTC)
+rows = [r for r in rows if (_group_ts(r) or now) <= now]
+write_site(rows, sources, "site_window", now=now, directory=..., registry=..., outlet_dir=...)
+```
+
+- 2026-10-20 홈 구역 설계 (#548) 에서 여름 이적시장 마감 무렵을 이렇게 재현해 첫 화면에 보일 카드를 6장까지로 정했다.
+- 여러 안을 견줄 때는 브라우저에서 수치를 함께 잰다 (예: 한 구역 머리글에서 다음 구역 머리글까지의 거리를 화면 높이로 나눈 값).
+
+### 2.6. 화면에 무엇이 보일지는 서빙 입력으로 센다 (2026-10-20 추가)
+
+운영 DB 의 `articles` 를 세면 화면과 어긋난다.
+렌더 전에 `run.serving_rows` 가 fmkorea 의 무관한 글 · 오래된 글을 빼고, 카드 템플릿에도 숨김 조건이 있다.
+
+- **사이트에 실렸는지** — 배포본 `~/bullet-in/site/article/<content_hash>.html` 이 있는지로 본다.
+- **사본이 운영과 같은 입력인지** — 렌더한 서빙 기사 수가 배포본 사이드바 「전체 N건」 과 같은지 먼저 확인한다.
+- 사례 — `docs/troubleshooting/2026-10-20-counted-the-screen-from-the-wrong-layer.md`.
+
 ## 3. 배포 후 확인의 함정 — CDN 캐시
 
 배포 직후 라이브 주소로 페이지를 요청하면 **옛 페이지가 온다.**
@@ -110,6 +136,14 @@ ssh <vm> 'grep -c "<찾는 문자열>" ~/bullet-in/site/player/<slug>.html'   # 
 
 - 배포 스크립트가 마지막에 출력하는 `https://<배포id>.bullet-in.pages.dev` 주소를 쓰면 캐시를 우회한다.
 - 라이브 도메인은 잠시 뒤 따라온다.
+- **브라우저 자동화로 라이브를 확인할 때는 접속 통계 요청을 막는다** (2026-10-20 추가).
+  막지 않으면 확인 방문이 GA4 행동 지표에 사용자로 섞인다.
+
+```python
+# Playwright — 페이지를 열기 전에 GA 요청을 막는다
+page.route("**/*googletagmanager*", lambda r: r.abort())
+page.route("**/*google-analytics*", lambda r: r.abort())
+```
 
 ### 3.1 세는 함정 — 라벨 텍스트로 세면 다른 자리가 함께 걸린다
 
