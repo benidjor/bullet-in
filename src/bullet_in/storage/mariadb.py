@@ -144,8 +144,13 @@ class MartStore:
             rows = c.execute(text(
                 "SELECT content_hash,url,source_id,accept_path,title_original,body_excerpt,"
                 "body_source,body_level,outlet,summary_ko,summary3_ko,body_ko "
-                "FROM articles WHERE title_ko IS NULL")).mappings().all()
+                "FROM articles WHERE title_ko IS NULL AND enrich_blocked IS NULL")).mappings().all()
         return [dict(r) for r in rows]
+    def mark_enrich_blocked(self, content_hash: str, reason: str) -> None:
+        """입력 차단 표시 — 이 행은 rows_missing_translation 이 다시 고르지 않는다 (안건 3δ)."""
+        with self.engine.begin() as c:
+            c.execute(text("UPDATE articles SET enrich_blocked=:r WHERE content_hash=:h"),
+                      {"r": reason, "h": content_hash})
     def rows_rewritten(self) -> list[dict]:
         """재작성 경로로 이미 채워진 행 — 소급 재작성 대상 선정용.
         rows_missing_translation 과 같은 컬럼을 돌려준다 (같은 함수들이 소비한다)."""

@@ -661,7 +661,8 @@ _MODES = {"translate": (TRANSLATE_PROMPT, FULL_KEYS),
 
 def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate",
                 roster: str = "(없음)", max_attempts: int = 3,
-                notes: dict[str, str] | None = None) -> dict[str, dict]:
+                notes: dict[str, str] | None = None,
+                blocked: dict[str, str] | None = None) -> dict[str, dict]:
     """번역 · 요약 · 추출 쌍 생성. roster 는 확정 링크 명단 문자열이며 아스날
     미언급 기사의 판단 근거로 프롬프트에 실린다 (스펙 §6.5).
     notes 는 content_hash 별 재시도 사유로, 직전 회차가 어긋난 행에만 붙는다
@@ -669,7 +670,10 @@ def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate",
 
     파싱 실패는 회차 안에서 다시 부른다 (안건 ψ) — 넘기면 그 행이 다음 회차까지
     「번역 대기」 로 남는다. 429 는 그대로 회차 즉시 중단이다 (분당 속도 한도라
-    재시도가 대기를 부르고 요금이 된다 · CLAUDE.md)."""
+    재시도가 대기를 부르고 요금이 된다 · CLAUDE.md).
+
+    입력 차단 (prompt_feedback.block_reason) 은 같은 입력이면 매번 같아 다시 부르지
+    않는다 — 사유를 blocked 에 담아 넘기고 다음 회차도 고르지 않게 한다 (안건 3δ)."""
     prompt, keys = _MODES.get(mode, _MODES["translate"])
     notes = notes or {}
     result: dict[str, dict] = {}
@@ -691,6 +695,13 @@ def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate",
                     rate_limited = True
                 else:
                     log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
+                break
+            reason = getattr(getattr(msg, "prompt_feedback", None), "block_reason", None)
+            if reason:
+                name = getattr(reason, "name", None) or str(reason)
+                log.warning("Gemini 입력 차단, 번역 포기 content_hash=%s 사유=%s", h, name)
+                if blocked is not None:
+                    blocked[h] = name
                 break
             parsed = _extract_full(msg.text, keys)
             if parsed is not None:

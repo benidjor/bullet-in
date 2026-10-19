@@ -509,18 +509,35 @@ def enrich(run_id: str) -> None:
     if notes:
         logging.getLogger(__name__).info("재시도 사유를 실은 행 %d건", len(notes))
     results: dict[str, dict] = {}
+    blocked: dict[str, str] = {}
     results.update(enrich_rows(translate_rows, client, GEMINI_MODEL,
                                mode="translate", roster=roster_material,
-                               notes=notes))
+                               notes=notes, blocked=blocked))
     results.update(enrich_rows(tweet_rows, client, GEMINI_MODEL,
-                               mode="tweet", roster=roster_material, notes=notes))
+                               mode="tweet", roster=roster_material, notes=notes,
+                               blocked=blocked))
+    # 입력 차단 (안건 3δ): 표시해 두면 다음 회차가 다시 고르지 않으므로 알림은 기사마다
+    # 한 번만 나간다. 표시 · 발송 실패가 회차를 멈추지 않게 감싼다 (관측 알림 공통 격리).
+    by_hash = {r["content_hash"]: r for r in missing}
+    if blocked:
+        try:
+            for h, reason in blocked.items():
+                mart.mark_enrich_blocked(h, reason)
+            notify.send_alert(**notify.build_enrich_blocked_alert(
+                [{"content_hash": h, "reason": reason,
+                  "title_original": by_hash.get(h, {}).get("title_original"),
+                  "source_id": by_hash.get(h, {}).get("source_id"),
+                  "url": by_hash.get(h, {}).get("url")}
+                 for h, reason in blocked.items()], run_id=run_id))
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "입력 차단 표시 · 알림 실패 — 다음 실행이 다시 고른다", exc_info=True)
     rewritten, gate_reports = rewrite_rows_guarded(
         rewrite_rows, client, GEMINI_MODEL, name_map=name_map, club_map=club_map,
         roster=roster_material)
     results.update(rewritten)
     results.update(title_only_rows(title_only, client, GEMINI_MODEL))
 
-    by_hash = {r["content_hash"]: r for r in missing}
     finals = {h: finalize_translation(v, by_hash.get(h, {}), glossary, name_map, club_map)
               for h, v in results.items()}
     # 재작성 게이트 잔존은 다음 회차에 한 번 더 만든다 — title_ko 를 NULL 로 두는 것이

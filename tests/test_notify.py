@@ -485,6 +485,23 @@ def test_build_filter_miss_alert_embed_shape():
     assert alert["fields"][-1]["value"] == "run 3f2a9c12"
 
 
+def test_build_enrich_blocked_alert_lists_each_article():
+    # 안건 3δ — 입력 차단된 기사는 다시 시도하지 않으므로 사람이 한 번 보게 한다
+    rows = [{"content_hash": "92f0bae9c63ae27e", "title_original": "[FourFourTwo] 맨시티 영입 총정리",
+             "source_id": "fmkorea", "url": "https://www.fourfourtwo.com/team/x",
+             "reason": "PROHIBITED_CONTENT"}]
+    alert = notify.build_enrich_blocked_alert(rows, run_id="3f2a9c12abcd")
+    assert "1건" in alert["title"]
+    f = alert["fields"][0]
+    assert f["name"] == "[FourFourTwo] 맨시티 영입 총정리"
+    assert "- 출처: fmkorea" in f["value"]
+    assert "- 사유: PROHIBITED_CONTENT" in f["value"]
+    assert "[원문](https://www.fourfourtwo.com/team/x)" in f["value"]
+    assert "92f0bae9" in f["value"]
+    assert alert["fields"][-1]["value"] == "run 3f2a9c12"
+    assert alert["channel"] == notify.CHANNEL_REVIEW
+
+
 def test_cliff_alert_reports_cycle_outcome_without_claiming_normal():
     """success_rate 가 1 미만인데 '정상 종료' 라고 쓰면 숫자와 말이 어긋난다."""
     embed = notify.build_cliff_alert(
@@ -584,6 +601,10 @@ def _sample_payloads() -> dict:
         "filter_miss": notify.build_filter_miss_alert(
             [{"title": "t", "taxonomies": [], "url": "http://a"}],
             run_id="run12345678"),
+        "blocked": notify.build_enrich_blocked_alert(
+            [{"content_hash": "92f0bae9c63a", "title_original": "t",
+              "source_id": "fmkorea", "url": "http://a", "reason": "PROHIBITED_CONTENT"}],
+            run_id="run12345678"),
         "roster": notify.build_roster_staleness_alert(
             [{"ko_name": "사카", "transfer_status": "none",
               "new_stages": {"rumour": 1}, "recent_total": 3}],
@@ -607,8 +628,8 @@ def test_incident_alerts_carry_incident_channel():
 
 def test_review_alerts_carry_review_channel():
     p = _sample_payloads()
-    assert [p[k]["channel"] for k in ("candidate", "filter_miss", "roster")] \
-        == [notify.CHANNEL_REVIEW] * 3
+    assert [p[k]["channel"] for k in ("candidate", "filter_miss", "roster", "blocked")] \
+        == [notify.CHANNEL_REVIEW] * 4
 
 
 def test_trend_alerts_carry_trend_channel():

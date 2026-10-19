@@ -40,6 +40,8 @@ ALTER TABLE articles ADD COLUMN IF NOT EXISTS rewrite_retention FLOAT;
 -- 다음 회차가 처리) 회차 메모리로는 남길 수 없어 행에 저장한다. 개정 전 적재분의 NULL 은
 -- 전건 태그 채택이라 고정 유지로 읽힌다.
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS accept_path VARCHAR(16);
+-- Gemini 입력 차단 사유 — 이 칸이 차면 번역을 다시 시도하지 않는다 (안건 3δ).
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS enrich_blocked VARCHAR(32);
 CREATE TABLE IF NOT EXISTS pipeline_runs (
   run_id VARCHAR(64) PRIMARY KEY, dag_run_id VARCHAR(128),
   started_at DATETIME, finished_at DATETIME, duration_sec FLOAT,

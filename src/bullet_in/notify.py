@@ -480,6 +480,26 @@ def build_filter_miss_alert(suspects: list[dict], *, run_id: str) -> dict:
             "channel": CHANNEL_REVIEW}
 
 
+def build_enrich_blocked_alert(rows: list[dict], *, run_id: str) -> dict:
+    """Gemini 가 입력 단계에서 거부한 기사 알림 (안건 3δ).
+
+    같은 입력이면 매번 같은 차단이라 이후 실행은 이 기사를 다시 부르지 않는다 —
+    그래서 사람이 한 번은 보게 한다. 원인 추정 없이 제목 · 출처 · 사유 · 링크만 싣는다."""
+    fields = []
+    for r in rows:
+        lines = [f"- 출처: {r.get('source_id') or '-'}", f"- 사유: {r.get('reason') or '-'}"]
+        if r.get("url"):
+            lines.append(f"- [원문]({r['url']})")
+        lines.append(f"- content_hash: {(r.get('content_hash') or '')[:8]}")
+        fields.append({"name": r.get("title_original") or "(제목 없음)",
+                       "value": "\n".join(lines), "inline": False})
+    fields.append({"name": "실행", "value": run_label(run_id), "inline": True})
+    return {"title": f"🚫 번역 차단 — {len(rows)}건",
+            "description": ("Gemini 가 입력 단계에서 거부해 번역하지 못했습니다.\n"
+                            "같은 입력이면 매번 거부되므로 이후 실행은 이 기사를 다시 시도하지 않습니다."),
+            "color": COLOR_ANOMALY, "fields": fields, "channel": CHANNEL_REVIEW}
+
+
 def build_candidate_alert(candidates: list[dict], *, run_id: str) -> dict:
     """enrich 자동 발굴 후보 등재 알림 (스펙 §4.2) — 후속 액션은 확정 CLI.
     Discord embed 필드 상한 (25) 안에서 10명까지 펼치고 나머지는 건수로 접는다.
