@@ -222,12 +222,12 @@ notify.send_alert(**notify.build_cliff_alert(
     ["fmkorea"], history=[{"fmkorea": 12}] * 4, sources=sources,
     failure_codes={"fmkorea": {430: 4}}, success_rate=1.0, run_id="smoke-test-0000"))
 
-# 관측 채널 — 링크 선수 후보 등재
+# 확인요청 채널 — 링크 선수 후보 등재
 notify.send_alert(**notify.build_candidate_alert(
     [{"ko": "스모크", "full_name": "Smoke Test", "stage": "rumour",
       "title": "실발송 스모크"}], run_id="smoke-test-0000"))
 
-# 경향 채널 — 신선도 · 수집량
+# 추이 채널 — 신선도 · 수집량
 records = [SourceFreshness("x_ornstein", now - timedelta(hours=291), 120.0, 291.0, True)]
 notify.send_alert(**notify.build_freshness_alert(
     records, 48, targets=records, sources=sources, run_id="smoke-test-0000",
@@ -240,7 +240,7 @@ EOF
 ```
 
 - **판독** — WARNING 없이 끝나면 Discord 2xx 수락 · 채널에서 불릿 · 상대시간 · 시퀀스 렌더링을 눈으로 확인.
-- **채널 판정** — 네 건이 **어느 채널에 떨어졌는지**로 본다 ( 장애 1 · 관측 1 · 경향 2 ) .
+- **채널 판정** — 네 건이 **어느 채널에 떨어졌는지**로 본다 ( 장애 1 · 확인요청 1 · 추이 2 ) .
   넷이 한 채널에 모였으면 채널 변수가 안 주입된 것이다.
   코드가 아니라 `.env` · 프로세스 환경을 본다.
   발송 성공만으로는 갈렸는지 알 수 없다 — 폴백이 조용히 받아 주기 때문이다.

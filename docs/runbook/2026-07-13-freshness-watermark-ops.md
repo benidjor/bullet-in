@@ -19,7 +19,7 @@
 ## 알림 해석
 
 - **🕰️ 신선도 경고 (주황)** — 이번 회차 발송 대상이 하나라도 있으면 한 embed 로 묶여 온다.
-  **경향 채널** 로 간다 ( `DISCORD_WEBHOOK_TREND` · 미설정이면 기본 웹훅 · `docs/runbook/2026-07-13-collection-alerts-ops.md` ) .
+  **추이 채널** 로 간다 ( `DISCORD_WEBHOOK_TREND` · 미설정이면 기본 웹훅 · `docs/runbook/2026-07-13-collection-alerts-ops.md` ) .
 - **제목이 소스 이름과 조용한 기간을 싣는다** — 한 소스면 `🕰️ 신선도 경고 — David Ornstein (X) 12.1일째 조용합니다`, 여럿이면 `… 외 2개 소스가 오래됐습니다`.
   일수는 경과 시간을 24로 나눈 값이라 필드의 `h` 값을 단위만 바꿔 적었다.
   description 은 전체 조망 ( `감시 5소스: stale 1 · 정상 3 · 워터마크 없음 1` ) 이다.
@@ -159,7 +159,7 @@ uv run pytest tests/integration/test_source_freshness.py -v  # 테이블 적재 
 - 기능 제거는 `git revert` 로 충분하다.
   `source_freshness` 는 append 전용 이력이라 남아 있어도 무해하고, 테이블 자체도 `CREATE TABLE IF NOT EXISTS` 라 재적용 충돌이 없다.
 - 알림만 임시로 끄려면 `DISCORD_WEBHOOK_URL` 과 `DISCORD_WEBHOOK_TREND` 를 함께 해제한다 ( WARNING 로깅 폴백 ).
-  경향 채널 변수를 남기면 기본 변수를 지워도 그쪽으로 계속 나간다.
+  추이 채널 변수를 남기면 기본 변수를 지워도 그쪽으로 계속 나간다.
   감시 · 이력 적재는 계속 돈다.
 
 ## 참고
