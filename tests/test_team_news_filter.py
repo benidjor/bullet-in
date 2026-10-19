@@ -94,3 +94,39 @@ def test_옛_기타_주소는_선수_팀_뉴스만_보인다(browser, tmp_path):
       team: getComputedStyle(document.querySelector('.sect[data-kind="team"]')).display })""")
     page.close()
     assert r == {"checked": True, "transfer": "none", "team": "block"}
+
+
+# 닷새에 이적 카드 셋씩 — 첫 화면은 앞 세 날짜 · 상한 6장 (1 · 2일째) · 3일째는 상한 뒤
+DAYS = [_row(f"d{d}{i}", "rumour", 10 - i) | {"published_at": datetime(2026, 6, 29 - d, 10 - i)}
+        for d in range(5) for i in range(3)]
+
+RESET_JS = """async () => {
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const vis = el => !!el && el.offsetParent !== null;
+  const sect = document.querySelector('.sect[data-kind="transfer"]');
+  const snap = () => ({
+    cards: [...sect.querySelectorAll('a.item:not(.dupcard)')].filter(vis).length,
+    days: [...sect.querySelectorAll('.daygroup')].filter(vis).map(g => g.dataset.date),
+    cap: vis(sect.querySelector('.capmore')) ? sect.querySelector('.capmore').textContent : null,
+    more: vis(sect.querySelector('.latestmore')) });
+  const first = snap();
+  document.querySelector('input[data-group="kind"][data-value="transfer"]').click();
+  document.getElementById('applyBtn').click(); await wait(30);
+  const filtered = snap();
+  document.getElementById('resetBtn').click(); await wait(30);
+  return { first, filtered, reset: snap() };
+}"""
+
+
+def test_필터를_풀면_첫_화면으로_돌아간다(browser, tmp_path):
+    (tmp_path / "index.html").write_text(render_index(DAYS, SOURCES, NOW), encoding="utf-8")
+    for f in ("app.js", "style.css"):
+        (tmp_path / f).write_text((STATIC / f).read_text(encoding="utf-8"), encoding="utf-8")
+    page = browser.new_page()
+    page.goto((tmp_path / "index.html").as_uri())
+    r = page.evaluate(RESET_JS)
+    page.close()
+    assert r["first"] == {"cards": 6, "days": ["2026-06-29", "2026-06-28"],
+                          "cap": "이적 뉴스 더보기 · 3건", "more": False}
+    assert r["filtered"]["cards"] == 15 and r["filtered"]["cap"] is None
+    assert r["reset"] == r["first"]                              # 날짜 펼침 · 상한이 첫 화면 그대로

@@ -1,5 +1,5 @@
 // Bullet-in 서빙 인터랙션 — 필터 · 정렬 · 공신력 연동 · 테마.
-// DOM 계약: a.item[data-hash][data-stage][data-dir][data-tier][data-outlet][data-journalist][data-published][data-confidence][data-text]
+// DOM 계약: a.item[data-hash][data-stage][data-kind][data-dir][data-tier][data-outlet][data-journalist][data-published][data-confidence][data-text]
 //   data-journalist 는 공저 저자 전원을 '|' 로 이은 다중 값이다 (단독 기사면 값 하나).
 //           사이드바 옵션 input[data-group][data-value][data-tier]
 // URL 계약: ?outlet=&journalist=&tier=&stage=&kind=transfer|team&sort=confidence|views&q=  (다중 선택은 키 반복 · 옛 bucket=other 는 kind=team 으로 읽음)
@@ -295,6 +295,7 @@ const nextSib = (el, cls) => {
 };
 const dayCuts = [...document.querySelectorAll('.latest')].map(wrap => {
   const more = nextSib(wrap, 'latestmore');
+  const cutAtLoad = wrap.classList.contains('latestcut');   // 필터를 풀면 이 첫 화면으로 돌아간다
   const groups = [...wrap.querySelectorAll('.daygroup')];
   // 위쪽 띠 기사만 있는 날짜는 머리글도 숨으므로 세지 않는다 (render.mark_day_cut 과 같은 규칙)
   const real = g => g.querySelector('.item:not(.dupcard)');
@@ -335,7 +336,13 @@ const dayCuts = [...document.querySelectorAll('.latest')].map(wrap => {
       groups.forEach(g => g.classList.remove('wcut'));
       if (more) more.hidden = true;
     },
-    restore() { if (more) { more.hidden = false; sync(); } },
+    // 필터를 풀면 날짜 펼침을 첫 화면으로 되돌린다 — 펼친 채로 두면 상한 (capApply) 이
+    // 앞 날짜에만 걸려 뒤 날짜가 통째로 보이는 어긋남이 생겼다 (최종 리뷰 2026-10-20).
+    restore() {
+      groups.forEach(g => g.classList.remove('wcut'));
+      wrap.classList.toggle('latestcut', cutAtLoad);
+      if (more) { more.hidden = false; sync(); }
+    },
   };
 });
 const expandLatest = () => dayCuts.forEach(c => c.expand());
@@ -514,7 +521,7 @@ function applyFilters() {
     const blockHit = cards.some(c => selfHit.get(c)) || lineHits.length > 0;
     shown += cards.filter(c => selfHit.get(c)).length + lineHits.length;
     for (const c of cards) {
-      // 조건 없음 = 기존 카드 단위 (기타 단계 숨김 유지) · 조건 있음 = 블록 단위
+      // 조건 없음 = 카드 단위 · 조건 있음 = 블록 단위
       c.style.display = (active ? blockHit : selfHit.get(c)) ? '' : 'none';
       c.classList.toggle('ctxdim', active && blockHit && !selfHit.get(c));
     }
@@ -638,6 +645,7 @@ function resetAll() {
   box('tier').forEach(c => { c.checked = c.dataset.value === 'all'; });
   box('team').forEach(c => { c.checked = c.dataset.value === 'arsenal'; });
   userTouchedSrc = false;
+  capWraps.forEach(w => { delete w.dataset.capOff; });   // 초기화 = 첫 화면 · 푼 상한도 다시 건다
   if (searchInput) searchInput.value = '';
   const js = document.getElementById('jSearch');       // 기자 검색칸도 함께 되돌린다
   if (js && js.value) { js.value = ''; js.dispatchEvent(new Event('input')); }

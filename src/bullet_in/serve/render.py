@@ -1144,12 +1144,17 @@ def render_index(articles: list[dict], sources: dict, now: datetime,
                       | {a["content_hash"] for a in band if a["_kind"] == kind and _is_today(a)})
         sections.append({"kind": kind, "title": title, "days": days,
                          "cut": mark_day_cut(days), "today": today_n,
-                         "hidden_days": sum(1 for d in days if d["extra"] and not d["all_dup"])})
+                         "hidden_days": sum(1 for d in days if d["extra"] and not d["all_dup"]),
+                         # 위쪽 띠 기사만 있는 구역 — 숨김 카드 (필터 도달용) 만 내보내고 머리글은 안 단다
+                         "empty": all(d["all_dup"] for d in days)})
+    # 가십 바로가기 · 「전체 기사 보기」 는 카드가 보이는 첫 구역 머리글에 단다 — 이적 기사가
+    # 전부 위쪽 띠로 올라간 날 이적 구역이 숨으면 링크도 함께 사라졌다 (최종 리뷰 2026-10-20).
+    head_kind = next((s["kind"] for s in sections if s["days"] and not s["empty"]), None)
 
     facets = facet_counts(articles, sources, directory=directory, registry=registry,
                           outlet_dir=outlet_dir)
     return _env().get_template("index.html.j2").render(
-        lead=top["lead"], mains=top["mains"], sections=sections,
+        lead=top["lead"], mains=top["mains"], sections=sections, head_kind=head_kind,
         gossip=gossip, gossip_hidden=gossip_hidden, gossip_days=GOSSIP_DAYS,
         gossip_shown=len(gossip) - gossip_hidden, gossip_total=len(gossip),
         gossip_today=gossip_today,
@@ -1836,7 +1841,8 @@ def _mid_tier_rank(row: dict) -> int:
 
 
 def _stage_visible(row: dict) -> bool:
-    """카드가 화면에 남는 단계인가 — 기타 · 미상은 app.js 의 isOther 가 숨긴다."""
+    """가십에서 꺼내 세울 수 있는 단계인가 — 단계가 없는 최하 카드는 가십에서 숨으므로
+    (카드 매크로 hide_other · 설계 2026-10-20) 꺼내지 않는다."""
     stage = row.get("transfer_stage")
     return bool(stage) and stage != "other"
 

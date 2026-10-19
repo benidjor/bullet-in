@@ -293,6 +293,36 @@ def test_index_skips_a_section_with_no_cards():
     assert '<section class="sect" data-kind="team">' not in html
 
 
+def test_section_with_only_band_cards_has_no_header_and_links_move():
+    # 이적 기사가 전부 위쪽 띠로 올라가면 이적 구역은 숨김 카드뿐 — 머리글을 달지 않고,
+    # 가십 바로가기 · 전체 기사 링크는 카드가 보이는 선수 · 팀 뉴스 머리글로 간다 (최종 리뷰 2026-10-20)
+    band = [_row(content_hash=f"b{i}", tier=0.0, transfer_stage="agreed", transfer_direction="in",
+                 title_ko=f"아스날 공식 발표 {i}") for i in range(2)]
+    team = [_row(content_hash=f"o{i}", transfer_stage="other", title_ko=f"팀 소식 {i}") for i in range(2)]
+    low = _low(content_hash="lo", title_ko="아스날, 라이스 이적설 부인")
+    html = render_index(band + team + [low], SOURCES, NOW)
+    tr = _section(html, "transfer")
+    assert "dupcard" in tr and "sechead" not in tr
+    tm = _section(html, "team")
+    assert "<h2>선수 · 팀 뉴스</h2>" in tm
+    assert 'class="seclink" href="all.html"' in tm and 'class="gossipjump"' in tm
+
+
+def test_band_articles_sit_in_sections_only_as_hidden_dupcards():
+    b = _row(content_hash="bd", tier=1.0, transfer_stage="agreed", transfer_direction="in")
+    t = _row(content_hash="tt", transfer_stage="rumour")
+    html = render_index([b, t], SOURCES, NOW)
+    tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/bd\.html"', _section(html, "transfer")).group(0)
+    assert "dupcard" in tag and "display:none" in tag
+
+
+def test_render_all_shows_cards_without_a_stage():
+    from bullet_in.serve.render import render_all
+    html = render_all([_row(content_hash="o", transfer_stage="other")], SOURCES, NOW)
+    tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/o\.html"[^>]*>', html).group(0)
+    assert "display:none" not in tag and 'data-kind="team"' in tag
+
+
 def test_gossip_still_hides_cards_without_a_stage():
     # 가십 구역은 이 설계 범위 밖 — 배지 없는 최하 카드는 지금처럼 숨긴다 (hide_other)
     hi = _row(content_hash="hi", tier=2.0, transfer_stage="agreed", transfer_direction="in",

@@ -35,10 +35,13 @@
 {% block content %}
 {# 홈은 두 구역이다 (설계 2026-10-20 §3) — 위 「이적 뉴스」 · 아래 「선수 · 팀 뉴스」.
    머리글 건수는 「그 구역에 실제로 놓인 오늘치」 다 (2026-08-30 c안을 구역마다).
-   가십 바로가기는 첫 구역 머리글에만 단다 — 가십이 0건이면 걸지 않는다. #}
+   가십 바로가기 · 전체 기사 링크는 카드가 보이는 첫 구역 머리글에만 단다 (head_kind)
+   — 가십이 0건이면 바로가기는 걸지 않는다. 위쪽 띠 기사만 있는 구역은 머리글 없이
+   숨김 카드만 내보낸다 (필터를 걸면 드러난다). #}
 {% for s in sections if s.days %}
+{% set head = s.kind == head_kind %}
 <section class="sect" data-kind="{{ s.kind }}">
-<div class="sechead"><h2>{{ s.title }}</h2><span class="secside"><span class="kst">오늘 {{ s.today }}건{% if loop.first and gossip_today %} · <a class="gossipjump" href="#gossip">가십 {{ gossip_today }}건</a>{% endif %}{% if loop.first %} · 시각 KST 기준{% endif %}</span>{% if loop.first %}<a class="seclink" href="all.html">전체 기사 보기</a>{% endif %}</span></div>
+{% if not s.empty %}<div class="sechead"><h2>{{ s.title }}</h2><span class="secside"><span class="kst">오늘 {{ s.today }}건{% if head and gossip_today %} · <a class="gossipjump" href="#gossip">가십 {{ gossip_today }}건</a>{% endif %}{% if head %} · 시각 KST 기준{% endif %}</span>{% if head %}<a class="seclink" href="all.html">전체 기사 보기</a>{% endif %}</span></div>{% endif %}
 
 {# 첫 화면 카드 상한은 app.js 가 건다 (data-cap · 정렬을 바꿔도 다시 센다). #}
 <div class="latest{{ ' latestcut' if s.cut }}" data-cap="6">
