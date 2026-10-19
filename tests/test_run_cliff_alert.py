@@ -46,6 +46,21 @@ def test_payload_carries_the_funnel_from_adapters_that_count_it():
     assert "수집 단계 기록: 목록 13 → URL 13 → 제목 확인 7 → 키워드 3" in str(payload["fields"])
 
 
+def test_payload_skips_sources_another_alert_already_reported():
+    """사이트맵 실패 알림이 간 소스는 절벽 알림에서 뺀다 — 같은 사건이 두 채널로 가지 않게.
+
+    실측 2026-10-19 18:00 UTC: 사이트맵 404 하나에 장애 「Arsenal.com 수집 0건」 과
+    추이 「공식 소스 사이트맵 수집 실패」 가 함께 왔다."""
+    history = [{"arsenal_official": 3, "goal": 13}]
+    assert cliff_alert_payload({"goal": 14}, history, adapters=[], sources={},
+                               success_rate=0.875, run_id="r",
+                               skip={"arsenal_official"}) is None
+    # 다른 소스가 함께 끊겼으면 그 소스만 남는다
+    payload = cliff_alert_payload({}, history, adapters=[], sources={},
+                                  success_rate=0.75, run_id="r", skip={"arsenal_official"})
+    assert payload["title"] == "🚨 goal 수집 0건"
+
+
 def test_payload_ignores_source_already_at_zero():
     """arsenal_official 은 직전에도 0 — 전이가 아니므로 알림이 없다."""
     history = [{"arsenal_official": 0, "goal": 13}]

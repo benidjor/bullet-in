@@ -1149,7 +1149,11 @@ def test_sitemap_alert_for_404_without_retry():
         "Client error '404 Not Found' for url 'https://www.arsenal.com/sitemaps/articles/1/sitemap.xml'",
         failed_runs=1, allowed_runs=2, window=30, run_id=RID)
     assert "사유: 404 (재시도 안 함)" in p["description"]
-    assert "주소" in p["description"]
+    # 404 는 지금까지 네 번 모두 아스날 쪽 일시 장애였다 (09-26 · 10-18 두 번 · 10-19) —
+    # 첫 알림부터 주소 변경을 의심하게 하지 않고, 길게 이어질 때만 주소를 보게 한다
+    assert "일시 장애로 보입니다" in p["description"]
+    assert "4번 (12시간) 이상 이어지면" in p["description"]
+    assert "바뀌었을 수 있습니다" not in p["description"]
     assert p["channel"] == CHANNEL_TREND
 
 
