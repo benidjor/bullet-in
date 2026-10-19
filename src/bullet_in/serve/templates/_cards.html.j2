@@ -1,10 +1,10 @@
 {% macro stage_badge(s) %}{% if s %}<span class="stage {{ s.tone }}{{ ' filled' if s.filled }}">{{ s.label }}</span>{% endif %}{% endmacro %}
-{% macro card(a, when=None, cls='', show_cred=True, thumb=False, hidden=False, hide_other=False) %}
+{% macro card(a, when=None, cls='', show_cred=True, thumb=False, hidden=False) %}
 {% set show_thumb = thumb and a.image_url %}
-{# 단계 배지가 없는 카드 (「기타」) 는 이제 기본으로 보인다 (설계 2026-10-20) — 홈은
-   「선수 · 팀 뉴스」 구역에, 전체 기사는 목록 그대로 둔다. 가십만 지금처럼 숨긴다
-   (hide_other) · 가십 구역은 이 설계의 범위 밖이다. #}
-<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if hidden or (hide_other and not a._stage_disp) %} style="display:none"{% endif %} href="{{ root }}article/{{ a.content_hash }}.html"
+{# 단계 배지가 없는 카드 (「기타」) 는 어디서나 기본으로 보인다 (설계 2026-10-20) — 홈은
+   「선수 · 팀 뉴스」 구역에, 공신력 최하는 가십 구역에 (사용자 결정 2026-10-20), 전체 기사는
+   목록 그대로 둔다. 좁혀 보는 것은 사이드바 「뉴스 종류」 의 몫이다. #}
+<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if hidden %} style="display:none"{% endif %} href="{{ root }}article/{{ a.content_hash }}.html"
    data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-kind="{{ a._kind }}" data-dir="{{ a._dir }}" data-tier="{{ a._tier_key }}"
    data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}"
    data-published="{{ a._published_iso }}" data-confidence="{{ a.confidence_score or 0 }}"

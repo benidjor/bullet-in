@@ -130,3 +130,27 @@ def test_필터를_풀면_첫_화면으로_돌아간다(browser, tmp_path):
                           "cap": "이적 뉴스 더보기 · 3건", "more": False}
     assert r["filtered"]["cards"] == 15 and r["filtered"]["cap"] is None
     assert r["reset"] == r["first"]                              # 날짜 펼침 · 상한이 첫 화면 그대로
+
+
+GOSSIP = [_row("tr", "rumour", 9), _row("lo", "other", 8) | {"tier": 4}]
+
+
+def test_가십의_기타_카드는_늘_보이고_초기화_뒤에도_보인다(browser, tmp_path):
+    # 사용자 결정 2026-10-20 — 최하 등급 「기타」 도 숨기지 않는다 · 「이적 뉴스」 로 좁히면 빠진다
+    (tmp_path / "index.html").write_text(render_index(GOSSIP, SOURCES, NOW), encoding="utf-8")
+    for f in ("app.js", "style.css"):
+        (tmp_path / f).write_text((STATIC / f).read_text(encoding="utf-8"), encoding="utf-8")
+    page = browser.new_page()
+    page.goto((tmp_path / "index.html").as_uri())
+    r = page.evaluate("""async () => {
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+      const lo = () => document.querySelector('.gossiplist a.item[data-hash="lo"]').offsetParent !== null;
+      const out = { initial: lo() };
+      document.querySelector('input[data-group="kind"][data-value="transfer"]').click();
+      document.getElementById('applyBtn').click(); await wait(30);
+      out.transferOnly = lo();
+      document.getElementById('resetBtn').click(); await wait(30);
+      out.reset = lo();
+      return out; }""")
+    page.close()
+    assert r == {"initial": True, "transferOnly": False, "reset": True}
