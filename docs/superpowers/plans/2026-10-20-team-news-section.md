@@ -87,11 +87,11 @@ dry run 은 「도는가」 만 본다.
 - `src/bullet_in/serve/templates/player.html.j2`
 - `tests/test_serve_render.py`
 
-- [ ] **Step 1: 시험을 먼저 바꾼다** — 옛 정책 시험 셋 (「기타」 숨김 둘 · 「기타」 칸) 을 새 규칙으로 바꾸고, 새 시험 다섯 (구역 배치 · 빈 구역 생략 · 가십 숨김 유지 · 날짜 셋 · 구역별 오늘 건수) 을 더한다. `test_section_is_named_news_and_counts_are_split` 의 머리글 기대값을 「이적 뉴스」 · 「오늘 1건」 으로, `test_linked_player_badge_and_its_exposure_exception_are_gone` 의 마지막 줄을 「숨지 않음」 으로 바꾼다.
+- [ ] **Step 1: 시험을 먼저 바꾼다** — 옛 정책 시험 셋 (「기타」 숨김 둘 · 「기타」 칸) 을 새 규칙으로 바꾸고, 새 시험 다섯 (구역 배치 · 빈 구역 생략 · 가십 숨김 유지 · 날짜 셋 · 구역별 오늘 건수) 을 더한다. 사이드바 시험은 서버 템플릿을 보므로 이 작업에 둔다 (2026-10-20 구현 때 작업 2 에서 옮김). `test_section_is_named_news_and_counts_are_split` 의 머리글 기대값을 「이적 뉴스」 · 「오늘 1건」 으로, `test_linked_player_badge_and_its_exposure_exception_are_gone` 의 마지막 줄을 「숨지 않음」 으로 바꾼다.
 
 ```diff
 diff --git a/tests/test_serve_render.py b/tests/test_serve_render.py
-index 152014c..9846f84 100644
+index 152014c..72bf45d 100644
 --- a/tests/test_serve_render.py
 +++ b/tests/test_serve_render.py
 @@ -250,19 +250,56 @@ def test_detail_shows_stage_badge():
@@ -161,7 +161,29 @@ index 152014c..9846f84 100644
      assert "display:none" in tag
  
  
-@@ -939,7 +971,7 @@ def test_linked_player_badge_and_its_exposure_exception_are_gone():
+@@ -273,11 +310,16 @@ def test_app_js_has_no_badge_exemption_left():
+     assert "d.ctx" not in js
+ 
+ 
+-def test_sidebar_has_other_bucket_checkbox():
+-    html = render_index([_row(transfer_stage="other")], SOURCES, NOW)
+-    assert 'data-group="bucket"' in html
+-    assert 'data-value="other"' in html
+-    assert "기타" in html
++def test_sidebar_has_kind_filter_and_no_other_bucket():
++    # 설계 2026-10-20 §4 — 「기타」 칸 대신 「뉴스 종류」 · 영입 단계는 맨 아래
++    html = render_index([_row(content_hash="t", transfer_stage="rumour"),
++                         _row(content_hash="o", transfer_stage="other")], SOURCES, NOW)
++    assert 'data-group="bucket"' not in html
++    assert 'data-group="kind" data-value="transfer"> 이적 뉴스 <span class="ct">1</span>' in html
++    assert 'data-group="kind" data-value="team"> 선수 · 팀 뉴스 <span class="ct">1</span>' in html
++    order = [html.index(f'data-grp="{g}"') for g in ("kind", "tier", "outlet", "journalist", "stage")]
++    assert order == sorted(order)
++    assert "<h4>이적 뉴스 · 영입 단계</h4>" in html
+ 
+ 
+ def test_app_js_has_other_bucket_toggle_contract():
+@@ -939,7 +981,7 @@ def test_linked_player_badge_and_its_exposure_exception_are_gone():
      assert 'class="ctx"' not in html          # 배지 없음
      assert 'data-ctx' not in html             # 필터 표식도 없음
      tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/ob\.html"', html).group(0)
@@ -170,7 +192,7 @@ index 152014c..9846f84 100644
  
  
  from bullet_in.serve.render import filter_stage
-@@ -1139,11 +1171,11 @@ def test_lowest_stays_in_gossip_when_the_day_already_has_a_card():
+@@ -1139,11 +1181,11 @@ def test_lowest_stays_in_gossip_when_the_day_already_has_a_card():
  
  
  def test_section_is_named_news_and_counts_are_split():
@@ -557,46 +579,29 @@ index 0000000..ffebdab
 
 ```diff
 diff --git a/tests/test_serve_render.py b/tests/test_serve_render.py
-index 152014c..9846f84 100644
+index 72bf45d..9846f84 100644
 --- a/tests/test_serve_render.py
 +++ b/tests/test_serve_render.py
-@@ -273,29 +310,24 @@ def test_app_js_has_no_badge_exemption_left():
-     assert "d.ctx" not in js
+@@ -322,22 +322,12 @@ def test_sidebar_has_kind_filter_and_no_other_bucket():
+     assert "<h4>이적 뉴스 · 영입 단계</h4>" in html
  
  
--def test_sidebar_has_other_bucket_checkbox():
--    html = render_index([_row(transfer_stage="other")], SOURCES, NOW)
--    assert 'data-group="bucket"' in html
--    assert 'data-value="other"' in html
--    assert "기타" in html
--
--
 -def test_app_js_has_other_bucket_toggle_contract():
--    js = (STATIC / "app.js").read_text(encoding="utf-8")
++def test_app_js_reads_kind_and_drops_the_other_bucket():
++    # 설계 2026-10-20 §4.2 · §4.3 — 「기타」 칸 · 「좁히면 기타도 연다」 예외를 걷고 뉴스 종류로 거른다
+     js = (STATIC / "app.js").read_text(encoding="utf-8")
 -    assert "bucket" in js              # '기타' 토글 셀렉터
 -    assert "showOther" in js            # other 노출 분기
 -
-+def test_sidebar_has_kind_filter_and_no_other_bucket():
-+    # 설계 2026-10-20 §4 — 「기타」 칸 대신 「뉴스 종류」 · 영입 단계는 맨 아래
-+    html = render_index([_row(content_hash="t", transfer_stage="rumour"),
-+                         _row(content_hash="o", transfer_stage="other")], SOURCES, NOW)
-+    assert 'data-group="bucket"' not in html
-+    assert 'data-group="kind" data-value="transfer"> 이적 뉴스 <span class="ct">1</span>' in html
-+    assert 'data-group="kind" data-value="team"> 선수 · 팀 뉴스 <span class="ct">1</span>' in html
-+    order = [html.index(f'data-grp="{g}"') for g in ("kind", "tier", "outlet", "journalist", "stage")]
-+    assert order == sorted(order)
-+    assert "<h4>이적 뉴스 · 영입 단계</h4>" in html
- 
+-
 -def test_app_js_opens_other_when_narrowed_by_outlet_journalist_or_tier():
 -    """사이드바 건수에는 기타 기사가 들어 있는데 기타 토글 말고는 열 수단이 없었다.
- 
+-
 -    언론사 · 기자 · 공신력으로 좁히면 기타도 함께 열어야 건수와 목록이 맞는다
 -    (사이드바 계수 설계 §5.1). 공신력 축이 이 예외에서 빠져 있어 사이드바 숫자와
 -    필터 결과가 갈렸다 (2026-08-28 실측 — 「최상 94」 를 눌러도 91건).
 -    """
-+def test_app_js_reads_kind_and_drops_the_other_bucket():
-+    # 설계 2026-10-20 §4.2 · §4.3 — 「기타」 칸 · 「좁히면 기타도 연다」 예외를 걷고 뉴스 종류로 거른다
-     js = (STATIC / "app.js").read_text(encoding="utf-8")
+-    js = (STATIC / "app.js").read_text(encoding="utf-8")
 -    assert "const narrowed = srcActive || tiers.length > 0;" in js
 -    assert "isOther ? (showOther || (narrowed && stageEnums.size === 0))" in js
 +    assert "showOther" not in js and "narrowed" not in js
