@@ -322,22 +322,12 @@ def test_sidebar_has_kind_filter_and_no_other_bucket():
     assert "<h4>이적 뉴스 · 영입 단계</h4>" in html
 
 
-def test_app_js_has_other_bucket_toggle_contract():
+def test_app_js_reads_kind_and_drops_the_other_bucket():
+    # 설계 2026-10-20 §4.2 · §4.3 — 「기타」 칸 · 「좁히면 기타도 연다」 예외를 걷고 뉴스 종류로 거른다
     js = (STATIC / "app.js").read_text(encoding="utf-8")
-    assert "bucket" in js              # '기타' 토글 셀렉터
-    assert "showOther" in js            # other 노출 분기
-
-
-def test_app_js_opens_other_when_narrowed_by_outlet_journalist_or_tier():
-    """사이드바 건수에는 기타 기사가 들어 있는데 기타 토글 말고는 열 수단이 없었다.
-
-    언론사 · 기자 · 공신력으로 좁히면 기타도 함께 열어야 건수와 목록이 맞는다
-    (사이드바 계수 설계 §5.1). 공신력 축이 이 예외에서 빠져 있어 사이드바 숫자와
-    필터 결과가 갈렸다 (2026-08-28 실측 — 「최상 94」 를 눌러도 91건).
-    """
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
-    assert "const narrowed = srcActive || tiers.length > 0;" in js
-    assert "isOther ? (showOther || (narrowed && stageEnums.size === 0))" in js
+    assert "showOther" not in js and "narrowed" not in js
+    assert "const okKind = kinds.length === 0 || kinds.includes(d.kind);" in js
+    assert "p.getAll('bucket').includes('other')" in js      # 옛 주소는 선수 · 팀 뉴스로 읽는다
 
 
 def test_index_footer_does_not_link_to_ops_page():
