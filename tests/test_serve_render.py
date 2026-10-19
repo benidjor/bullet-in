@@ -250,19 +250,56 @@ def test_detail_shows_stage_badge():
 
 import re as _re
 
-def test_index_hides_offmission_card_by_default():
+def _section(html, kind):
+    m = _re.search(r'<section class="sect" data-kind="%s">(.*?)</section>' % kind, html, _re.S)
+    return m.group(1) if m else ""
+
+
+def test_index_puts_other_card_in_team_section_and_shows_it():
+    # 설계 2026-10-20 §3.1 — 「기타」 는 숨기지 않고 선수 · 팀 뉴스 구역에 둔다 (#22 정책 폐기)
     tr = _row(content_hash="t", transfer_stage="rumour")
     ot = _row(content_hash="o", transfer_stage="other")
     html = render_index([tr, ot], SOURCES, NOW)
-    o_tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/o\.html"', html).group(0)
-    t_tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/t\.html"', html).group(0)
-    assert "display:none" in o_tag       # off-mission(other) 카드만 숨김
-    assert "display:none" not in t_tag   # 이적 카드(rumour)는 노출
+    o_tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/o\.html"[^>]*>', html).group(0)
+    assert "display:none" not in o_tag
+    assert 'data-kind="team"' in o_tag
+    assert 'href="article/o.html"' in _section(html, "team")
+    assert 'href="article/t.html"' in _section(html, "transfer")
+    assert 'href="article/o.html"' not in _section(html, "transfer")
 
-def test_index_still_hides_offmission_card_without_badge():
-    # 회귀 가드 — 배지 없는 기타 글은 그대로 숨김 (PR #22 정책 유지)
-    html = render_index([_row(content_hash="o2", transfer_stage="other")], SOURCES, NOW)
-    tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/o2\.html"', html).group(0)
+
+def test_mark_day_cut_counts_only_days_with_cards():
+    from bullet_in.serve.render import mark_day_cut
+    days = [{"all_dup": False}, {"all_dup": True}, {"all_dup": False},
+            {"all_dup": False}, {"all_dup": False}]
+    assert mark_day_cut(days) is True
+    # 위쪽 띠 기사만 있는 날짜 (all_dup) 는 펼칠 자리를 차지하지 않는다
+    assert [d["extra"] for d in days] == [False, False, False, False, True]
+    assert mark_day_cut([{"all_dup": False}] * 3) is False
+
+
+def test_each_section_counts_its_own_today():
+    t1 = _row(content_hash="t1", transfer_stage="rumour", published_at=datetime(2026, 6, 29, 9))
+    o1 = _row(content_hash="o1", transfer_stage="other", published_at=datetime(2026, 6, 29, 8))
+    o2 = _row(content_hash="o2", transfer_stage="other", published_at=datetime(2026, 6, 29, 7))
+    html = render_index([t1, o1, o2], SOURCES, NOW)
+    assert "오늘 1건" in _section(html, "transfer")
+    assert "오늘 2건" in _section(html, "team")
+
+
+def test_index_skips_a_section_with_no_cards():
+    html = render_index([_row(content_hash="t", transfer_stage="rumour")], SOURCES, NOW)
+    assert 'data-kind="transfer"' in html
+    assert '<section class="sect" data-kind="team">' not in html
+
+
+def test_gossip_still_hides_cards_without_a_stage():
+    # 가십 구역은 이 설계 범위 밖 — 배지 없는 최하 카드는 지금처럼 숨긴다 (hide_other)
+    hi = _row(content_hash="hi", tier=2.0, transfer_stage="agreed", transfer_direction="in",
+              title_ko="아스날, 사카 재계약 합의")
+    lo = _row(content_hash="lo", tier=4.0, transfer_stage="other", title_ko="아스날 훈련장 소식")
+    html = render_index([hi, lo], SOURCES, NOW)
+    tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/lo\.html"', html).group(0)
     assert "display:none" in tag
 
 
@@ -273,11 +310,16 @@ def test_app_js_has_no_badge_exemption_left():
     assert "d.ctx" not in js
 
 
-def test_sidebar_has_other_bucket_checkbox():
-    html = render_index([_row(transfer_stage="other")], SOURCES, NOW)
-    assert 'data-group="bucket"' in html
-    assert 'data-value="other"' in html
-    assert "기타" in html
+def test_sidebar_has_kind_filter_and_no_other_bucket():
+    # 설계 2026-10-20 §4 — 「기타」 칸 대신 「뉴스 종류」 · 영입 단계는 맨 아래
+    html = render_index([_row(content_hash="t", transfer_stage="rumour"),
+                         _row(content_hash="o", transfer_stage="other")], SOURCES, NOW)
+    assert 'data-group="bucket"' not in html
+    assert 'data-group="kind" data-value="transfer"> 이적 뉴스 <span class="ct">1</span>' in html
+    assert 'data-group="kind" data-value="team"> 선수 · 팀 뉴스 <span class="ct">1</span>' in html
+    order = [html.index(f'data-grp="{g}"') for g in ("kind", "tier", "outlet", "journalist", "stage")]
+    assert order == sorted(order)
+    assert "<h4>이적 뉴스 · 영입 단계</h4>" in html
 
 
 def test_app_js_has_other_bucket_toggle_contract():
@@ -939,7 +981,7 @@ def test_linked_player_badge_and_its_exposure_exception_are_gone():
     assert 'class="ctx"' not in html          # 배지 없음
     assert 'data-ctx' not in html             # 필터 표식도 없음
     tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/ob\.html"', html).group(0)
-    assert "display:none" in tag              # 기타라서 숨는다 (예외 없음)
+    assert "display:none" not in tag          # 「기타」 는 이제 선수 · 팀 뉴스 구역에 보인다 (설계 2026-10-20)
 
 
 from bullet_in.serve.render import filter_stage
@@ -1139,11 +1181,11 @@ def test_lowest_stays_in_gossip_when_the_day_already_has_a_card():
 
 
 def test_section_is_named_news_and_counts_are_split():
-    # 「최신 소식」 → 「최신 뉴스」 · 오늘 건수를 뉴스 · 가십으로 갈라 적는다
+    # 「최신 뉴스」 → 「이적 뉴스」 (설계 2026-10-20 §3.4) · 오늘 건수를 구역 · 가십으로 갈라 적는다
     low = _low(content_hash="lo", title_ko="아스날, 사카 이적설 부인")
     html = render_index([low], SOURCES, NOW)
-    assert "<h2>최신 뉴스</h2>" in html
-    assert "오늘 뉴스 1건" in html
+    assert "<h2>이적 뉴스</h2>" in html
+    assert "오늘 1건" in html
     # 오늘치가 전부 최신 뉴스로 올라가 가십 절에 0건이면 링크를 걸지 않는다 (c안)
     assert "gossipjump" not in html
 

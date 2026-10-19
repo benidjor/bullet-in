@@ -106,13 +106,13 @@ gtag('config','{{ ga_id }}');
     <h4>팀</h4>
     <label class="opt"><input type="checkbox" data-group="team" data-value="arsenal" checked> Arsenal <span class="ct">{{ facets.team.get('arsenal', 0) }}</span></label>
 
-    <div class="grp" data-grp="stage">
-      <button class="grphead" type="button"><h4>영입 단계</h4><span class="caret">▾</span></button>
+    {# 「뉴스 종류」 는 홈의 두 구역과 같은 축이다 (설계 2026-10-20 §4) — 옛 「기타」 칸을 대신하고,
+       고르면 좁혀지는 필터다. 공통 필터 (공신력 · 소스 · 기자) 가 그 아래, 「영입 단계」 는 맨 아래. #}
+    <div class="grp" data-grp="kind">
+      <button class="grphead" type="button"><h4>뉴스 종류</h4><span class="caret">▾</span></button>
       <div class="grpbody">
-      {% for sg in facets.stage_groups %}
-      <label class="opt"><input type="checkbox" data-group="stage" data-value="{{ sg.value }}"> {{ sg.label }} <span class="ct">{{ sg.count }}</span></label>
-      {% endfor %}
-      <label class="opt"><input type="checkbox" data-group="bucket" data-value="other"> 기타 <span class="ct">{{ facets.other or 0 }}</span></label>
+      <label class="opt"><input type="checkbox" data-group="kind" data-value="transfer"> 이적 뉴스 <span class="ct">{{ facets.kinds.transfer }}</span></label>
+      <label class="opt"><input type="checkbox" data-group="kind" data-value="team"> 선수 · 팀 뉴스 <span class="ct">{{ facets.kinds.team }}</span></label>
       </div>
     </div>
 
@@ -142,6 +142,15 @@ gtag('config','{{ ga_id }}');
           </button>
         </div>
         {{ facet_block('journalist', facets.journalists) }}
+      </div>
+    </div>
+
+    <div class="grp" data-grp="stage">
+      <button class="grphead" type="button"><h4>이적 뉴스 · 영입 단계</h4><span class="caret">▾</span></button>
+      <div class="grpbody">
+      {% for sg in facets.stage_groups %}
+      <label class="opt"><input type="checkbox" data-group="stage" data-value="{{ sg.value }}"> {{ sg.label }} <span class="ct">{{ sg.count }}</span></label>
+      {% endfor %}
       </div>
     </div>
 

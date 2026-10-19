@@ -1,13 +1,11 @@
 {% macro stage_badge(s) %}{% if s %}<span class="stage {{ s.tone }}{{ ' filled' if s.filled }}">{{ s.label }}</span>{% endif %}{% endmacro %}
-{% macro card(a, when=None, cls='', show_cred=True, thumb=False, hidden=False, show_all=False) %}
+{% macro card(a, when=None, cls='', show_cred=True, thumb=False, hidden=False, hide_other=False) %}
 {% set show_thumb = thumb and a.image_url %}
-{# 기타 단계는 기본 숨김 (#22).
-   링크 선수 배지가 붙은 글을 예외로 노출하던 규칙은 2026-08-27 에 배지와 함께
-   걷어냈다 — 배지 없이 예외만 남기면 아스날과 무관한 글이 설명 없이 뜬다.
-   선수 페이지 (show_all) 는 귀속 기사 전량을 보여줘야 해서 이 기본 숨김을 끈다
-   — 머리 건수와 목록 수가 어긋나면 안 되기 때문 (선수 페이지 스펙 §5.3). #}
-<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if hidden or (not show_all and not a._stage_disp) %} style="display:none"{% endif %} href="{{ root }}article/{{ a.content_hash }}.html"
-   data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-dir="{{ a._dir }}" data-tier="{{ a._tier_key }}"
+{# 단계 배지가 없는 카드 (「기타」) 는 이제 기본으로 보인다 (설계 2026-10-20) — 홈은
+   「선수 · 팀 뉴스」 구역에, 전체 기사는 목록 그대로 둔다. 가십만 지금처럼 숨긴다
+   (hide_other) · 가십 구역은 이 설계의 범위 밖이다. #}
+<a class="item {{ a._grade }}{{ ' hasthumb' if show_thumb }}{{ ' ' ~ cls if cls }}"{% if hidden or (hide_other and not a._stage_disp) %} style="display:none"{% endif %} href="{{ root }}article/{{ a.content_hash }}.html"
+   data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-kind="{{ a._kind }}" data-dir="{{ a._dir }}" data-tier="{{ a._tier_key }}"
    data-outlet="{{ a._outlet }}" data-journalist="{{ a._journalist }}"
    data-published="{{ a._published_iso }}" data-confidence="{{ a.confidence_score or 0 }}"
    data-text="{{ (a._title ~ ' ' ~ (a.summary_ko or '')) | lower }}">
@@ -22,7 +20,7 @@
 {# 같은 소식 줄 (2026-09-02) — 대표 카드 안에 한 줄씩 붙는다. 필터가 읽는 data-*
    는 옛 관련 보도 항목 (relitem) 이 갖던 것을 그대로 옮긴 것이다. #}
 {% macro sameline(a) %}<a class="sameline" href="{{ root }}article/{{ a.content_hash }}.html"
-   data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-dir="{{ a._dir }}"
+   data-hash="{{ a.content_hash }}" data-stage="{{ a._stage }}" data-kind="{{ a._kind }}" data-dir="{{ a._dir }}"
    data-tier="{{ a._tier_key }}" data-outlet="{{ a._outlet }}"
    data-journalist="{{ a._journalist }}" data-published="{{ a._published_iso }}"
    data-confidence="{{ a.confidence_score or 0 }}"
