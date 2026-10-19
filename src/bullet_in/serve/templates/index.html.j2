@@ -80,7 +80,7 @@
 {% if gossip %}
 <div class="sechead gossiphead" id="gossip"><h2>가십</h2><span class="secside"><span class="kst">최근 {{ gossip_days }}일 {{ gossip_shown }}건 · 전체 {{ gossip_total }}건</span><a class="seclink" href="all.html">전체 기사 보기</a></span></div>
 <div class="gossiplist{{ ' weekcut' if gossip_hidden }}">
-  {% for a in gossip %}{{ card(a, when=a._gwhen, cls='gwk' if a._gwk else '', show_cred=False, hide_other=True) }}{% endfor %}
+  {% for a in gossip %}{{ card(a, when=a._gwhen, cls='gwk' if a._gwk else '', show_cred=False) }}{% endfor %}
 </div>
 {% if gossip_hidden %}<button class="gossipmore" id="gossipMore" type="button">이전 날짜 가십 더보기 · {{ gossip_hidden }}건</button>{% endif %}
 <p class="gossipnote">공신력 최하 보도는 사건 묶음과 상관없이 모두 여기에 모읍니다.</p>

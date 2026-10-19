@@ -1841,8 +1841,8 @@ def _mid_tier_rank(row: dict) -> int:
 
 
 def _stage_visible(row: dict) -> bool:
-    """가십에서 꺼내 세울 수 있는 단계인가 — 단계가 없는 최하 카드는 가십에서 숨으므로
-    (카드 매크로 hide_other · 설계 2026-10-20) 꺼내지 않는다."""
+    """가십에서 꺼내 세울 수 있는 단계인가 — 꺼내기는 이적 단계가 있는 최하 기사만 한다
+    (2026-08-30 규칙 · 단계가 없는 최하 카드는 가십 구역에 그대로 보인다)."""
     stage = row.get("transfer_stage")
     return bool(stage) and stage != "other"
 

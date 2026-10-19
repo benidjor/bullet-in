@@ -323,14 +323,14 @@ def test_render_all_shows_cards_without_a_stage():
     assert "display:none" not in tag and 'data-kind="team"' in tag
 
 
-def test_gossip_still_hides_cards_without_a_stage():
-    # 가십 구역은 이 설계 범위 밖 — 배지 없는 최하 카드는 지금처럼 숨긴다 (hide_other)
+def test_gossip_shows_cards_without_a_stage():
+    # 사용자 결정 2026-10-20 — 최하 등급의 「기타」 도 가십 구역에 늘 보이게 둔다 (뉴스 종류로 좁힘)
     hi = _row(content_hash="hi", tier=2.0, transfer_stage="agreed", transfer_direction="in",
               title_ko="아스날, 사카 재계약 합의")
     lo = _row(content_hash="lo", tier=4.0, transfer_stage="other", title_ko="아스날 훈련장 소식")
     html = render_index([hi, lo], SOURCES, NOW)
-    tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/lo\.html"', html).group(0)
-    assert "display:none" in tag
+    tag = _re.search(r'<a class="item[^"]*"[^>]*href="article/lo\.html"[^>]*>', html).group(0)
+    assert "display:none" not in tag and 'data-kind="team"' in tag
 
 
 def test_app_js_has_no_badge_exemption_left():

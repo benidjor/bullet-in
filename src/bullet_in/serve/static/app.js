@@ -507,10 +507,8 @@ function applyFilters() {
       it.style.display = vis ? '' : 'none';
       if (vis) shown++;
     } else if (!it.closest('.block')) {                  // 가십 등 낱개 카드
-      // 가십 구역은 이 설계 범위 밖 — 조건이 없을 때는 서버 렌더처럼 배지 없는 카드를 숨긴다
-      const vis = m && (active || it.dataset.kind !== 'team');
-      it.style.display = vis ? '' : 'none';
-      if (vis) shown++;
+      it.style.display = m ? '' : 'none';
+      if (m) shown++;
     }
   }
   for (const bl of document.querySelectorAll('.block')) {
