@@ -504,6 +504,40 @@ def build_enrich_blocked_alert(rows: list[dict], *, run_id: str) -> dict:
             "color": COLOR_ANOMALY, "fields": fields, "channel": CHANNEL_REVIEW}
 
 
+def build_translation_stall_alert(stale: list[dict], *, waiting: int, hours: float,
+                                  run_id: str) -> dict:
+    """번역을 hours 넘게 기다리는 기사가 있을 때의 장애 알림 (안건 3α).
+
+    조건이 이어지는 동안 실행마다 보낸다 — 잔액 소진처럼 사람이 손써야 풀리는 장애다.
+    기사 목록을 싣는 까닭은 전체가 멈춘 것인지 한 기사만 계속 실패하는 것인지를
+    알림만 보고 가르게 하려는 것이다. 필드 값 상한 (1024자) 을 넘기면 메시지가 통째로
+    거부되므로 넘기기 전에 줄을 멈추고 나머지는 건수로 접는다."""
+    lines: list[str] = []
+    for r in stale[:10]:
+        title = (r.get("title_original") or "(제목 없음)")[:60]
+        link = f"[{title}]({r['url']})" if r.get("url") else title
+        line = (f"- {(r.get('content_hash') or '')[:8]} · {r.get('source_id') or '-'} · "
+                f"{r['age_hours']:.0f}시간 · {link}")
+        if len("\n".join(lines + [line])) > 1000:
+            break
+        lines.append(line)
+    if len(stale) > len(lines):
+        lines.append(f"- 외 {len(stale) - len(lines)}건")
+    fields = [{"name": f"{hours:g}시간 넘게 기다리는 기사", "value": "\n".join(lines),
+               "inline": False},
+              {"name": "번역 대기 전체", "value": f"{waiting}건", "inline": True},
+              {"name": "실행", "value": run_label(run_id), "inline": True}]
+    return {"title": f"🚨 번역 멈춤 의심 — {hours:g}시간 넘게 번역을 기다리는 기사 {len(stale)}건",
+            "description": ("새 기사가 번역되지 않은 채 쌓이고 있습니다.\n"
+                            "정상이면 다음 실행 (3시간 뒤) 에서, 제목 검사로 한 번 되돌려져도 "
+                            "6시간 안에 번역됩니다.\n"
+                            "**먼저 볼 것**: AI Studio 결제 화면의 선불 잔액 · enrich 로그의 "
+                            "「Gemini rate limit(429)」 · 「Gemini 호출 실패」 줄\n"
+                            "한 건만 계속 남아 있으면 그 기사만의 문제일 수 있습니다."),
+            "color": COLOR_FAILURE, "fields": fields, "url": RUNBOOK_ANOMALY,
+            "channel": CHANNEL_INCIDENT}
+
+
 def build_candidate_alert(candidates: list[dict], *, run_id: str) -> dict:
     """enrich 자동 발굴 후보 등재 알림 (스펙 §4.2) — 후속 액션은 확정 CLI.
     Discord embed 필드 상한 (25) 안에서 10명까지 펼치고 나머지는 건수로 접는다.

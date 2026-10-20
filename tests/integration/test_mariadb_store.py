@@ -66,6 +66,19 @@ def test_rows_missing_translation_skips_a_blocked_row(engine):
     missing = {r["content_hash"] for r in store.rows_missing_translation()}
     assert "hx" not in missing and "hy" in missing
 
+def test_translation_waits_carry_fetched_at_and_skip_blocked_and_translated(engine):
+    # 안건 3α — 번역 멈춤 감시의 재료 · 고르는 조건은 rows_missing_translation 과 같다
+    store = MartStore(engine)
+    at = datetime(2026, 10, 20, 1, 0)
+    store.upsert([_art(h, f"https://x.test/{h}").model_copy(update={"fetched_at": at})
+                  for h in ("wa", "wb", "wc")])
+    store.mark_enrich_blocked("wb", "PROHIBITED_CONTENT")
+    store.set_translation("wc", "제목", "요약")
+    waits = store.translation_waits()
+    assert [(r["content_hash"], r["fetched_at"]) for r in waits] == [("wa", at)]
+    assert waits[0]["url"] == "https://x.test/wa" and waits[0]["source_id"] == "guardian"
+
+
 def test_changed_url_updates_hash_and_resets_translation(engine):
     from bullet_in.models import Article
     from datetime import datetime, timezone

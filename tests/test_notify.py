@@ -502,6 +502,36 @@ def test_build_enrich_blocked_alert_lists_each_article():
     assert alert["channel"] == notify.CHANNEL_REVIEW
 
 
+def test_build_translation_stall_alert_lists_waiting_articles():
+    # 안건 3α — 2026-10-03 잔액 소진 때 번역이 27시간 멈췄고 사람이 먼저 찾았다
+    stale = [{"content_hash": "6ed7886d0000", "source_id": "fmkorea",
+              "title_original": "Arsenal eye move", "url": "https://x.test/a",
+              "age_hours": 27.4}]
+    alert = notify.build_translation_stall_alert(stale, waiting=3, hours=8.5,
+                                                 run_id="3f2a9c12abcd")
+    assert alert["channel"] == notify.CHANNEL_INCIDENT
+    assert "8.5시간" in alert["title"] and "1건" in alert["title"]
+    body = _field(alert, "8.5시간 넘게 기다리는 기사")
+    assert "- 6ed7886d · fmkorea · 27시간 · [Arsenal eye move](https://x.test/a)" in body
+    assert _field(alert, "번역 대기 전체") == "3건"
+    assert "선불 잔액" in alert["description"]
+    assert alert["fields"][-1]["value"] == "run 3f2a9c12"
+
+
+def test_build_translation_stall_alert_folds_the_rest_within_field_limit():
+    # 디스코드 필드 값은 1024자가 상한이고 넘기면 메시지가 통째로 거부된다
+    stale = [{"content_hash": f"{i:08x}", "source_id": "guardian",
+              "title_original": "T" * 300, "url": "https://x.test/" + "p" * 150,
+              "age_hours": 30.0 - i} for i in range(14)]
+    alert = notify.build_translation_stall_alert(stale, waiting=14, hours=8.5,
+                                                 run_id="3f2a9c12abcd")
+    body = _field(alert, "8.5시간 넘게 기다리는 기사")
+    assert len(body) <= 1024
+    shown = body.count("· guardian ·")
+    assert 0 < shown <= 10
+    assert body.endswith(f"- 외 {14 - shown}건")
+
+
 def test_cliff_alert_reports_cycle_outcome_without_claiming_normal():
     """success_rate 가 1 미만인데 '정상 종료' 라고 쓰면 숫자와 말이 어긋난다."""
     embed = notify.build_cliff_alert(
@@ -617,13 +647,17 @@ def _sample_payloads() -> dict:
             checked_at=now),
         "coverage": notify.build_coverage_alert(
             ["no_candidates"], {"candidates": 0}, run_id="run12345678"),
+        "stall": notify.build_translation_stall_alert(
+            [{"content_hash": "6ed7886d0000", "source_id": "fmkorea",
+              "title_original": "t", "url": "http://a", "age_hours": 10.0}],
+            waiting=1, hours=8.5, run_id="run12345678"),
     }
 
 
 def test_incident_alerts_carry_incident_channel():
     p = _sample_payloads()
-    assert [p[k]["channel"] for k in ("failure", "cliff", "blackout")] \
-        == [notify.CHANNEL_INCIDENT] * 3
+    assert [p[k]["channel"] for k in ("failure", "cliff", "blackout", "stall")] \
+        == [notify.CHANNEL_INCIDENT] * 4
 
 
 def test_review_alerts_carry_review_channel():

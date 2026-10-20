@@ -436,3 +436,24 @@ def missing_club_candidates(titles: list[str], clubs, people, journalists,
     return sorted(({"name": h, "count": n, "example": example[h]}
                    for h, n in counts.items() if n >= min_count),
                   key=lambda c: (-c["count"], c["name"]))
+
+
+# 번역 멈춤 감시 (안건 3α · 2026-10-20 사용자 결정) — 정상이면 번역 대기는 다음 실행 (3시간)
+# 에서, 재작성 재큐 1회 (enrich.rewrite_requeue) 를 거쳐도 6시간 안에 풀린다. 문턱을 9시간에 두면
+# 세 실행 뒤의 감시가 초 단위로 갈린다 — 수집은 실행 시작 몇 초 뒤, 감시는 1분 남짓 뒤라
+# 2026-10-03 에 적용했다면 9시간 1분이었다. 6시간과 9시간 사이에 두어 세 실행 뒤에는 늘 잡히게 한다.
+TRANSLATION_WAIT_HOURS = 8.5
+
+
+def stale_translation_waits(rows: list[dict], now: datetime,
+                            hours: float = TRANSLATION_WAIT_HOURS) -> list[dict]:
+    """fetched_at 에서 hours 를 넘게 번역을 기다린 행 — 오래 기다린 것부터, age_hours 를 붙여서.
+
+    원인을 가리지 않는다. 2026-10-03 선불 잔액 소진은 429 로만 보여 분당 속도 한도와
+    구별되지 않았다 (트러블슈팅 2026-10-05)."""
+    out = []
+    for r in rows:
+        age = (now - r["fetched_at"]).total_seconds() / 3600
+        if age > hours:
+            out.append({**r, "age_hours": round(age, 1)})
+    return sorted(out, key=lambda r: -r["age_hours"])

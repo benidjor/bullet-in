@@ -104,6 +104,22 @@ def test_enrich_stops_and_logs_on_rate_limit(caplog):
     assert any("429" in r.message or "rate limit" in r.message.lower()
                for r in caplog.records)
 
+def test_rate_limit_log_keeps_the_error_body(caplog):
+    # 안건 3α — 2026-10-03 잔액 소진은 「rate limit(429)」 한 줄만 남아 속도 한도와
+    # 가를 수 없었다. 다음에 같은 일이 생기면 응답 문구로 가를 수 있는지 보려고 본문을 남긴다.
+    body = "429 RESOURCE_EXHAUSTED. {'error': {'message': 'prepayment credits are depleted'}}"
+    class M:
+        def generate_content(self, **kw):
+            raise _RateLimit(body)
+    class C:
+        def __init__(self): self.models = M()
+    row = {"content_hash": "a", "title_original": "A", "body_excerpt": "", "summary_ko": ""}
+    with caplog.at_level(logging.WARNING):
+        enrich_rows([row], C(), "m")
+        classify_stage_rows([row], C(), "m")
+    assert caplog.text.count("prepayment credits are depleted") == 2
+
+
 def test_summarize_ko_rows_stops_and_logs_on_rate_limit(caplog):
     class M:
         def __init__(self): self.n = 0

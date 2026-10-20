@@ -151,6 +151,17 @@ class MartStore:
         with self.engine.begin() as c:
             c.execute(text("UPDATE articles SET enrich_blocked=:r WHERE content_hash=:h"),
                       {"r": reason, "h": content_hash})
+    def translation_waits(self) -> list[dict]:
+        """번역 대기 행과 대기열에 들어온 시각 — 번역 멈춤 감시 (안건 3α) 의 재료.
+
+        고르는 조건은 rows_missing_translation 과 같다. fetched_at 은 본문이 바뀌어
+        번역이 비워질 때도 함께 갱신되므로 (upsert) 그 행이 번역을 기다리기 시작한 시각이다."""
+        with self.engine.connect() as c:
+            rows = c.execute(text(
+                "SELECT content_hash,source_id,title_original,url,fetched_at "
+                "FROM articles WHERE title_ko IS NULL AND enrich_blocked IS NULL "
+                "ORDER BY fetched_at")).mappings().all()
+        return [dict(r) for r in rows]
     def rows_rewritten(self) -> list[dict]:
         """재작성 경로로 이미 채워진 행 — 소급 재작성 대상 선정용.
         rows_missing_translation 과 같은 컬럼을 돌려준다 (같은 함수들이 소비한다)."""

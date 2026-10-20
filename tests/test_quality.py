@@ -2,7 +2,8 @@ from datetime import datetime, timedelta
 from bullet_in.quality import (success_rate, volume_anomaly, volume_anomalies,
                                Anomaly, evaluate_freshness, candidate_cliffs,
                                list_signature, responded,
-                               evaluate_states, SourceFreshness, broken_alert_split)
+                               evaluate_states, SourceFreshness, broken_alert_split,
+                               stale_translation_waits, TRANSLATION_WAIT_HOURS)
 
 def test_success_rate_excludes_errored_sources():
     assert success_rate(total_sources=5, errored=1) == 0.8
@@ -686,3 +687,18 @@ def test_responded_rss_needs_entries_and_signature():
     assert responded("rss", {**ok, "list_sig": ""}, errored=False) == (False, "no_record")
     assert responded("rss", ok, errored=True) == (False, "error")
     assert responded("rss", None, errored=False) == (False, "no_record")
+
+
+def test_stale_translation_waits_keeps_rows_past_the_threshold_oldest_first():
+    # 안건 3α — 8.5시간 = 정상 대기 (길어야 6시간) 와 세 실행 뒤 감시 (9시간 안팎) 사이
+    now = datetime(2026, 10, 20, 12, 0)
+    rows = [{"content_hash": "a", "fetched_at": now - timedelta(hours=10)},
+            {"content_hash": "b", "fetched_at": now - timedelta(hours=8.5)},  # 딱 8.5시간은 아직
+            {"content_hash": "c", "fetched_at": now - timedelta(hours=27)},
+            {"content_hash": "d", "fetched_at": now - timedelta(hours=6)},    # 재작성 재큐 1회
+            # 첫 실행이 2분 늦게 시작해 세 실행 뒤 감시에서 9시간에 못 미쳐도 잡힌다
+            {"content_hash": "e", "fetched_at": now - timedelta(hours=9, minutes=-2)}]
+    out = stale_translation_waits(rows, now)
+    assert [r["content_hash"] for r in out] == ["c", "a", "e"]
+    assert [r["age_hours"] for r in out] == [27.0, 10.0, 9.0]
+    assert TRANSLATION_WAIT_HOURS == 8.5
