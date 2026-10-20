@@ -1083,6 +1083,7 @@ def resummarize_rows(rows: list[dict], client, model: str) -> dict[str, dict]:
 # 문안 정본은 스펙 2026-08-10-article-stage-redefinition-design.md §4 — dry-run 채택판
 # (v1c · specs/assets/2026-08-10-stage-dryrun/) 원문 그대로다. 경계 문구를 고칠 때는
 # 소표본 재검증을 거친다 (시소 함정: troubleshooting 2026-08-08).
+# 2026-10-20 개정 — other 목록에 소속 선수의 경기 · 근황 한 줄 추가 (같은 스펙 §6.6).
 # {club} 은 멀티 클럽 확장 대비 파라미터 (스펙 §9) · {roster} 는 완료 명단 재료 자리
 # (이번 개정에서는 미주입 — dry-run v2 기각 · 명단 갱신 뒤 재평가).
 STAGE_PROMPT = (
@@ -1133,6 +1134,8 @@ STAGE_PROMPT = (
     "- 소속 구단과의 재계약 · 계약 연장 ({club} 과 무관한 구단의 경우 — {club} 영입 대상의 잔류 · "
     "재계약 체결은 collapsed 다)\n"
     "- 감독 · 스태프 인사\n"
+    "- 이미 {club} 소속인 선수의 경기 · 근황 — 선발 · 출전 명단 · 경기장 도착 · 경기 결과 · 부상 · "
+    "훈련 · 전술 · 인터뷰 (기사가 어떤 이적의 진행을 새 소식으로 전하면 그 단계로 답한다)\n"
     "- 기사가 아닌 공지 · 안내 · 목록 링크\n"
     "각 기사의 content_hash는 그대로 두고 stage와 direction만 채운다.\n"
     'ONLY JSON 배열: [{{"content_hash":"...","stage":"rumour","direction":"in"}}]\n\n'
