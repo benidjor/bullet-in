@@ -216,7 +216,7 @@ def test_linked_hashes_sql_drops_mention():
                        "('ment',1,'mention'),"      # 언급뿐 — 빠진다
                        "('both',1,'mention'),('both',2,'subject'),"  # 하나라도 주역이면 남는다
                        "('cand',3,'subject')"))     # 미확정 선수 — 원래대로 안 센다
-        c.execute(text("INSERT INTO articles VALUES "
+        c.execute(text("INSERT INTO articles (content_hash,title_ko,title_original) VALUES "
                        "('subj','아스날, 영입 추진','x'),('ment','x','x'),"
                        "('both','x','x'),('cand','x','x')"))
         got = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
@@ -233,7 +233,8 @@ def _linked_db():
         c.execute(text("CREATE TABLE article_players "
                        "(content_hash TEXT, player_id INTEGER, role TEXT)"))
         c.execute(text("CREATE TABLE articles "
-                       "(content_hash TEXT, title_ko TEXT, title_original TEXT)"))
+                       "(content_hash TEXT, title_ko TEXT, title_original TEXT, "
+                       "transfer_stage TEXT)"))
         yield c
 
 
@@ -249,8 +250,8 @@ def test_linked_hashes_sql_keeps_archived_player_linked_to_arsenal():
         c.execute(text("INSERT INTO article_players VALUES "
                        "('link',1,'subject'),('dest',1,'subject')"))
         c.execute(text("INSERT INTO articles VALUES "
-                       "('link','아스날, 영입 문의','x'),"     # 링크 근거
-                       "('dest','첼시, 영입 합의','x')"))      # 거취 — 제목에 아스날 없음
+                       "('link','아스날, 영입 문의','x','interest'),"     # 링크 근거
+                       "('dest','첼시, 영입 합의','x','agreed')"))       # 거취 — 제목에 아스날 없음
         got = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
     assert got == {"link", "dest"}
 
@@ -267,7 +268,7 @@ def test_linked_hashes_sql_drops_archived_player_never_linked_to_arsenal():
         c.execute(text("INSERT INTO players VALUES (1,'archived')"))
         c.execute(text("INSERT INTO article_players VALUES ('a',1,'subject'),('b',1,'subject')"))
         c.execute(text("INSERT INTO articles VALUES "
-                       "('a','리즈, 영입 준비','x'),('b','노팅엄, 제안','x')"))
+                       "('a','리즈, 영입 준비','x','interest'),('b','노팅엄, 제안','x','negotiating')"))
         got = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
     assert got == set()
 
@@ -280,9 +281,32 @@ def test_linked_hashes_sql_arsenal_link_counts_english_title():
         c.execute(text("INSERT INTO players VALUES (1,'archived')"))
         c.execute(text("INSERT INTO article_players VALUES ('a',1,'subject')"))
         c.execute(text("INSERT INTO articles VALUES "
-                       "('a','첼시, 영입 합의','Arsenal make approach for the defender')"))
+                       "('a','첼시, 영입 합의','Arsenal make approach for the defender','interest')"))
         got = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
     assert got == {"a"}
+
+
+def test_linked_hashes_sql_needs_a_stage_for_archived_player_articles():
+    """보관 선수 연결은 그 기사에 이적 단계가 있을 때만 인정한다 (2026-10-21 사용자 결정).
+
+    영입설이 끝난 비니시우스의 레알 마드리드 경기 분석 (`cb858806` · 단계 other) 이
+    「선수 · 팀 뉴스」 구역에 섰다. 거취 기사는 이적 단계를 받으므로 그대로 남는다.
+    확정 선수는 이 조건 없이 그대로 둔다 — 소속 선수의 경기 소식이 선수 · 팀 뉴스다.
+    """
+    with _linked_db() as c:
+        from sqlalchemy import text
+        from bullet_in.run import LINKED_HASHES_SQL
+        c.execute(text("INSERT INTO players VALUES (1,'archived'),(2,'confirmed')"))
+        c.execute(text("INSERT INTO article_players VALUES "
+                       "('link',1,'subject'),('match',1,'subject'),('blank',1,'subject'),"
+                       "('ours',2,'subject')"))
+        c.execute(text("INSERT INTO articles VALUES "
+                       "('link','아스날, 영입 문의','x','interest'),"
+                       "('match','레알 마드리드, 비니시우스 없는 세비야전 대승','x','other'),"
+                       "('blank','레알 마드리드, 훈련 복귀','x',NULL),"   # 아직 분류 전
+                       "('ours','아스날, 노팅엄 포레스트전 승리','x','other')"))
+        got = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
+    assert got == {"link", "ours"}
 
 
 def test_serving_rows_drops_namesake_of_a_roster_player():
