@@ -977,6 +977,19 @@ def test_glossary_normalizes_scanlon_to_the_roster_spelling():
     assert out["title_ko"] == "아스날, 지브롤터 국가대표 윙어 제임스 스캔론 영입"
 
 
+def test_glossary_normalizes_odegaard_variant():
+    # 「Odegaard」 가 「외데가르드」 로 번역돼 2026-07-18 부터 29행에 남았다 (2026-10-20 실측 ·
+    # 출처 8곳). 사전에는 「오데가르드」 만 있었다. 풀네임은 뒤 항목이 「마르틴」 으로 잇는다.
+    import yaml
+    from pathlib import Path
+    from bullet_in.enrich import apply_glossary
+    g = (yaml.safe_load(Path("config/glossary.yaml").read_text()) or {})["replacements"]
+    out = apply_glossary({"title_ko": "아스날, 노팅엄 포레스트전 하베르츠·사카·외데가르드 복귀",
+                          "body_ko": "마틴 외데가르드가 주장 완장을 찼다."}, g)
+    assert out["title_ko"] == "아스날, 노팅엄 포레스트전 하베르츠·사카·외데고르 복귀"
+    assert out["body_ko"] == "마르틴 외데고르가 주장 완장을 찼다."
+
+
 def _tweet_row(**kw):
     # 트윗은 별도 제목이 없어 title_original 에 본문 전문이 들어간다 (실사례 e1348256 축약).
     row = {"content_hash": "t1", "source_id": "x_afcstuff",
