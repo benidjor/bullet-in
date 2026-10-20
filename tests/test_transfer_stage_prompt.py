@@ -15,3 +15,10 @@ def test_prompt_keeps_other_club_stage_rule():
 
 def test_prompt_states_the_two_axes_are_independent():
     assert "방향만 none 이고 단계는 그대로" in STAGE_PROMPT
+
+
+def test_prompt_sends_current_player_match_news_to_other():
+    # 2026-10-20 개정 (스펙 2026-08-10 §6.6) — 선발 명단 · 경기장 도착 트윗이 루머 · 완료로 잡혀
+    # 홈 「이적 뉴스」 에 섞였다. 예외 괄호가 빠지면 부상 공백 영입 고려 기사까지 other 로 간다
+    assert "이미 {club} 소속인 선수의 경기 · 근황" in STAGE_PROMPT
+    assert "기사가 어떤 이적의 진행을 새 소식으로 전하면 그 단계로 답한다" in STAGE_PROMPT
