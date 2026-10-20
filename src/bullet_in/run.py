@@ -113,6 +113,12 @@ CANDIDATE_HISTORY_SQL = ("SELECT candidate_counts FROM pipeline_runs "
 #
 # 명단에서 빼야 할 선수가 생겨도 그 선수의 status 를 고치지 않는다 — 사전 · 선수 페이지 ·
 # fmkorea 수집 필터가 함께 움직인다 (2026-08-27 실측 26건). 이 질의에 조건을 더한다.
+#
+# 보관 선수는 그 기사에 표시하는 이적 단계가 있을 때만 인정한다 (2026-10-21 사용자 결정).
+# 거취 기사는 단계를 받지만, 영입설이 끝난 선수의 경기 분석 · 근황은 단계가 없어 홈
+# 「선수 · 팀 뉴스」 구역에 섰다 (비니시우스의 레알 마드리드 세비야전 분석 · 실측 4건 ·
+# 전부 다른 구단 이야기). 단계 목록은 배지가 쓰는 것과 같은 transfer_stage.STAGE_ENUMS 다.
+_DISPLAYABLE_STAGES = ", ".join(f"'{s}'" for s in transfer_stage.STAGE_ENUMS)
 _ARSENAL_TITLE = ("(a2.title_ko LIKE '%아스날%' OR a2.title_ko LIKE '%아스널%' "
                   "OR LOWER(a2.title_original) LIKE '%arsenal%' "
                   "OR a2.title_original LIKE '%아스날%' "
@@ -120,7 +126,9 @@ _ARSENAL_TITLE = ("(a2.title_ko LIKE '%아스날%' OR a2.title_ko LIKE '%아스�
 LINKED_HASHES_SQL = (
     "SELECT DISTINCT ap.content_hash FROM article_players ap "
     "JOIN players p ON p.id = ap.player_id "
+    "JOIN articles a ON a.content_hash = ap.content_hash "
     "WHERE ap.role <> 'mention' AND (p.status = 'confirmed' OR (p.status = 'archived' "
+    f"AND a.transfer_stage IN ({_DISPLAYABLE_STAGES}) "
     "AND EXISTS (SELECT 1 FROM article_players ap2 "
     "JOIN articles a2 ON a2.content_hash = ap2.content_hash "
     f"WHERE ap2.player_id = p.id AND ap2.role <> 'mention' AND {_ARSENAL_TITLE})))")
