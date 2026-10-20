@@ -138,11 +138,25 @@ ssh <vm> 'grep -c "<찾는 문자열>" ~/bullet-in/site/player/<slug>.html'   # 
 - 라이브 도메인은 잠시 뒤 따라온다.
 - **브라우저 자동화로 라이브를 확인할 때는 접속 통계 요청을 막는다** (2026-10-20 추가).
   막지 않으면 확인 방문이 GA4 행동 지표에 사용자로 섞인다.
+- **패턴은 정규식으로 쓴다** (2026-10-20 고침).
+  처음 적었던 글롭 `**/*googletagmanager*` 은 아무것도 막지 못했다.
+  Playwright 글롭의 `*` 는 `/` 를 넘지 못해 `gtag/js?id=…` · `g/collect?…` 같은 주소와 맞지 않는다.
+- 막은 요청 수를 출력해 1 이상인지 본다.
+  0 이면 막을 요청이 없었던 것이 아니라 패턴이 맞지 않은 것일 수 있다.
 
 ```python
 # Playwright — 페이지를 열기 전에 GA 요청을 막는다
-page.route("**/*googletagmanager*", lambda r: r.abort())
-page.route("**/*google-analytics*", lambda r: r.abort())
+import re
+
+blocked = []
+
+def block(route):
+    blocked.append(route.request.url)
+    route.abort()
+
+page.route(re.compile(r"googletagmanager\.com|google-analytics\.com|analytics\.google\.com"), block)
+# ... 페이지를 연 뒤
+print("막은 GA 요청:", len(blocked))
 ```
 
 ### 3.1 세는 함정 — 라벨 텍스트로 세면 다른 자리가 함께 걸린다
