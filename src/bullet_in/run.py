@@ -31,7 +31,8 @@ from bullet_in.quality import (success_rate, volume_anomalies, evaluate_freshnes
                                evaluate_coverage, candidate_cliffs, filter_miss_suspects,
                                roster_axis_staleness, evaluate_states, broken_alert_split,
                                responded, LIST_UNCHANGED_CAP_HOURS,
-                               missing_club_candidates, club_head)
+                               missing_club_candidates, club_head,
+                               stale_translation_waits, TRANSLATION_WAIT_HOURS)
 from bullet_in import notify
 from bullet_in import dbt_gate
 from bullet_in.deploy import write_build_marker
@@ -336,6 +337,16 @@ def cliff_alert_payload(candidate_counts: dict, history: list[dict], *,
         funnels=adapter_funnels(adapters))
 
 
+def translation_stall_payload(waits: list[dict], now: datetime, *,
+                              run_id: str) -> dict | None:
+    """번역을 9시간 넘게 기다리는 행이 있으면 장애 알림 payload · 없으면 None (안건 3α)."""
+    stale = stale_translation_waits(waits, now)
+    if not stale:
+        return None
+    return notify.build_translation_stall_alert(
+        stale, waiting=len(waits), hours=TRANSLATION_WAIT_HOURS, run_id=run_id)
+
+
 def slo2_margin(previous_rates: list[float], current_rate: float,
                 n_sources: int) -> tuple[int, int, int]:
     """(소스 실패, 충족 한도, 창 길이) — 수집 현황 화면의 SLO-2 와 같은 창 (설계 2026-10-05 §4.2).
@@ -623,6 +634,19 @@ def enrich(run_id: str) -> None:
         logging.getLogger(__name__).warning(
             "재번역 큐 요약: 신규 %d · 채택 %d · 해소 %d",
             *retranslation_summary(finals, by_hash))
+
+    # 번역 멈춤 감시 (안건 3α): 이번 실행의 저장 뒤에도 9시간 넘게 남은 번역 대기가 있으면
+    # 장애 채널로 알린다. 2026-10-03 잔액 소진 때는 429 경고 한 줄만 남고 27시간 동안
+    # 신호가 없었다. 판정 · 발송 실패가 실행을 멈추지 않게 감싼다 (관측 알림 공통 격리).
+    try:
+        payload = translation_stall_payload(
+            mart.translation_waits(), datetime.now(timezone.utc).replace(tzinfo=None),
+            run_id=run_id)
+        if payload:
+            notify.send_alert(**payload)
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "번역 멈춤 감시 실패 — 이번 실행 건너뜀 (번역 저장에는 영향 없음)", exc_info=True)
 
     # 분류 패스 (방향 축 스펙 §4): 규칙 경로 2형태 — 가십은 stage · direction 둘 다
     # 고정 (LLM 제외), 공홈은 stage 만 고정하고 방향은 LLM 배치에서 받는다 (stage 응답은 버림)

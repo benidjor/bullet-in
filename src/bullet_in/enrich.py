@@ -608,7 +608,7 @@ def extract_players_rows(rows: list[dict], client, model: str,
                         "response_mime_type": "application/json"})
         except Exception as e:
             if _is_rate_limit(e):
-                log.warning("Gemini rate limit(429), 추출 중단 — 남은 행 재실행 시 이어짐")
+                log.warning("Gemini rate limit(429), 추출 중단 — 남은 행 재실행 시 이어짐: %s", e)
                 break
             log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
             continue
@@ -691,7 +691,7 @@ def enrich_rows(rows: list[dict], client, model: str, mode: str = "translate",
                             "response_mime_type": "application/json"})
             except Exception as e:
                 if _is_rate_limit(e):
-                    log.warning("Gemini rate limit(429), enrich 중단 — 남은 행 다음 사이클")
+                    log.warning("Gemini rate limit(429), enrich 중단 — 남은 행 다음 사이클: %s", e)
                     rate_limited = True
                 else:
                     log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
@@ -808,7 +808,7 @@ def rewrite_rows_guarded(rows: list[dict], client, model: str,
                             "response_mime_type": "application/json"})
             except Exception as e:
                 if _is_rate_limit(e):
-                    log.warning("Gemini rate limit(429), 재작성 중단 — 남은 행 다음 사이클")
+                    log.warning("Gemini rate limit(429), 재작성 중단 — 남은 행 다음 사이클: %s", e)
                     rate_limited = True
                     break
                 log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
@@ -971,7 +971,7 @@ def title_only_rows(rows: list[dict], client, model: str) -> dict[str, dict]:
                         "response_mime_type": "application/json"})
         except Exception as e:
             if _is_rate_limit(e):
-                log.warning("Gemini rate limit(429), 제목 생성 중단 — 남은 행 다음 사이클")
+                log.warning("Gemini rate limit(429), 제목 생성 중단 — 남은 행 다음 사이클: %s", e)
                 break
             log.warning("Gemini 호출 실패, 스킵 content_hash=%s: %s", h, e)
             continue
@@ -1021,7 +1021,7 @@ def summarize_ko_rows(rows: list[dict], client, model: str) -> dict[str, str]:
                         "response_mime_type": "application/json"})
         except Exception as e:
             if _is_rate_limit(e):
-                log.warning("Gemini rate limit(429), 요약 중단 — 남은 행은 다음 사이클 누적")
+                log.warning("Gemini rate limit(429), 요약 중단 — 남은 행은 다음 사이클 누적: %s", e)
                 break
             log.warning("Gemini 호출 실패, 요약 스킵 content_hash=%s: %s", h, e)
             continue
@@ -1064,7 +1064,7 @@ def resummarize_rows(rows: list[dict], client, model: str) -> dict[str, dict]:
                         "response_mime_type": "application/json"})
         except Exception as e:
             if _is_rate_limit(e):
-                log.warning("Gemini rate limit(429), 말투 백필 중단 — 남은 행 다음 사이클")
+                log.warning("Gemini rate limit(429), 말투 백필 중단 — 남은 행 다음 사이클: %s", e)
                 break
             log.warning("Gemini 호출 실패, 말투 백필 스킵 content_hash=%s: %s", h, e)
             continue
@@ -1184,7 +1184,7 @@ def classify_stage_rows(rows: list[dict], client, model: str,
                         "response_mime_type": "application/json"})
         except Exception as e:
             if _is_rate_limit(e):
-                log.warning("Gemini rate limit(429), 단계 분류 중단 — 남은 배치 다음 사이클")
+                log.warning("Gemini rate limit(429), 단계 분류 중단 — 남은 배치 다음 사이클: %s", e)
                 break
             log.warning("Gemini 호출 실패, 단계 분류 배치 스킵: %s", e)
             continue
