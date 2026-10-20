@@ -339,7 +339,7 @@ def cliff_alert_payload(candidate_counts: dict, history: list[dict], *,
 
 def translation_stall_payload(waits: list[dict], now: datetime, *,
                               run_id: str) -> dict | None:
-    """번역을 9시간 넘게 기다리는 행이 있으면 장애 알림 payload · 없으면 None (안건 3α)."""
+    """번역을 8.5시간 넘게 기다리는 행이 있으면 장애 알림 payload · 없으면 None (안건 3α)."""
     stale = stale_translation_waits(waits, now)
     if not stale:
         return None
@@ -635,7 +635,7 @@ def enrich(run_id: str) -> None:
             "재번역 큐 요약: 신규 %d · 채택 %d · 해소 %d",
             *retranslation_summary(finals, by_hash))
 
-    # 번역 멈춤 감시 (안건 3α): 이번 실행의 저장 뒤에도 9시간 넘게 남은 번역 대기가 있으면
+    # 번역 멈춤 감시 (안건 3α): 이번 실행의 저장 뒤에도 8.5시간 넘게 남은 번역 대기가 있으면
     # 장애 채널로 알린다. 2026-10-03 잔액 소진 때는 429 경고 한 줄만 남고 27시간 동안
     # 신호가 없었다. 판정 · 발송 실패가 실행을 멈추지 않게 감싼다 (관측 알림 공통 격리).
     try:

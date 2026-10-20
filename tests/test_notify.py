@@ -507,11 +507,11 @@ def test_build_translation_stall_alert_lists_waiting_articles():
     stale = [{"content_hash": "6ed7886d0000", "source_id": "fmkorea",
               "title_original": "Arsenal eye move", "url": "https://x.test/a",
               "age_hours": 27.4}]
-    alert = notify.build_translation_stall_alert(stale, waiting=3, hours=9.0,
+    alert = notify.build_translation_stall_alert(stale, waiting=3, hours=8.5,
                                                  run_id="3f2a9c12abcd")
     assert alert["channel"] == notify.CHANNEL_INCIDENT
-    assert "9시간" in alert["title"] and "1건" in alert["title"]
-    body = _field(alert, "9시간 넘게 기다리는 기사")
+    assert "8.5시간" in alert["title"] and "1건" in alert["title"]
+    body = _field(alert, "8.5시간 넘게 기다리는 기사")
     assert "- 6ed7886d · fmkorea · 27시간 · [Arsenal eye move](https://x.test/a)" in body
     assert _field(alert, "번역 대기 전체") == "3건"
     assert "선불 잔액" in alert["description"]
@@ -523,9 +523,9 @@ def test_build_translation_stall_alert_folds_the_rest_within_field_limit():
     stale = [{"content_hash": f"{i:08x}", "source_id": "guardian",
               "title_original": "T" * 300, "url": "https://x.test/" + "p" * 150,
               "age_hours": 30.0 - i} for i in range(14)]
-    alert = notify.build_translation_stall_alert(stale, waiting=14, hours=9.0,
+    alert = notify.build_translation_stall_alert(stale, waiting=14, hours=8.5,
                                                  run_id="3f2a9c12abcd")
-    body = _field(alert, "9시간 넘게 기다리는 기사")
+    body = _field(alert, "8.5시간 넘게 기다리는 기사")
     assert len(body) <= 1024
     shown = body.count("· guardian ·")
     assert 0 < shown <= 10
@@ -650,7 +650,7 @@ def _sample_payloads() -> dict:
         "stall": notify.build_translation_stall_alert(
             [{"content_hash": "6ed7886d0000", "source_id": "fmkorea",
               "title_original": "t", "url": "http://a", "age_hours": 10.0}],
-            waiting=1, hours=9.0, run_id="run12345678"),
+            waiting=1, hours=8.5, run_id="run12345678"),
     }
 
 
