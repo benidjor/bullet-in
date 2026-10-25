@@ -14,6 +14,27 @@
 - **정기 회차와의 관계** — 같은 fmkorea 어댑터 부품 (`build_fmkorea_adapter` · `persist` · `tunnel_alive`) 을 재사용하되 진입점은 별도다.
   실행 주기도 분리돼 있어서 (정기 +90분 오프셋) 배치가 fmkorea 에서 430 을 맞아도 정기 회차의 접촉 예산은 그대로 남는다.
 
+### 1.1. 지금 명단 보기
+
+2026-10-25 부터 명단은 기사로 정해져 (설계 §11.2) 선수 표만 봐서는 알 수 없다.
+배치가 쓰는 함수를 그대로 불러 본다 (읽기 전용 · fmkorea 접촉 없음).
+
+```bash
+ssh -i ~/.ssh/seoulnow_deploy ubuntu@155.248.164.17 'cd ~/bullet-in && set -a && . ./.env && set +a && ~/.local/bin/uv run --frozen python -c "
+import os
+from sqlalchemy import create_engine
+from bullet_in.storage.players import PlayerStore
+rows = PlayerStore(create_engine(os.environ[\"MARIADB_URL\"])).active_link_players()
+print(len(rows), \"명\", \" · \".join(n for _, n in rows))
+"'
+# 예: 6 명 요케레스 · 크루피 · 수비멘디 · 스콧 · 바르티슈빌리 · 누사 (2026-10-25 운영 DB 로 같은 SQL 을 돌린 값)
+```
+
+명단에 있어야 할 선수가 없으면 두 조건을 차례로 본다.
+
+- **최근 45일 안 아스날 제목 기사** — 그 선수에게 주역 (`role` 이 `mention` 이 아님) 으로 붙은 기사가 있는가.
+- **이력에 공신력 등급 3 이상 보도** — 그 선수의 아스날 제목 기사 가운데 `articles.tier <= 3` 인 것이 있는가.
+
 ## 2. VM 최초 반영 절차
 
 ```bash
