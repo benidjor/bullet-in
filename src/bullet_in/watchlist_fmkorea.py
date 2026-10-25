@@ -4,7 +4,7 @@
 번역 · 분류 · 렌더는 다음 정기 회차가 흡수한다.
 """
 from __future__ import annotations
-import argparse, asyncio, logging, os
+import argparse, asyncio, logging, os, time
 from pathlib import Path
 
 import yaml
@@ -32,6 +32,10 @@ SLICE_SIZE = 10      # 배치당 검색 인원 (보수안)
 # — 절반만 올리고 버려지는 자리는 회전으로 옮긴다 (_round_robin 의 start).
 MAX_POSTS = 8
 REQUEST_GAP_SEC = 2.0   # 검색 · 글 fetch 사이 간격 — 배치 밀도를 정기 회차 수준으로
+# 430 만으로 전원 실패해도 마지막 성공이 이보다 오래되면 알린다 (2026-10-25 사용자 결정).
+# 정규 실행은 같은 맥 회선을 쓰지만 430 과 정상을 오가 「8번 연속」 이 안 채워지고
+# (10-19 ~ 10-25 최장 6번) 워치리스트만 막힌 차례도 있어, 그쪽 알림이 대신하지 못한다.
+BLOCKED_ALERT_AFTER_HOURS = 48
 
 
 def read_cursor(path: Path) -> int | None:
@@ -45,6 +49,15 @@ def read_cursor(path: Path) -> int | None:
 def write_cursor(path: Path, player_id: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(str(player_id))
+
+
+def hours_since_success(path: Path) -> float | None:
+    """마지막 성공 이후 시간 — 커서 파일은 검색 실패가 없을 때만 쓰이므로 (next_cursor)
+    수정 시각이 곧 마지막 성공 시각이다. 파일이 없으면 None (성공 기록 없음)."""
+    try:
+        return (time.time() - path.stat().st_mtime) / 3600
+    except OSError:
+        return None
 
 
 def read_rotation(path: Path) -> int:
@@ -158,11 +171,23 @@ async def main(dry_run: bool = False, force: bool = False) -> None:
 
     # 배치 전멸 알림 (차단 알림 스펙 §3.2): 검색 실패가 슬라이스 전원과 같을 때만.
     # 부분 실패는 알리지 않는다 — 실측 3회 모두 전원 실패였다.
-    if slice_ids and adapter.search_failures == len(slice_ids):
+    # 430 만으로 전원 실패하면 기본은 로그만 남긴다 (2026-10-25 사용자 결정 · 설계 2026-08-01 §11).
+    # 커서를 멈춰 다음 차례가 같은 선수를 다시 검색하므로 한두 번의 차단에는 할 일이 없다.
+    # 마지막 성공이 48시간을 넘었거나 성공 기록이 아예 없으면 알린다 — 「모름」 을 조용히
+    # 넘기면 커서 파일이 지워진 채 계속 막혀도 알림이 영영 없다.
+    codes = dict(getattr(adapter, "search_failure_codes", {}) or {})
+    since = hours_since_success(CURSOR_PATH)
+    quiet_block = (set(codes) == {430} and since is not None
+                   and since <= BLOCKED_ALERT_AFTER_HOURS)
+    if slice_ids and adapter.search_failures == len(slice_ids) and quiet_block:
+        log.info("배치 전원 검색 실패 — 모두 HTTP 430 (일시 차단) · 마지막 성공 %.1f시간 전 "
+                 "(%d시간 넘으면 알림) · 다음 차례가 같은 선수를 다시 검색",
+                 since, BLOCKED_ALERT_AFTER_HOURS)
+    elif slice_ids and adapter.search_failures == len(slice_ids):
         try:
             notify.send_alert(**notify.build_watchlist_blackout_alert(
                 searched=len(slice_ids),
-                failure_codes=dict(getattr(adapter, "search_failure_codes", {}) or {}),
+                failure_codes=codes,
                 last_contact=last))
         except Exception:
             log.warning("배치 전멸 알림 발송 실패 — 배치는 계속 진행", exc_info=True)

@@ -1,4 +1,6 @@
 import asyncio
+import os
+import time
 from datetime import datetime, timezone
 from bullet_in import watchlist_fmkorea
 from bullet_in.models import RawItem
@@ -208,10 +210,67 @@ def test_blackout_alert_sent_when_every_search_fails(monkeypatch, tmp_path):
     sent = []
     monkeypatch.setattr(watchlist_fmkorea.notify, "send_alert",
                         lambda **kw: sent.append(kw))
-    adapter = _FakeAdapter([], search_failures=5, search_failure_codes={430: 5})
+    adapter = _FakeAdapter([], search_failures=5, search_failure_codes={"error": 5})
     _run_main(monkeypatch, tmp_path, adapter=adapter, players=_BLACKOUT_PLAYERS)
     assert len(sent) == 1
     assert "전원" in sent[0]["title"]
+
+
+def _blocked_run(monkeypatch, tmp_path):
+    """430 만으로 전원 실패하는 차례 하나 — 보낸 알림 목록을 돌려준다."""
+    sent = []
+    monkeypatch.setattr(watchlist_fmkorea.notify, "send_alert",
+                        lambda **kw: sent.append(kw))
+    adapter = _FakeAdapter([], search_failures=5, search_failure_codes={430: 5})
+    _run_main(monkeypatch, tmp_path, adapter=adapter, players=_BLACKOUT_PLAYERS)
+    return sent
+
+
+def _cursor_aged(tmp_path, hours):
+    """커서 파일 = 마지막 성공 기록 · 수정 시각을 hours 시간 전으로 맞춘다."""
+    path = tmp_path / "cursor"
+    write_cursor(path, 10)
+    t = time.time() - hours * 3600
+    os.utime(path, (t, t))
+
+
+def test_no_alert_when_every_failure_is_430_and_last_success_is_recent(
+        monkeypatch, tmp_path, caplog):
+    """430 만으로 전원 실패하면 기본은 알리지 않고 로그만 남긴다 (2026-10-25 사용자 결정)."""
+    _cursor_aged(tmp_path, 47)
+    with caplog.at_level("INFO"):
+        sent = _blocked_run(monkeypatch, tmp_path)
+    assert sent == []
+    assert "430" in caplog.text
+
+
+def test_alert_when_every_failure_is_430_and_last_success_is_older_than_48h(
+        monkeypatch, tmp_path):
+    """마지막 성공 (커서 파일 수정 시각) 이 48시간을 넘으면 430 만이어도 알린다 —
+    정규 실행이 정상인데 워치리스트만 막힌 차례가 있어 정규 실행 알림이 대신하지 못한다."""
+    _cursor_aged(tmp_path, 49)
+    sent = _blocked_run(monkeypatch, tmp_path)
+    assert len(sent) == 1
+
+
+def test_alert_when_every_failure_is_430_and_no_success_was_ever_recorded(
+        monkeypatch, tmp_path):
+    """커서 파일이 없으면 성공 기록이 없는 것이라 48시간을 넘긴 것과 같이 알린다 —
+    「모름」 을 조용히 넘기면 파일이 지워진 채 계속 막혀도 알림이 영영 없다."""
+    assert not (tmp_path / "cursor").exists()
+    sent = _blocked_run(monkeypatch, tmp_path)
+    assert len(sent) == 1
+
+
+def test_blackout_alert_sent_when_430_mixes_with_other_failures(monkeypatch, tmp_path):
+    """430 이 아닌 실패가 섞이면 사람이 볼 것이 있어 그대로 알린다."""
+    sent = []
+    monkeypatch.setattr(watchlist_fmkorea.notify, "send_alert",
+                        lambda **kw: sent.append(kw))
+    adapter = _FakeAdapter([], search_failures=5,
+                           search_failure_codes={430: 3, "error": 2})
+    _run_main(monkeypatch, tmp_path, adapter=adapter, players=_BLACKOUT_PLAYERS)
+    assert len(sent) == 1
 
 
 def test_no_alert_on_partial_failure(monkeypatch, tmp_path):

@@ -19,6 +19,18 @@ SUBJECT = "subject"
 MENTION = "mention"
 ROLES = frozenset({SUBJECT, MENTION})
 
+# 워치리스트 명단 조건 (설계 2026-08-01 §11 · 2026-10-25 사용자 결정).
+# 등급은 credibility.yaml 의 tier — 작을수록 공신력이 높고 4 는 출처 미등재 · 가십이다.
+WATCHLIST_RECENT_DAYS = 45
+WATCHLIST_CREDIBLE_TIER = 3
+# 선수 p 가 주역으로 붙은 아스날 제목 기사 — 제목 판정은 run._ARSENAL_TITLE 과 같다.
+_ARSENAL_LINK = (
+    "SELECT 1 FROM article_players ap JOIN articles a ON a.content_hash = ap.content_hash "
+    f"WHERE ap.player_id = p.id AND ap.role <> '{MENTION}' "
+    "AND (a.title_ko LIKE '%아스날%' OR a.title_ko LIKE '%아스널%' "
+    "OR LOWER(a.title_original) LIKE '%arsenal%' "
+    "OR a.title_original LIKE '%아스날%' OR a.title_original LIKE '%아스널%')")
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -159,12 +171,22 @@ class PlayerStore:
                 "AND category IN ('squad','manager') ORDER BY id")).all()]
 
     def active_link_players(self) -> list[tuple[int, str]]:
-        """워치리스트 로테이션 명단 (스펙 §3.1) — 활성 이적축 · id 순."""
+        """워치리스트 로테이션 명단 (스펙 §3.1 · §11) — 활성 이적축 · id 순.
+
+        이적축 값은 이적이 끝나도 저절로 안 바뀌어 (레앙 · 바르콜라가 이적 뒤에도 in_link)
+        기사로 한 번 더 거른다 — 최근 45일 안에 아스날 제목 기사에 주역으로 붙었고,
+        그 선수의 아스날 제목 기사 이력에 공신력 등급 3 이상 보도가 한 건은 있어야 한다
+        (2026-10-25 사용자 결정). 공신력은 이력 전체로 본다 — 스콧은 7월 Sky · 타임즈
+        (등급 2) 뒤로 가십 (등급 4) 만 이어졌지만 추적 대상이다."""
         with self.engine.connect() as c:
             return [(r[0], r[1]) for r in c.execute(text(
-                "SELECT id, ko_name FROM players WHERE status='confirmed' "
-                "AND transfer_status IN ('in_link','out_link') "
-                "AND ko_name IS NOT NULL ORDER BY id")).all()]
+                "SELECT p.id, p.ko_name FROM players p WHERE p.status='confirmed' "
+                "AND p.transfer_status IN ('in_link','out_link') "
+                "AND p.ko_name IS NOT NULL "
+                f"AND EXISTS ({_ARSENAL_LINK} AND COALESCE(a.published_at, a.created_at) "
+                f">= UTC_TIMESTAMP() - INTERVAL {WATCHLIST_RECENT_DAYS} DAY) "
+                f"AND EXISTS ({_ARSENAL_LINK} AND a.tier <= {WATCHLIST_CREDIBLE_TIER}) "
+                "ORDER BY p.id")).all()]
 
     def cycle_pairs(self, hashes: list[str]) -> list[dict]:
         """이번 회차에 만진 기사들의 (확정 선수, 단계) 귀속 — 축 낡음 관측 재료
