@@ -168,17 +168,37 @@ def test_confirmed_ko_names_excludes_archived_and_candidate(engine):
     assert "사카" in names
 
 
+def _arsenal_link(engine, player_id, h, *, days_ago=1, tier=2.0,
+                  title="Arsenal in talks", role="subject"):
+    """워치리스트 명단 재료 — 선수에게 붙은 기사 한 건 (제목 · 공신력 등급 · 역할)."""
+    with engine.begin() as c:
+        c.execute(text(
+            "INSERT INTO articles (content_hash,url,title_original,tier,published_at) "
+            "VALUES (:h,:u,:t,:tier, UTC_TIMESTAMP() - INTERVAL :d DAY)"),
+            {"h": h, "u": "https://example.test/" + h, "t": title, "tier": tier,
+             "d": days_ago})
+        c.execute(text(
+            "INSERT INTO article_players (content_hash,player_id,role,extracted_at) "
+            "VALUES (:h,:p,:r,UTC_TIMESTAMP())"), {"h": h, "p": player_id, "r": role})
+
+
+def _pid(engine, full_name):
+    with engine.connect() as c:
+        return c.execute(text("SELECT id FROM players WHERE full_name=:n"),
+                         {"n": full_name}).scalar_one()
+
+
 def test_active_link_players_only_links_ordered_by_id(engine):
     store = PlayerStore(engine)
     store.seed(ROSTER)
     with engine.begin() as c:
         c.execute(text("UPDATE players SET transfer_status='in_link' WHERE full_name='Bukayo Saka'"))
         c.execute(text("UPDATE players SET transfer_status='out_link' WHERE full_name='William Saliba'"))
+    _arsenal_link(engine, _pid(engine, "Bukayo Saka"), "a" * 64)
+    _arsenal_link(engine, _pid(engine, "William Saliba"), "b" * 64)
     rows = store.active_link_players()
-    names = [n for _, n in rows]
-    # ROSTER 에 이미 in_link/out_link 확정 선수가 있어 (2026-07-31 후보 확정 운영) 전체가
-    # 사카·살리바 둘만은 아니다 — 이번에 지정한 둘이 seed 순서상 id 최소라 맨 앞에 온다.
-    assert names[:2] == ["사카", "살리바"]
+    # ROSTER 의 다른 링크 선수는 붙은 기사가 없어 빠진다 — 남는 것은 이번에 기사를 붙인 둘
+    assert [n for _, n in rows] == ["사카", "살리바"]
     assert [pid for pid, _ in rows] == sorted(pid for pid, _ in rows)
 
 
@@ -188,8 +208,32 @@ def test_active_link_players_excludes_archived_link(engine):
     with engine.begin() as c:
         c.execute(text("UPDATE players SET transfer_status='in_link', status='archived' "
                        "WHERE full_name='Bukayo Saka'"))
+    _arsenal_link(engine, _pid(engine, "Bukayo Saka"), "a" * 64)
     names = [n for _, n in store.active_link_players()]
     assert "사카" not in names   # archived 는 활성 이적축에서 제외
+
+
+def test_active_link_players_needs_a_recent_arsenal_title_and_a_credible_report(engine):
+    """명단 = 최근 45일 안에 아스날 제목 기사가 있고, 이력에 등급 3 이상 보도가 있는 선수
+    (2026-10-25 사용자 결정 · 설계 2026-08-01 §11)."""
+    store = PlayerStore(engine)
+    scott = _confirmed(store, full_name="Alex Scott", ko_name="스콧", transfer_status="in_link")
+    leao = _confirmed(store, full_name="Rafael Leao", ko_name="레앙", transfer_status="in_link")
+    old = _confirmed(store, full_name="Old Link", ko_name="올드", transfer_status="in_link")
+    other = _confirmed(store, full_name="Other Club", ko_name="아더", transfer_status="in_link")
+    mention = _confirmed(store, full_name="Mention Only", ko_name="멘션", transfer_status="in_link")
+    # 스콧: 공신력 보도는 석 달 전 · 최근 45일 안에는 가십 (등급 4) 만 → 남는다
+    _arsenal_link(engine, scott, "1" * 64, days_ago=90, tier=2.0)
+    _arsenal_link(engine, scott, "2" * 64, days_ago=10, tier=4.0)
+    # 레앙: 최근 기사는 있지만 등급 4 보도뿐 → 빠진다
+    _arsenal_link(engine, leao, "3" * 64, days_ago=10, tier=4.0)
+    # 올드: 공신력 보도가 있어도 45일을 넘겼다 → 빠진다
+    _arsenal_link(engine, old, "4" * 64, days_ago=46, tier=1.0)
+    # 아더: 최근 공신력 기사지만 제목에 아스날이 없다 → 빠진다
+    _arsenal_link(engine, other, "5" * 64, days_ago=10, tier=1.0, title="Chelsea in talks")
+    # 멘션: 아스날 제목 · 공신력 기사지만 배경으로 이름만 걸렸다 → 빠진다
+    _arsenal_link(engine, mention, "6" * 64, days_ago=10, tier=1.0, role="mention")
+    assert [n for _, n in store.active_link_players()] == ["스콧"]
 
 
 def _add_player(engine, *, full_name, surname, ko_name, category, status,

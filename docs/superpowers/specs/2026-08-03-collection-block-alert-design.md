@@ -142,6 +142,8 @@ fmkorea 축구 소식통 (fmkorea)
 - 마지막 fmkorea 접촉: 2026-08-03 19:34 KST
 ```
 
+2026-10-25 개정 — 실패가 모두 HTTP 430 이면 마지막 성공이 48시간을 넘었을 때만 보낸다 (`docs/superpowers/specs/2026-08-01-linked-player-watchlist-design.md` §11.3).
+
 ### 5.3. 금지 표현
 
 - **`ADAPTER_HINTS` 미사용** — 기존 힌트는 fmkorea 에 `검색 URL 변경 · 429 차단` 을 붙이는데, 실제 응답은 430 이고 후보 0 의 원인은 알림 시점에 알 수 없음.
