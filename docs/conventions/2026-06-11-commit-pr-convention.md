@@ -242,6 +242,7 @@ squash 전 개별 commit과 리뷰 코멘트는 PR 페이지에 영구 보존됨
 
 PR 본문에는 "Generated with Claude Code" 같은 Claude 서명을 넣지 않음.
 AI 활용은 커밋 단위 트레일러 (§1.3)와 README의 "AI 도구 활용" 섹션으로만 드러냄.
+CI 「PR 규약」 이 본문에 서명 줄이 있으면 막음 (`.claude/tools/check-pr-format.py --signature` · 2026-10-25 · #552 부터 #558 까지 일곱 PR 에 붙었던 뒤 추가).
 
 ## 3. 트러블슈팅 기록
 
