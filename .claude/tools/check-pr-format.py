@@ -12,6 +12,7 @@
 ## 쓰는 법
 
     python3 .claude/tools/check-pr-format.py --body pr_body.md --title "fix(x): 제목"
+    python3 .claude/tools/check-pr-format.py --signature pr_body.md   # Claude 서명 줄만 (CI 차단용)
     python3 .claude/tools/check-pr-format.py --open-prs      # 열린 PR 제목 (아직 고칠 수 있다)
     python3 .claude/tools/check-pr-format.py --unpushed      # 푸시 전 커밋 제목 (가장 이른 자리)
     python3 .claude/tools/check-pr-format.py --merged 12     # 머지된 제목 (참고 · 못 고친다)
@@ -40,6 +41,9 @@ BARE_BULLET = re.compile(r"^\s*- (?!\*\*)(?!`)")
 # 범위 물결표 — GitHub 이 취소선으로 읽는다
 TILDE_RANGE = re.compile(r"\d\s*~\s*\d")
 # 단어 + 임 종결 — 동사의 명사형과 기계로 못 가르므로 소프트 경고
+# Claude 서명 줄 (§2.7) — 줄 전체가 서명일 때만 잡는다. 규칙을 설명하려고 문장 안에 인용한 것은 서명이 아니다.
+# #552 부터 #558 까지 일곱 PR 본문 끝에 붙었고 아무 검사도 못 잡았다 (2026-10-25).
+SIGNATURE = re.compile(r"^\s*(🤖\s*)?Generated with \[Claude Code\]\(https://claude\.(com|ai)/[^)]*\)\s*$")
 IM_ENDING = re.compile(r"[가-힣]임[.]?$")
 # 본문 구조 (§2.1) — 섹션 일곱의 제목 · 순서 · §6 의 task-list 고정 항목 일곱
 SECTIONS = ["## 1. 개요", "## 2. 의사결정 & Trade-off", "## 3. 변경 사항", "## 4. 검증",
@@ -73,6 +77,18 @@ def check_body(path: str) -> list[tuple[str, str, str]]:
             out.append((f"{path}:{i}", "라벨 없는 불릿", ln[:70]))
         if TILDE_RANGE.search(ln):
             out.append((f"{path}:{i}", "범위 물결표", ln[:70]))
+    return out
+
+
+def check_signature(path: str) -> list[tuple[str, str, str]]:
+    """Claude 서명 줄 (§2.7) — 코드 블록 안의 인용은 대상 밖."""
+    out, fence = [], False
+    for i, raw in enumerate(open(path, encoding="utf-8").read().splitlines(), 1):
+        if raw.lstrip().startswith("```"):
+            fence = not fence
+            continue
+        if not fence and SIGNATURE.match(raw):
+            out.append((f"{path}:{i}", "Claude 서명 (§2.7)", raw.strip()[:70]))
     return out
 
 
@@ -118,6 +134,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="PR · 커밋 형식 검사")
     ap.add_argument("--body", action="append", default=[], help="본문 파일")
     ap.add_argument("--title", action="append", default=[], help="제목 문자열")
+    ap.add_argument("--signature", action="append", default=[], help="본문 파일 — Claude 서명 줄만 본다")
     ap.add_argument("--open-prs", action="store_true", help="열린 PR 제목")
     ap.add_argument("--unpushed", action="store_true", help="푸시 전 커밋 제목")
     ap.add_argument("--merged", type=int, metavar="N", help="머지된 제목 N개 (참고)")
@@ -125,7 +142,9 @@ def main() -> int:
 
     hits: list[tuple[str, str, str]] = []
     for path in a.body:
-        hits += check_body(path) + check_sections(path)
+        hits += check_body(path) + check_sections(path) + check_signature(path)
+    for path in a.signature:
+        hits += check_signature(path)
     for t in a.title:
         hits += check_title(t, "--title")
     if a.open_prs:
@@ -142,7 +161,7 @@ def main() -> int:
         for s in run("git", "log", "--format=%s", f"-{a.merged}", "origin/main"):
             hits += check_title(s, "머지됨 (못 고침)")
 
-    if not any([a.body, a.title, a.open_prs, a.unpushed, a.merged]):
+    if not any([a.body, a.title, a.signature, a.open_prs, a.unpushed, a.merged]):
         ap.print_help()
         return 2
     for where, kind, text in hits:

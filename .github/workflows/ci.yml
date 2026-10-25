@@ -142,6 +142,16 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: python3 .claude/tools/check-pr-format.py --title "$PR_TITLE"
 
+      # Claude 서명 줄은 본문 규칙 가운데 이것만 차단한다 (컨벤션 §2.7) — 정상 PR 에 쓰일 일이 없어 오탐이 없다.
+      # 알림만 하던 동안 #552 부터 #558 까지 일곱 PR 본문 끝에 붙었다 (2026-10-25).
+      - name: 본문 Claude 서명 (차단)
+        if: always()
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > pr_body_sig.md
+          python3 .claude/tools/check-pr-format.py --signature pr_body_sig.md
+
       # 본문은 알림만 한다 — 최근 머지된 PR 여덟 중 여섯이 이 검사에 걸리는데
       # 「라벨 없는 불릿」 은 참고 절의 정상 표기이고 「임 종결」 은 도구가 소프트 경고로 낸다.
       # 차단으로 걸면 정상 PR 이 빨간불이 나고, 그 빨간불은 곧 무시된다.
