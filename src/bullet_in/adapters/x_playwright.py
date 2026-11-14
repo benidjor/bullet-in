@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import tempfile
 from datetime import datetime
 from bullet_in.models import RawItem
 from bullet_in.quality import list_signature
@@ -177,14 +178,23 @@ def save_x_cache(path: str | None, cache: dict, status_ids: set[str],
         return
     keep = {"expanded": {k: v for k, v in cache["expanded"].items() if k in status_ids},
             "outcomes": {k: v for k, v in cache["outcomes"].items() if k in tweet_urls}}
-    tmp = f"{path}.tmp"
+    tmp = None
     try:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(tmp, "w", encoding="utf-8") as f:
+        d = os.path.dirname(path) or "."
+        os.makedirs(d, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=d, suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(keep, f, ensure_ascii=False)
         os.replace(tmp, path)
-    except OSError as e:
+        tmp = None
+    except (OSError, TypeError, ValueError) as e:
         logging.getLogger(__name__).warning("X 결과 기억 파일을 못 씀 path=%s err=%s", path, e)
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 async def backtrack_cached(items: list[RawItem], outcomes: dict, now: datetime,

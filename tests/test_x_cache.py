@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 import yaml
@@ -115,8 +116,16 @@ def test_save_to_none_path_does_nothing():
     save_x_cache(None, {"expanded": {}, "outcomes": {}}, set(), set())
 
 
+def test_save_with_non_json_value_warns_and_leaves_no_file(tmp_path, caplog):
+    p = tmp_path / "c.json"
+    cache = {"expanded": {"1": datetime(2026, 11, 15)}, "outcomes": {}}
+    save_x_cache(str(p), cache, {"1"}, set())
+    assert "못 씀" in caplog.text
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_live_x_sources_have_cache_paths():
-    cfg = yaml.safe_load(open("config/sources.yaml"))
+    cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
     paths = {s["source_id"]: s["config"].get("cache_path") for s in cfg["sources"]
              if s["source_id"].startswith("x_")}
     assert paths == {"x_afcstuff": "state/x_cache_afcstuff.json",

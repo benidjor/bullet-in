@@ -406,10 +406,10 @@ def _materials():
 async def collect(run_id: str, concurrency: int) -> FetchSummary:
     """수집 · 원본 저장 · 마트 upsert · 회차 행 삽입 (§3.2 표의 첫 행)."""
     cfg, sources, registry, engine, mart, pstore = _materials()
-    # fmkorea 무관 글 필터 인정 집합 주입 (워치리스트 스펙 §3.2) — 배치와 동일 집합
     skipped = scheduled_skips(cfg["sources"], datetime.now(timezone.utc))
     if skipped:
         logging.getLogger(__name__).info("일정상 건너뜀: %s", " · ".join(skipped))
+    # fmkorea 무관 글 필터 인정 집합 주입 (워치리스트 스펙 §3.2) — 배치와 동일 집합
     adapters = build_adapters(cfg, fmkorea_player_names=pstore.confirmed_ko_names(),
                               scope_roster=scope_roster_or_none(pstore), skip=skipped)
 
