@@ -107,3 +107,19 @@ def test_expand_respects_the_cap():
     ctx = _Ctx({})
     _run(expand_truncated(ctx, raw, "afcstuff", logging.getLogger(__name__), cap=3))
     assert len(ctx.pages) == 3
+
+
+def test_expand_reuses_known_text_without_opening_a_page():
+    ctx = _Ctx({})                                    # 열면 pages 가 늘어 시험이 실패한다
+    tweets = [{"status_id": "1", "text": "a" * 280}]
+    grown = _run(expand_truncated(ctx, tweets, "h", logging.getLogger(__name__),
+                                  known={"1": "full"}))
+    assert (grown, tweets[0]["text"], len(ctx.pages)) == (0, "full", 0)
+
+
+def test_expand_records_new_full_text():
+    known = {}
+    ctx = _Ctx({"https://x.com/h/status/2": "x" * 400})
+    _run(expand_truncated(ctx, [{"status_id": "2", "text": "a" * 280}], "h",
+                          logging.getLogger(__name__), known=known))
+    assert known == {"2": "x" * 400}

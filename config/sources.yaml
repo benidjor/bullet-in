@@ -150,7 +150,7 @@ sources:
     # 그런 기자의 **속보** 인용은 원문이 x_ornstein 으로도 들어와 같은 소식이 두 행이 된다
     # (실측: 온스테인 속보 12건 전량이 x_ornstein raw 에도 있었다). 속보만 빼고 논평은 남긴다
     # — 논평은 방송 · 팟캐스트 발언이라 본인이 트윗한 적이 없고 여기서만 들어온다.
-    config: { handle: "afcstuff", max_tweets: 30, cookies_path: "x_cookies.json", backtrack_config: "config/backtrack.yaml", own_source_handles: ["David_Ornstein"] }
+    config: { handle: "afcstuff", max_tweets: 30, cookies_path: "x_cookies.json", backtrack_config: "config/backtrack.yaml", own_source_handles: ["David_Ornstein"], cache_path: "state/x_cache_afcstuff.json" }
     # 기자가 아닌 인용처 (2026-08-27 사용자 결정) — @clubgame 은 판타지 축구 게임 앱이라
     # 그 글이 「아스날 26/27 선수 능력치」 처럼 이적 뉴스가 아니다.
     journalist_denylist: ["@clubgame"]
@@ -171,7 +171,7 @@ sources:
     # 원본 공백 최장 228h (09-06 ~ 16 · 수집 시각 기준) · 발행 시각으로 재면 저장된 트윗 사이 공백이 513h 까지 있어
     # 「10일이면 지난 석 달 오탐 0」 은 성립하지 않는다 (스펙 §9.5.3 · 목록의 실제 침묵은 그보다 짧을 수 있다).
     list_unchanged_cap_hours: 240
-    config: { handle: "David_Ornstein", max_tweets: 30, cookies_path: "x_cookies.json", self_source: true }
+    config: { handle: "David_Ornstein", max_tweets: 30, cookies_path: "x_cookies.json", self_source: true, cache_path: "state/x_cache_ornstein.json" }
     # 2026-11-08 X 가 자동화 탐지로 계정 정지 · 이적기간은 영국 낮 다섯 회차 · 그 밖에는 두 회차
     # (2026-11-15 사용자 결정 · 계획서 2026-11-15-x-collection-cadence)
     run_hours_utc: { in_window: [9, 12, 15, 18, 21], out_of_window: [12, 21] }

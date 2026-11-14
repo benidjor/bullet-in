@@ -1,0 +1,99 @@
+import asyncio
+from datetime import datetime, timezone
+
+import yaml
+
+from bullet_in.adapters.x_playwright import (backtrack_cached, load_x_cache,
+                                             save_x_cache)
+from bullet_in.models import RawItem
+
+_NOW = datetime(2026, 11, 15, 9, tzinfo=timezone.utc)
+_NOW2 = datetime(2026, 11, 15, 12, tzinfo=timezone.utc)
+
+
+def _tweet(sid):
+    return RawItem(source_id="x_afcstuff", source_type="x",
+                   url=f"https://x.com/afcstuff/status/{sid}", fetched_at=_NOW,
+                   raw_payload={"text": "t", "created_at": None,
+                                "journalist": "@SamiMokbel_BBC",
+                                "handles": ["@SamiMokbel_BBC"], "image_url": None})
+
+
+def _promoted(it):
+    return RawItem(source_id=it.source_id, source_type="html",
+                   url="https://www.bbc.com/a", fetched_at=it.fetched_at,
+                   raw_payload={"title": "T", "body": "B", "outlet": "BBC"})
+
+
+def test_second_run_reuses_promotion_and_opens_no_timeline():
+    calls = []
+
+    async def scrape(fresh):
+        calls.append(len(fresh))
+        return {"samimokbel_bbc": []}, set()
+
+    async def promote(fresh, tl):
+        return [_promoted(it) for it in fresh]
+
+    outcomes = {}
+    first = asyncio.run(backtrack_cached([_tweet("1")], outcomes, _NOW, scrape, promote))
+    second = asyncio.run(backtrack_cached([_tweet("1")], outcomes, _NOW2, scrape, promote))
+    assert calls == [1]
+    assert [i.url for i in second] == [i.url for i in first] == ["https://www.bbc.com/a"]
+    assert second[0].raw_payload == first[0].raw_payload and second[0].fetched_at == _NOW2
+    assert second[0].source_type == "html"
+
+
+def test_failed_timeline_is_not_remembered():
+    async def scrape(fresh):
+        return {}, {"samimokbel_bbc"}
+
+    async def promote(fresh, tl):
+        return list(fresh)
+
+    outcomes = {}
+    asyncio.run(backtrack_cached([_tweet("1")], outcomes, _NOW, scrape, promote))
+    assert outcomes == {}
+
+
+def test_mixed_batch_keeps_input_order():
+    async def scrape(fresh):
+        return {}, set()
+
+    async def promote(fresh, tl):
+        return [_promoted(it) for it in fresh]
+
+    outcomes = {}
+    asyncio.run(backtrack_cached([_tweet("2")], outcomes, _NOW, scrape, promote))
+    out = asyncio.run(backtrack_cached([_tweet("1"), _tweet("2"), _tweet("3")],
+                                       outcomes, _NOW2, scrape, promote))
+    assert [i.source_type for i in out] == ["html", "html", "html"]
+    assert set(outcomes) == {f"https://x.com/afcstuff/status/{i}" for i in "123"}
+
+
+def test_save_keeps_only_what_this_run_saw_and_round_trips(tmp_path):
+    p = tmp_path / "c.json"
+    cache = {"expanded": {"1": "a", "9": "old"},
+             "outcomes": {"u1": {"url": "u1"}, "u9": {}}}
+    save_x_cache(str(p), cache, {"1"}, {"u1"})
+    assert load_x_cache(str(p)) == {"expanded": {"1": "a"}, "outcomes": {"u1": {"url": "u1"}}}
+
+
+def test_broken_or_missing_cache_starts_empty(tmp_path, caplog):
+    bad = tmp_path / "bad.json"
+    bad.write_text("{")
+    empty = {"expanded": {}, "outcomes": {}}
+    assert load_x_cache(None) == load_x_cache(str(tmp_path / "none.json")) == empty
+    assert load_x_cache(str(bad)) == empty and "못 읽음" in caplog.text
+
+
+def test_save_to_none_path_does_nothing():
+    save_x_cache(None, {"expanded": {}, "outcomes": {}}, set(), set())
+
+
+def test_live_x_sources_have_cache_paths():
+    cfg = yaml.safe_load(open("config/sources.yaml"))
+    paths = {s["source_id"]: s["config"].get("cache_path") for s in cfg["sources"]
+             if s["source_id"].startswith("x_")}
+    assert paths == {"x_afcstuff": "state/x_cache_afcstuff.json",
+                     "x_ornstein": "state/x_cache_ornstein.json"}
