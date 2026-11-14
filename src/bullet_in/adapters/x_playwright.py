@@ -195,22 +195,25 @@ async def backtrack_cached(items: list[RawItem], outcomes: dict, now: datetime,
     건너뛰는 것이 아니라 **재사용**이다 — 승격된 트윗을 트윗 주소로 다시 내면 같은 기사가
     두 행이 되고, 잘린 원문으로 다시 내면 저장된 행을 덮어쓴다.
     기자 타임라인을 못 읽은 (`failed`) 트윗은 기억하지 않아 다음 실행이 다시 시도한다."""
-    fresh = [it for it in items if it.url not in outcomes]
+    keys = [it.url for it in items]   # 승격이 항목을 제자리에서 바꾸므로 (유료 기사) 미리 잡아 둔다
+    fresh = [it for it, k in zip(items, keys) if k not in outcomes]
     promoted: dict[str, RawItem] = {}
     if fresh:
+        fresh_keys = [it.url for it in fresh]
+        handles = [(it.raw_payload.get("journalist") or "").lstrip("@").lower()
+                   for it in fresh]
         timelines, failed = await scrape(fresh)
-        for src, out in zip(fresh, await promote(fresh, timelines)):
-            promoted[src.url] = out
-            handle = (src.raw_payload.get("journalist") or "").lstrip("@").lower()
-            if handle not in failed:
-                outcomes[src.url] = {"url": out.url, "source_type": out.source_type,
-                                     "raw_payload": out.raw_payload}
+        for k, h, out in zip(fresh_keys, handles, await promote(fresh, timelines)):
+            promoted[k] = out
+            if h not in failed:
+                outcomes[k] = {"url": out.url, "source_type": out.source_type,
+                               "raw_payload": dict(out.raw_payload)}
     result = []
-    for it in items:
-        if it.url in promoted:
-            result.append(promoted[it.url])
+    for it, k in zip(items, keys):
+        if k in promoted:
+            result.append(promoted[k])
             continue
-        o = outcomes[it.url]
+        o = outcomes[k]
         result.append(RawItem(source_id=it.source_id, source_type=o["source_type"],
                               url=o["url"], fetched_at=now,
                               raw_payload=dict(o["raw_payload"])))
@@ -263,8 +266,8 @@ async def expand_truncated(ctx, raw_tweets: list[dict], handle: str, log,
             log.info("트윗 펼침 status_id=%s %d자 → %d자",
                      sid, len(t.get("text") or ""), len(full))
             t["text"] = full
-            known[sid] = full
             grown += 1
+        known[sid] = t.get("text") or ""   # 잘리지 않은 긴 트윗도 기억해 다시 열지 않는다
     still_cut = [t for t in targets if looks_truncated(t.get("text"))]
     if still_cut:
         log.warning("트윗 펼치기 이후에도 끊겨 보임 %d건 status_id=%s — 펼치기가 "

@@ -117,6 +117,26 @@ def test_expand_reuses_known_text_without_opening_a_page():
     assert (grown, tweets[0]["text"], len(ctx.pages)) == (0, "full", 0)
 
 
+def test_expand_remembers_a_long_but_complete_tweet():
+    text = "L" * 280
+    known = {}
+    ctx = _Ctx({"https://x.com/h/status/7": "짧음"})      # 페이지 쪽이 더 길지 않다
+    _run(expand_truncated(ctx, [{"status_id": "7", "text": text}], "h",
+                          logging.getLogger(__name__), known=known))
+    assert (known, len(ctx.pages)) == ({"7": text}, 1)
+    _run(expand_truncated(ctx, [{"status_id": "7", "text": text}], "h",
+                          logging.getLogger(__name__), known=known))
+    assert len(ctx.pages) == 1
+
+
+def test_expand_does_not_remember_a_failed_read():
+    known = {}
+    ctx = _Ctx({}, fail_urls=["https://x.com/h/status/8"])
+    _run(expand_truncated(ctx, [{"status_id": "8", "text": "a" * 280}], "h",
+                          logging.getLogger(__name__), known=known))
+    assert known == {}
+
+
 def test_expand_records_new_full_text():
     known = {}
     ctx = _Ctx({"https://x.com/h/status/2": "x" * 400})

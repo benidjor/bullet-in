@@ -58,6 +58,28 @@ def test_failed_timeline_is_not_remembered():
     assert outcomes == {}
 
 
+def test_in_place_paywall_promotion_is_still_keyed_by_tweet_url():
+    calls = []
+
+    async def scrape(fresh):
+        calls.append(len(fresh))
+        return {}, set()
+
+    async def promote(fresh, tl):      # backtrack_promote 의 유료 기사 경로처럼 제자리 변경
+        for it in fresh:
+            it.raw_payload["tweet_url"] = it.url
+            it.url = "https://www.theathletic.com/a"
+        return list(fresh)
+
+    outcomes = {}
+    first = asyncio.run(backtrack_cached([_tweet("1")], outcomes, _NOW, scrape, promote))
+    second = asyncio.run(backtrack_cached([_tweet("1")], outcomes, _NOW2, scrape, promote))
+    assert calls == [1]
+    assert list(outcomes) == ["https://x.com/afcstuff/status/1"]
+    assert [i.url for i in first] == [i.url for i in second] == ["https://www.theathletic.com/a"]
+    assert second[0].raw_payload["tweet_url"] == "https://x.com/afcstuff/status/1"
+
+
 def test_mixed_batch_keeps_input_order():
     async def scrape(fresh):
         return {}, set()
