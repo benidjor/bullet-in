@@ -129,6 +129,27 @@ a => {
 """
 
 
+class XPageError(RuntimeError):
+    """X 페이지에 트윗이 안 보일 때 — 어떤 화면이 떠 있었는지 (주소 · 제목) 를 담는다."""
+
+
+async def wait_for_tweets(page, timeout: int = 20000) -> None:
+    """트윗이 뜰 때까지 기다린다. 실패하면 화면 단서 (주소 · 제목) 를 붙여 올린다.
+
+    시간 초과만으로는 로그인 요구 · 계정 잠금 · 빈 화면을 가를 수 없다."""
+    try:
+        await page.wait_for_selector('article[data-testid="tweet"]', timeout=timeout)
+    except Exception as e:
+        try:
+            title = await page.title()
+        except Exception:
+            title = "?"
+        lines = str(e).splitlines()
+        first = lines[0] if lines else type(e).__name__
+        shown = title if title == "?" else repr(title)
+        raise XPageError(f"트윗이 안 보임 · url={page.url} · title={shown} · {first}") from e
+
+
 def load_x_cache(path: str | None) -> dict:
     """트윗별 첫 결과 기억 — 펼친 전문 (status_id) 과 역추적 결과 (트윗 주소).
 
@@ -229,7 +250,7 @@ async def expand_truncated(ctx, raw_tweets: list[dict], handle: str, log,
             page = await ctx.new_page()
             await page.goto(f"https://x.com/{handle}/status/{sid}",
                             wait_until="domcontentloaded")
-            await page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
+            await wait_for_tweets(page)
             full = await page.eval_on_selector(
                 'article[data-testid="tweet"]', _FULL_TEXT_JS)
         except Exception as e:  # 소스 격리 — 한 트윗 실패는 그 트윗만 타임라인 값 유지
@@ -312,7 +333,7 @@ class XPlaywrightAdapter:
             await ctx.add_cookies(cookies)
             page = await ctx.new_page()
             await page.goto(f"https://x.com/{self.handle}", wait_until="domcontentloaded")
-            await page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
+            await wait_for_tweets(page)
             raw_tweets = await _scroll_collect(page, _TWEET_JS, self.max_tweets)
             self.funnel = {"scraped": len(raw_tweets), "passed": 0,
                            "list_sig": list_signature(tweet_list_urls(raw_tweets))}
@@ -357,7 +378,7 @@ class XPlaywrightAdapter:
             try:
                 page = await ctx.new_page()
                 await page.goto(f"https://x.com/{h}", wait_until="domcontentloaded")
-                await page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
+                await wait_for_tweets(page)
                 timelines[h.lower()] = await _scroll_collect(page, _JOURN_JS, depth)
             except Exception as e:  # 소스 격리 : 한 핸들 실패는 그 인용만 2순위로 강등
                 log.warning("backtrack 타임라인 실패 handle=%s err=%s", h, e)

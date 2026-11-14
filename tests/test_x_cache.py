@@ -1,10 +1,12 @@
 import asyncio
 from datetime import datetime, timezone
 
+import pytest
 import yaml
 
-from bullet_in.adapters.x_playwright import (backtrack_cached, load_x_cache,
-                                             save_x_cache)
+from bullet_in.adapters.x_playwright import (XPageError, backtrack_cached,
+                                             load_x_cache, save_x_cache,
+                                             wait_for_tweets)
 from bullet_in.models import RawItem
 
 _NOW = datetime(2026, 11, 15, 9, tzinfo=timezone.utc)
@@ -97,3 +99,32 @@ def test_live_x_sources_have_cache_paths():
              if s["source_id"].startswith("x_")}
     assert paths == {"x_afcstuff": "state/x_cache_afcstuff.json",
                      "x_ornstein": "state/x_cache_ornstein.json"}
+
+
+class _Page:
+    url = "https://x.com/account/access"
+
+    def __init__(self, title="Locked account", title_fails=False):
+        self._t, self._f = title, title_fails
+
+    async def wait_for_selector(self, sel, timeout):
+        raise TimeoutError("Timeout 20000ms exceeded.\nCall log: ...")
+
+    async def title(self):
+        if self._f:
+            raise RuntimeError("closed")
+        return self._t
+
+
+def test_timeout_carries_url_and_title():
+    with pytest.raises(XPageError) as e:
+        asyncio.run(wait_for_tweets(_Page()))
+    msg = str(e.value)
+    assert "url=https://x.com/account/access" in msg and "title='Locked account'" in msg
+    assert "Call log" not in msg and isinstance(e.value.__cause__, TimeoutError)
+
+
+def test_title_failure_still_raises_the_timeout():
+    with pytest.raises(XPageError) as e:
+        asyncio.run(wait_for_tweets(_Page(title_fails=True)))
+    assert "title=?" in str(e.value)
