@@ -31,6 +31,7 @@ X 가 2026-11-08 수집용 쿠키의 계정을 자동화 탐지 (inauthentic beh
 | 역추적 | 끄지 않는다 · 새 트윗만 (이미 본 트윗은 첫 결과 재사용) |
 | 잘린 트윗 펼치기 | 새 트윗만 (이미 본 트윗은 첫 결과 재사용) |
 | 머지 전 임시 조치 | 없음 |
+| X 실패 때 화면 단서 | 남긴다 · 트윗을 기다리다 시간 초과되면 그 페이지의 주소 · 제목을 오류 문장에 붙인다 |
 
 ## 작업 원칙 (Karpathy 4원칙 · CLAUDE.md 「행동 가이드라인」)
 
@@ -87,12 +88,13 @@ X 가 2026-11-08 수집용 쿠키의 계정을 자동화 탐지 (inauthentic beh
 - **이미 저장한 트윗의 원문** — 기억한 전문이 그대로 나가 저장 행이 잘린 글로 바뀌지 않는다 (Task 3 시험)
 - **기자 타임라인을 못 연 항목** — 기억하지 않아 다음 회차에 다시 시도한다 (Task 3 시험)
 - **건너뛴 회차의 신선도 상태** — 직전이 「끊김」 이면 그대로 「끊김」 · 연속 무응답 수가 늘지 않는다 (Task 2 시험)
+- **단서를 읽다가 또 실패** — 페이지가 이미 닫혔거나 제목을 못 읽어도 원래 시간 초과가 그대로 올라간다 (Task 3 시험)
 
 ## 알고 두는 한계 (고치지 않음)
 
 - **X 의 절벽 알림은 사실상 꺼진다** — 건너뛴 회차 다음 X 회차는 직전 회차에 X 후보가 없어 「직전 > 0 · 이번 0」 이 성립하지 않는다 · X 고장은 신선도 「끊김」 (X 회차 두 번 연속 무응답) 이 잡는다 · 비이적기간에는 알림까지 최대 약 24시간
 - **기자 링크가 나중에 달리는 경우** — 첫 시도에서 카드가 없던 트윗은 다시 시도하지 않는다 · 지금까지 그런 사례가 있었는지는 안 쟀다
-- **X 실패 때 화면 단서** — 시간 초과 때 페이지 주소 · 제목을 남기는 일은 이번 범위 밖이다 (사용자 결정 대기)
+- **화면 단서는 주소 · 제목뿐이다** — 화면 캡처 · 본문은 남기지 않는다 · 잠금 안내와 로그인 화면이 같은 제목이면 가르지 못한다
 
 ---
 
@@ -247,10 +249,10 @@ def test_stage_text_for_a_skipped_source():
 
 ---
 
-### Task 3: 이미 본 트윗은 첫 결과를 재사용
+### Task 3: 이미 본 트윗은 첫 결과를 재사용 · 실패 때 화면 단서
 
 **Files:**
-- Modify: `src/bullet_in/adapters/x_playwright.py` (`expand_truncated` 의 `known` 인자 · `load_x_cache` · `save_x_cache` · `backtrack_cached` 추가 · `XPlaywrightAdapter` 의 `cache_path` · `fetch` 배선 · `_scrape_journalists` 반환을 `(timelines, failed)` 로)
+- Modify: `src/bullet_in/adapters/x_playwright.py` (`expand_truncated` 의 `known` 인자 · `load_x_cache` · `save_x_cache` · `backtrack_cached` · `wait_for_tweets` 추가 · `XPlaywrightAdapter` 의 `cache_path` · `fetch` 배선 · `_scrape_journalists` 반환을 `(timelines, failed)` 로 · 트윗 대기 세 곳 (`fetch` 본 타임라인 · `expand_truncated` · `_scrape_journalists`) 을 `wait_for_tweets` 로)
 - Modify: `src/bullet_in/adapters/factory.py` (`cache_path` 전달)
 - Modify: `config/sources.yaml` (두 X 소스 `config.cache_path`)
 - Test: `tests/test_x_expand.py` · `tests/test_x_cache.py` (새 파일)
@@ -261,6 +263,7 @@ def test_stage_text_for_a_skipped_source():
   - `load_x_cache(path: str | None) -> dict` — `{"expanded": {status_id: text}, "outcomes": {tweet_url: {"url", "source_type", "raw_payload"}}}` · `None` · 파일 없음 · JSON 오류면 빈 꼴 (JSON 오류는 `WARNING X 결과 기억 파일을 못 읽음 — 빈 기억으로 시작`)
   - `save_x_cache(path: str | None, cache: dict, status_ids: set[str], tweet_urls: set[str]) -> None` — 이번에 본 키만 남겨 임시 파일에 쓰고 `os.replace` · `path` 가 `None` 이면 아무것도 안 한다
   - `async backtrack_cached(items: list[RawItem], outcomes: dict, now: datetime, scrape, promote) -> list[RawItem]` — `scrape(fresh) -> (timelines, failed)` · `promote(fresh, timelines) -> list[RawItem]` · 기억한 주소는 `RawItem(source_id, source_type, url, fetched_at=now, raw_payload)` 로 되살리고 나머지만 `scrape` · `promote` 에 넘긴다 · 새 결과는 인용 기자 (`raw_payload["journalist"]` 의 `@` 뗀 소문자) 가 `failed` 에 없을 때만 기억한다 · 출력 순서는 입력 순서 · 새 항목이 없으면 `scrape` · `promote` 를 부르지 않는다
+  - `async wait_for_tweets(page, timeout: int = 20000) -> None` — `page.wait_for_selector('article[data-testid="tweet"]', timeout=timeout)` · 실패하면 `XPageError(f"트윗이 안 보임 · url={page.url} · title={제목!r} · {원래 오류 첫 줄}")` 를 원래 오류에 이어 (`from e`) 올린다 · 제목 읽기가 실패하면 제목 자리에 `?` · `XPageError` 는 `RuntimeError` 를 잇는 새 예외
 - Consumes: 기존 `backtrack_promote(items, timelines, cfg)`
 
 - [ ] **Step 1: 실패하는 시험을 쓴다**
@@ -321,6 +324,31 @@ def test_live_x_sources_have_cache_paths():
                      "x_ornstein": "state/x_cache_ornstein.json"}
 ```
 
+```python
+# tests/test_x_cache.py (계속) · 화면 단서
+class _Page:
+    url = "https://x.com/account/access"
+    def __init__(self, title="Locked account", title_fails=False):
+        self._t, self._f = title, title_fails
+    async def wait_for_selector(self, sel, timeout):
+        raise TimeoutError("Timeout 20000ms exceeded.\nCall log: ...")
+    async def title(self):
+        if self._f: raise RuntimeError("closed")
+        return self._t
+
+def test_timeout_carries_url_and_title():
+    with pytest.raises(XPageError) as e:
+        asyncio.run(wait_for_tweets(_Page()))
+    msg = str(e.value)
+    assert "url=https://x.com/account/access" in msg and "title='Locked account'" in msg
+    assert "Call log" not in msg and isinstance(e.value.__cause__, TimeoutError)
+
+def test_title_failure_still_raises_the_timeout():
+    with pytest.raises(XPageError) as e:
+        asyncio.run(wait_for_tweets(_Page(title_fails=True)))
+    assert "title=?" in str(e.value)
+```
+
 `_tweet(sid)` 은 `parse_afcstuff_tweets` 가 내는 모양의 `RawItem` (주소 `https://x.com/afcstuff/status/<sid>` · `raw_payload["journalist"] = "@SamiMokbel_BBC"`) · `_promoted(it)` 은 주소 `https://www.bbc.com/a` · `source_type="html"` 인 새 `RawItem` 이다.
 `tests/test_x_expand.py` 의 가짜 `ctx` 에 연 페이지 수 (`opened`) 가 없으면 이 작업에서 더한다.
 
@@ -328,7 +356,8 @@ def test_live_x_sources_have_cache_paths():
 - [ ] **Step 3: 구현한다** — `fetch` 순서 = `cache = load_x_cache(self.cache_path)` → 타임라인 스크롤 → `expand_truncated(..., known=cache["expanded"])` → 파싱 → (`backtrack_config` 가 있으면 브라우저를 닫기 전에) `backtrack_cached(items, cache["outcomes"], now, scrape=lambda f: self._scrape_journalists(ctx, f, bt, log), promote=lambda f, tl: backtrack_promote(f, tl, bt))` → 브라우저 닫기 → (`self_source` 면) `resolve_card_urls` → `save_x_cache(self.cache_path, cache, 이번 status_id 집합, 파싱한 트윗 주소 집합)`
   - 결과 기억 파일을 읽거나 쓰다 실패해도 수집은 계속한다 (쓰기 실패 = `WARNING` 한 줄)
 - [ ] **Step 4: 통과 확인** — 같은 명령 통과 · 이어서 전체 `pytest -q` 통과 · 89 skip
-- [ ] **Step 5: 커밋** — `perf(x): 이미 본 트윗은 펼치기 · 역추적을 다시 하지 않고 첫 결과를 쓰게`
+  - 트윗 대기 세 곳을 `wait_for_tweets(page)` 로 바꾼다 · 펼치기 · 기자 타임라인의 기존 `WARNING` 줄은 그대로 두고 오류 문장만 단서가 붙은 것으로 바뀐다
+- [ ] **Step 5: 커밋** — `perf(x): 이미 본 트윗은 펼치기 · 역추적을 다시 하지 않고 첫 결과를 쓰게` · 단서는 같은 Task 의 두 번째 커밋 `feat(x): 트윗이 안 보이면 페이지 주소 · 제목을 오류에 남기게`
 
 ---
 
