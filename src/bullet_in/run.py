@@ -7,7 +7,7 @@ from pathlib import Path
 from pymongo import MongoClient
 from sqlalchemy import create_engine, text
 from google import genai
-from bullet_in.adapters.factory import build_adapters
+from bullet_in.adapters.factory import build_adapters, scheduled_skips
 from bullet_in.ingest import gather_all
 from bullet_in.adapters.fmkorea import is_arsenal_relevant
 from bullet_in.canonical import content_hash, canonical_url
@@ -307,6 +307,11 @@ def adapter_funnels(adapters) -> dict:
             if (f := getattr(a, "funnel", None))}
 
 
+def skipped_funnels(funnels: dict, skipped: list[str]) -> dict:
+    """일정상 건너뛴 소스에 표지를 단 새 깔때기 — 무응답이 아니라 건너뜀으로 판정되게 한다."""
+    return {**funnels, **{sid: {"skipped": "schedule"} for sid in skipped}}
+
+
 def blocked_miss_runs(sources: dict) -> dict[str, int]:
     """차단 (전부 430) 만 이어질 때 끊김까지 기다릴 소스별 회차 수 — 설정이 있는 소스만."""
     return {sid: int(s["blocked_miss_runs"]) for sid, s in sources.items()
@@ -402,8 +407,11 @@ async def collect(run_id: str, concurrency: int) -> FetchSummary:
     """수집 · 원본 저장 · 마트 upsert · 회차 행 삽입 (§3.2 표의 첫 행)."""
     cfg, sources, registry, engine, mart, pstore = _materials()
     # fmkorea 무관 글 필터 인정 집합 주입 (워치리스트 스펙 §3.2) — 배치와 동일 집합
+    skipped = scheduled_skips(cfg["sources"], datetime.now(timezone.utc))
+    if skipped:
+        logging.getLogger(__name__).info("일정상 건너뜀: %s", " · ".join(skipped))
     adapters = build_adapters(cfg, fmkorea_player_names=pstore.confirmed_ko_names(),
-                              scope_roster=scope_roster_or_none(pstore))
+                              scope_roster=scope_roster_or_none(pstore), skip=skipped)
 
     t0 = time.perf_counter()
     started_at_utc = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -443,7 +451,7 @@ async def collect(run_id: str, concurrency: int) -> FetchSummary:
         payload = cliff_alert_payload(
             candidate_counts, cand_hist, adapters=adapters, sources=sources,
             success_rate=success_rate(len(adapters), len(errors)), run_id=run_id,
-            skip=sitemap_alerted)
+            skip=sitemap_alerted | set(skipped))
         if payload:
             notify.send_alert(**payload)
     except Exception:
@@ -490,7 +498,7 @@ async def collect(run_id: str, concurrency: int) -> FetchSummary:
         source_counts=stats["source_counts"], candidate_counts=candidate_counts,
         new_count=len(arts), dup_count=stats["dup_count"],
         blocked_count=stats["blocked_count"], errors=errors,
-        funnels=adapter_funnels(adapters),
+        funnels=skipped_funnels(adapter_funnels(adapters), skipped),
         success_rate=success_rate(len(adapters), len(errors)))
     with engine.begin() as c:
         c.execute(text(RUN_INSERT_SQL),

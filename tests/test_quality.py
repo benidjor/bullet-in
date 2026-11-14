@@ -702,3 +702,20 @@ def test_stale_translation_waits_keeps_rows_past_the_threshold_oldest_first():
     assert [r["content_hash"] for r in out] == ["c", "a", "e"]
     assert [r["age_hours"] for r in out] == [27.0, 10.0, 9.0]
     assert TRANSLATION_WAIT_HOURS == 8.5
+
+
+def test_responded_skipped_by_schedule():
+    assert responded("x_playwright", {"skipped": "schedule"}, False) == (False, "skipped")
+
+
+def test_skipped_run_carries_the_previous_judgement():
+    prev = {"state": "broken", "miss_streak": 3, "block_streak": 0, "list_sig": "s1",
+            "list_changed_at": _T0 - timedelta(hours=5)}
+    r = _judge(_rec("x_afcstuff", thr=24.0), ok=False, reason="skipped", sig=None, prev=prev)
+    assert (r.state, r.reason, r.miss_streak, r.list_sig) == ("broken", "skipped", 3, "s1")
+    assert r.list_changed_at == _T0 - timedelta(hours=5)
+
+
+def test_skipped_run_without_history_is_ok():
+    r = _judge(_rec("x_afcstuff", thr=24.0), ok=False, reason="skipped", sig=None)
+    assert (r.state, r.miss_streak) == ("ok", 0)

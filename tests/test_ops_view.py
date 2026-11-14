@@ -5,7 +5,7 @@
 from datetime import datetime, timedelta
 
 from bullet_in.dbt_gate import GateTally, TestOutcome
-from bullet_in.serve.ops_view import NO_GATE, UNNAMED, build_ops_view
+from bullet_in.serve.ops_view import NO_GATE, UNNAMED, _stage_text, build_ops_view
 
 NOW = datetime(2026, 9, 5, 0, 10)                                  # UTC
 
@@ -395,3 +395,7 @@ def test_slo_절은_창_밖의_재시도를_세지_않는다():
 
 def test_빈_스냅샷이면_사이트맵_줄이_없다():
     assert not any("사이트맵" in t for t in _slo_texts(EMPTY))
+
+
+def test_stage_text_for_a_skipped_source():
+    assert _stage_text({"skipped": "schedule"}) == "일정상 건너뜀"
