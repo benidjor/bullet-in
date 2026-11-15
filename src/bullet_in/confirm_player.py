@@ -96,7 +96,8 @@ def _render(engine) -> None:
     import yaml
     from pathlib import Path
     from sqlalchemy import text
-    from bullet_in.run import SERVING_SELECT_SQL, LINKED_HASHES_SQL, serving_rows
+    from bullet_in.run import (SERVING_SELECT_SQL, LINKED_HASHES_SQL, serving_rows,
+                               drop_late_official)
     from bullet_in.adapters.factory import build_adapters
     from bullet_in.score import load_sources
     from bullet_in.credibility import load_registry, journalist_directory, outlet_directory
@@ -105,6 +106,8 @@ def _render(engine) -> None:
     with engine.connect() as c:
         rows = [dict(r) for r in c.execute(text(SERVING_SELECT_SQL)).mappings().all()]
         linked = set(c.execute(text(LINKED_HASHES_SQL)).scalars().all())
+    rows, late = drop_late_official(rows)
+    log.info("서빙 제외 — Arsenal.com 늦게 들어온 옛 글 %d건", late)
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
     adapters = build_adapters(cfg,
                               fmkorea_player_names=PlayerStore(engine).confirmed_ko_names())
