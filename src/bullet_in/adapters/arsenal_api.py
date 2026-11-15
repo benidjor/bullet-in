@@ -24,6 +24,12 @@ GRAPHQL_URL = "https://afc-prd.graph.arsenal.com/graphql"
 SITEMAP_URL = "https://www.arsenal.com/sitemaps/articles/1/sitemap.xml"
 WINDOW_HOURS = 48.0
 
+# 발행 뒤 이만큼 지난 글은 정규 수집에서 받지 않는다 (계획 2026-11-15-arsenal-late-republished).
+# 창은 사이트맵 lastmod 기준이라, 2026-11-02 · 11-03 처럼 구단이 옛 글의 수정 시각을 한꺼번에
+# 바꾸면 2015 ~ 2026-07 발행 글 29건이 새 기사로 들어왔다 (원인은 lastmod 일괄 갱신으로 추정).
+# 7월 첫 적재 · 8월 이적 발표는 2 ~ 30일 늦게 들어온 정상 글이라 30일 안쪽으로 둔다.
+REPUBLISHED_MAX_AGE_DAYS = 30
+
 # 사이트맵이 가끔 20초를 넘기거나 503 · 404 를 준다 (설계 2026-10-05 §1.3 · 627회 중 8회).
 # 일시 장애만 한 번 더 묻는다 — 최악 소요 20 + 10 + 20 = 50초 (설계 §2.2).
 # 바꾸면 _sitemap 의 경고 문구 「10초 뒤 재시도」 도 함께 바꾼다.
@@ -138,9 +144,11 @@ class ArsenalApiAdapter:
     source_type = "api"
 
     def __init__(self, source_id: str, window_hours: float = WINDOW_HOURS,
-                 scope: ScopeRule | None = None):
+                 scope: ScopeRule | None = None, max_age_days: float | None = None):
         self.source_id = source_id
         self.window_hours = window_hours
+        # 옛 글 거르기 — 정규 수집만 켠다 (factory) · 백필은 옛 글을 일부러 받으므로 기본은 끈다
+        self.max_age_days = max_age_days
         self.scope = scope   # 수집 범위 판정 (설계 2026-10-07 §3) — 없으면 종전 두 경로만
         self.coverage: dict = {}
         self.men_news_rejects: list[dict] = []   # 관측용 — Men + News 인데 비채택 (스펙 2026-08-07 §3.3)
@@ -189,6 +197,18 @@ class ArsenalApiAdapter:
                      self.funnel["sitemap_sec"], self.funnel["sitemap_attempts"],
                      "" if ok else " · 실패")
 
+    def _too_old(self, art: dict, now: datetime) -> bool:
+        """발행일이 max_age_days 보다 오래된 글인가 — 발행일이 없거나 못 읽으면 거르지 않는다."""
+        if self.max_age_days is None:
+            return False
+        try:
+            pub = datetime.fromisoformat(art["publicationDate"].replace("Z", "+00:00"))
+        except (KeyError, AttributeError, TypeError, ValueError):
+            return False
+        if pub.tzinfo is None:            # 시간대 표기가 없으면 UTC 로 읽는다 (비교가 깨지지 않게)
+            pub = pub.replace(tzinfo=timezone.utc)
+        return pub < now - timedelta(days=self.max_age_days)
+
     async def fetch(self) -> list[RawItem]:
         now = datetime.now(timezone.utc)
         out: list[RawItem] = []
@@ -214,6 +234,9 @@ class ArsenalApiAdapter:
                 if not art:
                     log.warning("%s: GetArticle 응답 없음 — %s", self.source_id, url)
                     continue
+                if self._too_old(art, now):
+                    self.funnel["stale"] = self.funnel.get("stale", 0) + 1
+                    continue
                 if "Men" in (art.get("taxonomies") or []):
                     men += 1
                 accept_path = _accept(art, self.scope)
@@ -237,6 +260,8 @@ class ArsenalApiAdapter:
                                    url=url, fetched_at=now, raw_payload=payload))
         self.coverage = {"candidates": len(urls), "men_tagged": men,
                          "accepted": len(out)}
-        log.info("%s: 창 후보 %d · Men %d · accept %d",
-                 self.source_id, len(urls), men, len(out))
+        stale = self.funnel.get("stale", 0)
+        log.info("%s: 창 후보 %d · Men %d · accept %d%s",
+                 self.source_id, len(urls), men, len(out),
+                 f" · 옛 글 {stale}" if stale else "")
         return out

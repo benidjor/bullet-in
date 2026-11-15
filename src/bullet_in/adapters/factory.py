@@ -5,7 +5,7 @@ from collections.abc import Collection
 from datetime import datetime, timezone
 from bullet_in.adapters.rss import RssAdapter
 from bullet_in.adapters.guardian_api import GuardianAdapter
-from bullet_in.adapters.arsenal_api import ArsenalApiAdapter
+from bullet_in.adapters.arsenal_api import ArsenalApiAdapter, REPUBLISHED_MAX_AGE_DAYS
 from bullet_in.adapters.html import HtmlAdapter
 from bullet_in.adapters.playwright_news import PlaywrightAdapter
 from bullet_in.adapters.x_playwright import XPlaywrightAdapter
@@ -68,7 +68,8 @@ def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None,
                                        title_contains=c.get("title_contains")))
         elif kind == "arsenal_api":
             out.append(ArsenalApiAdapter(
-                sid, scope=official_scope if c.get("title_scope") else None))
+                sid, scope=official_scope if c.get("title_scope") else None,
+                max_age_days=REPUBLISHED_MAX_AGE_DAYS))
         elif kind == "html":
             out.append(HtmlAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url"),
                                    title_contains=c.get("title_contains"),
