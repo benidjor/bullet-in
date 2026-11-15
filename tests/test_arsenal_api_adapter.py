@@ -343,3 +343,77 @@ def test_fetch_records_passed_by_and_dropped_for_men_news():
     assert a.funnel["passed_by"] == {"scope": 1}
     assert a.funnel["dropped"] == ["Disabled Supporters' Ticket Information"]
     assert a.funnel["sitemap_attempts"] == 1                        # 사이트맵 기록은 그대로
+
+
+# --- 옛 글 재유입 거르기 (계획 2026-11-15-arsenal-late-republished · Task 1) ---
+from datetime import timedelta
+from bullet_in.adapters.arsenal_api import REPUBLISHED_MAX_AGE_DAYS
+
+
+def _iso(dt):
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def _late_backend(published_by_gid):
+    entries = [_sitemap_entry(f"post-{g}", lastmod=_iso(datetime.now(timezone.utc)))
+               for g in published_by_gid]
+    return _mock_backend(_sitemap(entries), {
+        g: _gql_article(f"Title {g}", ["Men", "News", "Transfer news"], published=p)
+        for g, p in published_by_gid.items()})
+
+
+@respx.mock
+def test_max_age_drops_old_publication_and_counts_stale():
+    now = datetime.now(timezone.utc)
+    _late_backend({"aNEW00000001": _iso(now - timedelta(days=2)),
+                   "aOLD00000001": _iso(now - timedelta(days=400))})
+    a = ArsenalApiAdapter("arsenal_official", max_age_days=REPUBLISHED_MAX_AGE_DAYS)
+    items = asyncio.run(a.fetch())
+    assert [i.url.rsplit("-", 1)[1] for i in items] == ["aNEW00000001"]
+    assert a.funnel["stale"] == 1
+    assert a.men_news_rejects == []
+    assert "dropped" not in a.funnel
+
+
+@respx.mock
+def test_max_age_keeps_just_inside_thirty_days():
+    now = datetime.now(timezone.utc)
+    _late_backend({"aEDGE0000001": _iso(now - timedelta(days=30) + timedelta(minutes=5))})
+    a = ArsenalApiAdapter("arsenal_official", max_age_days=30)
+    assert len(asyncio.run(a.fetch())) == 1
+    assert "stale" not in a.funnel
+
+
+@respx.mock
+def test_max_age_keeps_missing_or_broken_publication_date():
+    _late_backend({"aNONE0000001": None, "aBAD00000001": "not-a-date"})
+    a = ArsenalApiAdapter("arsenal_official", max_age_days=30)
+    assert len(asyncio.run(a.fetch())) == 2
+    assert "stale" not in a.funnel
+
+
+@respx.mock
+def test_without_max_age_backfill_still_takes_old_articles():
+    now = datetime.now(timezone.utc)
+    _late_backend({"aOLD00000002": _iso(now - timedelta(days=3650))})
+    a = ArsenalApiAdapter("arsenal_official")
+    assert len(asyncio.run(a.fetch())) == 1
+
+
+def test_factory_turns_max_age_on_for_arsenal_official():
+    from bullet_in.adapters.factory import build_adapters
+    cfg = {"sources": [{"source_id": "arsenal_official", "adapter": "arsenal_api",
+                        "config": {"title_scope": True}}]}
+    [a] = build_adapters(cfg)
+    assert a.max_age_days == REPUBLISHED_MAX_AGE_DAYS == 30
+
+
+@respx.mock
+def test_max_age_reads_publication_date_without_timezone_as_utc():
+    now = datetime.now(timezone.utc)
+    _late_backend({"aNAIVE000001": (now - timedelta(days=400)).strftime("%Y-%m-%dT%H:%M:%S"),
+                   "aNAIVE000002": (now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S")})
+    a = ArsenalApiAdapter("arsenal_official", max_age_days=30)
+    items = asyncio.run(a.fetch())
+    assert [i.url.rsplit("-", 1)[1] for i in items] == ["aNAIVE000002"]
+    assert a.funnel["stale"] == 1

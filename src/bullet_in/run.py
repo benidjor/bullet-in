@@ -2,12 +2,13 @@ from __future__ import annotations
 import argparse, asyncio, json, logging, math, os, time, uuid, yaml
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from pymongo import MongoClient
 from sqlalchemy import create_engine, text
 from google import genai
 from bullet_in.adapters.factory import build_adapters, scheduled_skips
+from bullet_in.adapters.arsenal_api import REPUBLISHED_MAX_AGE_DAYS
 from bullet_in.ingest import gather_all
 from bullet_in.adapters.fmkorea import is_arsenal_relevant
 from bullet_in.canonical import content_hash, canonical_url
@@ -252,6 +253,26 @@ def _serving_kept(row: dict, terms, names, surnames, linked) -> bool:
         return True
     # ④ 추출이 확정 선수를 붙인 기사 — 언급뿐인 귀속은 위 SQL 이 뺀다 (미기입은 남긴다)
     return row.get("content_hash") in linked
+
+
+def drop_late_official(rows: list[dict],
+                       max_age_days: float = REPUBLISHED_MAX_AGE_DAYS) -> tuple[list[dict], int]:
+    """Arsenal.com 행 중 발행 뒤 max_age_days 넘게 지나 저장된 것을 렌더 입력에서 뺀다.
+
+    (남길 행, 뺀 수) 를 돌려준다. DB 는 두고 렌더 입력만 거른다. 구단이 옛 글의 사이트맵
+    수정 시각을 한꺼번에 바꿔 몇 년 전 글이 새 기사로 들어온 행 몫이다 (2026-11-02 · 11-03
+    29건 · 09월 6건). 앞으로는 수집 단계가 같은 기준으로 거른다 (arsenal_api.max_age_days).
+    두 시각 중 하나라도 없으면 남긴다."""
+    limit = timedelta(days=max_age_days)
+    keep, dropped = [], 0
+    for r in rows:
+        pub, got = r.get("published_at"), r.get("fetched_at")
+        if (r.get("source_id") == "arsenal_official" and pub is not None
+                and got is not None and got - pub > limit):
+            dropped += 1
+        else:
+            keep.append(r)
+    return keep, dropped
 
 
 def serving_rows(rows: list[dict], *, relevance_terms, player_names,
@@ -710,6 +731,11 @@ def publish(run_id: str) -> None:
     fetched = FetchSummary.from_row(row)
     with engine.connect() as c:
         rows = [dict(r) for r in c.execute(text(SERVING_SELECT_SQL)).mappings().all()]
+    rows, late = drop_late_official(rows)
+    if late:
+        logging.getLogger(__name__).info(
+            "Arsenal.com 늦게 들어온 옛 글 서빙 제외 %d건 (발행 %d일 초과 뒤 저장)",
+            late, REPUBLISHED_MAX_AGE_DAYS)
     # 수집 필터 도입 전 적재된 fmkorea 무관 글을 서빙에서만 제외 (DB 는 보존).
     # 어댑터가 들고 있는 인정 집합을 그대로 써서 수집 · 서빙 기준을 하나로 묶는다.
     # 목록에서 빠지면 sweep_orphan_pages 가 상세 페이지도 함께 정리한다.
