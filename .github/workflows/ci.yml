@@ -18,7 +18,9 @@ permissions:
 jobs:
   tests:
     name: pytest
-    runs-on: ubuntu-latest
+    # ubuntu-latest 가 26.04 로 바뀌자 Playwright 가 크로미움을 설치하지 못해 시험이 아예 돌지 않았다
+    # (2026-11-15 #560 · 「Playwright does not support chromium on ubuntu26.04-x64」) · 지원되면 되돌린다.
+    runs-on: ubuntu-24.04
     services:
       # 통합 테스트 69건이 이 접속으로 붙는다 (tests/integration/conftest.py 가 주소를 고정한다).
       # 스키마의 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 는 MariaDB 문법이라 MySQL 로 못 바꾼다.
