@@ -86,6 +86,8 @@ def responded(adapter: str | None, funnel: dict | None,
     제목이 확인되지 않은 링크는 이적 키워드 검사까지 가지 못하고 버려진다."""
     if errored:
         return False, "error"
+    if funnel and funnel.get("skipped"):
+        return False, "skipped"   # 일정상 건너뜀 — 응답을 못 받은 것이 아니다
     if not funnel:
         return False, "no_record"
     if adapter == "html":
@@ -161,6 +163,14 @@ def evaluate_states(records: list[SourceFreshness],
         ok, reason = responses.get(r.source_id, (False, "no_record"))
         prev = previous.get(r.source_id) or {}
         prev_sig, prev_changed = prev.get("list_sig"), prev.get("list_changed_at")
+        if reason == "skipped":
+            # 일정상 건너뛴 실행은 판정하지 않는다 — 직전 판정을 그대로 잇고 시계도 세지 않는다
+            r.state, r.reason = prev.get("state") or "ok", "skipped"
+            r.miss_streak = int(prev.get("miss_streak") or 0)
+            r.block_streak = int(prev.get("block_streak") or 0)
+            r.list_sig, r.list_changed_at = prev_sig, prev_changed or now
+            r.cap_hours = (cap_overrides or {}).get(r.source_id, cap_hours)
+            continue
         if ok:
             r.miss_streak = 0
             r.list_sig = sigs.get(r.source_id) or None

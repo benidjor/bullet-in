@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import tempfile
 from datetime import datetime
 from bullet_in.models import RawItem
 from bullet_in.quality import list_signature
@@ -129,8 +130,108 @@ a => {
 """
 
 
+class XPageError(RuntimeError):
+    """X 페이지에 트윗이 안 보일 때 — 어떤 화면이 떠 있었는지 (주소 · 제목) 를 담는다."""
+
+
+async def wait_for_tweets(page, timeout: int = 20000) -> None:
+    """트윗이 뜰 때까지 기다린다. 실패하면 화면 단서 (주소 · 제목) 를 붙여 올린다.
+
+    시간 초과만으로는 로그인 요구 · 계정 잠금 · 빈 화면을 가를 수 없다."""
+    try:
+        await page.wait_for_selector('article[data-testid="tweet"]', timeout=timeout)
+    except Exception as e:
+        try:
+            title = await page.title()
+        except Exception:
+            title = "?"
+        lines = str(e).splitlines()
+        first = lines[0] if lines else type(e).__name__
+        shown = title if title == "?" else repr(title)
+        raise XPageError(f"트윗이 안 보임 · url={page.url} · title={shown} · {first}") from e
+
+
+def load_x_cache(path: str | None) -> dict:
+    """트윗별 첫 결과 기억 — 펼친 전문 (status_id) 과 역추적 결과 (트윗 주소).
+
+    한 번 본 트윗은 전문 · 역추적을 다시 하지 않고 이 기억을 쓴다 (X 페이지 접근을
+    줄이려는 것). 없거나 못 읽으면 빈 기억으로 시작해 수집은 계속한다."""
+    empty = {"expanded": {}, "outcomes": {}}
+    if not path or not os.path.exists(path):
+        return empty
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = json.load(f)
+        return {"expanded": dict(raw.get("expanded") or {}),
+                "outcomes": dict(raw.get("outcomes") or {})}
+    except (OSError, ValueError, AttributeError, TypeError):
+        logging.getLogger(__name__).warning("X 결과 기억 파일을 못 읽음 — 빈 기억으로 시작")
+        return empty
+
+
+def save_x_cache(path: str | None, cache: dict, status_ids: set[str],
+                 tweet_urls: set[str]) -> None:
+    """이번에 본 키만 남겨 저장한다 — 타임라인에서 밀려난 트윗은 기억도 함께 버린다.
+
+    임시 파일에 쓰고 바꿔치기해 쓰다 끊겨도 옛 기억이 남는다. 쓰기 실패는 경고만."""
+    if not path:
+        return
+    keep = {"expanded": {k: v for k, v in cache["expanded"].items() if k in status_ids},
+            "outcomes": {k: v for k, v in cache["outcomes"].items() if k in tweet_urls}}
+    tmp = None
+    try:
+        d = os.path.dirname(path) or "."
+        os.makedirs(d, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=d, suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(keep, f, ensure_ascii=False)
+        os.replace(tmp, path)
+        tmp = None
+    except (OSError, TypeError, ValueError) as e:
+        logging.getLogger(__name__).warning("X 결과 기억 파일을 못 씀 path=%s err=%s", path, e)
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
+async def backtrack_cached(items: list[RawItem], outcomes: dict, now: datetime,
+                           scrape, promote) -> list[RawItem]:
+    """역추적을 트윗마다 한 번만 한다 — 기억한 트윗은 첫 결과 그대로 되살리고 (`fetched_at` 만 갱신)
+    새 트윗만 기자 타임라인을 열어 승격한다.
+
+    건너뛰는 것이 아니라 **재사용**이다 — 승격된 트윗을 트윗 주소로 다시 내면 같은 기사가
+    두 행이 되고, 잘린 원문으로 다시 내면 저장된 행을 덮어쓴다.
+    기자 타임라인을 못 읽은 (`failed`) 트윗은 기억하지 않아 다음 실행이 다시 시도한다."""
+    keys = [it.url for it in items]   # 승격이 항목을 제자리에서 바꾸므로 (유료 기사) 미리 잡아 둔다
+    fresh = [it for it, k in zip(items, keys) if k not in outcomes]
+    promoted: dict[str, RawItem] = {}
+    if fresh:
+        fresh_keys = [it.url for it in fresh]
+        handles = [(it.raw_payload.get("journalist") or "").lstrip("@").lower()
+                   for it in fresh]
+        timelines, failed = await scrape(fresh)
+        for k, h, out in zip(fresh_keys, handles, await promote(fresh, timelines)):
+            promoted[k] = out
+            if h not in failed:
+                outcomes[k] = {"url": out.url, "source_type": out.source_type,
+                               "raw_payload": dict(out.raw_payload)}
+    result = []
+    for it, k in zip(items, keys):
+        if k in promoted:
+            result.append(promoted[k])
+            continue
+        o = outcomes[k]
+        result.append(RawItem(source_id=it.source_id, source_type=o["source_type"],
+                              url=o["url"], fetched_at=now,
+                              raw_payload=dict(o["raw_payload"])))
+    return result
+
+
 async def expand_truncated(ctx, raw_tweets: list[dict], handle: str, log,
-                           cap: int = 10) -> int:
+                           cap: int = 10, known: dict[str, str] | None = None) -> int:
     """길이가 임계를 넘는 트윗을 status 페이지에서 다시 읽어 전문으로 교체한다.
 
     반환은 실제로 늘어난 건수. 기자 타임라인 수집과 같은 모양이다 — 페이지를 따로
@@ -141,7 +242,12 @@ async def expand_truncated(ctx, raw_tweets: list[dict], handle: str, log,
     「임계를 넘겼는데 안 늘어난 건수」 로 세면 안 된다 — 임계 이상의 대부분은 원래
     안 잘린 트윗이라 회차마다 떠서 아무도 안 보게 된다 (라이브 검증 2026-08-30:
     임계 이상 2건 중 1건이 정상 트윗이었다)."""
-    targets = [t for t in raw_tweets if needs_expansion(t.get("text"))]
+    known = {} if known is None else known
+    for t in raw_tweets:   # 이미 펼친 트윗은 페이지를 열지 않고 첫 전문을 쓴다
+        if t.get("status_id") in known:
+            t["text"] = known[t["status_id"]]
+    targets = [t for t in raw_tweets
+               if t.get("status_id") not in known and needs_expansion(t.get("text"))]
     if not targets:
         return 0
     if len(targets) > cap:
@@ -157,7 +263,7 @@ async def expand_truncated(ctx, raw_tweets: list[dict], handle: str, log,
             page = await ctx.new_page()
             await page.goto(f"https://x.com/{handle}/status/{sid}",
                             wait_until="domcontentloaded")
-            await page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
+            await wait_for_tweets(page)
             full = await page.eval_on_selector(
                 'article[data-testid="tweet"]', _FULL_TEXT_JS)
         except Exception as e:  # 소스 격리 — 한 트윗 실패는 그 트윗만 타임라인 값 유지
@@ -171,6 +277,7 @@ async def expand_truncated(ctx, raw_tweets: list[dict], handle: str, log,
                      sid, len(t.get("text") or ""), len(full))
             t["text"] = full
             grown += 1
+        known[sid] = t.get("text") or ""   # 잘리지 않은 긴 트윗도 기억해 다시 열지 않는다
     still_cut = [t for t in targets if looks_truncated(t.get("text"))]
     if still_cut:
         log.warning("트윗 펼치기 이후에도 끊겨 보임 %d건 status_id=%s — 펼치기가 "
@@ -211,12 +318,14 @@ class XPlaywrightAdapter:
 
     def __init__(self, source_id: str, handle: str, max_tweets: int = 20,
                  cookies_path: str = "x_cookies.json", backtrack_config_path: str | None = None,
-                 self_source: bool = False, own_source_handles: list[str] | None = None):
+                 self_source: bool = False, own_source_handles: list[str] | None = None,
+                 cache_path: str | None = None):
         self.source_id, self.handle = source_id, handle
         self.max_tweets, self.cookies_path = max_tweets, cookies_path
         self.backtrack_config_path = backtrack_config_path
         self.self_source = self_source
         self.own_source_handles = own_source_handles or []
+        self.cache_path = cache_path
         self.funnel: dict = {}
 
     async def fetch(self) -> list[RawItem]:
@@ -230,29 +339,35 @@ class XPlaywrightAdapter:
             from bullet_in.adapters.x_backtrack import load_backtrack_config
             bt = load_backtrack_config(self.backtrack_config_path)
         now = datetime.now(timezone.utc)
+        cache = load_x_cache(self.cache_path)
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             ctx = await browser.new_context()
             await ctx.add_cookies(cookies)
             page = await ctx.new_page()
             await page.goto(f"https://x.com/{self.handle}", wait_until="domcontentloaded")
-            await page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
+            await wait_for_tweets(page)
             raw_tweets = await _scroll_collect(page, _TWEET_JS, self.max_tweets)
             self.funnel = {"scraped": len(raw_tweets), "passed": 0,
                            "list_sig": list_signature(tweet_list_urls(raw_tweets))}
             # 접힌 트윗을 전문으로 바꾼 뒤에 파싱한다 — 파싱이 텍스트에서 인용 핸들과
             # 태그를 뽑으므로 잘린 채로 파싱하면 뒷부분의 인용이 통째로 사라진다.
-            await expand_truncated(ctx, raw_tweets, self.handle, log)
+            await expand_truncated(ctx, raw_tweets, self.handle, log,
+                                   known=cache["expanded"])
             items = self._parse_tweets(raw_tweets, now)
-            timelines = {}
+            tweet_urls = {it.url for it in items}
             if bt:
-                timelines = await self._scrape_journalists(ctx, items, bt, log)
+                from bullet_in.adapters.x_backtrack import backtrack_promote
+                items = await backtrack_cached(
+                    items, cache["outcomes"], now,
+                    scrape=lambda fresh: self._scrape_journalists(ctx, fresh, bt, log),
+                    promote=lambda fresh, tl: backtrack_promote(fresh, tl, bt))
             await browser.close()
         if self.self_source:
             items = await resolve_card_urls(items, log)
-        if bt:
-            from bullet_in.adapters.x_backtrack import backtrack_promote
-            items = await backtrack_promote(items, timelines, bt)
+        save_x_cache(self.cache_path, cache,
+                     {t["status_id"] for t in raw_tweets if t.get("status_id")},
+                     tweet_urls)
         self.funnel["passed"] = len(items)
         return items
 
@@ -270,20 +385,21 @@ class XPlaywrightAdapter:
         if len(handles) > cap:
             log.info("backtrack 기자 상한 초과 %d → %d (드롭 로깅)", len(handles), cap)
             handles = handles[:cap]
-        timelines = {}
+        timelines, failed = {}, set()
         for h in handles:
             page = None
             try:
                 page = await ctx.new_page()
                 await page.goto(f"https://x.com/{h}", wait_until="domcontentloaded")
-                await page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
+                await wait_for_tweets(page)
                 timelines[h.lower()] = await _scroll_collect(page, _JOURN_JS, depth)
             except Exception as e:  # 소스 격리 : 한 핸들 실패는 그 인용만 2순위로 강등
                 log.warning("backtrack 타임라인 실패 handle=%s err=%s", h, e)
+                failed.add(h.lower())   # 못 읽은 기자의 결과는 기억하지 않는다 (다음에 재시도)
             finally:
                 if page is not None:
                     await page.close()
-        return timelines
+        return timelines, failed
 
     def _parse_tweets(self, raw_tweets: list[dict], now: datetime) -> list[RawItem]:
         """파서 선택 — self_source 면 본인 트윗 경로, 아니면 기존 인용 경로 (spec §5.2)."""

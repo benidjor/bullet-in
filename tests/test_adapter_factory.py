@@ -1,4 +1,9 @@
-from bullet_in.adapters.factory import build_adapters
+from datetime import datetime, timezone
+from pathlib import Path
+
+import yaml
+
+from bullet_in.adapters.factory import build_adapters, scheduled_skips
 
 def test_factory_builds_enabled_adapters(monkeypatch):
     monkeypatch.setenv("GUARDIAN_API_KEY", "k")
@@ -207,3 +212,46 @@ def test_official_source_gets_official_rule_when_title_scope():
     on, off = build_adapters(cfg, scope_roster=[("Bukayo Saka", "Saka")])
     assert on.scope.match("Saka talks a deal") == "name"
     assert off.scope is None
+
+
+_X = {"source_id": "x", "adapter": "x_playwright",
+      "run_hours_utc": {"in_window": [9, 12, 15, 18, 21], "out_of_window": [12, 21]},
+      "config": {"handle": "h"}}
+
+
+def _t(s):
+    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+
+
+def test_out_of_window_runs_only_at_listed_slots():
+    assert scheduled_skips([_X], _t("2026-11-15T12:00:04")) == []
+    assert scheduled_skips([_X], _t("2026-11-15T15:00:04")) == ["x"]
+
+
+def test_in_window_uses_the_window_list():
+    assert scheduled_skips([_X], _t("2027-01-10T15:00:04")) == []
+    assert scheduled_skips([_X], _t("2027-01-10T03:00:04")) == ["x"]
+
+
+def test_late_retry_counts_as_its_slot():
+    assert scheduled_skips([_X], _t("2026-11-11T12:07:26")) == []
+    assert scheduled_skips([_X], _t("2026-11-11T13:59:00")) == []
+
+
+def test_sources_without_schedule_or_not_collected_are_never_listed():
+    plain = {"source_id": "p", "adapter": "rss", "config": {"feed_url": "a"}}
+    stopped = dict(_X, source_id="s", collect=False)
+    assert scheduled_skips([plain, stopped], _t("2026-11-15T15:00:00")) == []
+
+
+def test_build_adapters_drops_skipped_sources():
+    cfg = {"sources": [{"source_id": "keep", "adapter": "rss", "config": {"feed_url": "a"}}, _X]}
+    assert [a.source_id for a in build_adapters(cfg, skip=["x"])] == ["keep"]
+
+
+def test_live_x_sources_have_both_schedules():
+    cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
+    for s in cfg["sources"]:
+        if s["source_id"] in ("x_afcstuff", "x_ornstein"):
+            assert s["run_hours_utc"] == {"in_window": [9, 12, 15, 18, 21],
+                                          "out_of_window": [12, 21]}

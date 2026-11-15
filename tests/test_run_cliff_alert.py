@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 
-from bullet_in.run import cliff_alert_payload
+from bullet_in.run import cliff_alert_payload, skipped_funnels
 
 
 class _Adapter:
@@ -362,3 +362,14 @@ def test_cliff_payload_draws_the_sitemap_record_not_the_html_chain():
     text = str(payload["fields"])
     assert "사이트맵 시도 2" in text
     assert "목록 0" not in text
+
+
+def test_skipped_sources_get_a_marker_and_keep_others():
+    out = skipped_funnels({"bbc_sport": {"entries": 3}}, ["x_afcstuff"])
+    assert out == {"bbc_sport": {"entries": 3}, "x_afcstuff": {"skipped": "schedule"}}
+
+
+def test_cliff_ignores_a_skipped_source():
+    assert cliff_alert_payload({"bbc_sport": 3}, [{"bbc_sport": 3, "x_afcstuff": 2}],
+                               adapters=[], sources={}, success_rate=1.0,
+                               run_id="r", skip={"x_afcstuff"}) is None

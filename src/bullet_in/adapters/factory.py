@@ -1,6 +1,8 @@
 from __future__ import annotations
 import os
 import logging
+from collections.abc import Collection
+from datetime import datetime, timezone
 from bullet_in.adapters.rss import RssAdapter
 from bullet_in.adapters.guardian_api import GuardianAdapter
 from bullet_in.adapters.arsenal_api import ArsenalApiAdapter
@@ -10,6 +12,7 @@ from bullet_in.adapters.x_playwright import XPlaywrightAdapter
 from bullet_in.adapters.fmkorea import FmkoreaAdapter
 
 from bullet_in.scope import ScopeRule, scope_names
+from bullet_in.transfer_windows import in_transfer_window
 
 log = logging.getLogger(__name__)
 
@@ -22,8 +25,22 @@ def scope_rules(cfg: dict, roster) -> tuple[ScopeRule, ScopeRule]:
                          cfg.get("scope_name_full_only") or ()) if roster else set())
     return ScopeRule(cfg.get("transfer_keywords") or (), names), ScopeRule((), names)
 
+def scheduled_skips(sources: list[dict], now: datetime) -> list[str]:
+    """이번 실행 칸에 돌지 않는 소스 — `run_hours_utc` 가 있는 수집 대상만 본다.
+
+    실행은 3시간 칸 (0 · 3 · … · 21 UTC) 에 시작하고 늦게 떠도 같은 칸으로 센다.
+    이적기간이면 `in_window`, 아니면 `out_of_window` 목록에 이번 칸이 없는 소스를 낸다."""
+    utc = now.astimezone(timezone.utc)
+    slot = utc.hour - utc.hour % 3
+    key = "in_window" if in_transfer_window(now) else "out_of_window"
+    return [s["source_id"] for s in sources
+            if s.get("run_hours_utc") and s.get("enabled", True) and s.get("collect", True)
+            and slot not in s["run_hours_utc"][key]]
+
+
 def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None,
-                   scope_roster: list[tuple[str, str]] | None = None) -> list:
+                   scope_roster: list[tuple[str, str]] | None = None,
+                   skip: Collection[str] = ()) -> list:
     press_scope, official_scope = scope_rules(cfg, scope_roster)
     out = []
     for s in cfg["sources"]:
@@ -31,6 +48,8 @@ def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None,
         # 본문 서빙 범위가 함께 사라지므로, 이미 적재된 기사가 있으면 그 화면이 깨진다.
         # collect 는 수집만 멈추고 표시 설정을 남긴다 (읽는 쪽은 이 키를 안 본다).
         if not s.get("enabled", True) or not s.get("collect", True):
+            continue
+        if s["source_id"] in skip:
             continue
         c = s.get("config", {})
         kind, sid = s["adapter"], s["source_id"]
@@ -66,7 +85,8 @@ def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None,
                                           c.get("cookies_path", "x_cookies.json"),
                                           c.get("backtrack_config"),
                                           self_source=c.get("self_source", False),
-                                          own_source_handles=c.get("own_source_handles")))
+                                          own_source_handles=c.get("own_source_handles"),
+                                          cache_path=c.get("cache_path")))
         elif kind == "fmkorea":
             out.append(FmkoreaAdapter(
                 sid, c["search_url"], c["search_keywords"],

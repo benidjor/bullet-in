@@ -460,6 +460,8 @@ _STATE_PILL = {"broken": ("끊김", "bad"), "no_response": ("응답 없음", "wa
 def _stage_text(funnel: dict | None) -> str:
     """수집 단계 칸 — 어댑터마다 응답 판정에 쓰는 숫자 (스펙 2026-10-02 §4.2.1)."""
     f = funnel or {}
+    if "skipped" in f:
+        return "일정상 건너뜀"
     if "scraped" in f:
         return f"트윗 {f.get('scraped', 0)}"
     if "keywords" in f:
