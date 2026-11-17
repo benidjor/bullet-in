@@ -198,7 +198,7 @@ def test_sources_yaml_scope_settings():
     import yaml
     from pathlib import Path
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
-    assert cfg["scope_name_extras"] == ["Gabriel", "Bruno", "Ødegaard"]
+    assert cfg["scope_name_extras"] == ["Gabriel", "Bruno", "Ødegaard", "Gabi", "Ezri"]
     assert cfg["scope_name_full_only"] == ["White", "Rice", "Jesus", "Timber", "Salmon"]
     scoped = sorted(s["source_id"] for s in cfg["sources"]
                     if (s.get("config") or {}).get("title_scope"))
