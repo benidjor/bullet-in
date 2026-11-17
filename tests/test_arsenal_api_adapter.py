@@ -423,13 +423,17 @@ def test_max_age_reads_publication_date_without_timezone_as_utc():
 def test_scope_confirms_surname_from_body_and_takes_report_prefix():
     _mock_backend(_sitemap([_sitemap_entry("rice-aRICE0000001"),
                             _sitemap_entry("report-aREPT0000001"),
-                            _sitemap_entry("rice-aRICE0000002")]), {
+                            _sitemap_entry("rice-aRICE0000002"),
+                            _sitemap_entry("rice-aRICE0000003")]), {
         "aRICE0000001": _gql_article("Rice – ‘This togetherness is unmatched’", ["Men", "News"],
                                      body_texts=("Declan Rice spoke after the win.",)),
         "aREPT0000001": _gql_article("Report: Liverpool 0-1 Arsenal", ["Men", "News"]),
         "aRICE0000002": _gql_article("Rice prices at the Emirates kiosk", ["Men", "News"],
+                                     body_texts=("Food prices.",)),
+        "aRICE0000003": _gql_article("Rice prices soar", ["Men", "News"],
                                      body_texts=("Food prices.",))})
     a = ArsenalApiAdapter("arsenal_official", window_hours=24 * 365,
                           scope=ScopeRule((), set(), confirm={"Rice": "Declan Rice"}))
     items = asyncio.run(a.fetch())
+    # 세 번째는 「Emirates」 팀 낱말로 받고 · 네 번째는 본문에 전체 이름이 없어 버린다
     assert [i.url.rsplit("-", 1)[1] for i in items] == ["aRICE0000001", "aREPT0000001", "aRICE0000002"]
