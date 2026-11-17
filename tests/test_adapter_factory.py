@@ -198,7 +198,7 @@ def test_sources_yaml_scope_settings():
     import yaml
     from pathlib import Path
     cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
-    assert cfg["scope_name_extras"] == ["Gabriel", "Bruno", "Ødegaard"]
+    assert cfg["scope_name_extras"] == ["Gabriel", "Bruno", "Ødegaard", "Gabi", "Ezri"]
     assert cfg["scope_name_full_only"] == ["White", "Rice", "Jesus", "Timber", "Salmon"]
     scoped = sorted(s["source_id"] for s in cfg["sources"]
                     if (s.get("config") or {}).get("title_scope"))
@@ -255,3 +255,21 @@ def test_live_x_sources_have_both_schedules():
         if s["source_id"] in ("x_afcstuff", "x_ornstein"):
             assert s["run_hours_utc"] == {"in_window": [9, 12, 15, 18, 21],
                                           "out_of_window": [12, 21]}
+
+
+def test_factory_builds_confirm_map_and_guardian_url_rule():
+    cfg = {"scope_name_full_only": ["White"],
+           "sources": [{"source_id": "guardian", "adapter": "html",
+                        "config": {"list_url": "https://g.test", "item_selector": "a",
+                                   "title_scope": True,
+                                   "scope_url_contains": ["-match-report"]}}]}
+    [a] = build_adapters(cfg, scope_roster=[("Ben White", "White"), ("Bukayo Saka", "Saka")])
+    assert a.scope_url_contains == ("-match-report",)
+    assert a.scope.confirm == {"White": "Ben White"}
+
+
+def test_real_config_sets_url_rule_only_for_guardian():
+    cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
+    rules = {s["source_id"]: s.get("config", {}).get("scope_url_contains") for s in cfg["sources"]}
+    assert rules["guardian"] == ["-match-report"]
+    assert [k for k, v in rules.items() if v] == ["guardian"]

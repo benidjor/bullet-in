@@ -20,10 +20,16 @@ def scope_rules(cfg: dict, roster) -> tuple[ScopeRule, ScopeRule]:
     """(언론사용, 공식 소스용) 수집 범위 판정 규칙 (설계 2026-10-07 §2 · §3.2).
 
     공식 소스는 이적 낱말을 이미 자기 경로 (`tag` · `title`) 로 보므로 키워드 갈래를
-    빼고 이름 · 추가 낱말 · 팀 낱말만 쓴다. 명단이 없으면 이름 갈래만 빠진다."""
-    names = (scope_names(roster, cfg.get("scope_name_extras") or (),
-                         cfg.get("scope_name_full_only") or ()) if roster else set())
-    return ScopeRule(cfg.get("transfer_keywords") or (), names), ScopeRule((), names)
+    빼고 이름 · 추가 낱말 · 팀 낱말만 쓴다. 명단이 없으면 이름 갈래만 빠진다.
+
+    성만으로는 안 받는 사람 (`scope_name_full_only`) 은 {성: 전체 이름} 으로 넘겨
+    문맥에 전체 이름이 있을 때 받게 한다 (2주 수집 검토 2026-11-15)."""
+    full_only = cfg.get("scope_name_full_only") or ()
+    names = (scope_names(roster, cfg.get("scope_name_extras") or (), full_only)
+             if roster else set())
+    confirm = {sur: full for full, sur in (roster or ()) if full and sur in full_only}
+    return (ScopeRule(cfg.get("transfer_keywords") or (), names, confirm),
+            ScopeRule((), names, confirm))
 
 def scheduled_skips(sources: list[dict], now: datetime) -> list[str]:
     """이번 실행 칸에 돌지 않는 소스 — `run_hours_utc` 가 있는 수집 대상만 본다.
@@ -77,7 +83,8 @@ def build_adapters(cfg: dict, fmkorea_player_names: set[str] | None = None,
                                    title_selector=c.get("title_selector"),
                                    thumbnail_only=c.get("thumbnail_only", False),
                                    title_attr=c.get("title_attr"),
-                                   scope=press_scope if c.get("title_scope") else None))
+                                   scope=press_scope if c.get("title_scope") else None,
+                                   scope_url_contains=c.get("scope_url_contains") or ()))
         elif kind == "playwright":
             out.append(PlaywrightAdapter(sid, c["list_url"], c["item_selector"], c.get("base_url")))
         elif kind == "x_playwright":

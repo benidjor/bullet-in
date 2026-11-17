@@ -359,3 +359,45 @@ def test_html_adapter_without_scope_keeps_keyword_filter():
     items = asyncio.run(a.fetch())
     assert [i.raw_payload["title"] for i in items] == ["Arteta agrees new deal"]
     assert "passed_by" not in a.funnel and "dropped" not in a.funnel
+
+
+LIST_G = ('<a class="t" href="/a" aria-label="‘We had to dig in’ … says Rice">x</a>'
+          '<a class="t" href="/b" aria-label="Rice prices soar">y</a>'
+          '<a class="t" href="/c" aria-label="Rice back in training">z</a>')
+
+
+@respx.mock
+def test_html_confirms_surname_title_from_detail_body_once():
+    respx.get("https://g.test/arsenal").mock(return_value=httpx.Response(200, text=LIST_G))
+    ra = respx.get("https://g.test/a").mock(return_value=httpx.Response(
+        200, text='<div class="body">Declan Rice said the team dug in.</div>'))
+    respx.get("https://g.test/b").mock(return_value=httpx.Response(
+        200, text='<div class="body">Rice prices soar.</div>'))
+    respx.get("https://g.test/c").mock(return_value=httpx.Response(503))
+    a = HtmlAdapter("guardian", "https://g.test/arsenal", "a.t", "https://g.test",
+                    body_selector="div.body", title_attr="aria-label",
+                    scope=ScopeRule([], set(), confirm={"Rice": "Declan Rice"}))
+    out = asyncio.run(a.fetch())
+    assert [i.url for i in out] == ["https://g.test/a"]
+    assert ra.call_count == 1
+    assert out[0].raw_payload["body"].startswith("Declan Rice")
+    assert a.funnel["passed_by"] == {"fullname": 1}
+    assert sorted(a.funnel["dropped"]) == ["Rice back in training", "Rice prices soar"]
+    assert a.funnel["passed"] == 1
+
+
+@respx.mock
+def test_html_url_rule_takes_match_report_but_not_live_blog():
+    lst = ('<a class="t" href="/football/2026/oct/27/fleetwood-arsenal-match-report" '
+           'aria-label="Fantastic Fleetwood seal shootout success">x</a>'
+           '<a class="t" href="/football/live/2026/nov/01/liverpool-v-arsenal-live" '
+           'aria-label="Liverpool 0-1 Arsenal – as it happened">y</a>')
+    respx.get("https://g.test/arsenal").mock(return_value=httpx.Response(200, text=lst))
+    respx.get("https://g.test/football/2026/oct/27/fleetwood-arsenal-match-report").mock(
+        return_value=httpx.Response(200, text='<div class="body">Report.</div>'))
+    a = HtmlAdapter("guardian", "https://g.test/arsenal", "a.t", "https://g.test",
+                    body_selector="div.body", title_attr="aria-label",
+                    scope=ScopeRule([], set()), scope_url_contains=["-match-report"])
+    out = asyncio.run(a.fetch())
+    assert [i.url.rsplit("/", 1)[1] for i in out] == ["fleetwood-arsenal-match-report"]
+    assert a.funnel["passed_by"] == {"report": 1}

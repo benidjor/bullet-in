@@ -89,3 +89,49 @@ def test_press_titles_measured_on_2026_10_06():
     assert _split(FX["press"]["bbc_sport"], rule) == {"keyword": 5, "extra": 2, "name": 7, "team": 1}
     assert _split(FX["press"]["skysports"], rule) == {"keyword": 3, "name": 4}
     assert _split(FX["press"]["guardian"], rule) == {"keyword": 1, "name": 6, "team": 2}
+
+
+def test_names_ignore_diacritics():
+    rule = ScopeRule([], {"Viktor Gyokeres", "Gyokeres", "Ødegaard"})
+    assert rule.match("Viktor Gyökeres the difference as Arsenal claim nervy win") == "name"
+    assert rule.match("Odegaard assists for Norway") == "name"
+    assert rule.match("gyökeres") is None                            # 대소문자 구분은 그대로
+
+
+def test_new_extra_words():
+    rule = ScopeRule([], set())
+    assert rule.match("Timber hits 100 Arsenal appearances against Forest") == "extra"
+    assert rule.match("Team news: Six changes made for Slavia Prague showdown") == "extra"
+    assert rule.match("Teams newsletter") is None
+
+
+def test_report_and_preview_prefix():
+    rule = ScopeRule([], set())
+    assert rule.match("Report: Liverpool 0-1 Arsenal") == "report"
+    assert rule.match("Preview: Arsenal v Hull City") == "report"
+    assert rule.match("Match report on Arsenal") is None
+
+
+def test_surname_only_title_is_confirmed_by_full_name_in_context():
+    rule = ScopeRule([], scope_names([("Ben White", "White"), ("Declan Rice", "Rice")],
+                                     full_only=["White", "Rice"]),
+                     confirm={"White": "Ben White", "Rice": "Declan Rice"})
+    t = "Tuchel defends White after more Wembley boos"
+    assert rule.needs_context(t)
+    assert rule.match(t) is None
+    assert rule.match(t, context="England manager Thomas Tuchel defended Ben White.") == "fullname"
+    assert rule.match("Toure recalls winning the league at White Hart Lane",
+                      context="Kolo Toure on Arsenal at White Hart Lane") is None
+    assert rule.match("PSG could rival Arsenal for Gibbs-White",
+                      context="Nottingham Forest's Morgan Gibbs-White") is None
+    assert rule.match("Rice relishing title race", context="") is None
+    assert not rule.needs_context("Arsenal back at Highbury")
+
+
+def test_config_covers_new_transfer_words_and_aliases():
+    cfg = yaml.safe_load(Path("config/sources.yaml").read_text())
+    assert {"sale", "monitor"} <= set(cfg["transfer_keywords"])
+    assert {"Gabi", "Ezri"} <= set(cfg["scope_name_extras"])
+    rule = ScopeRule(cfg["transfer_keywords"], set(cfg["scope_name_extras"]))
+    assert rule.match("Arsenal monitor Leverkusen striker Kofane") == "keyword"
+    assert rule.match("Big Gabi enjoys latest clean sheet") == "name"

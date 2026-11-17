@@ -55,7 +55,7 @@ class RssAdapter:
                 if not title:
                     continue
                 if self.scope is not None:
-                    reason = self.scope.match(title)
+                    reason = self.scope.match(title, context=e.get("summary") or "")
                     record(funnel, title, reason)
                     if reason is None:
                         continue
