@@ -148,3 +148,19 @@ def test_rss_scope_records_passed_by_and_dropped():
     assert a.funnel["passed"] == 2
     assert a.funnel["passed_by"] == {"keyword": 1, "extra": 1}
     assert a.funnel["dropped"] == ["Is it a two-team title race?"]
+
+
+@respx.mock
+def test_rss_confirms_surname_title_from_summary():
+    items = ("<item><title>Tuchel defends White after more Wembley boos</title>"
+             "<link>https://b.test/1</link>"
+             "<description>England manager Thomas Tuchel defended Ben White.</description></item>"
+             "<item><title>PSG could rival Arsenal for Gibbs-White</title>"
+             "<link>https://b.test/2</link>"
+             "<description>Morgan Gibbs-White is wanted.</description></item>")
+    respx.get(FEED).mock(return_value=httpx.Response(200, content=_mini(items)))
+    a = RssAdapter("bbc_sport", FEED, scope=ScopeRule([], set(), confirm={"White": "Ben White"}))
+    out = asyncio.run(a.fetch())
+    assert [i.url for i in out] == ["https://b.test/1"]
+    assert a.funnel["passed_by"] == {"fullname": 1}
+    assert a.funnel["dropped"] == ["PSG could rival Arsenal for Gibbs-White"]

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from urllib.parse import urljoin
 import httpx
@@ -14,7 +15,7 @@ class HtmlAdapter:
                  base_url: str | None = None, title_contains: str | list[str] | None = None,
                  body_selector: str | None = None, title_selector: str | None = None,
                  thumbnail_only: bool = False, title_attr: str | None = None,
-                 scope: ScopeRule | None = None):
+                 scope: ScopeRule | None = None, scope_url_contains: Sequence[str] = ()):
         self.source_id = source_id
         self.list_url = list_url
         self.item_selector = item_selector
@@ -24,6 +25,8 @@ class HtmlAdapter:
         self.title_attr = title_attr
         self.thumbnail_only = thumbnail_only
         self.scope = scope   # 수집 범위 판정 (설계 2026-10-07 §2) — 있으면 키워드 필터를 대신한다
+        # 주소로 가리는 경기 리포트 — Guardian 리포트는 제목에 표지가 없다 (2주 수집 검토 2026-11-15)
+        self.scope_url_contains = tuple(scope_url_contains)
         # 발견 4단 계수 (스펙 2026-08-14 §8.2) — 어댑터 인스턴스 속성이라 DB 에 안 남는다.
         # 기록되는 후보 계수는 마지막 단계뿐이라, 셀렉터가 깨져 첫 단이 0 이 된 것과
         # 사이트가 조용해 마지막 단이 0 이 된 것이 구분되지 않았다 (§2.5 실측).
@@ -43,6 +46,7 @@ class HtmlAdapter:
             r.raise_for_status()
             soup = BeautifulSoup(r.text, "html.parser")
             now, matched, seen = datetime.now(timezone.utc), [], set()
+            pending = []     # 성만 쓴 제목 — 상세 페이지 본문을 문맥으로 다시 판정
             selected = soup.select(self.item_selector)
             # href 없는 항목은 별도 단을 두지 않고 중복 제거 단에 함께 접는다 —
             # 둘 다 "URL 을 못 얻은 자리" 라 나눠도 진단이 갈리지 않는다.
@@ -71,6 +75,11 @@ class HtmlAdapter:
                 self.funnel["titled"] += 1
                 if self.scope is not None:
                     reason = self.scope.match(title)
+                    if reason is None and any(p in url for p in self.scope_url_contains):
+                        reason = "report"
+                    if reason is None and self.body_selector and self.scope.needs_context(title):
+                        pending.append((title, url))
+                        continue
                     record(self.funnel, title, reason)
                     if reason is None:
                         continue
@@ -78,13 +87,23 @@ class HtmlAdapter:
                         k in title.lower() for k in self.title_keywords):
                     continue
                 self.funnel["passed"] += 1
-                matched.append((title, url))
+                matched.append((title, url, None))
+            for title, url in pending:
+                # 받은 상세는 적재에 그대로 쓴다 — 같은 글을 두 번 받지 않는다
+                detail = await fetch_article_detail(c, url, self.body_selector)
+                reason = self.scope.match(title, context=detail.get("body") or "")
+                record(self.funnel, title, reason)
+                if reason is not None:
+                    self.funnel["passed"] += 1
+                    matched.append((title, url, detail))
             # 목록 지문 — 키워드 필터 앞의 링크 묶음 (스펙 2026-10-02 §2.3.2)
             self.funnel["list_sig"] = list_signature(seen)
             out = []
-            for title, url in matched:
+            for title, url, detail in matched:
                 payload = {"title": title}
-                if self.body_selector:
+                if detail is not None:
+                    payload.update(detail)
+                elif self.body_selector:
                     payload.update(await fetch_article_detail(c, url, self.body_selector))
                 elif self.thumbnail_only:
                     # 경량 상세 방문 — og:image 만 (본문 · 저자 미추출 = 번역 비용 무변경)

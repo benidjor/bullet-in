@@ -117,6 +117,7 @@ sources:
       base_url: "https://www.theguardian.com"
       title_contains: *transfer_kw
       title_scope: true   # 이적 + 선수 · 팀 소식 + 경기 평점 (설계 2026-10-07 §2)
+      scope_url_contains: ["-match-report"]   # 경기 리포트 (2주 수집 검토 2026-11-15 · 제목에 표지 없음)
     freshness_hours: 192   # 공백 95% 168h (21일 실측) — 저빈도 소스 (아스날 태그 주 2~3건)
     enabled: true
   - source_id: skysports

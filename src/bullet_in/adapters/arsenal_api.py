@@ -117,7 +117,8 @@ def _accept(article: dict, scope: ScopeRule | None = None) -> str | None:
         return "title"
     if scope is None or EXCLUDE_TAGS & tax or _EXCLUDE_TITLE_RE.search(title):
         return None
-    if SCOPE_TAG in tax or scope.match(title):
+    body = _body_payload(article.get("articleBody") or [])["body"]
+    if SCOPE_TAG in tax or scope.match(title, context=body):
         return "scope"
     return None
 
